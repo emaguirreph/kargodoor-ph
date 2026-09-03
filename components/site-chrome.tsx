@@ -79,6 +79,7 @@ export function Footer() {
           <section>
             <h2>CONTACT INFORMATION</h2>
             <p>Mobile: 0917 157 7370</p>
+            <p>Mobile: 0908 889 0664</p>
             <p>
               Email: <a href="mailto:support@kargodoorph.com">support@kargodoorph.com</a>
             </p>

@@ -70,8 +70,8 @@ export default function ServicesPage() {
               className="kd-services-warehouse-image"
               src="/assets/kargodoor-services-warehouses-approved.png"
               alt="KargoDoor warehouses in Guangzhou, Yiwu, Shishi, Hong Kong, and Taiwan"
-              width={1229}
-              height={709}
+              width={1651}
+              height={953}
               loading="lazy"
               decoding="async"
             />
@@ -79,8 +79,8 @@ export default function ServicesPage() {
               className="kd-services-inclusions-image"
               src="/assets/kargodoor-services-all-in-approved.png"
               alt="All-in shipping includes international shipping, customs clearance, taxes and duties, processing and handling, warehouse receiving, and shipment coordination"
-              width={1366}
-              height={356}
+              width={1900}
+              height={828}
               loading="lazy"
               decoding="async"
             />

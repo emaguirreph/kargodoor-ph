@@ -42,7 +42,7 @@ const steps = [
 
 export default function HomePage() {
   return (
-    <div className="kd-site-shell">
+    <div className="kd-site-shell kd-home-shell">
       <Header />
 
       <main>

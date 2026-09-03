@@ -13,18 +13,20 @@ type Estimate =
 
 const peso = (amount: number) => `₱${amount.toLocaleString("en-PH", { maximumFractionDigits: 2 })}`;
 
+function higherSeaEstimate(cbmPackage: string, cbmAmount: number, weight: number): Estimate {
+  const weightAmount = weight * 21;
+  return weightAmount > cbmAmount
+    ? { service: "sea", package: "KD MAX", amount: weightAmount }
+    : { service: "sea", package: cbmPackage, amount: cbmAmount };
+}
+
 function seaEstimate(cbm: number, weight: number): Estimate {
-  if (cbm <= 0.01) return { service: "sea", package: "KD MINI", amount: 250 };
-  if (cbm <= 0.05) return { service: "sea", package: "KD LITE", amount: 750 };
-  if (cbm <= 0.125) return { service: "sea", package: "KD PLUS", amount: 1400 };
+  if (cbm <= 0.01) return higherSeaEstimate("KD MINI", 250, weight);
+  if (cbm <= 0.05) return higherSeaEstimate("KD LITE", 750, weight);
+  if (cbm <= 0.125) return higherSeaEstimate("KD PLUS", 1400, weight);
 
-  const volumeCharge = Math.max(cbm * 8000, 1700);
-  if (weight <= 425) return { service: "sea", package: "KD STANDARD", amount: volumeCharge };
-
-  const weightCharge = weight * 21;
-  return weightCharge > volumeCharge
-    ? { service: "sea", package: "KD MAX", amount: weightCharge }
-    : { service: "sea", package: "KD STANDARD", amount: volumeCharge };
+  const volumeAmount = Math.max(cbm * 8000, 1700);
+  return higherSeaEstimate("KD STANDARD", volumeAmount, weight);
 }
 
 export default function RatesCalculatorPage() {
@@ -104,7 +106,7 @@ export default function RatesCalculatorPage() {
                       <span>WEIGHT (KG)</span>
                       <input aria-label="Weight kilograms" type="number" min="0" step="any" inputMode="decimal" placeholder="Example: 100" value={weight} onChange={(event) => { setWeight(event.target.value); setEstimate(null); setError(""); }} />
                     </label>
-                    <p className="kd-calculator-helper"><Info aria-hidden="true" /> Both CBM and weight are required for Sea Freight. Your package tier is calculated automatically.</p>
+                    <p className="kd-calculator-helper"><Info aria-hidden="true" /> Both CBM and weight are required for Sea Freight. Your estimate automatically uses whichever applicable rate is higher.</p>
                   </>
                 ) : (
                   <>
@@ -146,8 +148,8 @@ export default function RatesCalculatorPage() {
               <img
                 src="/assets/kargodoor-package-size-guide-approved.png"
                 alt="Package size guide for KD Mini, KD Lite, KD Plus, KD Standard, and KD Max"
-                width={1088}
-                height={696}
+                width={1643}
+                height={1044}
                 loading="lazy"
                 decoding="async"
               />
