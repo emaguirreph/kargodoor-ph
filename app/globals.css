@@ -402,6 +402,13 @@ a {
   display: flex;
   gap: 9px;
   margin-top: 18px;
+  margin-left: 74px;
+}
+
+.kd-hero-actions .kd-button svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
 }
 
 .kd-button {
@@ -1548,6 +1555,10 @@ a {
 
   .kd-hero-copy {
     width: 65%;
+  }
+
+  .kd-hero-actions {
+    margin-left: 0;
   }
 
   .kd-story-grid {
