@@ -14,6 +14,10 @@ type Estimate =
 const peso = (amount: number) => `₱${amount.toLocaleString("en-PH", { maximumFractionDigits: 2 })}`;
 
 function higherSeaEstimate(cbmPackage: string, cbmAmount: number, weight: number): Estimate {
+  if (weight <= 425) {
+    return { service: "sea", package: cbmPackage, amount: cbmAmount };
+  }
+
   const weightAmount = weight * 21;
   return weightAmount > cbmAmount
     ? { service: "sea", package: "KD MAX", amount: weightAmount }
@@ -106,7 +110,7 @@ export default function RatesCalculatorPage() {
                       <span>WEIGHT (KG)</span>
                       <input aria-label="Weight kilograms" type="number" min="0" step="any" inputMode="decimal" placeholder="Example: 100" value={weight} onChange={(event) => { setWeight(event.target.value); setEstimate(null); setError(""); }} />
                     </label>
-                    <p className="kd-calculator-helper"><Info aria-hidden="true" /> Both CBM and weight are required for Sea Freight. Your estimate automatically uses whichever applicable rate is higher.</p>
+                    <p className="kd-calculator-helper"><Info aria-hidden="true" /> Both CBM and weight are required for Sea Freight. Above 425 kg, your estimate uses whichever applicable CBM or weight rate is higher.</p>
                   </>
                 ) : (
                   <>
