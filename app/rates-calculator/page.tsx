@@ -8,29 +8,23 @@ import { trackEvent } from "@/lib/analytics";
 type Service = "sea" | "air";
 
 type Estimate =
-  | { service: "sea-fixed"; tier: string; amount: number }
-  | { service: "sea-variable"; cbm: number; weight: number; volume: number; weightCharge: number; amount: number; basis: string }
-  | { service: "air"; weight: number; amount: number };
+  | { service: "sea"; package: string; amount: number }
+  | { service: "air"; package: string; amount: number };
 
 const peso = (amount: number) => `₱${amount.toLocaleString("en-PH", { maximumFractionDigits: 2 })}`;
 
 function seaEstimate(cbm: number, weight: number): Estimate {
-  if (cbm <= 0.01) return { service: "sea-fixed", tier: "KD MINI", amount: 250 };
-  if (cbm <= 0.05) return { service: "sea-fixed", tier: "KD LITE", amount: 750 };
-  if (cbm <= 0.125) return { service: "sea-fixed", tier: "KD PLUS", amount: 1400 };
+  if (cbm <= 0.01) return { service: "sea", package: "KD MINI", amount: 250 };
+  if (cbm <= 0.05) return { service: "sea", package: "KD LITE", amount: 750 };
+  if (cbm <= 0.125) return { service: "sea", package: "KD PLUS", amount: 1400 };
 
-  const volume = Math.max(cbm * 8000, 1700);
+  const volumeCharge = Math.max(cbm * 8000, 1700);
+  if (weight <= 425) return { service: "sea", package: "KD STANDARD", amount: volumeCharge };
+
   const weightCharge = weight * 21;
-  const usesWeight = weightCharge > volume;
-  return {
-    service: "sea-variable",
-    cbm,
-    weight,
-    volume,
-    weightCharge,
-    amount: Math.max(volume, weightCharge),
-    basis: usesWeight ? "KD MAX / WEIGHT RATE" : "KD STANDARD / VOLUME RATE",
-  };
+  return weightCharge > volumeCharge
+    ? { service: "sea", package: "KD MAX", amount: weightCharge }
+    : { service: "sea", package: "KD STANDARD", amount: volumeCharge };
 }
 
 export default function RatesCalculatorPage() {
@@ -72,7 +66,7 @@ export default function RatesCalculatorPage() {
       return;
     }
 
-    setEstimate({ service: "air", weight: numericWeight, amount: numericWeight * 500 });
+    setEstimate({ service: "air", package: "AIR FREIGHT", amount: numericWeight * 500 });
     setError("");
     trackEvent("calculate_shipping");
   };
@@ -135,18 +129,7 @@ export default function RatesCalculatorPage() {
                 ) : (
                   <div className="kd-result-filled">
                     <p className="kd-result-service">{serviceLabel}</p>
-                    {estimate.service === "sea-fixed" && <ResultRow label="PACKAGE TIER" value={estimate.tier} />}
-                    {estimate.service === "sea-variable" && <>
-                      <ResultRow label="CBM" value={estimate.cbm.toString()} />
-                      <ResultRow label="WEIGHT" value={`${estimate.weight} KG`} />
-                      <ResultRow label="VOLUME-BASED CHARGE" value={peso(estimate.volume)} />
-                      <ResultRow label="WEIGHT-BASED CHARGE" value={peso(estimate.weightCharge)} />
-                      <p className="kd-result-basis">{estimate.basis} APPLIED</p>
-                    </>}
-                    {estimate.service === "air" && <>
-                      <ResultRow label="WEIGHT" value={`${estimate.weight} KG`} />
-                      <ResultRow label="RATE" value="₱500/KG" />
-                    </>}
+                    <ResultRow label="PACKAGE" value={estimate.package} />
                     <div className="kd-result-total"><span>ESTIMATED ALL-IN RATE</span><strong>{peso(estimate.amount)}</strong></div>
                   </div>
                 )}

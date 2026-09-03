@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plane, Ship } from "lucide-react";
+import { Calculator, FileText, Plane, Ship } from "lucide-react";
 import { Footer, Header } from "@/components/site-chrome";
 import { TrackedLink } from "@/components/tracked-link";
 
@@ -61,10 +61,12 @@ export default function HomePage() {
                 alt="SOURCE · SHIP · RECEIVE — 采购 · 运输 · 收货 — China to PH, made SIMPLE — Simple, reliable, and affordable shipping from China to the Philippines."
               />
               <div className="kd-hero-actions">
-                <TrackedLink className="kd-button kd-button-green" href="/contact-us" analyticsEvent="generate_lead">
+                <TrackedLink className="kd-button kd-button-green" href="https://m.me/KargoDoorPH" target="_blank" rel="noopener noreferrer" analyticsEvent="generate_lead">
+                  <FileText aria-hidden="true" />
                   GET A QUOTE
                 </TrackedLink>
                 <Link className="kd-button kd-button-white" href="/rates-calculator">
+                  <Calculator aria-hidden="true" />
                   CALCULATOR
                 </Link>
               </div>

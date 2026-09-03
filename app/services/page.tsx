@@ -95,7 +95,7 @@ export default function ServicesPage() {
               <p>Tell us about your cargo and we’ll help you choose the option that best fits your shipment.</p>
             </div>
             <div className="kd-services-cta-actions">
-              <TrackedLink className="kd-button kd-button-green" href="/contact-us" analyticsEvent="generate_lead">
+              <TrackedLink className="kd-button kd-button-green" href="https://m.me/KargoDoorPH" target="_blank" rel="noopener noreferrer" analyticsEvent="generate_lead">
                 <FileText aria-hidden="true" />
                 GET A QUOTE
               </TrackedLink>

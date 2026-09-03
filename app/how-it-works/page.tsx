@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { FileText } from "lucide-react";
 import { Footer, Header } from "@/components/site-chrome";
 import { TrackedLink } from "@/components/tracked-link";
 
@@ -77,7 +77,8 @@ export default function HowItWorksPage() {
               <h2 id="ready-title">READY TO SHIP?</h2>
               <p>From China to the Philippines, we make cargo simple.</p>
             </div>
-            <TrackedLink className="kd-button kd-button-green kd-ready-button" href="/contact-us" analyticsEvent="generate_lead">
+            <TrackedLink className="kd-button kd-button-green kd-ready-button" href="https://m.me/KargoDoorPH" target="_blank" rel="noopener noreferrer" analyticsEvent="generate_lead">
+              <FileText aria-hidden="true" />
               GET A QUOTE
             </TrackedLink>
           </div>
