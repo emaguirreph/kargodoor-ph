@@ -1593,6 +1593,10 @@ a {
   .kd-header-quote {
     display: none;
   }
+  /* Keep the navigation control at the far right on phone-width layouts. */
+.kd-mobile-menu {
+  margin-left: auto;
+}
 
   .kd-mobile-menu-toggle {
     width: 42px;
@@ -1633,7 +1637,87 @@ a {
 
   .kd-hero-branding {
     width: min(430px, 100%);
-  }
+  }/* Mobile type scale: readable without the oversized desktop proportions. */
+.kd-section h2,
+.kd-rates h2,
+.kd-story-heading h2,
+.kd-process-heading h1,
+.kd-ready-copy h2,
+.kd-services-heading h1,
+.kd-services-cta h2,
+.kd-rates-heading h1,
+.kd-contact-heading h1,
+.kd-faq-heading h1 {
+  font-size: clamp(28px, 7.5vw, 34px);
+}
+
+.kd-section-lead,
+.kd-info-card p,
+.kd-step-card p,
+.kd-service-card p,
+.kd-story-copy,
+.kd-rates p,
+.kd-faq-card p,
+.kd-process-heading p,
+.kd-process-introduction,
+.kd-process-card ul,
+.kd-ready-copy p,
+.kd-services-heading p,
+.kd-services-card-description,
+.kd-services-card ul,
+.kd-services-transit,
+.kd-services-cta p,
+.kd-rates-heading p,
+.kd-contact-heading p,
+.kd-contact-details,
+.kd-contact-card p,
+.kd-contact-ready p,
+.kd-faq-answer > div {
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.kd-info-card h3,
+.kd-step-card h3,
+.kd-service-card h3,
+.kd-services-card h2,
+.kd-faq-card h3,
+.kd-process-card-title {
+  font-size: 20px;
+}
+
+.kd-button,
+.kd-header-quote,
+.kd-contact-ready-button {
+  font-size: 16px;
+}
+
+.kd-calculator-card label > span,
+.kd-calculator-card input,
+.kd-calculator-card select,
+.kd-calculator-helper,
+.kd-calculate-button {
+  font-size: 16px;
+}
+
+.kd-calculator-card input,
+.kd-calculator-card select {
+  height: 56px;
+}
+
+.kd-calculate-button {
+  min-height: 56px;
+}
+
+.kd-result-row,
+.kd-result-service {
+  font-size: 16px;
+}
+
+.kd-result-total strong {
+  font-size: clamp(40px, 12vw, 52px);
+}
+  
 
   .kd-section {
     padding: 44px 0;
@@ -1823,6 +1907,30 @@ a {
   }
 }
 
+/* Final phone-only typography guardrail. This comes after page-specific mobile rules. */
+@media (max-width: 700px) {
+  .kd-section h2,
+  .kd-rates h2,
+  .kd-story-heading h2,
+  .kd-process-heading h1,
+  .kd-ready-copy h2,
+  .kd-services-heading h1,
+  .kd-services-cta h2,
+  .kd-rates-heading h1,
+  .kd-contact-heading h1,
+  .kd-faq-heading h1 {
+    font-size: clamp(28px, 7.5vw, 34px);
+  }
+
+  .kd-info-card h3,
+  .kd-step-card h3,
+  .kd-service-card h3,
+  .kd-services-card h2,
+  .kd-faq-card h3,
+  .kd-process-card-title {
+    font-size: 20px;
+  }
+}
 @media (prefers-reduced-motion: no-preference) {
   .kd-text-link,
   .kd-header-quote,
