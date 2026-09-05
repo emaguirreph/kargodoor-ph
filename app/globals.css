@@ -907,96 +907,108 @@ a {
 }
 
 .kd-services-intro {
-  padding: 66px 0 34px;
+padding: 44px 0 26px;
 }
 
 .kd-services-heading {
-  text-align: center;
+text-align: center;
 }
 
 .kd-services-heading h1,
 .kd-services-cta h2 {
-  margin: 0;
-  color: var(--kd-blue);
-  font-family: var(--kd-heading-font);
-  font-size: clamp(38px, 3.4vw, 46px);
-  font-weight: 800;
-  line-height: 1.05;
-  letter-spacing: -0.04em;
+margin: 0;
+color: var(--kd-blue);
+font-family: var(--kd-heading-font);
+font-size: clamp(36px, 3vw, 44px);
+font-weight: 800;
+line-height: 1.05;
+letter-spacing: -0.04em;
 }
 
 .kd-services-heading p {
-  margin: 10px 0 0;
-  color: var(--kd-muted-text);
-  font-size: clamp(17px, 1.4vw, 19px);
-  line-height: 1.5;
+margin: 7px 0 0;
+color: var(--kd-muted-text);
+font-size: clamp(16px, 1.25vw, 18px);
+line-height: 1.4;
 }
 
 .kd-services-heading .kd-services-heading-green {
-  margin-top: 3px;
-  color: var(--kd-green);
-  font-weight: 600;
+margin-top: 2px;
+color: var(--kd-green);
+font-weight: 600;
 }
 
 .kd-services-cards {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 28px;
-  margin-top: 38px;
+display: grid;
+grid-template-columns: repeat(3, minmax(0, 1fr));
+align-items: stretch;
+gap: 18px;
+margin-top: 26px;
 }
 
 .kd-services-card {
-  min-height: 302px;
-  padding: 30px 32px;
-  border: 1px solid #d8e2ef;
-  border-radius: 10px;
-  background: rgb(246 249 253 / 92%);
+min-height: 250px;
+padding: 23px 24px;
+border: 1px solid #d8e2ef;
+border-radius: 10px;
+background: rgb(246 249 253 / 92%);
 }
 
 .kd-services-card h2 {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  margin: 0;
-  color: var(--kd-blue);
-  font-family: var(--kd-heading-font);
-  font-size: clamp(24px, 2vw, 29px);
-  font-weight: 800;
-  line-height: 1.1;
+display: flex;
+align-items: center;
+justify-content: center;
+gap: 8px;
+margin: 0;
+color: var(--kd-blue);
+font-family: var(--kd-heading-font);
+font-size: clamp(21px, 1.65vw, 25px);
+font-weight: 800;
+line-height: 1.1;
+white-space: nowrap;
 }
 
 .kd-services-card h2 span {
-  font-family: sans-serif;
-  font-size: 0.76em;
-  line-height: 1;
+font-family: sans-serif;
+font-size: 0.74em;
+line-height: 1;
 }
 
 .kd-services-card-description {
-  margin: 18px 0 0;
-  color: #536f87;
-  font-size: clamp(18px, 1.42vw, 20px);
-  font-weight: 700;
-  line-height: 1.4;
+margin: 13px 0 0;
+color: #536f87;
+font-size: clamp(16px, 1.2vw, 18px);
+font-weight: 700;
+line-height: 1.35;
 }
 
 .kd-services-card ul {
-  margin: 16px 0 0;
-  padding: 0;
-  list-style: none;
-  color: var(--kd-blue);
-  font-size: clamp(17px, 1.34vw, 19px);
-  line-height: 1.45;
+margin: 11px 0 0;
+padding: 0;
+list-style: none;
+color: var(--kd-blue);
+font-size: clamp(15px, 1.08vw, 17px);
+line-height: 1.38;
+}
+
+.kd-services-card li + li {
+margin-top: 3px;
 }
 
 .kd-services-transit {
-  margin: 16px 0 0;
-  color: #4aa923;
-  font-size: clamp(17px, 1.34vw, 19px);
-  font-weight: 800;
-  line-height: 1.4;
+margin: 11px 0 0;
+color: #4aa923;
+font-size: clamp(15px, 1.08vw, 17px);
+font-weight: 800;
+line-height: 1.35;
 }
 
+.kd-services-transit a {
+color: inherit;
+font-weight: 800;
+text-decoration: underline;
+text-underline-offset: 2px;
+}
 .kd-services-visuals {
   padding: 0 0 36px;
 }
