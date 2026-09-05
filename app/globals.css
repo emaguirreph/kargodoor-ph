@@ -573,21 +573,34 @@ a {
   padding-top: 66px;
 }
 
+/* HOME — three equal service cards with aligned headings. */
 .kd-service-grid {
-display: grid;
-grid-template-columns: repeat(3, 1fr);
-gap: 20px;
-width: min(1100px, 100%);
-margin: 34px auto 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  width: min(1200px, 100%);
+  margin: 34px auto 0;
 }
 
 .kd-service-card {
-  min-height: 190px;
-  padding: 36px 34px;
+  min-height: 220px;
+  padding: 54px 28px 36px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 18px;
   text-align: left;
+}
+
+.kd-service-card > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.kd-service-card h3 {
+  height: 42px;
+  margin: 0 0 12px;
+  display: flex;
+  align-items: center;
 }
 
 .kd-service-icon {
@@ -1150,6 +1163,7 @@ margin: 34px auto 0;
 }
 
 /* Rates & Calculator — page-specific styles. Shared site chrome remains unchanged. */
+
 .kd-rates-page {
   background-color: #f4f8ff;
   background-image: url("/assets/kargodoor-rates-background-approved.png");
@@ -1526,6 +1540,7 @@ margin: 34px auto 0;
 }
 
 /* Rates & Calculator — compact two-card layout. */
+
 .kd-calculator-grid {
   grid-template-columns: minmax(0, 620px) minmax(300px, 340px);
   justify-content: center;
@@ -1696,6 +1711,7 @@ margin: 34px auto 0;
 }
 
 /* FAQ — page-specific styles. Shared page chrome remains unchanged. */
+
 .kd-faq-page {
   background-color: #f4f8ff;
   background-image: url("/assets/kargodoor-faq-background-approved.png");
@@ -1862,6 +1878,7 @@ margin: 34px auto 0;
 }
 
 /* Contact Us — isolated page styles. Locked shared site chrome remains unchanged. */
+
 .kd-contact-page {
   background: #f5f8fd;
 }
@@ -2387,6 +2404,7 @@ margin: 34px auto 0;
   }
 
   /* Keep the navigation control at the far right on phone-width layouts. */
+
   .kd-mobile-menu {
     margin-left: auto;
   }
@@ -2450,6 +2468,7 @@ margin: 34px auto 0;
   }
 
   /* Mobile type scale: readable without the oversized desktop proportions. */
+
   .kd-section h2,
   .kd-rates h2,
   .kd-story-heading h2,
@@ -2557,33 +2576,24 @@ margin: 34px auto 0;
     min-height: 0;
   }
 
+  /* HOME services stack normally on phones.
+     No duplicate 3-column rule here. */
+
   .kd-service-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
-  width: min(1200px, 100%);
-  margin: 34px auto 0;
-}
+    width: 100%;
+    gap: 12px;
+  }
 
-.kd-service-card {
-  min-height: 220px;
-  padding: 36px 28px;
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  text-align: left;
-}
+  .kd-service-card {
+    min-height: 112px;
+    padding: 24px;
+    align-items: center;
+  }
 
-.kd-service-card > div {
-  flex: 1;
-  min-width: 0;
-}
-
-.kd-service-card h3 {
-  min-height: 42px;
-  display: flex;
-  align-items: center;
-}
+  .kd-service-card h3 {
+    height: auto;
+    margin: 0;
+  }
 
   .kd-story {
     padding: 48px 0;
@@ -2737,6 +2747,7 @@ margin: 34px auto 0;
 }
 
 /* Final phone-only typography guardrail. This comes after page-specific mobile rules. */
+
 @media (max-width: 700px) {
   .kd-section h2,
   .kd-rates h2,
@@ -2773,6 +2784,7 @@ margin: 34px auto 0;
 }
 
 /* Rates & Calculator — retain the compact result layout at phone widths. */
+
 .kd-calculator-card label > .kd-cbm-label {
   font-size: 12px;
   white-space: nowrap;
@@ -2798,6 +2810,7 @@ margin: 34px auto 0;
 }
 
 /* Rates & Calculator — input-label alignment micro-correction. */
+
 .kd-calculator-card > label:first-of-type > span,
 .kd-calculator-input-row label > span,
 .kd-calculator-input-row label > .kd-cbm-label {
@@ -2807,6 +2820,7 @@ margin: 34px auto 0;
 }
 
 /* Final CBM / Weight alignment fix */
+
 .kd-rates-page .kd-calculator-input-row {
   align-items: stretch;
 }
