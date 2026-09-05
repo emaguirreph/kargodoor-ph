@@ -2132,12 +2132,12 @@ min-height: 500px;
 .kd-hero-blur {
 display: none;
 }
-
 .kd-hero-copy {
 position: relative;
 z-index: 1;
 width: 88%;
 padding-top: 48px;
+background: transparent;
 }
 
 .kd-hero-actions {
