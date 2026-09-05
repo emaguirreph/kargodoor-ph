@@ -2558,14 +2558,32 @@ margin: 34px auto 0;
   }
 
   .kd-service-grid {
-    width: 100%;
-    gap: 12px;
-  }
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  width: min(1200px, 100%);
+  margin: 34px auto 0;
+}
 
-  .kd-service-card {
-    min-height: 112px;
-    padding: 24px;
-  }
+.kd-service-card {
+  min-height: 220px;
+  padding: 36px 28px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  text-align: left;
+}
+
+.kd-service-card > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.kd-service-card h3 {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+}
 
   .kd-story {
     padding: 48px 0;
