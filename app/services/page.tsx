@@ -13,7 +13,7 @@ const services = [
       "Bulkier and commercial cargo",
       "Shipments where cost matters more than speed",
     ],
-    transit: "Estimated transit time: 21–30 days",
+    transit: "Estimated transit time: 3–5 weeks",
   },
   {
     icon: "✈",
@@ -24,7 +24,18 @@ const services = [
       "Urgent but cost-sensitive cargo",
       "Goods that need faster transportation",
     ],
-    transit: "Estimated transit time: 3–7 days",
+    transit: "Estimated transit time: 5–7 days",
+  },
+  {
+    icon: "🚚",
+    title: "DOOR-TO-DOOR",
+    description: "Convenient delivery from our Metro Manila Warehouse to your location.",
+    details: [
+      "Free delivery for shipments of 2 CBM+ within 20 km of our Metro Manila Warehouse",
+      "Extended delivery services are available with applicable fees",
+    ],
+    transit: "",
+    deliveryLinks: true,
   },
 ];
 
@@ -51,20 +62,54 @@ export default function ServicesPage() {
                     <span aria-hidden="true">{service.icon}</span>
                     {service.title}
                   </h2>
-                  <p className="kd-services-card-description">{service.description}</p>
+
+                  <p className="kd-services-card-description">
+                    {service.description}
+                  </p>
+
                   <ul>
                     {service.details.map((detail) => (
                       <li key={detail}>{detail}</li>
                     ))}
                   </ul>
-                  <p className="kd-services-transit">{service.transit}</p>
+
+                  {service.transit && (
+                    <p className="kd-services-transit">
+                      {service.transit}
+                    </p>
+                  )}
+
+                  {service.deliveryLinks && (
+                    <p className="kd-services-transit">
+                      Delivery may also be arranged through{" "}
+                      <a
+                        href="https://www.lalamove.com/en-ph/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Lalamove
+                      </a>{" "}
+                      or{" "}
+                      <a
+                        href="https://www.transportify.com.ph/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Transportify
+                      </a>
+                      .
+                    </p>
+                  )}
                 </article>
               ))}
             </div>
           </div>
         </section>
 
-        <section className="kd-services-visuals" aria-label="Warehouses and all-in shipping inclusions">
+        <section
+          className="kd-services-visuals"
+          aria-label="Warehouses and all-in shipping inclusions"
+        >
           <div className="kd-container kd-services-container">
             <img
               className="kd-services-warehouse-image"
@@ -75,6 +120,7 @@ export default function ServicesPage() {
               loading="lazy"
               decoding="async"
             />
+
             <img
               className="kd-services-inclusions-image"
               src="/assets/kargodoor-services-all-in-approved.png"
@@ -87,19 +133,36 @@ export default function ServicesPage() {
           </div>
         </section>
 
-        <section className="kd-services-cta" aria-labelledby="service-cta-title">
+        <section
+          className="kd-services-cta"
+          aria-labelledby="service-cta-title"
+        >
           <div className="kd-container kd-services-container kd-services-cta-inner">
             <div>
-              <h2 id="service-cta-title">WHICH SERVICE IS RIGHT FOR YOU?</h2>
+              <h2 id="service-cta-title">
+                WHICH SERVICE IS RIGHT FOR YOU?
+              </h2>
               <p>Not sure whether to ship by sea or air?</p>
-              <p>Tell us about your cargo and we’ll help you choose the option that best fits your shipment.</p>
+              <p>
+                Tell us about your cargo and we’ll help you choose the option
+                that best fits your shipment.
+              </p>
             </div>
+
             <div className="kd-services-cta-actions">
-              <TrackedLink className="kd-button kd-button-green" href="/contact-us" analyticsEvent="generate_lead">
+              <TrackedLink
+                className="kd-button kd-button-green"
+                href="/contact-us"
+                analyticsEvent="generate_lead"
+              >
                 <FileText aria-hidden="true" />
                 GET A QUOTE
               </TrackedLink>
-              <Link className="kd-button kd-button-white" href="/rates-calculator">
+
+              <Link
+                className="kd-button kd-button-white"
+                href="/rates-calculator"
+              >
                 <Calculator aria-hidden="true" />
                 CALCULATOR
               </Link>
