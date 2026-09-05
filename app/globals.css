@@ -2036,4 +2036,22 @@ a {
   font-weight: 800;
   white-space: nowrap;
 }
-.kd-calculator-input-row { align-items: start; }
+.kd-calculator-input-row { align-items: stretch; }
+/* Final CBM / Weight alignment fix */
+.kd-rates-page .kd-calculator-input-row > label {
+  display: grid;
+  grid-template-rows: 24px 46px;
+  align-items: start;
+}
+
+.kd-rates-page .kd-calculator-input-row > label > span {
+  height: 24px;
+  line-height: 24px;
+  margin-bottom: 6px;
+  white-space: nowrap;
+}
+
+.kd-rates-page .kd-calculator-input-row > label > input {
+  height: 46px;
+  margin: 0;
+}
