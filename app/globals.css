@@ -2123,25 +2123,13 @@ min-height: 500px;
 }
 
 .kd-hero {
-background-position: 64% center;
+background-image: url("/assets/kargodoor-home-hero-approved.png");
+background-position: center;
+background-size: cover;
 }
 
 .kd-hero-blur {
-background-position: 64% center;
-filter: none;
-opacity: 0;
-}
-
-.kd-hero::before {
-content: "";
-position: absolute;
-inset: 0;
-background: linear-gradient(
-90deg,
-rgb(242 248 252 / 96%) 0%,
-rgb(242 248 252 / 82%) 50%,
-rgb(242 248 252 / 10%) 78%
-);
+display: none;
 }
 
 .kd-hero-copy {
