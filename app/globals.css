@@ -349,28 +349,9 @@ pointer-events: none;
 background-image: url("/assets/kargodoor-home-hero-approved.png");
 background-position: center;
 background-size: cover;
-filter: blur(4px) saturate(0.92);
-opacity: 0.95;
-transform: scale(1.012);
-}
-
-.kd-hero-blur-plane {
-clip-path: polygon(63% 5%, 88% 5%, 88% 39%, 63% 39%);
-}
-
-.kd-hero-blur-ship {
-clip-path: polygon(
-41% 43%,
-76% 43%,
-64% 61%,
-59% 61%,
-56% 85%,
-43% 85%
-);
-}
-
-.kd-hero-blur-boxes {
-clip-path: polygon(89% 80%, 100% 75%, 100% 100%, 87% 100%);
+filter: none;
+opacity: 0;
+transform: none;
 }
 
 .kd-hero-inner {
@@ -2147,7 +2128,8 @@ background-position: 64% center;
 
 .kd-hero-blur {
 background-position: 64% center;
-filter: blur(3px) saturate(0.92);
+filter: none;
+opacity: 0;
 }
 
 .kd-hero::before {
