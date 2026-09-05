@@ -2145,8 +2145,9 @@ margin-left: 0;
 }
 
 .kd-hero-branding {
-width: min(430px, 100%);
-mix-blend-mode: normal;
+  width: min(430px, 100%);
+  mix-blend-mode: multiply;
+  background: transparent;
 }
 
 .kd-section h2,
