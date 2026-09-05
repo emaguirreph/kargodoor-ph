@@ -14,10 +14,19 @@ const navigation = [
 ];
 
 function Brand({ variant = "header" }: { variant?: "header" | "footer" }) {
+  const logoSrc =
+    variant === "footer"
+      ? "/assets/kargodoor-footer-logo.png"
+      : "/assets/kargodoor-logo-tagline-approved.png";
+
   return (
-    <Link className={`kd-brand kd-brand-${variant}`} href="/" aria-label="KargoDoor PH home">
+    <Link
+      className={`kd-brand kd-brand-${variant}`}
+      href="/"
+      aria-label="KargoDoor PH home"
+    >
       <img
-        src="/assets/kargodoor-logo-tagline-approved.png"
+        src={logoSrc}
         alt="KargoDoor PH — China to PH, made SIMPLE"
       />
     </Link>
@@ -31,6 +40,7 @@ export function Header() {
     <header className="kd-header">
       <div className="kd-header-inner">
         <Brand />
+
         <nav className="kd-desktop-nav" aria-label="Primary navigation">
           {navigation.map((item) => (
             <Link key={item.href} href={item.href}>
@@ -38,9 +48,17 @@ export function Header() {
             </Link>
           ))}
         </nav>
-        <Link className="kd-header-quote" href="/contact-us" onClick={() => trackEvent("generate_lead")}>
+
+        <a
+          className="kd-header-quote"
+          href="https://m.me/KargoDoorPH"
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => trackEvent("generate_lead")}
+        >
           GET A QUOTE
-        </Link>
+        </a>
+
         <div className="kd-mobile-menu">
           <button
             type="button"
@@ -54,15 +72,34 @@ export function Header() {
             <span />
             <span />
           </button>
-          <nav id="kd-mobile-navigation" aria-label="Mobile navigation" hidden={!mobileMenuOpen}>
+
+          <nav
+            id="kd-mobile-navigation"
+            aria-label="Mobile navigation"
+            hidden={!mobileMenuOpen}
+          >
             {navigation.map((item) => (
-              <Link key={item.href} href={item.href} onClick={() => setMobileMenuOpen(false)}>
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setMobileMenuOpen(false)}
+              >
                 {item.label}
               </Link>
             ))}
-            <Link className="kd-mobile-quote" href="/contact-us" onClick={() => { setMobileMenuOpen(false); trackEvent("generate_lead"); }}>
+
+            <a
+              className="kd-mobile-quote"
+              href="https://m.me/KargoDoorPH"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                trackEvent("generate_lead");
+              }}
+            >
               GET A QUOTE
-            </Link>
+            </a>
           </nav>
         </div>
       </div>
@@ -75,15 +112,20 @@ export function Footer() {
     <footer className="kd-footer">
       <div className="kd-container">
         <Brand variant="footer" />
+
         <div className="kd-footer-grid">
           <section>
             <h2>CONTACT INFORMATION</h2>
             <p>Mobile: 0917 157 7370</p>
             <p>
-              Email: <a href="mailto:support@kargodoorph.com">support@kargodoorph.com</a>
+              Email:{" "}
+              <a href="mailto:support@kargodoorph.com">
+                support@kargodoorph.com
+              </a>
             </p>
             <p>Support: 8:00 AM–10:00 PM · 7 Days/Week</p>
           </section>
+
           <nav aria-label="Footer navigation">
             <h2>NAVIGATION</h2>
             {navigation.map((item) => (
@@ -92,23 +134,48 @@ export function Footer() {
               </Link>
             ))}
           </nav>
+
           <section className="kd-follow">
             <h2>FOLLOW US</h2>
             <div>
-              <a href="https://www.facebook.com/KargoDoorPH" target="_blank" rel="noopener noreferrer" aria-label="KargoDoor PH on Facebook" onClick={() => trackEvent("click_facebook")}>
+              <a
+                href="https://www.facebook.com/KargoDoorPH"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="KargoDoor PH on Facebook"
+                onClick={() => trackEvent("click_facebook")}
+              >
                 <span aria-hidden="true">f</span>
               </a>
-              <a href="https://www.instagram.com/kargodoorph/" target="_blank" rel="noopener noreferrer" aria-label="KargoDoor PH on Instagram" onClick={() => trackEvent("click_instagram")}>
+
+              <a
+                href="https://www.instagram.com/kargodoorph/"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="KargoDoor PH on Instagram"
+                onClick={() => trackEvent("click_instagram")}
+              >
                 <span aria-hidden="true">◎</span>
               </a>
-              <a href="https://www.tiktok.com/@kargodoor.ph" target="_blank" rel="noopener noreferrer" aria-label="KargoDoor PH on TikTok" onClick={() => trackEvent("click_tiktok")}>
+
+              <a
+                href="https://www.tiktok.com/@kargodoor.ph"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="KargoDoor PH on TikTok"
+                onClick={() => trackEvent("click_tiktok")}
+              >
                 <span aria-hidden="true">♪</span>
               </a>
             </div>
           </section>
         </div>
-        <p className="kd-copyright">© 2026 KARGODOOR PH. ALL RIGHTS RESERVED.</p>
+
+        <p className="kd-copyright">
+          © 2026 KARGODOOR PH. ALL RIGHTS RESERVED.
+        </p>
       </div>
+
       <a
         className="kd-floating-message"
         href="https://m.me/KargoDoorPH"
@@ -118,7 +185,10 @@ export function Footer() {
         onClick={() => trackEvent("contact")}
       >
         <video autoPlay loop muted playsInline preload="metadata" aria-hidden="true">
-          <source src="/assets/kargodoor-message-us-approved.webm" type="video/webm" />
+          <source
+            src="/assets/kargodoor-message-us-approved.webm"
+            type="video/webm"
+          />
         </video>
       </a>
     </footer>
