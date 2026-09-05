@@ -362,7 +362,7 @@ export default function RatesCalculatorPage() {
 
             <div className="kd-size-guide-scroll">
               <img
-                src="/assets/kargodoor-package-size-guide-clear-approved.png"
+                src="/assets/kargodoor-package-size-guide-approved.png"
                 alt="Package size guide for KD Mini, KD Lite, KD Plus, KD Standard, and KD Max"
                 width={1643}
                 height={1044}
