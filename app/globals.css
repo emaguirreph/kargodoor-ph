@@ -181,7 +181,7 @@ margin: 0 auto;
 
 .kd-header {
 height: 88px;
-background: #fff;
+background: #transparent;
 border-bottom: 1px solid #e8eef5;
 }
 
@@ -2123,9 +2123,10 @@ min-height: 500px;
 }
 
 .kd-hero {
-background-image: url("/assets/kargodoor-home-hero-approved.png");
-background-position: center;
-background-size: cover;
+  background-image: url("/assets/kargodoor-home-hero-approved.png");
+  background-position: center;
+  background-size: auto 100%;
+  background-repeat: no-repeat;
 }
 
 .kd-hero-blur {
