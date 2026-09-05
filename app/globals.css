@@ -2699,3 +2699,21 @@ width: 100%;
 height: 46px;
 margin: 0;
 }
+/* FINAL FAQ COMPACT BAR OVERRIDE */
+
+.kd-faq-page .kd-faq-listing {
+  gap: 8px;
+  margin-top: 28px;
+}
+
+.kd-faq-page .kd-faq-item button {
+  height: 58px;
+  min-height: 58px;
+  padding: 0 22px;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.kd-faq-page .kd-faq-item {
+  min-height: 0;
+}
