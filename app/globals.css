@@ -1818,3 +1818,334 @@ a {
     transition: transform 160ms ease, background-color 160ms ease, border-color 160ms ease;
   }
 }
+/* =========================================================
+   KARGODOOR — RATES & CALCULATOR COMPACT LAYOUT
+   Scoped only to /rates-calculator
+   ========================================================= */
+
+.kd-rates-page .kd-calculator-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 600px) minmax(300px, 330px);
+  justify-content: center;
+  align-items: stretch;
+  gap: 20px;
+  margin-top: 24px;
+}
+
+.kd-rates-page .kd-calculator-card,
+.kd-rates-page .kd-result-card {
+  width: 100%;
+  min-width: 0;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.kd-rates-page .kd-calculator-card {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+
+.kd-rates-page .kd-calculator-card h2,
+.kd-rates-page .kd-result-card h2 {
+  gap: 10px;
+  margin: 0 0 14px;
+  font-size: clamp(22px, 1.7vw, 27px);
+  line-height: 1.15;
+}
+
+.kd-rates-page .kd-calculator-icon svg,
+.kd-rates-page .kd-result-icon {
+  flex: 0 0 auto;
+}
+
+.kd-rates-page .kd-calculator-card label {
+  margin: 0;
+  min-width: 0;
+}
+
+.kd-rates-page .kd-calculator-card label > span {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.kd-rates-page .kd-calculator-card select,
+.kd-rates-page .kd-calculator-card input {
+  width: 100%;
+  min-width: 0;
+  height: 48px;
+  box-sizing: border-box;
+}
+
+.kd-rates-page .kd-calculator-input-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  align-items: end;
+}
+
+.kd-rates-page .kd-density-field input {
+  background: #f4f7f9;
+  cursor: default;
+}
+
+.kd-rates-page .kd-calculator-helper {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.kd-rates-page .kd-calculator-error {
+  margin: 0;
+}
+
+.kd-rates-page .kd-calculate-button {
+  margin-top: 2px;
+  min-height: 50px;
+}
+
+.kd-rates-page .kd-result-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.kd-rates-page .kd-result-empty,
+.kd-rates-page .kd-result-filled {
+  flex: 1;
+}
+
+.kd-rates-page .kd-result-filled {
+  display: flex;
+  flex-direction: column;
+}
+
+.kd-rates-page .kd-result-row {
+  margin: 8px 0 0;
+}
+
+.kd-rates-page .kd-result-total {
+  margin-top: auto;
+  padding-top: 18px;
+}
+
+.kd-rates-page .kd-result-total strong {
+  display: block;
+  margin-top: 8px;
+}
+
+.kd-rates-page .kd-rates-disclaimer {
+  margin-top: 14px;
+  font-size: 12px;
+  line-height: 1.45;
+  align-items: flex-start;
+}
+
+.kd-rates-page .kd-rates-disclaimer p {
+  margin: 0;
+}
+
+.kd-rates-page .kd-density-formula {
+  margin-top: 5px !important;
+}
+
+/* Tablet / mobile */
+@media (max-width: 900px) {
+  .kd-rates-page .kd-calculator-grid {
+    grid-template-columns: 1fr;
+    max-width: 620px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .kd-rates-page .kd-calculator-card,
+  .kd-rates-page .kd-result-card {
+    width: 100%;
+  }
+}
+
+/* Phone */
+@media (max-width: 600px) {
+  .kd-rates-page .kd-calculator-grid {
+    gap: 16px;
+    margin-top: 18px;
+  }
+
+  .kd-rates-page .kd-calculator-card,
+  .kd-rates-page .kd-result-card {
+    padding: 18px;
+  }
+
+  .kd-rates-page .kd-calculator-input-row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .kd-rates-page .kd-calculator-card h2,
+  .kd-rates-page .kd-result-card h2 {
+    font-size: 21px;
+  }
+
+  .kd-rates-page .kd-rates-disclaimer {
+    font-size: 11px;
+  }
+}
+
+/* =========================================================
+   KARGODOOR — RATES & CALCULATOR COMPACT OVERRIDES
+   Scoped only to /rates-calculator
+   ========================================================= */
+
+.kd-rates-page .kd-calculator-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 600px) minmax(300px, 330px);
+  justify-content: center;
+  align-items: stretch;
+  gap: 20px;
+  margin-top: 24px;
+}
+
+.kd-rates-page .kd-calculator-card,
+.kd-rates-page .kd-result-card {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 22px;
+}
+
+.kd-rates-page .kd-calculator-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.kd-rates-page .kd-calculator-card h2,
+.kd-rates-page .kd-result-card h2 {
+  margin: 0 0 12px;
+  gap: 10px;
+  font-size: clamp(22px, 1.7vw, 27px);
+  line-height: 1.15;
+}
+
+.kd-rates-page .kd-calculator-card label {
+  margin: 0;
+  min-width: 0;
+}
+
+.kd-rates-page .kd-calculator-card label > span {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.kd-rates-page .kd-calculator-card select,
+.kd-rates-page .kd-calculator-card input {
+  width: 100%;
+  min-width: 0;
+  height: 46px;
+  box-sizing: border-box;
+}
+
+.kd-rates-page .kd-calculator-input-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  align-items: end;
+}
+
+.kd-rates-page .kd-density-field input {
+  background: #f4f7f9;
+  cursor: default;
+}
+
+.kd-rates-page .kd-calculator-helper {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.kd-rates-page .kd-calculator-error {
+  margin: 0;
+}
+
+.kd-rates-page .kd-calculate-button {
+  margin-top: 2px;
+  min-height: 48px;
+}
+
+.kd-rates-page .kd-result-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.kd-rates-page .kd-result-empty,
+.kd-rates-page .kd-result-filled {
+  flex: 1;
+}
+
+.kd-rates-page .kd-result-filled {
+  display: flex;
+  flex-direction: column;
+}
+
+.kd-rates-page .kd-result-row {
+  margin: 6px 0 0;
+}
+
+.kd-rates-page .kd-result-total {
+  margin-top: auto;
+  padding-top: 16px;
+}
+
+.kd-rates-page .kd-result-total strong {
+  display: block;
+  margin-top: 6px;
+}
+
+.kd-rates-page .kd-rates-disclaimer {
+  margin-top: 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  align-items: flex-start;
+}
+
+.kd-rates-page .kd-rates-disclaimer p {
+  margin: 0;
+}
+
+.kd-rates-page .kd-density-formula {
+  margin-top: 4px !important;
+}
+
+@media (max-width: 900px) {
+  .kd-rates-page .kd-calculator-grid {
+    grid-template-columns: 1fr;
+    max-width: 620px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+
+@media (max-width: 600px) {
+  .kd-rates-page .kd-calculator-grid {
+    gap: 16px;
+    margin-top: 18px;
+  }
+
+  .kd-rates-page .kd-calculator-card,
+  .kd-rates-page .kd-result-card {
+    padding: 18px;
+  }
+
+  .kd-rates-page .kd-calculator-input-row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .kd-rates-page .kd-calculator-card h2,
+  .kd-rates-page .kd-result-card h2 {
+    font-size: 21px;
+  }
+
+  .kd-rates-page .kd-rates-disclaimer {
+    font-size: 11px;
+  }
+}
