@@ -1057,7 +1057,7 @@ a {
   width: max-content;
   padding: 0;
   border-radius: 3px;
-  background: #fff;
+  background: transparent;
   overflow: hidden;
 }
 
