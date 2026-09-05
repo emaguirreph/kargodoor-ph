@@ -21,7 +21,7 @@ const processSteps = [
       "Your supplier sends your packages to one of our warehouses in Guangzhou, Yiwu, Shishi, Hong Kong, or Taiwan.",
       "Make sure your KargoDoor Cargo Code is attached to every package so we can properly identify and track your shipment.",
       "From there, we handle the international shipping, customs clearance, taxes, and processing — all covered by one simple all-in shipping rate.",
-      "Estimated transit time: 21–30 days.",
+      "Estimated transit time: Sea Freight — 3–5 weeks · Air Freight — 5–7 days.",
     ],
   },
   {
