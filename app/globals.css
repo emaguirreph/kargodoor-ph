@@ -2027,3 +2027,13 @@ a {
 .kd-result-row strong { display: block; text-align: left; }
 .kd-result-row strong { margin-top: 7px; }
 .kd-result-total strong { font-size: clamp(32px, 3.5vw, 44px); white-space: nowrap; }
+
+/* Rates & Calculator — input-label alignment micro-correction. */
+.kd-calculator-card > label:first-of-type > span,
+.kd-calculator-input-row label > span,
+.kd-calculator-input-row label > .kd-cbm-label {
+  font-size: 16px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.kd-calculator-input-row { align-items: start; }
