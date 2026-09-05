@@ -574,11 +574,11 @@ a {
 }
 
 .kd-service-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 26px;
-  width: min(900px, 100%);
-  margin: 34px auto 0;
+display: grid;
+grid-template-columns: repeat(3, 1fr);
+gap: 20px;
+width: min(1100px, 100%);
+margin: 34px auto 0;
 }
 
 .kd-service-card {
