@@ -13,5 +13,12 @@
       "binding": "WORKER_SELF_REFERENCE",
       "service": "kargodoor-ph"
     }
+  ],
+  "d1_databases": [
+    {
+      "binding": "TRACKING_DB",
+      "database_name": "kargodoor-tracking",
+      "database_id": "2a224381-a6d9-40b0-9796-b05aad6f14ab"
+    }
   ]
 }
