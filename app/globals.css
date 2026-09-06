@@ -1012,11 +1012,18 @@ text-underline-offset: 2px;
 padding: 0 0 36px;
 }
 
-.kd-services-warehouse-image,
+.kd-services-warehouse-image {
+  display: block;
+  width: 80%;
+  max-width: 1000px;
+  height: auto;
+  margin: 0 auto;
+}
+
 .kd-services-inclusions-image {
-display: block;
-width: 100%;
-height: auto;
+  display: block;
+  width: 100%;
+  height: auto;
 }
 
 .kd-services-inclusions-image {
