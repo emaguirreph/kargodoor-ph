@@ -89,8 +89,14 @@ export async function POST(request: Request) {
   try {
     const auth = await authenticate(request);
     if (auth.denied) return auth.denied;
-    // Basic credentials are sent automatically by browsers. Enforce same-origin writes.
-    if (request.headers.get("origin") !== new URL(request.url).origin) return response("This request is not allowed.", 403);
+    // Basic credentials are sent automatically by browsers.
+// Safari may submit same-page HTML forms with Origin: null.
+const origin = request.headers.get("origin");
+const expectedOrigin = new URL(request.url).origin;
+
+if (origin && origin !== "null" && origin !== expectedOrigin) {
+  return response("This request is not allowed.", 403);
+}
     if (!request.headers.get("content-type")?.startsWith("application/x-www-form-urlencoded")) return response("Unsupported form format.", 415);
     const body = await request.text();
     if (body.length > 24000) return response("Form is too large.", 413);
