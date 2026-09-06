@@ -4,8 +4,9 @@ import { useId, useState, type ReactNode } from "react";
 import { Footer, Header } from "@/components/site-chrome";
 
 const messengerUrl = "https://m.me/KargoDoorPH";
-// Use Messenger for tracking inquiries until the tracking page URL is available.
-const trackingUrl = messengerUrl;
+
+const trackingUrl =
+  "https://kargodoor-ph.em-aguirreph.workers.dev/track";
 
 function ContactLink({
   children = "Contact KargoDoor",
