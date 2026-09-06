@@ -10,8 +10,39 @@ export const metadata: Metadata = {
     "Simple, reliable, and affordable shipping from China to the Philippines. Ship by sea or air with KargoDoor PH's all-in shipping service.",
     "/",
   ),
+
   metadataBase: new URL(siteUrl),
-  robots: { index: true, follow: true },
+
+  openGraph: {
+    title: "KargoDoor PH | China to Philippines Shipping",
+    description:
+      "Simple, reliable, and affordable shipping from China to the Philippines.",
+    url: "/",
+    siteName: "KargoDoor PH",
+    type: "website",
+    images: [
+      {
+        url: "/assets/kargodoor-social-share.png",
+        width: 1200,
+        height: 630,
+        alt: "KargoDoor PH - China to Philippines Shipping",
+      },
+    ],
+  },
+
+  twitter: {
+    card: "summary_large_image",
+    title: "KargoDoor PH | China to Philippines Shipping",
+    description:
+      "Simple, reliable, and affordable shipping from China to the Philippines.",
+    images: ["/assets/kargodoor-social-share.png"],
+  },
+
+  robots: {
+    index: true,
+    follow: true,
+  },
+
   other: {
     "codex-preview": "development",
   },
@@ -31,7 +62,11 @@ const structuredData = {
         "https://www.tiktok.com/@kargodoor.ph",
       ],
     },
-    { "@type": "WebSite", name: "KargoDoor PH", url: siteUrl },
+    {
+      "@type": "WebSite",
+      name: "KargoDoor PH",
+      url: siteUrl,
+    },
   ],
 };
 
@@ -44,12 +79,27 @@ export default function RootLayout({
     <html lang="en">
       <body className="antialiased">
         {children}
+
         <AnalyticsPageViews />
-        <Script src="https://www.googletagmanager.com/gtag/js?id=G-N0SJG6R2VH" strategy="afterInteractive" />
+
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=G-N0SJG6R2VH"
+          strategy="afterInteractive"
+        />
+
         <Script id="google-analytics" strategy="afterInteractive">
-          {`window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date()); gtag('config', 'G-N0SJG6R2VH');`}
+          {`window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-N0SJG6R2VH');`}
         </Script>
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
+
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(structuredData),
+          }}
+        />
       </body>
     </html>
   );
