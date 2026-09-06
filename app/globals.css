@@ -3000,3 +3000,53 @@ margin: 0;
     padding-right: 20px;
   }
 }
+/* =========================================================
+   HOME HERO — FINAL BRANDING SIZE & ALIGNMENT
+   ========================================================= */
+
+/* DESKTOP */
+@media (min-width: 701px) {
+  .kd-hero-copy {
+    width: 64%;
+  }
+
+  .kd-hero-branding {
+    width: min(760px, 100%);
+    height: auto;
+  }
+
+  .kd-hero-actions {
+    width: min(760px, 100%);
+    justify-content: center;
+    margin-left: 0;
+    margin-right: 0;
+  }
+}
+
+/* MOBILE */
+@media (max-width: 700px) {
+  .kd-hero-copy {
+    width: 100%;
+    padding-top: 38px;
+    background: transparent !important;
+  }
+
+  .kd-hero-branding {
+    display: block;
+    width: min(92vw, 500px);
+    max-width: 100%;
+    height: auto;
+    margin-left: auto;
+    margin-right: auto;
+    background: transparent !important;
+    mix-blend-mode: normal !important;
+  }
+
+  .kd-hero-actions {
+    width: 100%;
+    justify-content: center;
+    margin-left: auto;
+    margin-right: auto;
+    margin-top: 16px;
+  }
+}
