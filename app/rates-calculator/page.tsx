@@ -4,11 +4,13 @@ import { useMemo, useState, type FormEvent } from "react";
 import {
   ArrowRight,
   Calculator,
+  FileText,
   Info,
   PackageOpen,
   ShieldCheck,
 } from "lucide-react";
 import { Footer, Header } from "@/components/site-chrome";
+import { TrackedAnchor } from "@/components/tracked-link";
 import { trackEvent } from "@/lib/analytics";
 import { getAirEstimate, getSeaEstimate } from "@/lib/shipping-estimate.mjs";
 
@@ -325,6 +327,16 @@ export default function RatesCalculatorPage() {
                     </div>
                   </div>
                 )}
+                <TrackedAnchor
+                  className="kd-button kd-button-green kd-result-quote"
+                  href="http://m.me/kargodoorph"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  analyticsEvent="generate_lead"
+                >
+                  <FileText aria-hidden="true" />
+                  GET A QUOTE
+                </TrackedAnchor>
               </section>
             </div>
 

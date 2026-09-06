@@ -390,8 +390,10 @@ mix-blend-mode: multiply;
 .kd-hero-actions {
 display: flex;
 gap: 9px;
+width: min(660px, 100%);
+justify-content: center;
+flex-wrap: wrap;
 margin-top: 18px;
-margin-left: 74px;
 }
 
 .kd-hero-actions .kd-button {
@@ -1414,6 +1416,19 @@ display: flex;
 flex-direction: column;
 }
 
+.kd-result-quote {
+align-self: center;
+margin-top: 18px;
+gap: 8px;
+font-size: 14px;
+}
+
+.kd-result-quote svg {
+width: 19px;
+height: 19px;
+flex: 0 0 auto;
+}
+
 .kd-result-empty,
 .kd-result-filled {
 display: flex;
@@ -2141,7 +2156,7 @@ background: transparent;
 }
 
 .kd-hero-actions {
-margin-left: 0;
+width: min(430px, 100%);
 }
 
 .kd-hero-branding {

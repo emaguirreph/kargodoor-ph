@@ -51,7 +51,7 @@ export function Header() {
 
         <a
           className="kd-header-quote"
-          href="https://m.me/KargoDoorPH"
+          href="http://m.me/kargodoorph"
           target="_blank"
           rel="noopener noreferrer"
           onClick={() => trackEvent("generate_lead")}
@@ -90,7 +90,7 @@ export function Header() {
 
             <a
               className="kd-mobile-quote"
-              href="https://m.me/KargoDoorPH"
+              href="http://m.me/kargodoorph"
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => {
@@ -117,6 +117,7 @@ export function Footer() {
           <section>
             <h2>CONTACT INFORMATION</h2>
             <p>Mobile: 0917 157 7370</p>
+            <p>Mobile: 0908 889 0664</p>
             <p>
               Email:{" "}
               <a href="mailto:support@kargodoorph.com">

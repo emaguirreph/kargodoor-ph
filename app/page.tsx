@@ -75,7 +75,9 @@ export default function HomePage() {
               <div className="kd-hero-actions">
                 <TrackedLink
                   className="kd-button kd-button-green"
-                  href="/contact-us"
+                  href="http://m.me/kargodoorph"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   analyticsEvent="generate_lead"
                 >
                   GET A QUOTE
@@ -198,7 +200,7 @@ export default function HomePage() {
                 <div>
                   <h3>DOOR-TO-DOOR</h3>
                   <p>
-                    Free delivery for 2 CBM+ within 20 km of our Metro Manila
+                    Free delivery for 2 CBM+ within 20 km of our Malabon
                     Warehouse.
                   </p>
                 </div>

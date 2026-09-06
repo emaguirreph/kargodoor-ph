@@ -29,9 +29,9 @@ const services = [
   {
     icon: "🚚",
     title: "DOOR-TO-DOOR",
-    description: "Convenient delivery from our Metro Manila Warehouse to your location.",
+    description: "Convenient delivery from our Malabon Warehouse to your location.",
     details: [
-      "Free delivery for shipments of 2 CBM+ within 20 km of our Metro Manila Warehouse",
+      "Free delivery for shipments of 2 CBM+ within 20 km of our Malabon Warehouse",
       "Extended delivery services are available with applicable fees",
     ],
     transit: "",
@@ -152,7 +152,9 @@ export default function ServicesPage() {
             <div className="kd-services-cta-actions">
               <TrackedLink
                 className="kd-button kd-button-green"
-                href="/contact-us"
+                href="http://m.me/kargodoorph"
+                target="_blank"
+                rel="noopener noreferrer"
                 analyticsEvent="generate_lead"
               >
                 <FileText aria-hidden="true" />

@@ -168,7 +168,9 @@ export default function ContactUsPage() {
 
             <TrackedLink
               className="kd-contact-ready-button"
-              href="/contact-us"
+              href="http://m.me/kargodoorph"
+              target="_blank"
+              rel="noopener noreferrer"
               analyticsEvent="generate_lead"
             >
               <span>GET A QUOTE</span>

@@ -77,7 +77,7 @@ export default function HowItWorksPage() {
               <h2 id="ready-title">READY TO SHIP?</h2>
               <p>From China to the Philippines, we make cargo simple.</p>
             </div>
-            <TrackedLink className="kd-button kd-button-green kd-ready-button" href="/contact-us" analyticsEvent="generate_lead">
+            <TrackedLink className="kd-button kd-button-green kd-ready-button" href="http://m.me/kargodoorph" target="_blank" rel="noopener noreferrer" analyticsEvent="generate_lead">
               GET A QUOTE
             </TrackedLink>
           </div>
