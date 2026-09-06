@@ -9,6 +9,7 @@ const navigation = [
   { label: "HOW IT WORKS", href: "/how-it-works" },
   { label: "SERVICES", href: "/services" },
   { label: "RATES & CALCULATOR", href: "/rates-calculator" },
+  { label: "TRACK YOUR SHIPMENT", href: "/track" },
   { label: "FAQ", href: "/faq" },
   { label: "CONTACT US", href: "/contact-us" },
 ];
