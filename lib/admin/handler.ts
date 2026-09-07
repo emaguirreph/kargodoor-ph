@@ -285,6 +285,11 @@ export async function handleAdmin(request: Request, view?: Entity | "finance" | 
   } catch (error) {
     const known = error instanceof AdminError;
     const invalid = error instanceof ZodError;
+    if (!known && !invalid)
+      console.error("KargoDoor admin request failed", {
+        path: new URL(request.url).pathname,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
     const message = known
       ? error.message
       : invalid
