@@ -20,19 +20,8 @@ import {
 } from "./validation";
 
 import { saveRecord } from "./data";
-import {
-  page,
-  esc,
-  pesos,
-  input,
-  select,
-  hidden,
-} from "./ui";
-import {
-  dashboard,
-  finance,
-  activity,
-} from "./reports";
+import { page, esc, pesos, input, select, hidden } from "./ui";
+import { dashboard, finance, activity } from "./reports";
 
 const labels: Record<string, string> = {
   nihao_cost: "Ni Hao freight cost",
@@ -57,7 +46,10 @@ function validateFormOrigin(
   const expectedOrigin = canonicalOrigin(env);
   const requestOrigin = new URL(request.url).origin;
 
-  // The request itself must be served from the configured admin origin.
+  /*
+   * The request itself must always be served from the
+   * configured KargoDoor Admin origin.
+   */
   if (requestOrigin !== expectedOrigin) {
     throw new AdminError(
       "Admin request origin is invalid.",
@@ -65,7 +57,10 @@ function validateFormOrigin(
     );
   }
 
-  // Reject requests explicitly identified by the browser as cross-site.
+  /*
+   * Reject anything the browser explicitly identifies
+   * as a cross-site form submission.
+   */
   const fetchSite = request.headers.get("sec-fetch-site");
 
   if (fetchSite === "cross-site") {
@@ -78,17 +73,18 @@ function validateFormOrigin(
   const originHeader = request.headers.get("origin");
 
   /*
-   * Safari may legitimately send:
+   * Safari can legitimately submit:
    *
    * Origin: null
    * Sec-Fetch-Site: same-origin
    *
-   * For that case, allow processing to continue.
-   * The request is still protected by:
+   * We allow that specific case to continue.
+   *
+   * The request remains protected by:
    * - Cloudflare Access authentication
-   * - configured admin origin validation
+   * - configured production origin
    * - Sec-Fetch-Site validation
-   * - mandatory CSRF token validation
+   * - mandatory CSRF validation
    */
   if (!originHeader || originHeader === "null") {
     return;
@@ -112,35 +108,29 @@ function validateFormOrigin(
     );
   }
 }
+
+export async function handleAdmin(
   request: Request,
   view?: Entity | "finance" | "activity",
 ) {
   let localChallenge = false;
 
   try {
-    const { env: cf } =
-      await getCloudflareContext();
-
-    const env =
-      cf as unknown as AdminEnv;
+    const { env: cf } = await getCloudflareContext();
+    const env = cf as unknown as AdminEnv;
 
     localChallenge =
       env.ADMIN_LOCAL_DEV === "true" &&
       ["localhost", "127.0.0.1"].includes(
-        new URL(
-          canonicalOrigin(env),
-        ).hostname,
+        new URL(canonicalOrigin(env)).hostname,
       );
 
-    const user =
-      await authenticate(request, env);
-
+    const user = await authenticate(request, env);
     const db = env.ADMIN_DB;
     const url = new URL(request.url);
 
     const entity =
-      view === "customers" ||
-      view === "shipments"
+      view === "customers" || view === "shipments"
         ? view
         : undefined;
 
@@ -158,6 +148,16 @@ function validateFormOrigin(
       );
     }
 
+    if (
+      request.method !== "GET" &&
+      request.method !== "POST"
+    ) {
+      throw new AdminError(
+        "Method not allowed.",
+        405,
+      );
+    }
+
     /*
      * POST
      */
@@ -169,17 +169,13 @@ function validateFormOrigin(
         );
       }
 
-      validateFormOrigin(
-        request,
-        env,
-      );
+      validateFormOrigin(request, env);
 
-      const contentType =
-        request.headers
-          .get("content-type")
-          ?.split(";")[0]
-          ?.trim()
-          .toLowerCase();
+      const contentType = request.headers
+        .get("content-type")
+        ?.split(";")[0]
+        ?.trim()
+        .toLowerCase();
 
       if (
         contentType !==
@@ -191,27 +187,31 @@ function validateFormOrigin(
         );
       }
 
-      /*
-       * Limit the request body before
-       * accumulating it in memory.
-       */
-      const reader =
-        request.body?.getReader();
+      const contentLength = Number(
+        request.headers.get("content-length") ?? 0,
+      );
+
+      if (
+        Number.isFinite(contentLength) &&
+        contentLength > 24_000
+      ) {
+        throw new AdminError(
+          "Form is too large.",
+          413,
+        );
+      }
+
+      const reader = request.body?.getReader();
 
       if (!reader) {
-        throw new AdminError(
-          "Form is empty.",
-        );
+        throw new AdminError("Form is empty.");
       }
 
       const chunks: Uint8Array[] = [];
       let length = 0;
 
       while (true) {
-        const {
-          done,
-          value,
-        } = await reader.read();
+        const { done, value } = await reader.read();
 
         if (done) break;
 
@@ -229,16 +229,12 @@ function validateFormOrigin(
         chunks.push(value);
       }
 
-      const form =
-        new URLSearchParams(
-          Buffer.concat(
-            chunks,
-          ).toString("utf8"),
-        );
+      const form = new URLSearchParams(
+        Buffer.concat(chunks).toString("utf8"),
+      );
 
       /*
-       * CSRF validation remains mandatory
-       * even after origin validation.
+       * CSRF validation remains mandatory.
        */
       checkCsrf(
         env,
@@ -247,14 +243,10 @@ function validateFormOrigin(
         form.get("csrf") ?? "",
       );
 
-      const values =
-        parseForm(entity, form);
+      const values = parseForm(entity, form);
 
-      const id =
-        form.get("id") ?? "";
-
-      const revision =
-        form.get("revision") ?? "";
+      const id = form.get("id") ?? "";
+      const revision = form.get("revision") ?? "";
 
       if (
         id &&
@@ -269,15 +261,14 @@ function validateFormOrigin(
         );
       }
 
-      const recordId =
-        await saveRecord(
-          db,
-          entity,
-          values,
-          user.id,
-          id,
-          revision,
-        );
+      const recordId = await saveRecord(
+        db,
+        entity,
+        values,
+        user.id,
+        id,
+        revision,
+      );
 
       return page(
         "Saved",
@@ -294,63 +285,44 @@ function validateFormOrigin(
     }
 
     /*
-     * Finance / Activity / Dashboard
+     * REPORT PAGES
      */
     if (view === "finance") {
-      return await finance(
-        db,
-        url,
-        user.name,
-      );
+      return await finance(db, url, user.name);
     }
 
     if (view === "activity") {
-      return await activity(
-        db,
-        url,
-        user.name,
-      );
+      return await activity(db, url, user.name);
     }
 
     if (!entity) {
-      return await dashboard(
-        db,
-        user.name,
-      );
+      return await dashboard(db, user.name);
     }
 
     /*
-     * Customer / Shipment routes
+     * CUSTOMER / SHIPMENT ROUTES
      */
-    const id =
-      url.searchParams.get("id");
-
+    const id = url.searchParams.get("id");
     const edit =
-      url.searchParams.get("edit") ===
-      "1";
-
+      url.searchParams.get("edit") === "1";
     const add =
-      url.searchParams.get("new") ===
-      "1";
+      url.searchParams.get("new") === "1";
 
     let record: RecordData = {};
 
     if (id) {
-      if (
-        !/^[\da-f-]{36}$/i.test(id)
-      ) {
+      if (!/^[\da-f-]{36}$/i.test(id)) {
         throw new AdminError(
           "Invalid record ID.",
         );
       }
 
-      const found =
-        await db
-          .prepare(
-            `SELECT * FROM ${entity} WHERE id = ?`,
-          )
-          .bind(id)
-          .first<RecordData>();
+      const found = await db
+        .prepare(
+          `SELECT * FROM ${entity} WHERE id = ?`,
+        )
+        .bind(id)
+        .first<RecordData>();
 
       if (!found) {
         throw new AdminError(
@@ -368,13 +340,12 @@ function validateFormOrigin(
         : "Shipments";
 
     const notice =
-      url.searchParams.get("saved") ===
-      "1"
+      url.searchParams.get("saved") === "1"
         ? '<p class="notice" role="status">Changes saved.</p>'
         : "";
 
     /*
-     * Add / Edit forms
+     * ADD / EDIT FORM
      */
     if (add || edit) {
       if (edit && !id) {
@@ -443,18 +414,15 @@ function validateFormOrigin(
       } else {
         /*
          * SHIPMENT FORM
-         *
-         * Customer picker is intentionally
-         * bounded to 50 matches.
          */
-        const cq =
+        const customerSearch =
           (
             url.searchParams.get(
               "customer_search",
             ) ?? ""
           ).trim();
 
-        if (cq.length > 160) {
+        if (customerSearch.length > 160) {
           throw new AdminError(
             "Search is too long.",
           );
@@ -467,48 +435,47 @@ function validateFormOrigin(
           ) ??
           "";
 
-        const customers =
-          await db
-            .prepare(
-              `
-              SELECT
-                id,
-                customer_code,
-                full_name
-              FROM customers
-              WHERE
-                (
-                  ? != ''
-                  AND (
-                    instr(
-                      lower(full_name),
-                      lower(?)
-                    ) > 0
-                    OR
-                    instr(
-                      lower(customer_code),
-                      lower(?)
-                    ) > 0
-                  )
+        const customers = await db
+          .prepare(
+            `
+            SELECT
+              id,
+              customer_code,
+              full_name
+            FROM customers
+            WHERE
+              (
+                ? != ''
+                AND (
+                  instr(
+                    lower(full_name),
+                    lower(?)
+                  ) > 0
+                  OR
+                  instr(
+                    lower(customer_code),
+                    lower(?)
+                  ) > 0
                 )
-                OR id = ?
-              ORDER BY
-                CASE
-                  WHEN id = ? THEN 0
-                  ELSE 1
-                END,
-                full_name
-              LIMIT 50
-              `,
-            )
-            .bind(
-              cq,
-              cq,
-              cq,
-              selectedCustomer,
-              selectedCustomer,
-            )
-            .all<RecordData>();
+              )
+              OR id = ?
+            ORDER BY
+              CASE
+                WHEN id = ? THEN 0
+                ELSE 1
+              END,
+              full_name
+            LIMIT 50
+            `,
+          )
+          .bind(
+            customerSearch,
+            customerSearch,
+            customerSearch,
+            selectedCustomer,
+            selectedCustomer,
+          )
+          .all<RecordData>();
 
         fields =
           `<label class="wide">
@@ -523,23 +490,18 @@ function validateFormOrigin(
               ${customers.results
                 .map(
                   (customer) =>
-                    `<option
-                      value="${esc(
-                        customer.id,
-                      )}"
-                      ${
-                        selectedCustomer ===
-                        customer.id
-                          ? "selected"
-                          : ""
-                      }
-                    >
-                      ${esc(
-                        customer.customer_code,
-                      )} — ${esc(
-                        customer.full_name,
-                      )}
-                    </option>`,
+                    `<option value="${esc(
+                      customer.id,
+                    )}"${
+                      selectedCustomer ===
+                      customer.id
+                        ? " selected"
+                        : ""
+                    }>${esc(
+                      customer.customer_code,
+                    )} — ${esc(
+                      customer.full_name,
+                    )}</option>`,
                 )
                 .join("")}
             </select>
@@ -648,18 +610,9 @@ function validateFormOrigin(
               >
                 ${
                   id
-                    ? hidden(
-                        "id",
-                        id,
-                      ) +
-                      hidden(
-                        "edit",
-                        "1",
-                      )
-                    : hidden(
-                        "new",
-                        "1",
-                      )
+                    ? hidden("id", id) +
+                      hidden("edit", "1")
+                    : hidden("new", "1")
                 }
 
                 <label>
@@ -682,8 +635,8 @@ function validateFormOrigin(
 
               <p class="muted">
                 Find the customer before filling out
-                shipment details. Up to 50 matches are
-                shown.
+                shipment details. Up to 50 matches
+                are shown.
                 <a href="/admin/customers?new=1">
                   Add a customer
                 </a>
@@ -693,9 +646,7 @@ function validateFormOrigin(
           : "";
 
       return page(
-        `${
-          id ? "Edit" : "Add"
-        } ${
+        `${id ? "Edit" : "Add"} ${
           entity === "customers"
             ? "customer"
             : "shipment"
@@ -763,27 +714,24 @@ function validateFormOrigin(
     }
 
     /*
-     * Record details
+     * RECORD DETAILS
      */
     if (id) {
       let customer = "";
 
       if (entity === "shipments") {
-        const foundCustomer =
-          await db
-            .prepare(
-              `
-              SELECT
-                customer_code,
-                full_name
-              FROM customers
-              WHERE id = ?
-              `,
-            )
-            .bind(
-              record.customer_id,
-            )
-            .first<RecordData>();
+        const foundCustomer = await db
+          .prepare(
+            `
+            SELECT
+              customer_code,
+              full_name
+            FROM customers
+            WHERE id = ?
+            `,
+          )
+          .bind(record.customer_id)
+          .first<RecordData>();
 
         customer =
           `<p>
@@ -804,49 +752,47 @@ function validateFormOrigin(
           </p>`;
       }
 
-      const details =
-        Object.keys(
-          schemas[entity].shape,
+      const details = Object.keys(
+        schemas[entity].shape,
+      )
+        .filter(
+          (key) =>
+            key !== "customer_id",
         )
-          .filter(
-            (key) =>
-              key !== "customer_id",
-          )
-          .concat([
-            "created_at",
-            "updated_at",
-          ])
-          .map((key) => {
-            const monetary =
-              [
-                "shipping_charge",
-                "delivery_charge",
-                "nihao_cost",
-              ].includes(key);
+        .concat([
+          "created_at",
+          "updated_at",
+        ])
+        .map((key) => {
+          const monetary =
+            [
+              "shipping_charge",
+              "delivery_charge",
+              "nihao_cost",
+            ].includes(key);
 
-            const value = monetary
+          const value =
+            monetary
               ? record[key] === null
                 ? "Not entered"
                 : pesos(record[key])
               : esc(record[key]) ||
                 "—";
 
-            return `
-              <dt>
-                ${esc(
-                  labels[key] ??
-                    key.replaceAll(
-                      "_",
-                      " ",
-                    ),
-                )}
-              </dt>
-              <dd>
-                ${value}
-              </dd>
-            `;
-          })
-          .join("");
+          return `
+            <dt>
+              ${esc(
+                labels[key] ??
+                  key.replaceAll(
+                    "_",
+                    " ",
+                  ),
+              )}
+            </dt>
+            <dd>${value}</dd>
+          `;
+        })
+        .join("");
 
       const margin =
         entity === "shipments"
@@ -945,7 +891,7 @@ function validateFormOrigin(
     }
 
     /*
-     * Search / list
+     * SEARCH / LIST
      */
     const q =
       (
@@ -963,12 +909,11 @@ function validateFormOrigin(
         "customer_id",
       ) ?? "";
 
-    const pageNumber =
-      Number(
-        url.searchParams.get(
-          "page",
-        ) ?? 1,
-      );
+    const pageNumber = Number(
+      url.searchParams.get(
+        "page",
+      ) ?? 1,
+    );
 
     if (
       q.length > 160 ||
@@ -1154,9 +1099,7 @@ function validateFormOrigin(
                     )
                     .join("")}
 
-                  <th>
-                    Details
-                  </th>
+                  <th>Details</th>
                 </tr>
               </thead>
 
@@ -1262,18 +1205,14 @@ function validateFormOrigin(
                       ${statuses
                         .map(
                           (value) =>
-                            `<option
-                              ${
-                                status ===
-                                value
-                                  ? "selected"
-                                  : ""
-                              }
-                            >
-                              ${esc(
-                                value,
-                              )}
-                            </option>`,
+                            `<option${
+                              status ===
+                              value
+                                ? " selected"
+                                : ""
+                            }>${esc(
+                              value,
+                            )}</option>`,
                         )
                         .join("")}
                     </select>
@@ -1351,8 +1290,8 @@ function validateFormOrigin(
 
     /*
      * Sanitized unexpected-error logging.
-     * Never log JWTs, headers, secrets
-     * or submitted form data.
+     * Never log JWTs, cookies, headers,
+     * secrets, or submitted form contents.
      */
     if (!known && !invalid) {
       console.error(
