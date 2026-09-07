@@ -54,11 +54,29 @@ export async function handleAdmin(request: Request, view?: Entity | "finance" | 
     if (request.method === "POST") {
       if (!entity)
         throw new AdminError("Use the customer or shipment form.", 405);
-      if (request.headers.get("origin") !== canonicalOrigin(env))
-        throw new AdminError("Cross-site form submission rejected.", 403);
-      if (request.headers.get("sec-fetch-site") === "cross-site")
-        throw new AdminError("Cross-site form submission rejected.", 403);
-      if (
+     const submittedOrigin = request.headers.get("origin");
+const currentOrigin = new URL(request.url).origin;
+const expectedOrigin = canonicalOrigin(env);
+
+if (
+  !submittedOrigin ||
+  currentOrigin !== expectedOrigin ||
+  submittedOrigin !== currentOrigin
+) {
+  throw new AdminError(
+    "Cross-site form submission rejected.",
+    403,
+  );
+}
+
+const fetchSite = request.headers.get("sec-fetch-site");
+
+if (fetchSite === "cross-site") {
+  throw new AdminError(
+    "Cross-site form submission rejected.",
+    403,
+  );
+}
         request.headers.get("content-type")?.split(";")[0] !==
         "application/x-www-form-urlencoded"
       )
