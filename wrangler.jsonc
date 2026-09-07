@@ -3,7 +3,10 @@
   "name": "kargodoor-ph",
   "main": ".open-next/worker.js",
   "compatibility_date": "2025-03-01",
-  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "compatibility_flags": [
+    "nodejs_compat",
+    "global_fetch_strictly_public"
+  ],
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
@@ -19,6 +22,12 @@
       "binding": "TRACKING_DB",
       "database_name": "kargodoor-tracking",
       "database_id": "2a224381-a6d9-40b0-9796-b05aad6f14ab"
+    },
+    {
+      "binding": "ADMIN_DB",
+      "database_name": "kargodoor-admin-phase1",
+      "database_id": "e162f77c-441b-40ee-a916-fac23285f1e5",
+      "migrations_dir": "migrations/admin"
     }
   ]
 }

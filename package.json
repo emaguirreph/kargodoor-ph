@@ -7,11 +7,15 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "test": "npm run build",
     "lint": "eslint . --ignore-pattern .next --ignore-pattern .open-next --ignore-pattern .codex-snapshots",
-    "build:cloudflare": "opennextjs-cloudflare build"
+    "build:cloudflare": "opennextjs-cloudflare build",
+    "admin:setup:local": "node scripts/admin-local.mjs",
+    "admin:dev": "node scripts/admin-dev.mjs",
+    "test:admin": "node scripts/test-admin.mjs",
+    "test:admin:http": "node scripts/test-admin-http.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
@@ -41,11 +45,13 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "5.20260907.1",
     "@opennextjs/cloudflare": "1.20.0",
     "@tailwindcss/postcss": "4.2.1",
     "@types/node": "22.19.19",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
+    "esbuild": "0.25.4",
     "eslint": "9.39.4",
     "eslint-config-next": "16.2.6",
     "react-server-dom-webpack": "19.2.6",
