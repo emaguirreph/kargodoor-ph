@@ -55,34 +55,19 @@ function validateFormOrigin(
   env: AdminEnv,
 ) {
   const expectedOrigin = canonicalOrigin(env);
-  const requestOrigin = new URL(request.url).origin;
+  const requestUrl = new URL(request.url);
+  const requestOrigin = requestUrl.origin;
 
-  // The actual request must always be on the configured admin origin.
+  // The actual admin request itself must be on the configured production origin.
   if (requestOrigin !== expectedOrigin) {
     throw new AdminError(
-      "Cross-site form submission rejected.",
+      "Admin request origin is invalid.",
       403,
     );
   }
 
-  // Browsers normally send Origin on POST.
-  // If present, it must exactly match the admin origin.
-  const submittedOrigin =
-    request.headers.get("origin");
-
-  if (
-    submittedOrigin &&
-    submittedOrigin !== expectedOrigin
-  ) {
-    throw new AdminError(
-      "Cross-site form submission rejected.",
-      403,
-    );
-  }
-
-  // Explicit browser indication of a cross-site request.
-  const fetchSite =
-    request.headers.get("sec-fetch-site");
+  // Explicit browser cross-site requests are always rejected.
+  const fetchSite = request.headers.get("sec-fetch-site");
 
   if (fetchSite === "cross-site") {
     throw new AdminError(
@@ -91,28 +76,75 @@ function validateFormOrigin(
     );
   }
 
-  // Safari/privacy settings can sometimes omit Origin.
-  // If Origin is absent but Referer exists, validate it.
-  if (!submittedOrigin) {
-    const referer =
-      request.headers.get("referer");
+  /*
+   * Validate Origin when the browser provides it.
+   *
+   * Cloudflare/Safari can sometimes present the www and non-www
+   * hostname differently during navigation, so normalize that pair.
+   * CSRF validation below remains mandatory regardless.
+   */
+  const originHeader = request.headers.get("origin");
 
-    if (referer) {
+  if (originHeader) {
+    let submitted: URL;
+
+    try {
+      submitted = new URL(originHeader);
+    } catch {
+      throw new AdminError(
+        "Invalid form origin.",
+        403,
+      );
+    }
+
+    const expected = new URL(expectedOrigin);
+
+    const normalizeHost = (host: string) =>
+      host.toLowerCase().replace(/^www\./, "");
+
+    const sameSite =
+      submitted.protocol === expected.protocol &&
+      normalizeHost(submitted.hostname) ===
+        normalizeHost(expected.hostname);
+
+    if (!sameSite) {
+      throw new AdminError(
+        "Cross-site form submission rejected.",
+        403,
+      );
+    }
+  }
+
+  /*
+   * Safari may omit Origin.
+   * If so, validate Referer when available.
+   */
+  if (!originHeader) {
+    const refererHeader = request.headers.get("referer");
+
+    if (refererHeader) {
+      let referer: URL;
+
       try {
-        if (
-          new URL(referer).origin !==
-          expectedOrigin
-        ) {
-          throw new AdminError(
-            "Cross-site form submission rejected.",
-            403,
-          );
-        }
-      } catch (error) {
-        if (error instanceof AdminError) {
-          throw error;
-        }
+        referer = new URL(refererHeader);
+      } catch {
+        throw new AdminError(
+          "Invalid form referrer.",
+          403,
+        );
+      }
 
+      const expected = new URL(expectedOrigin);
+
+      const normalizeHost = (host: string) =>
+        host.toLowerCase().replace(/^www\./, "");
+
+      const sameSite =
+        referer.protocol === expected.protocol &&
+        normalizeHost(referer.hostname) ===
+          normalizeHost(expected.hostname);
+
+      if (!sameSite) {
         throw new AdminError(
           "Cross-site form submission rejected.",
           403,
