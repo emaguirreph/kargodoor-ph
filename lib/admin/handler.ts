@@ -54,79 +54,64 @@ function validateFormOrigin(
   request: Request,
   env: AdminEnv,
 ) {
-  const expected = new URL(canonicalOrigin(env));
-  const actual = new URL(request.url);
+  const expectedOrigin = canonicalOrigin(env);
+  const requestOrigin = new URL(request.url).origin;
 
-  const normalizeHost = (host: string) =>
-    host.toLowerCase().replace(/^www\./, "");
-
-  const sameOrigin = (url: URL) =>
-    url.protocol === expected.protocol &&
-    normalizeHost(url.hostname) === normalizeHost(expected.hostname) &&
-    url.port === expected.port;
-
-  // The request itself must still be for the KargoDoor admin domain.
-  if (!sameOrigin(actual)) {
+  // The request itself must be served from the configured admin origin.
+  if (requestOrigin !== expectedOrigin) {
     throw new AdminError(
       "Admin request origin is invalid.",
       403,
     );
   }
 
-  // Browser explicitly says this originated cross-site.
-  if (request.headers.get("sec-fetch-site") === "cross-site") {
+  // Reject requests explicitly identified by the browser as cross-site.
+  const fetchSite = request.headers.get("sec-fetch-site");
+
+  if (fetchSite === "cross-site") {
     throw new AdminError(
       "Cross-site form submission rejected.",
       403,
     );
   }
 
-  // Validate Origin when supplied.
   const originHeader = request.headers.get("origin");
 
-  if (originHeader) {
-    try {
-      if (!sameOrigin(new URL(originHeader))) {
-        throw new AdminError(
-          "Cross-site form submission rejected.",
-          403,
-        );
-      }
-    } catch (error) {
-      if (error instanceof AdminError) throw error;
-
-      throw new AdminError(
-        "Invalid form origin.",
-        403,
-      );
-    }
-
+  /*
+   * Safari may legitimately send:
+   *
+   * Origin: null
+   * Sec-Fetch-Site: same-origin
+   *
+   * For that case, allow processing to continue.
+   * The request is still protected by:
+   * - Cloudflare Access authentication
+   * - configured admin origin validation
+   * - Sec-Fetch-Site validation
+   * - mandatory CSRF token validation
+   */
+  if (!originHeader || originHeader === "null") {
     return;
   }
 
-  // Safari may omit Origin. Validate Referer when available instead.
-  const refererHeader = request.headers.get("referer");
+  let submittedOrigin: string;
 
-  if (refererHeader) {
-    try {
-      if (!sameOrigin(new URL(refererHeader))) {
-        throw new AdminError(
-          "Cross-site form submission rejected.",
-          403,
-        );
-      }
-    } catch (error) {
-      if (error instanceof AdminError) throw error;
+  try {
+    submittedOrigin = new URL(originHeader).origin;
+  } catch {
+    throw new AdminError(
+      "Invalid form origin.",
+      403,
+    );
+  }
 
-      throw new AdminError(
-        "Invalid form referrer.",
-        403,
-      );
-    }
+  if (submittedOrigin !== expectedOrigin) {
+    throw new AdminError(
+      "Cross-site form submission rejected.",
+      403,
+    );
   }
 }
-
-export async function handleAdmin(
   request: Request,
   view?: Entity | "finance" | "activity",
 ) {
