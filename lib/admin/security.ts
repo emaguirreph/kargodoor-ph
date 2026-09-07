@@ -185,7 +185,7 @@ export async function authenticate(request: Request, env: AdminEnv) {
     if (!cache || cache.domain !== domain || cache.expires < Date.now()) {
       const result = await fetch(`https://${domain}/cdn-cgi/access/certs`, {
         signal: AbortSignal.timeout(5000),
-        redirect: "error",
+        redirect: "manual",
       });
       if (!result.ok)
         throw new AdminError(
