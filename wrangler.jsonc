@@ -7,16 +7,25 @@
     "nodejs_compat",
     "global_fetch_strictly_public"
   ],
+
+  "vars": {
+    "ADMIN_ORIGIN": "https://kargodoorph.com",
+    "ACCESS_TEAM_DOMAIN": "misty-scene-f3ff.cloudflareaccess.com",
+    "ACCESS_AUD": "e299d6a99e9d618ee464f3746ea2fc6ecf03954a2b72ab01be2f2048b52c9965"
+  },
+
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
+
   "services": [
     {
       "binding": "WORKER_SELF_REFERENCE",
       "service": "kargodoor-ph"
     }
   ],
+
   "d1_databases": [
     {
       "binding": "TRACKING_DB",
