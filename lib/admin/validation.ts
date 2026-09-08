@@ -286,12 +286,14 @@ export const schemaKeys: Record<
 
 const formKeys: Record<Entity, readonly string[]> = {
   customers: schemaKeys.customers.filter((key) => key !== "customer_code"),
-  shipments: schemaKeys.shipments.filter((key) => key !== "tracking_number"),
+  shipments: schemaKeys.shipments.filter(
+    (key) => key !== "tracking_number" && key !== "cargo_code",
+  ),
 };
 
 const customerFormSchema = customerSchema.omit({ customer_code: true });
 const shipmentFormSchema = shipmentObjectSchema
-  .omit({ tracking_number: true })
+  .omit({ tracking_number: true, cargo_code: true })
   .superRefine((values, context) => {
     if (values.departure_date && values.warehouse_received_date && values.departure_date < values.warehouse_received_date)
       context.addIssue({ code: "custom", path: ["departure_date"], message: "Departure date cannot be before the warehouse received date" });

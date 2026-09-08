@@ -37,7 +37,6 @@ const labels: Record<string, string> = {
   notes: "Notes",
 
   tracking_number: "Tracking number",
-  cargo_code: "Legacy cargo code",
   service_type: "Service type",
   warehouse_received_date: "Warehouse received date",
   departure_date: "Departure date",
@@ -665,14 +664,6 @@ export async function handleAdmin(
          */
         fields +=
           `<p class="wide muted"><strong>Tracking Number</strong><br>${id ? esc(record.tracking_number) : "Automatically generated when saved."}</p>` +
-          input(
-            "cargo_code",
-            "Legacy cargo code (optional)",
-            record,
-            "text",
-            false,
-            60,
-          ) +
           select(
             "service_type",
             "Service type",
@@ -923,18 +914,6 @@ export async function handleAdmin(
               <div class="grid">
                 ${fields}
               </div>
-
-              ${
-                entity ===
-                "shipments"
-                  ? `
-                    <p class="muted">
-                      Tracking number is the unique public shipment identifier.
-                      Legacy cargo code is optional and is retained only for older records.
-                    </p>
-                  `
-                  : ""
-              }
 
               <p class="muted">
                 * Required. Optional blank
@@ -1315,7 +1294,6 @@ export async function handleAdmin(
               SELECT
                 s.id,
                 s.tracking_number,
-                s.cargo_code,
                 c.full_name,
                 s.status,
                 s.cbm,
@@ -1398,7 +1376,6 @@ export async function handleAdmin(
           ]
         : [
             "tracking_number",
-            "cargo_code",
             "full_name",
             "status",
             "cbm",

@@ -110,6 +110,18 @@ test("required fields, dates, enum, numeric precision and overposting are valida
   );
   const form = new URLSearchParams("customer_code=A&customer_code=B");
   assert.throws(() => parseForm("customers", form));
+  const {
+    tracking_number: _trackingNumber,
+    cargo_code: _cargoCode,
+    ...shipmentFormInput
+  } = shipmentInput(randomUUID());
+  assert.equal(_trackingNumber, "KDOOR-0001");
+  assert.equal(_cargoCode, "");
+  const parsedShipmentForm = parseForm(
+    "shipments",
+    new URLSearchParams(Object.entries(shipmentFormInput)),
+  );
+  assert.equal("cargo_code" in parsedShipmentForm, false);
   assert.equal(shipment(randomUUID()).shipping_charge, 650025);
   for (const bad of ["-1", "Infinity", "NaN", "1e3", "2.0001", ""])
     assert.equal(shipmentSchema.safeParse({ ...shipmentInput(randomUUID()), cbm: bad }).success, false);
@@ -227,8 +239,9 @@ test("new records receive sequential immutable account and tracking numbers", as
   const secondCustomer = await saveRecord(db, "customers", { ...newCustomer, full_name: "Second customer", mobile: "+639171234568" }, user, "", "");
   assert.equal(sql.prepare("SELECT customer_code FROM customers WHERE id=?").get(firstCustomer)!.customer_code, "KDOOR0001");
   assert.equal(sql.prepare("SELECT customer_code FROM customers WHERE id=?").get(secondCustomer)!.customer_code, "KDOOR0002");
-  const { tracking_number: _tracking, ...newShipment } = shipment(firstCustomer);
+  const { tracking_number: _tracking, cargo_code: _cargo, ...newShipment } = shipment(firstCustomer);
   assert.equal(_tracking, "KDOOR-0001");
+  assert.equal(_cargo, null);
   const seaOne = await saveRecord(db, "shipments", newShipment, user, "", "");
   const seaTwo = await saveRecord(db, "shipments", { ...newShipment, cargo_code: null }, user, "", "");
   const air = await saveRecord(db, "shipments", { ...newShipment, service_type: "Air Freight" }, user, "", "");
