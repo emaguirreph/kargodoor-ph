@@ -13,7 +13,7 @@ import {
 import {
   statuses,
   warehouses,
-  schemas,
+  schemaKeys,
   parseForm,
   type Entity,
   type RecordData,
@@ -1056,11 +1056,7 @@ export async function handleAdmin(
       }
 
       const details =
-        Object.keys(
-          schemas[
-            entity
-          ].shape,
-        )
+  schemaKeys[entity]  
           .filter(
             (key) =>
               key !==
