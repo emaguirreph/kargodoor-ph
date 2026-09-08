@@ -47,19 +47,107 @@ function parse(form: URLSearchParams, action: "invoice" | "payment" | "issue") {
   return action === "invoice" ? invoiceSchema.parse(raw) : action === "payment" ? paymentSchema.parse(raw) : issueSchema.parse(raw);
 }
 
-async function readForm(request: Request, env: AdminEnv, userId: string) {
-  if (request.headers.get("origin") !== canonicalOrigin(env) || request.headers.get("sec-fetch-site") === "cross-site") throw new AdminError("Cross-site form submission rejected.", 403);
-  if (request.headers.get("content-type")?.split(";")[0] !== "application/x-www-form-urlencoded") throw new AdminError("Unsupported form format.", 415);
+async function readForm(
+  request: Request,
+  env: AdminEnv,
+  userId: string,
+) {
+  const expectedOrigin = canonicalOrigin(env);
+  const requestOrigin = new URL(request.url).origin;
+
+  if (requestOrigin !== expectedOrigin) {
+    throw new AdminError(
+      "Admin request origin is invalid.",
+      403,
+    );
+  }
+
+  const fetchSite = request.headers.get("sec-fetch-site");
+
+  if (fetchSite === "cross-site") {
+    throw new AdminError(
+      "Cross-site form submission rejected.",
+      403,
+    );
+  }
+
+  const originHeader = request.headers.get("origin");
+
+  if (originHeader && originHeader !== "null") {
+    let submittedOrigin: string;
+
+    try {
+      submittedOrigin = new URL(originHeader).origin;
+    } catch {
+      throw new AdminError(
+        "Invalid form origin.",
+        403,
+      );
+    }
+
+    if (submittedOrigin !== expectedOrigin) {
+      throw new AdminError(
+        "Cross-site form submission rejected.",
+        403,
+      );
+    }
+  }
+
+  const contentType = request.headers
+    .get("content-type")
+    ?.split(";")[0]
+    ?.trim()
+    .toLowerCase();
+
+  if (
+    contentType !==
+    "application/x-www-form-urlencoded"
+  ) {
+    throw new AdminError(
+      "Unsupported form format.",
+      415,
+    );
+  }
+
   const reader = request.body?.getReader();
-  if (!reader) throw new AdminError("Form is empty.");
-  const chunks: Uint8Array[] = []; let length = 0;
+
+  if (!reader) {
+    throw new AdminError("Form is empty.");
+  }
+
+  const chunks: Uint8Array[] = [];
+  let length = 0;
+
   while (true) {
-    const { done, value } = await reader.read(); if (done) break;
-    length += value.length; if (length > 24000) { await reader.cancel(); throw new AdminError("Form is too large.", 413); }
+    const { done, value } = await reader.read();
+
+    if (done) break;
+
+    length += value.length;
+
+    if (length > 24000) {
+      await reader.cancel();
+
+      throw new AdminError(
+        "Form is too large.",
+        413,
+      );
+    }
+
     chunks.push(value);
   }
-  const form = new URLSearchParams(Buffer.concat(chunks).toString("utf8"));
-  checkCsrf(env, userId, route, form.get("csrf") ?? "");
+
+  const form = new URLSearchParams(
+    Buffer.concat(chunks).toString("utf8"),
+  );
+
+  checkCsrf(
+    env,
+    userId,
+    route,
+    form.get("csrf") ?? "",
+  );
+
   return form;
 }
 
