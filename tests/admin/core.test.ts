@@ -21,7 +21,7 @@ import {
   authenticate,
   type AdminEnv,
 } from "../../lib/admin/security";
-import { expensesPage, saveExpense } from "../../lib/admin/expenses";
+import { expensesPage, saveExpense, mutateExpense } from "../../lib/admin/expenses";
 function database() {
   const sql = new DatabaseSync(":memory:");
   sql.exec("PRAGMA foreign_keys=ON");
@@ -566,7 +566,7 @@ test("expenses page and add form load; valid expense saves integer centavos and 
   const url = new URL("https://admin.test/admin/finance/expenses");
   const empty = await expensesPage(db, url, "Admin", "token");
   assert.equal(empty.status, 200);
-  assert.match(await empty.text(), /No expenses yet/);
+  assert.match(await empty.text(), /No expenses found/);
   const form = await expensesPage(db, new URL(url + "?new=1"), "Admin", "token");
   assert.match(await form.text(), /name="csrf" value="token"/);
   await saveExpense(db, parseExpenseForm(new URLSearchParams(expenseInput)));
@@ -657,4 +657,86 @@ test("historical expense categories display safely and stored tracking remains u
   assert.doesNotMatch(html, /tracking_number|Tracking number|HISTORICAL-TRACKING/i);
   assert.deepEqual(sql.prepare("SELECT * FROM expenses WHERE id='historical'").get(), before);
   assert.deepEqual(sql.prepare("SELECT sql FROM sqlite_master ORDER BY name").all(), schemaBefore);
+});
+
+
+test("expense edit preloads values, validates input and preserves immutable fields", async () => {
+  const { db, sql } = database();
+  await saveExpense(db, parseExpenseForm(new URLSearchParams({ ...expenseInput, payee: "Old Payee", notes: "Old notes", payment_method: "GCash", reference_number: "REF" })));
+  const original = sql.prepare("SELECT * FROM expenses").get()!;
+  sql.prepare("UPDATE expenses SET tracking_number='KEEP' WHERE id=?").run(original.id as string);
+  const response = await expensesPage(db, new URL(`https://admin.test/admin/finance/expenses?edit=${original.id}`), "Admin", "token");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /Edit Expense/);
+  assert.match(html, /value="Office \/ Rent" selected/);
+  assert.match(html, /value="GCash" selected/);
+  for (const value of ["123.45", "Old Payee", "Old notes", "REF"]) assert.ok(html.includes(value));
+  assert.doesNotMatch(html, /tracking_number|Tracking number|created_at/);
+  const edit = { ...expenseInput, action: "edit", id: String(original.id), revision: String(original.updated_at), amount: "0.30", description: "Changed" };
+  for (const amount of ["0", "-1", "1.001"])
+    await assert.rejects(mutateExpense(db, new URLSearchParams({ ...edit, amount })));
+  await assert.rejects(mutateExpense(db, new URLSearchParams({ ...edit, category: "Old category" })));
+  await assert.rejects(mutateExpense(db, new URLSearchParams({ ...edit, created_at: "rewrite" })));
+  assert.equal(await mutateExpense(db, new URLSearchParams(edit)), "updated");
+  const saved = sql.prepare("SELECT * FROM expenses").get()!;
+  assert.equal(saved.id, original.id);
+  assert.equal(saved.created_at, original.created_at);
+  assert.equal(saved.tracking_number, "KEEP");
+  assert.notEqual(saved.updated_at, original.updated_at);
+  assert.equal(saved.amount, 30);
+  assert.equal(saved.description, "Changed");
+  await assert.rejects(mutateExpense(db, new URLSearchParams(edit)), /changed or no longer exists/);
+});
+
+test("expense deletion requires confirmation, preserves other rows and rejects stale confirmation", async () => {
+  const { db, sql } = database();
+  await saveExpense(db, parseExpenseForm(new URLSearchParams(expenseInput)));
+  await saveExpense(db, parseExpenseForm(new URLSearchParams({ ...expenseInput, description: "Keep this expense" })));
+  const original = sql.prepare("SELECT * FROM expenses WHERE description=?").get(expenseInput.description)!;
+  const response = await expensesPage(db, new URL(`https://admin.test/admin/finance/expenses?delete=${original.id}`), "Admin", "token");
+  const html = await response.text();
+  assert.match(html, /Confirm Delete/);
+  assert.match(html, /method="post"/);
+  assert.match(html, /name="confirm" value="yes"/);
+  assert.match(html, /2026-09-08/);
+  assert.match(html, /Supplies &lt;script&gt;/);
+  assert.match(html, /123.45/);
+  assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM expenses").get()!.n, 2);
+  const deletion = { action: "delete", id: String(original.id), revision: String(original.updated_at) };
+  await assert.rejects(mutateExpense(db, new URLSearchParams(deletion)), /Confirm/);
+  await assert.rejects(mutateExpense(db, new URLSearchParams({ ...deletion, confirm: "yes", revision: "stale" })), /changed or no longer exists/);
+  assert.equal(await mutateExpense(db, new URLSearchParams({ ...deletion, confirm: "yes" })), "deleted");
+  const remaining = sql.prepare("SELECT * FROM expenses").all();
+  assert.equal(remaining.length, 1);
+  assert.equal(remaining[0].description, "Keep this expense");
+});
+
+test("expense filters and search combine with exact integer totals and clear restores all rows", async () => {
+  const { db } = database();
+  const seed = [
+    { expense_date: "2026-09-01", category: "Website / Technology", payment_method: "GCash", payee: "Alpha", description: "First item", amount: "0.10", reference_number: "REF-A", notes: "Subscription" },
+    { expense_date: "2026-09-08", category: "Website / Technology", payment_method: "GCash", payee: "Beta", description: "Second item", amount: "0.20", reference_number: "REF-B", notes: "Hosting" },
+    { expense_date: "2026-09-10", category: "Office / Rent", payment_method: "Cash", payee: "Gamma", description: "Third item", amount: "100.01", reference_number: "REF-C", notes: "Rent" },
+  ];
+  for (const row of seed) await saveExpense(db, parseExpenseForm(new URLSearchParams(row)));
+  const cases: [string, number[], string][] = [
+    ["", [0, 1, 2], "100.31"], ["from=2026-09-08", [1, 2], "100.21"],
+    ["to=2026-09-08", [0, 1], "0.30"], ["from=2026-09-02&to=2026-09-09", [1], "0.20"],
+    ["category=Website+%2F+Technology", [0, 1], "0.30"], ["payment_method=Cash", [2], "100.01"],
+    ["q=ALPHA", [0], "0.10"], ["q=SECOND", [1], "0.20"], ["q=ref-c", [2], "100.01"],
+    ["q=HOSTING", [1], "0.20"],
+    ["from=2026-09-02&to=2026-09-09&category=Website+%2F+Technology&payment_method=GCash&q=hosting", [1], "0.20"],
+    ["q=%27+OR+1%3D1--", [], "0.00"],
+  ];
+  for (const [query, expected, total] of cases) {
+    const response = await expensesPage(db, new URL(`https://admin.test/admin/finance/expenses?${query}`), "Admin", "token");
+    assert.equal(response.status, 200);
+    const html = await response.text();
+    for (const [i, row] of seed.entries()) assert.equal(html.includes(`<td>${row.description}</td>`), expected.includes(i), query);
+    assert.ok(html.includes(`<strong>₱${total}</strong>`), query + " total");
+    assert.match(html, /href="\/admin\/finance\/expenses">Clear Filters/);
+  }
+  for (const query of ["from=2026-02-30", "from=2026-09-10&to=2026-09-01", "category=arbitrary", "payment_method=arbitrary"])
+    await assert.rejects(expensesPage(db, new URL(`https://admin.test/admin/finance/expenses?${query}`), "Admin", "token"));
 });

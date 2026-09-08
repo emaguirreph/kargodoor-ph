@@ -154,6 +154,46 @@ try {
   assert.deepEqual(savedExpenses[0].results, [{ amount: 12345 }]);
   assert.ok((await (await get("/admin/finance")).text()).includes('href="/admin/finance/expenses"'));
   console.log("Expenses HTTP checks passed: page, form, centavos save, invalid amounts, authentication, CSRF, origin, escaped list.");
+  const expenseRows = JSON.parse(cli(["d1", "execute", "ADMIN_DB", "--local", "--json",
+    "--command", "SELECT id, updated_at FROM expenses"]));
+  const expenseId = expenseRows[0].results[0].id;
+  const editPage = await get(`${expensePath}?edit=${expenseId}`);
+  assert.equal(editPage.status, 200);
+  const editHtml = await editPage.text();
+  assert.ok(editHtml.includes('value="123.45"'));
+  assert.ok(!editHtml.includes("tracking_number"));
+  const expenseEdit = { ...expense, action: "edit", id: expenseId, revision: revision(editHtml),
+    csrf: token(editHtml), amount: "150.30", description: "Edited expense", payment_method: "GCash" };
+  const deletePage = await get(`${expensePath}?delete=${expenseId}`);
+  assert.equal(deletePage.status, 200);
+  const deleteHtml = await deletePage.text();
+  assert.ok(deleteHtml.includes("Confirm Delete") && deleteHtml.includes("123.45"));
+  const expenseDelete = { action: "delete", id: expenseId, revision: revision(deleteHtml), csrf: token(deleteHtml), confirm: "yes" };
+  for (const mutation of [expenseEdit, expenseDelete]) {
+    assert.equal((await post(expensePath, { ...mutation, csrf: "forged" })).status, 403);
+    assert.equal((await post(expensePath, mutation, { Origin: "https://evil.test" })).status, 403);
+    assert.equal((await post(expensePath, mutation, { authorization: "" })).status, 401);
+  }
+  assert.equal((await post(expensePath, { ...expenseDelete, confirm: "" })).status, 400);
+  assert.equal((await post(expensePath, { ...expenseEdit, amount: "0" })).status, 400);
+  assert.equal((await post(expensePath, { ...expenseEdit, category: "arbitrary" })).status, 400);
+  const expenseUpdated = await post(expensePath, expenseEdit);
+  assert.equal(expenseUpdated.status, 303);
+  assert.ok((await (await get(expenseUpdated.headers.get("location"))).text()).includes("Expense updated."));
+  assert.equal((await post(expensePath, expenseDelete)).status, 409, "stale delete confirmation rejected");
+  assert.equal((await post(expensePath, { ...expense, description: "Keep expense", amount: "0.10" })).status, 303);
+  const filteredExpenseHtml = await (await get(expensePath + "?from=2026-09-08&to=2026-09-08&category=Office+%2F+Rent&payment_method=GCash&q=EDITED")).text();
+  assert.ok(filteredExpenseHtml.includes("<strong>₱150.30</strong>") && !filteredExpenseHtml.includes("<td>Keep expense</td>"));
+  const fullExpenseHtml = await (await get(expensePath)).text();
+  assert.ok(fullExpenseHtml.includes("<strong>₱150.40</strong>") && fullExpenseHtml.includes("<td>Keep expense</td>"));
+  const freshDeleteHtml = await (await get(`${expensePath}?delete=${expenseId}`)).text();
+  const expenseDeleted = await post(expensePath, { ...expenseDelete, revision: revision(freshDeleteHtml), csrf: token(freshDeleteHtml) });
+  assert.equal(expenseDeleted.status, 303);
+  const afterDeleteHtml = await (await get(expenseDeleted.headers.get("location"))).text();
+  assert.ok(afterDeleteHtml.includes("Expense deleted.") && afterDeleteHtml.includes("<td>Keep expense</td>") && !afterDeleteHtml.includes("<td>Edited expense</td>"));
+  assert.ok(afterDeleteHtml.includes("<strong>₱0.10</strong>"));
+  assert.equal((await get(`${expensePath}?edit=${expenseId}`)).status, 404);
+  console.log("Expense Phase 2 HTTP checks passed: edit, confirmed delete, authentication, CSRF, origin, validation, stale confirmation, combined filters/search, totals and preserved Add.");
   const trackingBefore = await (await get("/api/track?code=KDOOR-0001", false)).json();
   assert.equal(trackingBefore.remarks, "Tracking sentinel");
   for (const path of ["/", "/how-it-works", "/services", "/rates-calculator", "/faq", "/contact-us", "/track"])

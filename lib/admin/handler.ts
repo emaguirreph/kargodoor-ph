@@ -15,12 +15,11 @@ import {
   warehouses,
   schemaKeys,
   parseForm,
-  parseExpenseForm,
   type Entity,
   type RecordData,
 } from "./validation";
 
-import { expensesPage, saveExpense } from "./expenses";
+import { expensesPage, mutateExpense } from "./expenses";
 import { saveRecord } from "./data";
 import { page, esc, pesos, input, select, hidden } from "./ui";
 import { dashboard, finance, activity } from "./reports";
@@ -269,8 +268,8 @@ export async function handleAdmin(
       );
 
       if (view === "finance/expenses") {
-        await saveExpense(db, parseExpenseForm(form));
-        return page("Saved", "", user.name, 303, { Location: `${path}?saved=1` });
+        const outcome = await mutateExpense(db, form);
+        return page("Saved", "", user.name, 303, { Location: `${path}?${outcome}=1` });
       }
 
       const values =
