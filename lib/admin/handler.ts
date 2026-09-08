@@ -438,14 +438,7 @@ export async function handleAdmin(
         "customers"
       ) {
         fields =
-          input(
-            "customer_code",
-            "Account number",
-            record,
-            "text",
-            true,
-            40,
-          ) +
+          `<p class="wide muted"><strong>Account Number</strong><br>${id ? esc(record.customer_code) : "Automatically generated when saved."}</p>` +
           input(
             "full_name",
             "Full name",
@@ -671,14 +664,7 @@ export async function handleAdmin(
          * SHIPMENT IDENTITY
          */
         fields +=
-          input(
-            "tracking_number",
-            "Tracking number",
-            record,
-            "text",
-            true,
-            60,
-          ) +
+          `<p class="wide muted"><strong>Tracking Number</strong><br>${id ? esc(record.tracking_number) : "Automatically generated when saved."}</p>` +
           input(
             "cargo_code",
             "Legacy cargo code (optional)",

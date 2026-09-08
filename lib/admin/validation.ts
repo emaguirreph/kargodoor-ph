@@ -135,8 +135,8 @@ const shipmentObjectSchema = z
 
     tracking_number: required(60)
       .regex(
-        /^(?:KD-(?:SEA|AIR)-\d{6,}|(?:AIR-)?KDOOR-\d{4,})$/i,
-        "Use KD-SEA-000001 or KD-AIR-000001. Existing KDOOR numbers are also accepted.",
+        /^(?:KD-?(?:SEA|AIR)-?\d{6,}|(?:AIR-)?KDOOR-?\d{4,})$/i,
+        "Use KDSEA000001 or KDAIR000001. Existing dashed numbers are also accepted.",
       )
       .transform((value) =>
         value.toUpperCase(),
@@ -284,12 +284,26 @@ export const schemaKeys: Record<
   ],
 };
 
+const formKeys: Record<Entity, readonly string[]> = {
+  customers: schemaKeys.customers.filter((key) => key !== "customer_code"),
+  shipments: schemaKeys.shipments.filter((key) => key !== "tracking_number"),
+};
+
+const customerFormSchema = customerSchema.omit({ customer_code: true });
+const shipmentFormSchema = shipmentObjectSchema
+  .omit({ tracking_number: true })
+  .superRefine((values, context) => {
+    if (values.departure_date && values.warehouse_received_date && values.departure_date < values.warehouse_received_date)
+      context.addIssue({ code: "custom", path: ["departure_date"], message: "Departure date cannot be before the warehouse received date" });
+    if (values.actual_arrival && values.departure_date && values.actual_arrival < values.departure_date)
+      context.addIssue({ code: "custom", path: ["actual_arrival"], message: "Actual arrival cannot be before the departure date" });
+  });
+
 export function parseForm(
   entity: Entity,
   form: URLSearchParams,
 ) {
-  const keys =
-    schemaKeys[entity];
+  const keys = formKeys[entity];
 
   const allowed = [
     ...keys,
@@ -323,8 +337,8 @@ export function parseForm(
     );
 
   if (entity === "customers") {
-    return customerSchema.parse(raw);
+    return customerFormSchema.parse(raw);
   }
 
-  return shipmentSchema.parse(raw);
+  return shipmentFormSchema.parse(raw);
 }

@@ -38,8 +38,8 @@ export async function GET(request: Request) {
     }
 
     const validCode =
-      /^KD-(?:SEA|AIR)-\d{6,}$/i.test(trackingNumber) ||
-      /^(?:AIR-)?KDOOR-\d{4,}$/i.test(trackingNumber);
+      /^KD-?(?:SEA|AIR)-?\d{6,}$/i.test(trackingNumber) ||
+      /^(?:AIR-)?KDOOR-?\d{4,}$/i.test(trackingNumber);
 
     if (!validCode) {
       return Response.json(

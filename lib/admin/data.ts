@@ -5,6 +5,24 @@ import type {
 import { randomUUID } from "node:crypto";
 import { AdminError } from "./security";
 import type { Entity, RecordData } from "./validation";
+
+async function generatedIdentifier(db: D1Database, entity: Entity, values: RecordData) {
+  const field = entity === "customers" ? "customer_code" : "tracking_number";
+  if (values[field]) return undefined;
+  const prefix = entity === "customers" ? "KDOOR" : values.service_type === "Air Freight" ? "KDAIR" : "KDSEA";
+  const pattern = entity === "customers"
+    ? /^KDOOR-?(\d+)$/i
+    : values.service_type === "Air Freight"
+      ? /^KD-?AIR-?(\d+)$/i
+      : /^KD-?SEA-?(\d+)$/i;
+  const rows = (await db.prepare(`SELECT ${field} FROM ${entity}`).all<RecordData>()).results;
+  const highest = rows.reduce((max, row) => {
+    const match = pattern.exec(String(row[field] ?? ""));
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0);
+  return `${prefix}${String(highest + 1).padStart(entity === "customers" ? 4 : 6, "0")}`;
+}
+
 export async function saveRecord(
   db: D1Database,
   entity: Entity,
@@ -12,6 +30,7 @@ export async function saveRecord(
   user: string,
   id: string,
   revision: string,
+  attempt = 0,
 ) {
   const existing = id
     ? await db
@@ -25,6 +44,13 @@ export async function saveRecord(
       "Another admin changed this record. Reload it before saving.",
       409,
     );
+  const generatedField = entity === "customers" ? "customer_code" : "tracking_number";
+  const generated = !existing ? await generatedIdentifier(db, entity, values) : undefined;
+  const persistedValues: RecordData = existing
+    ? { ...values, [generatedField]: existing[generatedField] }
+    : generated
+      ? { ...values, [generatedField]: generated }
+      : values;
   const recordId = id || randomUUID();
   const now = new Date(
     Math.max(
@@ -33,14 +59,14 @@ export async function saveRecord(
     ),
   ).toISOString();
   const next: RecordData = {
-    ...values,
+    ...persistedValues,
     id: recordId,
     created_at: existing?.created_at ?? now,
     updated_at: now,
   };
   const statements: D1PreparedStatement[] = [];
   const changed = existing
-    ? Object.keys(values).filter((key) => values[key] !== existing[key])
+    ? Object.keys(persistedValues).filter((key) => persistedValues[key] !== existing[key])
     : [];
   if (existing && !changed.length) return recordId;
   const logs = [
@@ -52,7 +78,7 @@ export async function saveRecord(
       .map((key) => ({
         action: `change_${key}`,
         old: { [key]: existing![key] },
-        new: { [key]: values[key] },
+        new: { [key]: persistedValues[key] },
       })),
   ];
   if (!existing) {
@@ -85,13 +111,13 @@ export async function saveRecord(
         ),
     );
   if (existing) {
-    const keys = Object.keys(values);
+    const keys = Object.keys(persistedValues);
     statements.push(
       db
         .prepare(
           `UPDATE ${entity} SET ${keys.map((key) => `${key} = ?`).join(",")}, updated_at = ? WHERE id = ? AND updated_at = ?`,
         )
-        .bind(...keys.map((k) => values[k]), now, recordId, revision),
+        .bind(...keys.map((k) => persistedValues[k]), now, recordId, revision),
     );
   }
   try {
@@ -104,6 +130,10 @@ export async function saveRecord(
   } catch (error) {
     if (error instanceof AdminError) throw error;
     const message = String(error);
+    if (!existing && generated && message.includes("UNIQUE constraint")) {
+      if (attempt < 7) return saveRecord(db, entity, values, user, id, revision, attempt + 1);
+      throw new AdminError("Unable to reserve an identifier. Please try again.", 409);
+    }
     if (message.includes("UNIQUE constraint"))
       throw new AdminError(
         "This account number or tracking number already exists.",

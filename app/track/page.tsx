@@ -83,7 +83,7 @@ export default function TrackPage() {
                   type="text"
                   value={code}
                   onChange={(event) => setCode(event.target.value)}
-                  placeholder="Example: KD-SEA-000001"
+                  placeholder="Example: KDSEA000001"
                   autoComplete="off"
                 />
 
