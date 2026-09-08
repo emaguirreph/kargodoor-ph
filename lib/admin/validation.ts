@@ -72,21 +72,15 @@ const date = z
     (value) =>
       !value ||
       (
-        /^\d{4}-\d{2}-\d{2}$/.test(
-          value,
-        ) &&
-        Number.isFinite(
-          Date.parse(value),
-        ) &&
+        /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+        Number.isFinite(Date.parse(value)) &&
         new Date(value)
           .toISOString()
           .slice(0, 10) === value
       ),
     "Enter a valid date",
   )
-  .transform(
-    (value) => value || null,
-  );
+  .transform((value) => value || null);
 
 export const customerSchema = z
   .object({
@@ -95,9 +89,8 @@ export const customerSchema = z
         /^[a-zA-Z0-9-]+$/,
         "Use letters, numbers and hyphens",
       )
-      .transform(
-        (value) =>
-          value.toUpperCase(),
+      .transform((value) =>
+        value.toUpperCase(),
       ),
 
     full_name: required(160),
@@ -125,8 +118,7 @@ export const customerSchema = z
       )
       .transform(
         (value) =>
-          value.toLowerCase() ||
-          null,
+          value.toLowerCase() || null,
       ),
 
     address: optional(1000),
@@ -135,7 +127,7 @@ export const customerSchema = z
   })
   .strict();
 
-export const shipmentSchema = z
+const shipmentObjectSchema = z
   .object({
     customer_id: z
       .string()
@@ -146,9 +138,8 @@ export const shipmentSchema = z
         /^[A-Za-z0-9-]+$/,
         "Use letters, numbers and hyphens",
       )
-      .transform(
-        (value) =>
-          value.toUpperCase(),
+      .transform((value) =>
+        value.toUpperCase(),
       ),
 
     cargo_code: required(60)
@@ -156,9 +147,8 @@ export const shipmentSchema = z
         /^(?:AIR-)?KDOOR-\d{4,}$/,
         "Use a valid cargo code such as KDOOR-0001 or AIR-KDOOR-0001",
       )
-      .transform(
-        (value) =>
-          value.toUpperCase(),
+      .transform((value) =>
+        value.toUpperCase(),
       ),
 
     service_type: z.enum([
@@ -211,8 +201,10 @@ export const shipmentSchema = z
       "Paid",
     ]),
   })
-  .strict()
-  .superRefine(
+  .strict();
+
+export const shipmentSchema =
+  shipmentObjectSchema.superRefine(
     (values, context) => {
       const isAir =
         values.service_type ===
@@ -282,14 +274,50 @@ export type RecordData =
     string | number | null
   >;
 
+export const schemaKeys: Record<
+  Entity,
+  readonly string[]
+> = {
+  customers: [
+    "customer_code",
+    "full_name",
+    "company_name",
+    "mobile",
+    "email",
+    "address",
+    "notes",
+  ],
+
+  shipments: [
+    "customer_id",
+    "tracking_number",
+    "cargo_code",
+    "service_type",
+    "china_warehouse",
+    "warehouse_received_date",
+    "departure_date",
+    "cbm",
+    "weight_kg",
+    "status",
+    "estimated_arrival",
+    "actual_arrival",
+    "tracking_remarks",
+    "shipping_charge",
+    "nihao_cost",
+    "delivery_charge",
+    "payment_status",
+  ],
+};
+
 export function parseForm(
   entity: Entity,
   form: URLSearchParams,
 ) {
+  const keys =
+    schemaKeys[entity];
+
   const allowed = [
-    ...Object.keys(
-      schemas[entity].shape,
-    ),
+    ...keys,
     "id",
     "revision",
     "csrf",
@@ -311,14 +339,17 @@ export function parseForm(
     }
   }
 
-  return schemas[entity].parse(
+  const raw =
     Object.fromEntries(
-      Object.keys(
-        schemas[entity].shape,
-      ).map((key) => [
+      keys.map((key) => [
         key,
         form.get(key) ?? "",
       ]),
-    ),
-  );
+    );
+
+  if (entity === "customers") {
+    return customerSchema.parse(raw);
+  }
+
+  return shipmentSchema.parse(raw);
 }
