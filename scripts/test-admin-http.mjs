@@ -194,6 +194,23 @@ try {
   assert.ok(afterDeleteHtml.includes("<strong>₱0.10</strong>"));
   assert.equal((await get(`${expensePath}?edit=${expenseId}`)).status, 404);
   console.log("Expense Phase 2 HTTP checks passed: edit, confirmed delete, authentication, CSRF, origin, validation, stale confirmation, combined filters/search, totals and preserved Add.");
+  for (const query of ["", "?preset=all", "?preset=month", "?preset=last-month", "?preset=year", "?from=2026-09-08", "?to=2026-09-08", "?from=2026-09-08&to=2026-09-08"]) {
+    const financeResponse = await get("/admin/finance" + query);
+    assert.equal(financeResponse.status, 200);
+    assert.equal(financeResponse.headers.get("cache-control"), "no-store, private");
+    const financeHtml = await financeResponse.text();
+    for (const label of ["Revenue", "Payments Received", "Accounts Receivable", "Freight Costs", "Freight Margin", "Operating Expenses", "Net Profit", "Shipments"])
+      assert.ok(financeHtml.includes(`<h2>${label}</h2>`));
+    assert.ok(financeHtml.includes("report=freight") && financeHtml.includes('href="/admin/finance/expenses"'));
+  }
+  assert.equal((await get("/admin/finance?from=2026-09-09&to=2026-09-08")).status, 400);
+  assert.equal((await get("/admin/finance?from=invalid")).status, 400);
+  assert.equal((await get("/admin/finance?report=freight")).status, 200);
+  assert.equal((await post("/admin/finance", {})).status, 405);
+  const financeAll = await (await get("/admin/finance")).text();
+  assert.ok(financeAll.includes("<h2>Operating Expenses</h2><strong>₱0.10</strong>"));
+  assert.ok(financeAll.includes("<h2>Net Profit</h2><strong>-₱0.10</strong>"));
+  console.log("Finance Dashboard HTTP checks passed: admin page, all presets, one-sided/same-day ranges, invalid dates, cards, links, negative profit, and POST rejected.");
   const trackingBefore = await (await get("/api/track?code=KDOOR-0001", false)).json();
   assert.equal(trackingBefore.remarks, "Tracking sentinel");
   for (const path of ["/", "/how-it-works", "/services", "/rates-calculator", "/faq", "/contact-us", "/track"])
@@ -378,7 +395,7 @@ try {
   assert.ok(html.includes("record payment"));
   html = await (await get(`/admin/shipments?id=${sid}`)).text();
   assert.ok(html.includes("Paid"));
-  html = await (await get("/admin/finance")).text();
+  html = await (await get("/admin/finance?report=freight")).text();
   assert.ok(html.includes("1,899.90"), "margin uses saved charges and costs");
   assert.ok(html.includes("HTTP-SHIP-001"));
   html = await (await get(`/admin/activity?entity_type=shipments&entity_id=${sid}`)).text();

@@ -623,10 +623,10 @@ test("expense form has exact controlled dropdowns and no tracking field", async 
     "Permits / Government Fees", "Transportation / Fuel / Parking", "Supplies / Packaging",
     "Professional Fees", "Utilities", "Bank / Payment Fees", "Repairs / Maintenance",
     "Meals / Representation", "Taxes", "Miscellaneous"];
-  const categorySelect = html.match(/<select name="category" required>(.*?)<\/select>/s)![1];
+  const categorySelect = html.match(/<select name="category" required>([\s\S]*?)<\/select>/)![1];
   assert.deepEqual([...categorySelect.matchAll(/<option value="([^"]+)">([^<]+)<\/option>/g)].map((m) => [m[1], m[2]]), categories.map((c) => [c, c]));
   const methods = ["Cash", "Bank Transfer", "GCash", "Credit Card", "Debit Card", "Check", "Other"];
-  const paymentSelect = html.match(/<select name="payment_method">(.*?)<\/select>/s)![1];
+  const paymentSelect = html.match(/<select name="payment_method">([\s\S]*?)<\/select>/)![1];
   assert.deepEqual([...paymentSelect.matchAll(/<option value="([^"]+)">([^<]+)<\/option>/g)].map((m) => [m[1], m[2]]), methods.map((m) => [m, m]));
   for (const field of ["expense_date", "description", "amount"])
     assert.match(html, new RegExp(`<(?:input|textarea)[^>]*name="${field}"[^>]*required`));
@@ -740,3 +740,5 @@ test("expense filters and search combine with exact integer totals and clear res
   for (const query of ["from=2026-02-30", "from=2026-09-10&to=2026-09-01", "category=arbitrary", "payment_method=arbitrary"])
     await assert.rejects(expensesPage(db, new URL(`https://admin.test/admin/finance/expenses?${query}`), "Admin", "token"));
 });
+
+import "./finance.test";

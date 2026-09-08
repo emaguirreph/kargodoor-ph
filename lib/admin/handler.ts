@@ -19,6 +19,7 @@ import {
   type RecordData,
 } from "./validation";
 
+import { financeDashboard } from "./finance-summary";
 import { expensesPage, mutateExpense } from "./expenses";
 import { saveRecord } from "./data";
 import { page, esc, pesos, input, select, hidden } from "./ui";
@@ -332,11 +333,10 @@ export async function handleAdmin(
       view ===
       "finance"
     ) {
-      return await finance(
-        db,
-        url,
-        user.name,
-      );
+      if (url.searchParams.get("report") === "freight" || ["q", "missing", "page"].some((key) => url.searchParams.has(key))) {
+        return await finance(db, url, user.name);
+      }
+      return await financeDashboard(db, url, user.name);
     }
 
     if (

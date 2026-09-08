@@ -1,3 +1,4 @@
+import { financeRange, shipmentBusinessDateSql, type FinanceRange } from "./finance-dates";
 import type { D1Database } from "@cloudflare/workers-types";
 import { AdminError } from "./security";
 import type { RecordData } from "./validation";
@@ -10,6 +11,14 @@ export const marginSummarySql = `SELECT
  COALESCE(SUM(nihao_cost),0) AS costs,
  COALESCE(SUM(CASE WHEN nihao_cost IS NOT NULL THEN shipping_charge-nihao_cost ELSE 0 END),0) AS margin
  FROM shipments WHERE status != 'Cancelled'`;
+// Reuse the original aggregate unchanged; add only a bound business-date restriction.
+export async function freightSummary(db: D1Database, range: FinanceRange) {
+  return await db.prepare(`SELECT CAST(shipments AS TEXT) AS shipments, CAST(costed AS TEXT) AS costed,
+    CAST(charges AS TEXT) AS charges, CAST(costs AS TEXT) AS costs, CAST(margin AS TEXT) AS margin
+    FROM (${marginSummarySql} AND (? = '' OR ${shipmentBusinessDateSql} >= ?)
+      AND (? = '' OR ${shipmentBusinessDateSql} <= ?))`)
+    .bind(range.from, range.from, range.to, range.to).first<RecordData>();
+}
 const cards = (items: [string, unknown][]) => `<div class="cards">${items.map(([label, value]) => `<div class="card">${esc(label)}<strong>${esc(value)}</strong></div>`).join("")}</div>`;
 function pager(url: URL, number: number, more: boolean) {
   const link = (n: number) => {
@@ -53,17 +62,21 @@ export async function dashboard(db: D1Database, user: string) {
 export async function finance(db: D1Database, url: URL, user: string) {
   const { q, number, offset } = filters(url);
   const missing = url.searchParams.get("missing") === "1";
-  const total = await db.prepare(marginSummarySql).first<RecordData>();
+  const range = financeRange(url);
+  const total = await freightSummary(db, range);
   const rows = (await db.prepare(`SELECT s.id,s.tracking_number,c.full_name,s.status,s.shipping_charge,s.nihao_cost
     FROM shipments s JOIN customers c ON c.id=s.customer_id
     WHERE s.status != 'Cancelled' AND (instr(lower(s.tracking_number),lower(?))>0 OR instr(lower(c.full_name),lower(?))>0)
-    AND (?=0 OR s.nihao_cost IS NULL) ORDER BY s.updated_at DESC,s.id LIMIT 26 OFFSET ?`)
-    .bind(q,q,missing ? 1 : 0,offset).all<RecordData>()).results;
+    AND (?=0 OR s.nihao_cost IS NULL)
+    AND (? = '' OR COALESCE(NULLIF(s.warehouse_received_date, ''), date(s.created_at, '+8 hours')) >= ?)
+    AND (? = '' OR COALESCE(NULLIF(s.warehouse_received_date, ''), date(s.created_at, '+8 hours')) <= ?) ORDER BY s.updated_at DESC,s.id LIMIT 26 OFFSET ?`)
+    .bind(q,q,missing ? 1 : 0,range.from,range.from,range.to,range.to,offset).all<RecordData>()).results;
   return page("Freight margin", `
-    <p><a href="/admin/finance/expenses">Expenses</a></p>
+    <p><a href="/admin/finance">Finance Dashboard</a> · <a href="/admin/finance/expenses">Expenses</a></p>
+    <p class="muted">${esc(range.from || "All dates")} through ${esc(range.to || "all dates")}. Shipment date: warehouse receipt, otherwise Philippine creation date.</p>
     ${cards([["Costed freight charges",pesos(total?.charges)],["Ni Hao freight costs",pesos(total?.costs)],["Freight margin",pesos(total?.margin)],["Costs still needed",Number(total?.shipments ?? 0)-Number(total?.costed ?? 0)]])}
-    <p class="muted">Totals cover all non-cancelled shipments with a recorded Ni Hao cost, regardless of the search below. Freight margin = KargoDoor freight charge − Ni Hao freight cost. Delivery charges and other expenses are excluded; this is not net income or cash received.</p>
-    <section><form action="/admin/finance" method="get" class="search"><label>Search shipment or customer<input name="q" maxlength="160" value="${esc(q)}"></label><label>Cost status<select name="missing"><option value="0">All costs</option><option value="1"${missing ? " selected" : ""}>Cost not entered</option></select></label><button>Search</button><a href="/admin/finance">Clear</a></form></section>
+    <p class="muted">Totals cover non-cancelled shipments in the selected date range with a recorded Ni Hao cost, regardless of the search below. Freight margin = KargoDoor freight charge − Ni Hao freight cost. Delivery charges and other expenses are excluded; this is not net income or cash received.</p>
+    <section><form action="/admin/finance" method="get" class="search">${hidden("report", "freight")}${hidden("from", range.from)}${hidden("to", range.to)}<label>Search shipment or customer<input name="q" maxlength="160" value="${esc(q)}"></label><label>Cost status<select name="missing"><option value="0">All costs</option><option value="1"${missing ? " selected" : ""}>Cost not entered</option></select></label><button>Search</button><a href="/admin/finance?report=freight&amp;from=${esc(range.from)}&amp;to=${esc(range.to)}">Clear</a></form></section>
     <section>${rows.length ? `<div class="table"><table><thead><tr><th>Shipment / customer</th><th>Status</th><th>Freight charge</th><th>Ni Hao cost</th><th>Freight margin</th></tr></thead><tbody>${rows.slice(0,25).map(r => `<tr><td>${recordLink("shipments",r.id,r.tracking_number)}<br><span class="muted">${esc(r.full_name)}</span></td><td>${esc(r.status)}</td><td>${esc(pesos(r.shipping_charge))}</td><td>${r.nihao_cost === null ? "Not entered" : esc(pesos(r.nihao_cost))}</td><td>${r.nihao_cost === null ? "—" : esc(pesos(Number(r.shipping_charge)-Number(r.nihao_cost)))}</td></tr>`).join("")}</tbody></table></div>` : "<p>No matching shipments.</p>"}${pager(url,number,rows.length > 25)}</section>`, user);
 }
 
