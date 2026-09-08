@@ -1,5 +1,13 @@
 import { z, ZodError } from "zod";
-export const warehouses = ["Guangzhou", "Yiwu", "Shishi", "Hong Kong", "Taiwan"] as const;
+
+export const warehouses = [
+  "Guangzhou",
+  "Yiwu",
+  "Shishi",
+  "Hong Kong",
+  "Taiwan",
+] as const;
+
 export const statuses = [
   "Received at Warehouse",
   "In Transit",
@@ -8,102 +16,306 @@ export const statuses = [
   "Delivered",
   "Cancelled",
 ] as const;
+
 const required = (max: number) =>
-  z.string().trim().min(1, "Required value is missing").max(max);
+  z
+    .string()
+    .trim()
+    .min(1, "Required value is missing")
+    .max(max);
+
 const optional = (max: number) =>
   z
     .string()
     .trim()
     .max(max)
-    .transform((v) => v || null);
+    .transform((value) => value || null);
+
 const decimal = (max: number) =>
   required(30)
-    .regex(/^\d+(\.\d{1,3})?$/, "Use a positive number with up to 3 decimals")
+    .regex(
+      /^\d+(\.\d{1,3})?$/,
+      "Use a positive number with up to 3 decimals",
+    )
     .transform(Number)
-    .refine((n) => Number.isFinite(n) && n <= max, "Number is too large");
+    .refine(
+      (number) =>
+        Number.isFinite(number) &&
+        number <= max,
+      "Number is too large",
+    );
+
 const money = required(30)
   .regex(
     /^\d+(\.\d{1,2})?$/,
     "Use a non-negative peso amount with at most 2 decimals",
   )
-  .transform((v) => {
-    const [pesos, cents = ""] = v.split(".");
-    return Number(pesos) * 100 + Number(cents.padEnd(2, "0"));
+  .transform((value) => {
+    const [pesos, cents = ""] =
+      value.split(".");
+
+    return (
+      Number(pesos) * 100 +
+      Number(cents.padEnd(2, "0"))
+    );
   })
   .refine(
-    (n) => Number.isSafeInteger(n) && n <= 100000000000,
+    (number) =>
+      Number.isSafeInteger(number) &&
+      number <= 100000000000,
     "Amount is too large",
   );
+
 const date = z
   .string()
   .refine(
-    (v) =>
-      !v ||
-      (/^\d{4}-\d{2}-\d{2}$/.test(v) &&
-        Number.isFinite(Date.parse(v)) &&
-        new Date(v).toISOString().slice(0, 10) === v),
+    (value) =>
+      !value ||
+      (
+        /^\d{4}-\d{2}-\d{2}$/.test(
+          value,
+        ) &&
+        Number.isFinite(
+          Date.parse(value),
+        ) &&
+        new Date(value)
+          .toISOString()
+          .slice(0, 10) === value
+      ),
     "Enter a valid date",
   )
-  .transform((v) => v || null);
+  .transform(
+    (value) => value || null,
+  );
+
 export const customerSchema = z
   .object({
     customer_code: required(40)
-      .regex(/^[a-zA-Z0-9-]+$/, "Use letters, numbers and hyphens")
-      .transform((v) => v.toUpperCase()),
+      .regex(
+        /^[a-zA-Z0-9-]+$/,
+        "Use letters, numbers and hyphens",
+      )
+      .transform(
+        (value) =>
+          value.toUpperCase(),
+      ),
+
     full_name: required(160),
+
     company_name: optional(160),
+
     mobile: required(40).regex(
       /^[+\d() .-]{5,40}$/,
       "Enter a valid phone number",
     ),
+
     email: z
       .string()
       .trim()
       .max(254)
       .refine(
-        (v) => !v || z.string().email().safeParse(v).success,
+        (value) =>
+          !value ||
+          z
+            .string()
+            .email()
+            .safeParse(value)
+            .success,
         "Enter a valid email",
       )
-      .transform((v) => v.toLowerCase() || null),
+      .transform(
+        (value) =>
+          value.toLowerCase() ||
+          null,
+      ),
+
     address: optional(1000),
+
     notes: optional(4000),
   })
   .strict();
+
 export const shipmentSchema = z
   .object({
-    customer_id: z.string().uuid(),
+    customer_id: z
+      .string()
+      .uuid(),
+
     tracking_number: required(60)
-      .regex(/^[A-Za-z0-9-]+$/)
-      .transform((v) => v.toUpperCase()),
-    service_type: z.enum(["Sea Freight", "Air Freight"]),
-    china_warehouse: z.enum(warehouses),
+      .regex(
+        /^[A-Za-z0-9-]+$/,
+        "Use letters, numbers and hyphens",
+      )
+      .transform(
+        (value) =>
+          value.toUpperCase(),
+      ),
+
+    cargo_code: required(60)
+      .regex(
+        /^(?:AIR-)?KDOOR-\d{4,}$/,
+        "Use a valid cargo code such as KDOOR-0001 or AIR-KDOOR-0001",
+      )
+      .transform(
+        (value) =>
+          value.toUpperCase(),
+      ),
+
+    service_type: z.enum([
+      "Sea Freight",
+      "Air Freight",
+    ]),
+
+    china_warehouse:
+      z.enum(warehouses),
+
+    warehouse_received_date:
+      date,
+
+    departure_date:
+      date,
+
     cbm: decimal(1000000),
-    weight_kg: decimal(100000000),
-    status: z.enum(statuses),
-    estimated_arrival: date,
-    actual_arrival: date,
-    shipping_charge: money,
-    nihao_cost: z.union([z.literal("").transform(() => null), money]),
-    delivery_charge: money,
-    payment_status: z.enum(["Unpaid", "Partial", "Paid"]),
+
+    weight_kg:
+      decimal(100000000),
+
+    status:
+      z.enum(statuses),
+
+    estimated_arrival:
+      date,
+
+    actual_arrival:
+      date,
+
+    tracking_remarks:
+      optional(2000),
+
+    shipping_charge:
+      money,
+
+    nihao_cost: z.union([
+      z
+        .literal("")
+        .transform(() => null),
+      money,
+    ]),
+
+    delivery_charge:
+      money,
+
+    payment_status: z.enum([
+      "Unpaid",
+      "Partial",
+      "Paid",
+    ]),
   })
-  .strict();
-export const schemas = { customers: customerSchema, shipments: shipmentSchema };
-export type Entity = keyof typeof schemas;
-export type RecordData = Record<string, string | number | null>;
-export function parseForm(entity: Entity, form: URLSearchParams) {
+  .strict()
+  .superRefine(
+    (values, context) => {
+      const isAir =
+        values.service_type ===
+        "Air Freight";
+
+      const cargoIsAir =
+        values.cargo_code.startsWith(
+          "AIR-",
+        );
+
+      if (isAir !== cargoIsAir) {
+        context.addIssue({
+          code: "custom",
+          path: ["cargo_code"],
+          message:
+            isAir
+              ? "Air Freight cargo codes must start with AIR-KDOOR-."
+              : "Sea Freight cargo codes must start with KDOOR- and must not use AIR-KDOOR-.",
+        });
+      }
+
+      if (
+        values.departure_date &&
+        values.warehouse_received_date &&
+        values.departure_date <
+          values.warehouse_received_date
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: [
+            "departure_date",
+          ],
+          message:
+            "Departure date cannot be before the warehouse received date",
+        });
+      }
+
+      if (
+        values.actual_arrival &&
+        values.departure_date &&
+        values.actual_arrival <
+          values.departure_date
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: [
+            "actual_arrival",
+          ],
+          message:
+            "Actual arrival cannot be before the departure date",
+        });
+      }
+    },
+  );
+
+export const schemas = {
+  customers: customerSchema,
+  shipments: shipmentSchema,
+};
+
+export type Entity =
+  keyof typeof schemas;
+
+export type RecordData =
+  Record<
+    string,
+    string | number | null
+  >;
+
+export function parseForm(
+  entity: Entity,
+  form: URLSearchParams,
+) {
   const allowed = [
-    ...Object.keys(schemas[entity].shape),
+    ...Object.keys(
+      schemas[entity].shape,
+    ),
     "id",
     "revision",
     "csrf",
   ];
-  for (const key of form.keys())
-    if (!allowed.includes(key) || form.getAll(key).length !== 1)
-      throw new ZodError([{ code: "custom", path: [key], message: "Unexpected or repeated form field" }]);
+
+  for (const key of form.keys()) {
+    if (
+      !allowed.includes(key) ||
+      form.getAll(key).length !== 1
+    ) {
+      throw new ZodError([
+        {
+          code: "custom",
+          path: [key],
+          message:
+            "Unexpected or repeated form field",
+        },
+      ]);
+    }
+  }
+
   return schemas[entity].parse(
     Object.fromEntries(
-      Object.keys(schemas[entity].shape).map((key) => [
+      Object.keys(
+        schemas[entity].shape,
+      ).map((key) => [
         key,
         form.get(key) ?? "",
       ]),
