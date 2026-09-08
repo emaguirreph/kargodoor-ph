@@ -130,6 +130,7 @@ try {
     "/admin/activity",
     "/admin/finance",
     "/admin/finance/expenses",
+    "/admin/finance/export",
     "/admin/invoices",
   ])
     assert.equal((await get(path, false)).status, 401, path + " protected");
@@ -217,6 +218,23 @@ try {
   assert.ok(financeAll.includes("Net Profit / (Loss)") && financeAll.includes("-₱0.10"));
   assert.ok(financeAll.includes("Revenue and Payments Received are different") && financeAll.includes("This prevents double counting"));
   console.log("Finance Dashboard HTTP checks passed: admin page, all presets, one-sided/same-day ranges, invalid dates, overview tables, Expense actions, formulas, negative profit, and POST rejected.");
+  const financeReport = await (await get("/admin/finance?from=2026-09-01&to=2026-09-30")).text();
+  for (const label of ["% of Operating Expenses", "Period Comparison", "Monthly Summary", "Export Finance CSV"])
+    assert.ok(financeReport.includes(label));
+  const exportPath = "/admin/finance/export?from=2026-09-01&to=2026-09-30";
+  assert.equal((await get(exportPath, false)).status, 401);
+  const exportResponse = await get(exportPath);
+  assert.equal(exportResponse.status, 200);
+  assert.equal(exportResponse.headers.get("content-type"), "text/csv; charset=utf-8");
+  assert.equal(exportResponse.headers.get("content-disposition"),
+    'attachment; filename="KargoDoor-Finance-2026-09-01-to-2026-09-30.csv"');
+  const exportBytes = new Uint8Array(await exportResponse.arrayBuffer());
+  assert.deepEqual([...exportBytes.slice(0, 3)], [0xef, 0xbb, 0xbf]);
+  const exportText = new TextDecoder().decode(exportBytes);
+  for (const section of ["SUMMARY", "EXPENSE BREAKDOWN", "MONTHLY SUMMARY"]) assert.ok(exportText.includes(section));
+  assert.ok(!exportText.includes("cargo_code") && !exportText.includes("customer_id") && !exportText.includes("invoice_id"));
+  assert.equal((await post("/admin/finance/export", {})).status, 405);
+  console.log("Finance Phase 4 HTTP checks passed: reports, authenticated CSV, filename, UTF-8 BOM, sections, safe fields, and POST rejected.");
   const trackingBefore = await (await get("/api/track?code=KDOOR-0001", false)).json();
   assert.equal(trackingBefore.remarks, "Tracking sentinel");
   for (const path of ["/", "/how-it-works", "/services", "/rates-calculator", "/faq", "/contact-us", "/track"])

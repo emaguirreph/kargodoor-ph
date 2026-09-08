@@ -1,12 +1,12 @@
 import type { D1Database } from "@cloudflare/workers-types";
 import { freightSummary } from "./reports";
 import { financeRange, inFinanceRange, philippineToday, validBusinessDate, type FinanceRange } from "./finance-dates";
+import { readFinanceReport } from "./finance-report";
 import { esc, input, page } from "./ui";
 
 type Invoice = { id: string; issued_at: string | null; total: string; other_charge: string };
 type Payment = { invoice_id: string; payment_date: string; amount: string };
 type Expense = { expense_date: string; amount: string };
-type ExpenseCategory = { category: string; amount: string };
 const zero = BigInt(0);
 
 const expenseDescriptions: Record<string, string> = {
@@ -98,10 +98,7 @@ export async function readFinanceSummary(db: D1Database, range: FinanceRange, no
 export async function financeDashboard(db: D1Database, url: URL, user: string, now = new Date()) {
   const range = financeRange(url, now);
   const summary = await readFinanceSummary(db, range, now);
-  const categoryRows = (await db.prepare(`SELECT category, CAST(SUM(amount) AS TEXT) AS amount
-    FROM expenses WHERE amount > 0 AND date(expense_date) = expense_date AND (? = '' OR expense_date >= ?)
-      AND (? = '' OR expense_date <= ?) GROUP BY category HAVING SUM(amount) > 0
-    ORDER BY category`).bind(range.from, range.from, range.to, range.to).all<ExpenseCategory>()).results;
+  const report = await readFinanceReport(db, url, now, summary);
   const notices = [
     summary.uncosted > zero ? `${summary.uncosted} shipments in this range have no Ni Hao cost. Freight Costs and Freight Margin exclude their missing costs; Net Profit uses recorded costs only.` : "",
     summary.undatedInvoices ? `${summary.undatedInvoices} non-Draft/non-Void invoices lack valid issue dates and are excluded from Revenue and Accounts Receivable. These metrics may be incomplete.` : "",
@@ -125,15 +122,27 @@ export async function financeDashboard(db: D1Database, url: URL, user: string, n
     ["Freight Margin", "KargoDoor freight charges less Ni Hao freight cost.", summary.margin],
     ["Shipments", "Qualifying non-cancelled shipments in the selected period.", summary.shipments.toString()],
   ];
-  const breakdown = categoryRows.length
-    ? `<div class="table"><table><thead><tr><th>Category</th><th>Description</th><th>Amount</th></tr></thead><tbody>
-      ${categoryRows.map((row) => {
-        const excluded = row.category === "Freight / Ni Hao Cost";
+  const breakdown = `<div class="table"><table><thead><tr><th>Category</th><th>Description</th><th>Amount</th><th>% of Operating Expenses</th></tr></thead><tbody>
+      ${report.breakdown.map((row) => {
         const description = expenseDescriptions[row.category] ?? "Historical expense category.";
-        return `<tr><td><strong>${esc(row.category)}</strong>${excluded ? '<br><span class="muted">Excluded from Operating Expense total to prevent freight-cost double counting.</span>' : ""}</td>
-          <td class="muted">${esc(description)}</td><td><strong>${esc(financePesos(BigInt(row.amount)))}</strong></td></tr>`;
-      }).join("")}</tbody></table></div>`
-    : '<p class="muted">No expense categories have amounts in this reporting period.</p>';
+        return `<tr><td><strong>${esc(row.category)}</strong></td>
+          <td class="muted">${esc(description)}</td><td><strong>${esc(financePesos(row.amount))}</strong></td>
+          <td>${esc(row.percent)}</td></tr>`;
+      }).join("") || '<tr><td colspan="4" class="muted">No operating expense categories have amounts in this reporting period.</td></tr>'}
+      </tbody></table></div>`;
+  const comparison = report.comparison.length
+    ? `<div class="table"><table><thead><tr><th>Metric</th><th>Current</th><th>Previous</th><th>Difference</th><th>% Change</th></tr></thead><tbody>
+      ${report.comparison.map((row) => `<tr><td><strong>${esc(row.label)}</strong></td><td>${esc(financePesos(row.current))}</td>
+        <td>${esc(financePesos(row.previous))}</td><td>${esc(financePesos(row.difference))}</td><td>${esc(row.percentChange)}</td></tr>`).join("")}
+      </tbody></table></div>`
+    : '<p class="muted">Previous-period comparison is available for date presets and ranges with both From and To dates.</p>';
+  const monthly = `<div class="table finance-wide"><table><thead><tr><th>Month</th><th>Revenue</th><th>Payments Received</th>
+    <th>Ni Hao Freight Cost</th><th>Operating Expenses</th><th>Net Profit</th><th>Freight Margin</th><th>Shipments</th></tr></thead><tbody>
+    ${report.monthly.map((row) => `<tr><td><strong>${esc(row.label)}</strong></td><td>${esc(financePesos(row.revenue))}</td>
+      <td>${esc(financePesos(row.received))}</td><td>${esc(financePesos(row.costs))}</td><td>${esc(financePesos(row.operating))}</td>
+      <td>${esc(financePesos(row.profit))}</td><td>${esc(financePesos(row.margin))}</td><td>${row.shipments}</td></tr>`).join("")}
+    </tbody></table></div>`;
+  const exportLink = `/admin/finance/export?${new URLSearchParams(range)}`;
   return page("Finance", `<section><form action="/admin/finance" method="get" class="search">
     ${input("from", "From Date", range, "date")}${input("to", "To Date", range, "date")}<button type="submit">Apply</button></form>
     <div class="actions"><a href="/admin/finance?preset=month">This Month</a><a href="/admin/finance?preset=last-month">Last Month</a>
@@ -145,6 +154,8 @@ export async function financeDashboard(db: D1Database, url: URL, user: string, n
     ${metricTable("Shipping Performance", shipping)}
     <section><div class="actions"><h2>Operating Expenses</h2><a class="button" href="/admin/finance/expenses?new=1">+ Add Expense</a><a href="/admin/finance/expenses">View Expenses</a></div>
       <p><strong>Total Operating Expenses: ${esc(financePesos(summary.operating))}</strong></p>${breakdown}</section>
+    <section><h2>Period Comparison</h2>${comparison}</section>
+    <section><div class="actions"><h2>Monthly Summary</h2><a class="button" href="${esc(exportLink)}">Export Finance CSV</a></div>${monthly}</section>
     <section><h2>How the Numbers Are Calculated</h2><div class="table"><table><tbody>
       <tr><td><strong>Revenue</strong></td><td class="muted">Eligible Invoice Revenue</td></tr>
       <tr><td><strong>Payments Received</strong></td><td class="muted">Actual Payments Received</td></tr>
@@ -157,6 +168,6 @@ export async function financeDashboard(db: D1Database, url: URL, user: string, n
     <p class="muted">Freight / Ni Hao Cost entered under Expenses is excluded from Operating Expenses when the same backend freight cost is already recorded against shipments. This prevents double counting.</p></section>
     <p class="muted">Freight metrics use warehouse receipt date, or Philippine creation date when receipt date is absent. Cancelled shipments are excluded.</p>
     <div class="actions"><a href="${esc(freightLink)}">Freight Margin</a><a href="/admin/finance/expenses">Expenses</a></div>
-    <style>.finance-emphasis td{border-top:2px solid #154876;border-bottom:2px solid #154876}.finance-emphasis strong{font-size:1.08rem}
+    <style>.finance-emphasis td{border-top:2px solid #154876;border-bottom:2px solid #154876}.finance-emphasis strong{font-size:1.08rem}.finance-wide{overflow-x:auto}
     @media(max-width:520px){table{min-width:0}thead{display:none}tr{display:block;padding:10px 0;border-bottom:1px solid #d5e4ed}td{display:block;border:0;padding:4px 0}td:last-child{font-size:1.1rem}}</style>`, user);
 }

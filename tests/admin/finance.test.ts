@@ -8,9 +8,9 @@ import { financeDashboard, readFinanceSummary, financePesos } from "../../lib/ad
 import { financeRange, philippineToday } from "../../lib/admin/finance-dates";
 import { finance, marginSummarySql } from "../../lib/admin/reports";
 
-const now = new Date("2026-09-08T16:30:00Z");
-const all = { from: "", to: "" };
-function fixture() {
+export const now = new Date("2026-09-08T16:30:00Z");
+export const all = { from: "", to: "" };
+export function fixture() {
   const sql = new DatabaseSync(":memory:");
   sql.exec("PRAGMA foreign_keys=ON");
   for (const file of ["0001_phase1.sql", "0002_freight_cost.sql", "0003_invoices_payments.sql", "0004_public_tracking.sql", "0005_expenses.sql"])
@@ -133,7 +133,8 @@ test("finance overview tables, expense breakdown, actions and formulas use Phase
   assert.ok(html.includes('href="/admin/finance/expenses?new=1">+ Add Expense</a>'));
   assert.ok(html.includes('href="/admin/finance/expenses">View Expenses</a>'));
   assert.ok(html.includes("Marketing / Advertising") && html.includes("Ads, promotions"));
-  assert.ok(html.includes("Freight / Ni Hao Cost") && html.includes("Excluded from Operating Expense total"));
+  assert.ok(!html.includes("Excluded from Operating Expense total"));
+  assert.ok(!html.includes("<strong>Freight / Ni Hao Cost</strong>"));
   assert.ok(!html.includes("Utilities"), "out-of-range category is omitted");
   assert.equal((html.match(/Marketing \/ Advertising/g) ?? []).length, 1);
   for (const wording of ["Eligible Invoice Revenue", "Actual Payments Received",

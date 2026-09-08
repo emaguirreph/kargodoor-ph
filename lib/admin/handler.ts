@@ -20,6 +20,7 @@ import {
 } from "./validation";
 
 import { financeDashboard } from "./finance-summary";
+import { financeCsv } from "./finance-report";
 import { expensesPage, mutateExpense } from "./expenses";
 import { saveRecord } from "./data";
 import { page, esc, pesos, input, select, hidden } from "./ui";
@@ -107,7 +108,7 @@ function validateFormOrigin(
 
 export async function handleAdmin(
   request: Request,
-  view?: Entity | "finance" | "finance/expenses" | "activity",
+  view?: Entity | "finance" | "finance/expenses" | "finance/export" | "activity",
 ) {
   let localChallenge = false;
 
@@ -324,6 +325,10 @@ export async function handleAdmin(
 
     if (view === "finance/expenses") {
       return await expensesPage(db, url, user.name, csrfToken(env, user.id, path));
+    }
+
+    if (view === "finance/export") {
+      return await financeCsv(db, url);
     }
 
     /*
