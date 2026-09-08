@@ -80,15 +80,6 @@ function validateFormOrigin(
   const originHeader =
     request.headers.get("origin");
 
-  /*
-   * Safari can legitimately submit:
-   *
-   * Origin: null
-   * Sec-Fetch-Site: same-origin
-   *
-   * Cloudflare Access authentication and
-   * CSRF validation remain mandatory.
-   */
   if (!originHeader || originHeader === "null") {
     return;
   }
@@ -211,9 +202,7 @@ export async function handleAdmin(
         );
 
       if (
-        Number.isFinite(
-          contentLength,
-        ) &&
+        Number.isFinite(contentLength) &&
         contentLength > 24_000
       ) {
         throw new AdminError(
@@ -288,16 +277,12 @@ export async function handleAdmin(
         form.get("id") ?? "";
 
       const revision =
-        form.get(
-          "revision",
-        ) ?? "";
+        form.get("revision") ?? "";
 
       if (
         id &&
         (
-          !/^[\da-f-]{36}$/i.test(
-            id,
-          ) ||
+          !/^[\da-f-]{36}$/i.test(id) ||
           !revision ||
           revision.length > 40
         )
@@ -381,8 +366,7 @@ export async function handleAdmin(
         "new",
       ) === "1";
 
-    let record:
-      RecordData = {};
+    let record: RecordData = {};
 
     if (id) {
       if (
@@ -539,118 +523,112 @@ export async function handleAdmin(
           );
 
         /*
-         * Search existing customers.
+         * CUSTOMER PICKER
+         *
+         * Always show customers.
+         * If a search is entered,
+         * narrow the list.
+         * Always include the selected
+         * customer when editing.
          */
-        let customerRows:
-          RecordData[] = [];
+        const result =
+          await db
+            .prepare(
+              `
+              SELECT
+                id,
+                customer_code,
+                full_name,
+                company_name,
+                mobile,
+                email
+              FROM customers
+              WHERE
+                (
+                  ? = ''
 
-        if (
-          customerSearch ||
-          selectedCustomer
-        ) {
-          const result =
-            await db
-              .prepare(
-                `
-                SELECT
-                  id,
-                  customer_code,
-                  full_name,
-                  company_name,
-                  mobile,
-                  email
-                FROM customers
-                WHERE
-                  (
-                    ? != ''
-                    AND (
-                      instr(
-                        lower(
-                          COALESCE(
-                            customer_code,
-                            ''
-                          )
-                        ),
-                        lower(?)
-                      ) > 0
+                  OR instr(
+                    lower(
+                      COALESCE(
+                        customer_code,
+                        ''
+                      )
+                    ),
+                    lower(?)
+                  ) > 0
 
-                      OR instr(
-                        lower(
-                          COALESCE(
-                            full_name,
-                            ''
-                          )
-                        ),
-                        lower(?)
-                      ) > 0
+                  OR instr(
+                    lower(
+                      COALESCE(
+                        full_name,
+                        ''
+                      )
+                    ),
+                    lower(?)
+                  ) > 0
 
-                      OR instr(
-                        lower(
-                          COALESCE(
-                            company_name,
-                            ''
-                          )
-                        ),
-                        lower(?)
-                      ) > 0
+                  OR instr(
+                    lower(
+                      COALESCE(
+                        company_name,
+                        ''
+                      )
+                    ),
+                    lower(?)
+                  ) > 0
 
-                      OR instr(
-                        COALESCE(
-                          mobile,
-                          ''
-                        ),
-                        ?
-                      ) > 0
+                  OR instr(
+                    COALESCE(
+                      mobile,
+                      ''
+                    ),
+                    ?
+                  ) > 0
 
-                      OR instr(
-                        lower(
-                          COALESCE(
-                            email,
-                            ''
-                          )
-                        ),
-                        lower(?)
-                      ) > 0
-                    )
-                  )
+                  OR instr(
+                    lower(
+                      COALESCE(
+                        email,
+                        ''
+                      )
+                    ),
+                    lower(?)
+                  ) > 0
+                )
 
-                  OR (
-                    ? != ''
-                    AND id = ?
-                  )
+                OR (
+                  ? != ''
+                  AND id = ?
+                )
 
-                ORDER BY
-                  CASE
-                    WHEN id = ?
-                    THEN 0
-                    ELSE 1
-                  END,
-                  full_name,
-                  customer_code
+              ORDER BY
+                CASE
+                  WHEN id = ?
+                  THEN 0
+                  ELSE 1
+                END,
+                full_name,
+                customer_code
 
-                LIMIT 50
-                `,
-              )
-              .bind(
-                customerSearch,
-                customerSearch,
-                customerSearch,
-                customerSearch,
-                customerSearch,
-                customerSearch,
-                selectedCustomer,
-                selectedCustomer,
-                selectedCustomer,
-              )
-              .all<RecordData>();
+              LIMIT 50
+              `,
+            )
+            .bind(
+              customerSearch,
+              customerSearch,
+              customerSearch,
+              customerSearch,
+              customerSearch,
+              customerSearch,
+              selectedCustomer,
+              selectedCustomer,
+              selectedCustomer,
+            )
+            .all<RecordData>();
 
-          customerRows =
-            result.results;
-        }
+        const customerRows =
+          result.results;
 
-        /*
-         * CUSTOMER
-         */
         fields =
           `<label class="wide">
             Customer *
@@ -896,15 +874,16 @@ export async function handleAdmin(
                   >
                 </label>
 
-                <button type="submit">
+                <button
+                  type="submit"
+                >
                   Find customer
                 </button>
               </form>
 
               <p class="muted">
-                Find the customer before
-                filling out shipment details.
-                Up to 50 matches are shown.
+                Customers are shown automatically below.
+                Use search to narrow the list.
 
                 <a
                   href="/admin/customers?new=1"
@@ -1056,7 +1035,7 @@ export async function handleAdmin(
       }
 
       const details =
-  schemaKeys[entity]  
+        schemaKeys[entity]
           .filter(
             (key) =>
               key !==
