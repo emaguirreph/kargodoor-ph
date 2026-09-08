@@ -35,6 +35,20 @@ const labels: Record<string, string> = {
   email: "Email",
   address: "Address",
   notes: "Notes",
+
+  tracking_number: "Tracking number",
+  cargo_code: "Cargo code",
+  service_type: "Service type",
+  warehouse_received_date: "Warehouse received date",
+  departure_date: "Departure date",
+  status: "Status",
+  estimated_arrival: "Estimated arrival",
+  actual_arrival: "Actual arrival",
+  tracking_remarks: "Tracking remarks",
+  payment_status: "Payment status",
+  cbm: "CBM",
+  weight_kg: "Weight (kg)",
+
   created_at: "Created",
   updated_at: "Updated",
 };
@@ -72,7 +86,8 @@ function validateFormOrigin(
    * Origin: null
    * Sec-Fetch-Site: same-origin
    *
-   * CSRF validation remains mandatory below.
+   * Cloudflare Access authentication and
+   * CSRF validation remain mandatory.
    */
   if (!originHeader || originHeader === "null") {
     return;
@@ -166,7 +181,10 @@ export async function handleAdmin(
         );
       }
 
-      validateFormOrigin(request, env);
+      validateFormOrigin(
+        request,
+        env,
+      );
 
       const contentType =
         request.headers
@@ -185,14 +203,17 @@ export async function handleAdmin(
         );
       }
 
-      const contentLength = Number(
-        request.headers.get(
-          "content-length",
-        ) ?? 0,
-      );
+      const contentLength =
+        Number(
+          request.headers.get(
+            "content-length",
+          ) ?? 0,
+        );
 
       if (
-        Number.isFinite(contentLength) &&
+        Number.isFinite(
+          contentLength,
+        ) &&
         contentLength > 24_000
       ) {
         throw new AdminError(
@@ -214,14 +235,22 @@ export async function handleAdmin(
       let length = 0;
 
       while (true) {
-        const { done, value } =
+        const {
+          done,
+          value,
+        } =
           await reader.read();
 
-        if (done) break;
+        if (done) {
+          break;
+        }
 
-        length += value.length;
+        length +=
+          value.length;
 
-        if (length > 24_000) {
+        if (
+          length > 24_000
+        ) {
           await reader.cancel();
 
           throw new AdminError(
@@ -235,7 +264,9 @@ export async function handleAdmin(
 
       const form =
         new URLSearchParams(
-          Buffer.concat(chunks).toString(
+          Buffer.concat(
+            chunks,
+          ).toString(
             "utf8",
           ),
         );
@@ -248,18 +279,25 @@ export async function handleAdmin(
       );
 
       const values =
-        parseForm(entity, form);
+        parseForm(
+          entity,
+          form,
+        );
 
       const id =
         form.get("id") ?? "";
 
       const revision =
-        form.get("revision") ?? "";
+        form.get(
+          "revision",
+        ) ?? "";
 
       if (
         id &&
         (
-          !/^[\da-f-]{36}$/i.test(id) ||
+          !/^[\da-f-]{36}$/i.test(
+            id,
+          ) ||
           !revision ||
           revision.length > 40
         )
@@ -296,7 +334,10 @@ export async function handleAdmin(
     /*
      * REPORT PAGES
      */
-    if (view === "finance") {
+    if (
+      view ===
+      "finance"
+    ) {
       return await finance(
         db,
         url,
@@ -304,7 +345,10 @@ export async function handleAdmin(
       );
     }
 
-    if (view === "activity") {
+    if (
+      view ===
+      "activity"
+    ) {
       return await activity(
         db,
         url,
@@ -323,21 +367,28 @@ export async function handleAdmin(
      * CUSTOMER / SHIPMENT ROUTES
      */
     const id =
-      url.searchParams.get("id");
+      url.searchParams.get(
+        "id",
+      );
 
     const edit =
-      url.searchParams.get("edit") ===
-      "1";
+      url.searchParams.get(
+        "edit",
+      ) === "1";
 
     const add =
-      url.searchParams.get("new") ===
-      "1";
+      url.searchParams.get(
+        "new",
+      ) === "1";
 
-    let record: RecordData = {};
+    let record:
+      RecordData = {};
 
     if (id) {
       if (
-        !/^[\da-f-]{36}$/i.test(id)
+        !/^[\da-f-]{36}$/i.test(
+          id,
+        )
       ) {
         throw new AdminError(
           "Invalid record ID.",
@@ -359,36 +410,49 @@ export async function handleAdmin(
         );
       }
 
-      record = found;
+      record =
+        found;
     }
 
     const title =
-      entity === "customers"
+      entity ===
+      "customers"
         ? "Customers"
         : "Shipments";
 
     const notice =
-      url.searchParams.get("saved") ===
-      "1"
+      url.searchParams.get(
+        "saved",
+      ) === "1"
         ? '<p class="notice" role="status">Changes saved.</p>'
         : "";
 
     /*
-     * ADD / EDIT FORM
+     * ADD / EDIT
      */
-    if (add || edit) {
-      if (edit && !id) {
+    if (
+      add ||
+      edit
+    ) {
+      if (
+        edit &&
+        !id
+      ) {
         throw new AdminError(
           "Choose a record to edit.",
         );
       }
 
-      let fields = "";
+      let fields =
+        "";
 
       /*
        * CUSTOMER FORM
        */
-      if (entity === "customers") {
+      if (
+        entity ===
+        "customers"
+      ) {
         fields =
           input(
             "customer_code",
@@ -431,7 +495,9 @@ export async function handleAdmin(
             <textarea
               name="address"
               maxlength="1000"
-            >${esc(record.address)}</textarea>
+            >${esc(
+              record.address,
+            )}</textarea>
           </label>
 
           <label class="wide">
@@ -439,7 +505,9 @@ export async function handleAdmin(
             <textarea
               name="notes"
               maxlength="4000"
-            >${esc(record.notes)}</textarea>
+            >${esc(
+              record.notes,
+            )}</textarea>
           </label>`;
       } else {
         /*
@@ -453,7 +521,8 @@ export async function handleAdmin(
           ).trim();
 
         if (
-          customerSearch.length > 160
+          customerSearch.length >
+          160
         ) {
           throw new AdminError(
             "Search is too long.",
@@ -470,18 +539,10 @@ export async function handleAdmin(
           );
 
         /*
-         * CUSTOMER PICKER
-         *
-         * When a search term exists:
-         * search customer code, full name,
-         * company, mobile and email.
-         *
-         * When editing or customer_id is
-         * supplied, always include that
-         * selected customer.
+         * Search existing customers.
          */
-        let customerRows: RecordData[] =
-          [];
+        let customerRows:
+          RecordData[] = [];
 
         if (
           customerSearch ||
@@ -587,9 +648,13 @@ export async function handleAdmin(
             result.results;
         }
 
+        /*
+         * CUSTOMER
+         */
         fields =
           `<label class="wide">
             Customer *
+
             <select
               name="customer_id"
               required
@@ -600,13 +665,17 @@ export async function handleAdmin(
 
               ${customerRows
                 .map(
-                  (customer) =>
+                  (
+                    customer,
+                  ) =>
                     `<option
                       value="${esc(
                         customer.id,
                       )}"${
                         selectedCustomer ===
-                        String(customer.id)
+                        String(
+                          customer.id,
+                        )
                           ? " selected"
                           : ""
                       }
@@ -620,10 +689,21 @@ export async function handleAdmin(
             </select>
           </label>`;
 
+        /*
+         * SHIPMENT IDENTITY
+         */
         fields +=
           input(
             "tracking_number",
             "Tracking number",
+            record,
+            "text",
+            true,
+            60,
+          ) +
+          input(
+            "cargo_code",
+            "Cargo code",
             record,
             "text",
             true,
@@ -643,7 +723,29 @@ export async function handleAdmin(
             "Origin warehouse",
             record,
             warehouses,
+          );
+
+        /*
+         * TRACKING DATES
+         */
+        fields +=
+          input(
+            "warehouse_received_date",
+            "Warehouse received date",
+            record,
+            "date",
           ) +
+          input(
+            "departure_date",
+            "Departure date",
+            record,
+            "date",
+          );
+
+        /*
+         * SHIPPING DETAILS
+         */
+        fields +=
           input(
             "cbm",
             "CBM",
@@ -675,7 +777,28 @@ export async function handleAdmin(
             "Actual arrival",
             record,
             "date",
-          ) +
+          );
+
+        /*
+         * PUBLIC TRACKING REMARKS
+         */
+        fields +=
+          `<label class="wide">
+            Tracking remarks
+
+            <textarea
+              name="tracking_remarks"
+              maxlength="2000"
+              placeholder="Optional update visible in shipment tracking"
+            >${esc(
+              record.tracking_remarks,
+            )}</textarea>
+          </label>`;
+
+        /*
+         * FINANCIAL DETAILS
+         */
+        fields +=
           input(
             "shipping_charge",
             "KargoDoor freight charge (PHP)",
@@ -713,10 +836,11 @@ export async function handleAdmin(
       }
 
       /*
-       * SHIPMENT CUSTOMER SEARCH
+       * CUSTOMER SEARCH
        */
       const picker =
-        entity === "shipments"
+        entity ===
+        "shipments"
           ? `
             <section>
               <form
@@ -726,7 +850,10 @@ export async function handleAdmin(
               >
                 ${
                   id
-                    ? hidden("id", id) +
+                    ? hidden(
+                        "id",
+                        id,
+                      ) +
                       hidden(
                         "edit",
                         "1",
@@ -790,8 +917,13 @@ export async function handleAdmin(
           : "";
 
       return page(
-        `${id ? "Edit" : "Add"} ${
-          entity === "customers"
+        `${
+          id
+            ? "Edit"
+            : "Add"
+        } ${
+          entity ===
+          "customers"
             ? "customer"
             : "shipment"
         }`,
@@ -827,13 +959,29 @@ export async function handleAdmin(
                 ${fields}
               </div>
 
+              ${
+                entity ===
+                "shipments"
+                  ? `
+                    <p class="muted">
+                      Cargo code is the code customers
+                      will use on Track Package.
+                      Sea Freight uses KDOOR-0001 format.
+                      Air Freight uses AIR-KDOOR-0001 format.
+                    </p>
+                  `
+                  : ""
+              }
+
               <p class="muted">
                 * Required. Optional blank
                 values clear the saved field.
               </p>
 
               <div class="actions">
-                <button type="submit">
+                <button
+                  type="submit"
+                >
                   Save ${
                     entity ===
                     "customers"
@@ -845,7 +993,9 @@ export async function handleAdmin(
                 <a
                   href="${path}${
                     id
-                      ? `?id=${esc(id)}`
+                      ? `?id=${esc(
+                          id,
+                        )}`
                       : ""
                   }"
                 >
@@ -863,9 +1013,13 @@ export async function handleAdmin(
      * RECORD DETAILS
      */
     if (id) {
-      let customer = "";
+      let customer =
+        "";
 
-      if (entity === "shipments") {
+      if (
+        entity ===
+        "shipments"
+      ) {
         const foundCustomer =
           await db
             .prepare(
@@ -903,54 +1057,73 @@ export async function handleAdmin(
 
       const details =
         Object.keys(
-          schemas[entity].shape,
+          schemas[
+            entity
+          ].shape,
         )
           .filter(
             (key) =>
-              key !== "customer_id",
+              key !==
+              "customer_id",
           )
           .concat([
             "created_at",
             "updated_at",
           ])
-          .map((key) => {
-            const monetary =
-              [
-                "shipping_charge",
-                "delivery_charge",
-                "nihao_cost",
-              ].includes(key);
+          .map(
+            (key) => {
+              const monetary =
+                [
+                  "shipping_charge",
+                  "delivery_charge",
+                  "nihao_cost",
+                ].includes(
+                  key,
+                );
 
-            const value =
-              monetary
-                ? record[key] === null
-                  ? "Not entered"
-                  : pesos(
-                      record[key],
-                    )
-                : esc(record[key]) ||
-                  "—";
+              const value =
+                monetary
+                  ? record[
+                        key
+                      ] ===
+                      null
+                    ? "Not entered"
+                    : pesos(
+                        record[
+                          key
+                        ],
+                      )
+                  : esc(
+                      record[
+                        key
+                      ],
+                    ) ||
+                    "—";
 
-            return `
-              <dt>
-                ${esc(
-                  labels[key] ??
-                    key.replaceAll(
-                      "_",
-                      " ",
-                    ),
-                )}
-              </dt>
+              return `
+                <dt>
+                  ${esc(
+                    labels[
+                      key
+                    ] ??
+                      key.replaceAll(
+                        "_",
+                        " ",
+                      ),
+                  )}
+                </dt>
 
-              <dd>
-                ${value}
-              </dd>
-            `;
-          })
+                <dd>
+                  ${value}
+                </dd>
+              `;
+            },
+          )
           .join("");
 
       const margin =
-        entity === "shipments"
+        entity ===
+        "shipments"
           ? `
             <dt>
               Freight margin
@@ -975,7 +1148,8 @@ export async function handleAdmin(
           : "";
 
       const relatedLinks =
-        entity === "customers"
+        entity ===
+        "customers"
           ? `
             <a
               href="/admin/shipments?customer_id=${esc(
@@ -1052,8 +1226,9 @@ export async function handleAdmin(
      */
     const q =
       (
-        url.searchParams.get("q") ??
-        ""
+        url.searchParams.get(
+          "q",
+        ) ?? ""
       ).trim();
 
     const status =
@@ -1066,11 +1241,12 @@ export async function handleAdmin(
         "customer_id",
       ) ?? "";
 
-    const pageNumber = Number(
-      url.searchParams.get(
-        "page",
-      ) ?? 1,
-    );
+    const pageNumber =
+      Number(
+        url.searchParams.get(
+          "page",
+        ) ?? 1,
+      );
 
     if (
       q.length > 160 ||
@@ -1086,7 +1262,8 @@ export async function handleAdmin(
         pageNumber,
       ) ||
       pageNumber < 1 ||
-      pageNumber > 100_000
+      pageNumber >
+        100_000
     ) {
       throw new AdminError(
         "Invalid search or filter.",
@@ -1094,11 +1271,16 @@ export async function handleAdmin(
     }
 
     const offset =
-      (pageNumber - 1) * 25;
+      (pageNumber - 1) *
+      25;
 
-    let rows: RecordData[];
+    let rows:
+      RecordData[];
 
-    if (entity === "customers") {
+    if (
+      entity ===
+      "customers"
+    ) {
       rows =
         (
           await db
@@ -1174,6 +1356,7 @@ export async function handleAdmin(
               SELECT
                 s.id,
                 s.tracking_number,
+                s.cargo_code,
                 c.full_name,
                 s.status,
                 s.cbm,
@@ -1187,6 +1370,18 @@ export async function handleAdmin(
                   instr(
                     lower(
                       s.tracking_number
+                    ),
+                    lower(?)
+                  ) > 0
+
+                  OR
+
+                  instr(
+                    lower(
+                      COALESCE(
+                        s.cargo_code,
+                        ''
+                      )
                     ),
                     lower(?)
                   ) > 0
@@ -1222,6 +1417,7 @@ export async function handleAdmin(
             .bind(
               q,
               q,
+              q,
               status,
               status,
               customer,
@@ -1233,7 +1429,8 @@ export async function handleAdmin(
     }
 
     const keys =
-      entity === "customers"
+      entity ===
+      "customers"
         ? [
             "customer_code",
             "full_name",
@@ -1242,6 +1439,7 @@ export async function handleAdmin(
           ]
         : [
             "tracking_number",
+            "cargo_code",
             "full_name",
             "status",
             "cbm",
@@ -1259,7 +1457,9 @@ export async function handleAdmin(
                     .map(
                       (key) =>
                         `<th>${esc(
-                          labels[key] ??
+                          labels[
+                            key
+                          ] ??
                             key.replaceAll(
                               "_",
                               " ",
@@ -1268,21 +1468,30 @@ export async function handleAdmin(
                     )
                     .join("")}
 
-                  <th>Details</th>
+                  <th>
+                    Details
+                  </th>
                 </tr>
               </thead>
 
               <tbody>
                 ${rows
-                  .slice(0, 25)
+                  .slice(
+                    0,
+                    25,
+                  )
                   .map(
                     (row) =>
                       `<tr>
                         ${keys
                           .map(
-                            (key) =>
+                            (
+                              key,
+                            ) =>
                               `<td>${esc(
-                                row[key],
+                                row[
+                                  key
+                                ],
                               ) || "—"}</td>`,
                           )
                           .join("")}
@@ -1299,7 +1508,9 @@ export async function handleAdmin(
                             >
                               ${esc(
                                 row[
-                                  keys[0]
+                                  keys[
+                                    0
+                                  ]
                                 ],
                               )}
                             </span>
@@ -1314,23 +1525,27 @@ export async function handleAdmin(
         `
         : "<p>No matching records.</p>";
 
-    const pageLink = (
-      number: number,
-    ) => {
-      const params =
-        new URLSearchParams(
-          url.searchParams,
+    const pageLink =
+      (
+        number:
+          number,
+      ) => {
+        const params =
+          new URLSearchParams(
+            url.searchParams,
+          );
+
+        params.set(
+          "page",
+          String(
+            number,
+          ),
         );
 
-      params.set(
-        "page",
-        String(number),
-      );
-
-      return `${path}?${esc(
-        params.toString(),
-      )}`;
-    };
+        return `${path}?${esc(
+          params.toString(),
+        )}`;
+      };
 
     return page(
       title,
@@ -1349,7 +1564,9 @@ export async function handleAdmin(
               <input
                 name="q"
                 maxlength="160"
-                value="${esc(q)}"
+                value="${esc(
+                  q,
+                )}"
               >
             </label>
 
@@ -1363,7 +1580,8 @@ export async function handleAdmin(
             }
 
             ${
-              entity === "shipments"
+              entity ===
+              "shipments"
                 ? `
                   <label>
                     Status
@@ -1371,13 +1589,17 @@ export async function handleAdmin(
                     <select
                       name="status"
                     >
-                      <option value="">
+                      <option
+                        value=""
+                      >
                         All statuses
                       </option>
 
                       ${statuses
                         .map(
-                          (value) =>
+                          (
+                            value,
+                          ) =>
                             `<option${
                               status ===
                               value
@@ -1394,11 +1616,15 @@ export async function handleAdmin(
                 : ""
             }
 
-            <button type="submit">
+            <button
+              type="submit"
+            >
               Search
             </button>
 
-            <a href="${path}">
+            <a
+              href="${path}"
+            >
               Clear
             </a>
           </form>
@@ -1423,10 +1649,12 @@ export async function handleAdmin(
 
           <div class="actions">
             ${
-              pageNumber > 1
+              pageNumber >
+              1
                 ? `<a
                     href="${pageLink(
-                      pageNumber - 1,
+                      pageNumber -
+                        1,
                     )}"
                   >
                     Previous
@@ -1439,10 +1667,12 @@ export async function handleAdmin(
             </span>
 
             ${
-              rows.length > 25
+              rows.length >
+              25
                 ? `<a
                     href="${pageLink(
-                      pageNumber + 1,
+                      pageNumber +
+                        1,
                     )}"
                   >
                     Next
@@ -1456,12 +1686,17 @@ export async function handleAdmin(
     );
   } catch (error) {
     const known =
-      error instanceof AdminError;
+      error instanceof
+      AdminError;
 
     const invalid =
-      error instanceof ZodError;
+      error instanceof
+      ZodError;
 
-    if (!known && !invalid) {
+    if (
+      !known &&
+      !invalid
+    ) {
       console.error(
         "KargoDoor admin request failed",
         {
@@ -1471,7 +1706,8 @@ export async function handleAdmin(
             ).pathname,
 
           error:
-            error instanceof Error
+            error instanceof
+            Error
               ? error.message
               : "Unknown error",
         },
@@ -1484,12 +1720,16 @@ export async function handleAdmin(
         : invalid
           ? error.issues
               .map(
-                (issue) =>
+                (
+                  issue,
+                ) =>
                   `${issue.path.join(
                     " ",
                   )}: ${issue.message}`,
               )
-              .join("; ")
+              .join(
+                "; ",
+              )
           : "Unable to complete this request. Please try again. If it continues, ask the system owner to check the admin configuration.";
 
     const status =
@@ -1506,24 +1746,29 @@ export async function handleAdmin(
           class="notice"
           role="alert"
         >
-          ${esc(message)}
+          ${esc(
+            message,
+          )}
         </p>
 
         <p>
           For form errors, use your
           browser’s Back button to
           correct the values. For a
-          conflicting edit, reload the
-          record first.
+          conflicting edit, reload
+          the record first.
         </p>
 
-        <a href="/admin/dashboard">
+        <a
+          href="/admin/dashboard"
+        >
           Return to admin
         </a>
       `,
       "",
       status,
-      status === 401 &&
+      status ===
+          401 &&
         localChallenge
         ? {
             "WWW-Authenticate":
