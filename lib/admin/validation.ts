@@ -219,10 +219,9 @@ export const shipmentSchema =
         context.addIssue({
           code: "custom",
           path: ["cargo_code"],
-          message:
-            isAir
-              ? "Air Freight cargo codes must start with AIR-KDOOR-."
-              : "Sea Freight cargo codes must start with KDOOR- and must not use AIR-KDOOR-.",
+          message: isAir
+            ? "Air Freight cargo codes must start with AIR-KDOOR-."
+            : "Sea Freight cargo codes must start with KDOOR- and must not use AIR-KDOOR-.",
         });
       }
 
@@ -234,9 +233,7 @@ export const shipmentSchema =
       ) {
         context.addIssue({
           code: "custom",
-          path: [
-            "departure_date",
-          ],
+          path: ["departure_date"],
           message:
             "Departure date cannot be before the warehouse received date",
         });
@@ -250,9 +247,7 @@ export const shipmentSchema =
       ) {
         context.addIssue({
           code: "custom",
-          path: [
-            "actual_arrival",
-          ],
+          path: ["actual_arrival"],
           message:
             "Actual arrival cannot be before the departure date",
         });
@@ -268,11 +263,10 @@ export const schemas = {
 export type Entity =
   keyof typeof schemas;
 
-export type RecordData =
-  Record<
-    string,
-    string | number | null
-  >;
+export type RecordData = Record<
+  string,
+  string | number | null
+>;
 
 export const schemaKeys: Record<
   Entity,
