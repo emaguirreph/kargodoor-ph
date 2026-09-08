@@ -560,7 +560,7 @@ test("Phase 2B migration preserves populated Phase 2A invoice and payment record
   sql.close();
 });
 
-const expenseInput = { expense_date: "2026-09-08", category: "Office", description: "Supplies <script>", amount: "123.45" };
+const expenseInput = { expense_date: "2026-09-08", category: "Office / Rent", description: "Supplies <script>", amount: "123.45" };
 test("expenses page and add form load; valid expense saves integer centavos and escapes list", async () => {
   const { db, sql } = database();
   const url = new URL("https://admin.test/admin/finance/expenses");
@@ -573,6 +573,10 @@ test("expenses page and add form load; valid expense saves integer centavos and 
   const row = sql.prepare("SELECT * FROM expenses").get()!;
   assert.equal(row.amount, 12345);
   assert.equal(row.payee, null);
+  assert.equal(row.reference_number, null);
+  assert.equal(row.notes, null);
+  assert.equal(row.payment_method, null);
+  assert.equal(row.tracking_number, null);
   const html = await (await expensesPage(db, url, "Admin", "token")).text();
   assert.match(html, /123.45/);
   assert.match(html, /Supplies &lt;script&gt;/);
@@ -605,4 +609,52 @@ test("expense migration preserves existing records", () => {
   assert.equal(row.updated_at, row.created_at);
   assert.equal(row.payee, null);
   sql.close();
+});
+
+
+test("expense form has exact controlled dropdowns and no tracking field", async () => {
+  const { db } = database();
+  const response = await expensesPage(db, new URL("https://admin.test/admin/finance/expenses?new=1"), "Admin", "token");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.doesNotMatch(html, /tracking_number|Tracking number/i);
+  const categories = ["Freight / Ni Hao Cost", "Local Delivery / Trucking", "Marketing / Advertising",
+    "Salaries / Wages", "Management / Administrative", "Office / Rent", "Website / Technology",
+    "Permits / Government Fees", "Transportation / Fuel / Parking", "Supplies / Packaging",
+    "Professional Fees", "Utilities", "Bank / Payment Fees", "Repairs / Maintenance",
+    "Meals / Representation", "Taxes", "Miscellaneous"];
+  const categorySelect = html.match(/<select name="category" required>(.*?)<\/select>/s)![1];
+  assert.deepEqual([...categorySelect.matchAll(/<option value="([^"]+)">([^<]+)<\/option>/g)].map((m) => [m[1], m[2]]), categories.map((c) => [c, c]));
+  const methods = ["Cash", "Bank Transfer", "GCash", "Credit Card", "Debit Card", "Check", "Other"];
+  const paymentSelect = html.match(/<select name="payment_method">(.*?)<\/select>/s)![1];
+  assert.deepEqual([...paymentSelect.matchAll(/<option value="([^"]+)">([^<]+)<\/option>/g)].map((m) => [m[1], m[2]]), methods.map((m) => [m, m]));
+  for (const field of ["expense_date", "description", "amount"])
+    assert.match(html, new RegExp(`<(?:input|textarea)[^>]*name="${field}"[^>]*required`));
+  for (const field of ["payee", "reference_number", "notes"])
+    assert.doesNotMatch(html.match(new RegExp(`<(?:input|textarea)[^>]*name="${field}"[^>]*>`))![0], /required/);
+  for (const category of categories)
+    assert.equal(parseExpenseForm(new URLSearchParams({ ...expenseInput, category })).category, category);
+  for (const payment_method of methods)
+    assert.equal(parseExpenseForm(new URLSearchParams({ ...expenseInput, payment_method })).payment_method, payment_method);
+  for (const category of ["Office", "Arbitrary", "office / rent"])
+    assert.throws(() => parseExpenseForm(new URLSearchParams({ ...expenseInput, category })));
+  assert.throws(() => parseExpenseForm(new URLSearchParams({ ...expenseInput, payment_method: "Arbitrary" })));
+  assert.throws(() => parseExpenseForm(new URLSearchParams({ ...expenseInput, tracking_number: "KDSEA000001" })));
+});
+
+test("historical expense categories display safely and stored tracking remains untouched", async () => {
+  const { db, sql } = database();
+  sql.prepare(`INSERT INTO expenses (id, category, description, amount, expense_date, created_at, updated_at, tracking_number)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run("historical", "Old category <script>", "Old expense", 150, "2026-09-01", "then", "then", "HISTORICAL-TRACKING");
+  const before = sql.prepare("SELECT * FROM expenses WHERE id='historical'").get();
+  const schemaBefore = sql.prepare("SELECT sql FROM sqlite_master ORDER BY name").all();
+  await saveExpense(db, parseExpenseForm(new URLSearchParams(expenseInput)));
+  const response = await expensesPage(db, new URL("https://admin.test/admin/finance/expenses"), "Admin", "token");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /Old category &lt;script&gt;/);
+  assert.doesNotMatch(html, /tracking_number|Tracking number|HISTORICAL-TRACKING/i);
+  assert.deepEqual(sql.prepare("SELECT * FROM expenses WHERE id='historical'").get(), before);
+  assert.deepEqual(sql.prepare("SELECT sql FROM sqlite_master ORDER BY name").all(), schemaBefore);
 });

@@ -345,15 +345,38 @@ export function parseForm(
   return shipmentFormSchema.parse(raw);
 }
 
+export const expenseCategories = [
+  "Freight / Ni Hao Cost",
+  "Local Delivery / Trucking",
+  "Marketing / Advertising",
+  "Salaries / Wages",
+  "Management / Administrative",
+  "Office / Rent",
+  "Website / Technology",
+  "Permits / Government Fees",
+  "Transportation / Fuel / Parking",
+  "Supplies / Packaging",
+  "Professional Fees",
+  "Utilities",
+  "Bank / Payment Fees",
+  "Repairs / Maintenance",
+  "Meals / Representation",
+  "Taxes",
+  "Miscellaneous",
+] as const;
+
+export const expensePaymentMethods = [
+  "Cash", "Bank Transfer", "GCash", "Credit Card", "Debit Card", "Check", "Other",
+] as const;
+
 export const expenseSchema = z.object({
   expense_date: date.refine((value) => value !== null, "Expense date is required"),
-  category: required(160),
+  category: z.enum(expenseCategories),
   payee: optional(160),
   description: required(2000),
   amount: money.refine((value) => value > 0, "Amount must be greater than zero"),
-  payment_method: optional(160),
+  payment_method: z.union([z.enum(expensePaymentMethods), z.literal("")]).transform((value) => value || null),
   reference_number: optional(160),
-  tracking_number: optional(60),
   notes: optional(4000),
 }).strict();
 

@@ -138,12 +138,14 @@ try {
   const expenseForm = await get(expensePath + "?new=1");
   assert.equal(expenseForm.status, 200);
   const expense = { csrf: token(await expenseForm.text()), expense_date: "2026-09-08",
-    category: "Office", description: "Supplies <script>", amount: "123.45" };
+    category: "Office / Rent", description: "Supplies <script>", amount: "123.45" };
   for (const amount of ["0", "-1", "1.001"])
     assert.equal((await post(expensePath, { ...expense, amount })).status, 400);
   assert.equal((await post(expensePath, { ...expense, csrf: "forged" })).status, 403);
   assert.equal((await post(expensePath, expense, { Origin: "https://evil.test" })).status, 403);
   assert.equal((await post(expensePath, expense, { authorization: "" })).status, 401);
+  assert.equal((await post(expensePath, { ...expense, category: "Arbitrary" })).status, 400);
+  assert.equal((await post(expensePath, { ...expense, tracking_number: "KDSEA000001" })).status, 400);
   assert.equal((await post(expensePath, expense)).status, 303);
   const expenseList = await (await get(expensePath)).text();
   assert.ok(expenseList.includes("123.45") && expenseList.includes("Supplies &lt;script&gt;"));
