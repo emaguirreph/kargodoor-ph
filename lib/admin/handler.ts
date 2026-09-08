@@ -46,10 +46,6 @@ function validateFormOrigin(
   const expectedOrigin = canonicalOrigin(env);
   const requestOrigin = new URL(request.url).origin;
 
-  /*
-   * The request itself must always be served from the
-   * configured KargoDoor Admin origin.
-   */
   if (requestOrigin !== expectedOrigin) {
     throw new AdminError(
       "Admin request origin is invalid.",
@@ -57,11 +53,8 @@ function validateFormOrigin(
     );
   }
 
-  /*
-   * Reject anything the browser explicitly identifies
-   * as a cross-site form submission.
-   */
-  const fetchSite = request.headers.get("sec-fetch-site");
+  const fetchSite =
+    request.headers.get("sec-fetch-site");
 
   if (fetchSite === "cross-site") {
     throw new AdminError(
@@ -70,7 +63,8 @@ function validateFormOrigin(
     );
   }
 
-  const originHeader = request.headers.get("origin");
+  const originHeader =
+    request.headers.get("origin");
 
   /*
    * Safari can legitimately submit:
@@ -78,13 +72,7 @@ function validateFormOrigin(
    * Origin: null
    * Sec-Fetch-Site: same-origin
    *
-   * We allow that specific case to continue.
-   *
-   * The request remains protected by:
-   * - Cloudflare Access authentication
-   * - configured production origin
-   * - Sec-Fetch-Site validation
-   * - mandatory CSRF validation
+   * CSRF validation remains mandatory below.
    */
   if (!originHeader || originHeader === "null") {
     return;
@@ -93,7 +81,8 @@ function validateFormOrigin(
   let submittedOrigin: string;
 
   try {
-    submittedOrigin = new URL(originHeader).origin;
+    submittedOrigin =
+      new URL(originHeader).origin;
   } catch {
     throw new AdminError(
       "Invalid form origin.",
@@ -116,21 +105,29 @@ export async function handleAdmin(
   let localChallenge = false;
 
   try {
-    const { env: cf } = await getCloudflareContext();
-    const env = cf as unknown as AdminEnv;
+    const { env: cf } =
+      await getCloudflareContext();
+
+    const env =
+      cf as unknown as AdminEnv;
 
     localChallenge =
       env.ADMIN_LOCAL_DEV === "true" &&
       ["localhost", "127.0.0.1"].includes(
-        new URL(canonicalOrigin(env)).hostname,
+        new URL(
+          canonicalOrigin(env),
+        ).hostname,
       );
 
-    const user = await authenticate(request, env);
+    const user =
+      await authenticate(request, env);
+
     const db = env.ADMIN_DB;
     const url = new URL(request.url);
 
     const entity =
-      view === "customers" || view === "shipments"
+      view === "customers" ||
+      view === "shipments"
         ? view
         : undefined;
 
@@ -171,11 +168,12 @@ export async function handleAdmin(
 
       validateFormOrigin(request, env);
 
-      const contentType = request.headers
-        .get("content-type")
-        ?.split(";")[0]
-        ?.trim()
-        .toLowerCase();
+      const contentType =
+        request.headers
+          .get("content-type")
+          ?.split(";")[0]
+          ?.trim()
+          .toLowerCase();
 
       if (
         contentType !==
@@ -188,7 +186,9 @@ export async function handleAdmin(
       }
 
       const contentLength = Number(
-        request.headers.get("content-length") ?? 0,
+        request.headers.get(
+          "content-length",
+        ) ?? 0,
       );
 
       if (
@@ -201,17 +201,21 @@ export async function handleAdmin(
         );
       }
 
-      const reader = request.body?.getReader();
+      const reader =
+        request.body?.getReader();
 
       if (!reader) {
-        throw new AdminError("Form is empty.");
+        throw new AdminError(
+          "Form is empty.",
+        );
       }
 
       const chunks: Uint8Array[] = [];
       let length = 0;
 
       while (true) {
-        const { done, value } = await reader.read();
+        const { done, value } =
+          await reader.read();
 
         if (done) break;
 
@@ -229,13 +233,13 @@ export async function handleAdmin(
         chunks.push(value);
       }
 
-      const form = new URLSearchParams(
-        Buffer.concat(chunks).toString("utf8"),
-      );
+      const form =
+        new URLSearchParams(
+          Buffer.concat(chunks).toString(
+            "utf8",
+          ),
+        );
 
-      /*
-       * CSRF validation remains mandatory.
-       */
       checkCsrf(
         env,
         user.id,
@@ -243,10 +247,14 @@ export async function handleAdmin(
         form.get("csrf") ?? "",
       );
 
-      const values = parseForm(entity, form);
+      const values =
+        parseForm(entity, form);
 
-      const id = form.get("id") ?? "";
-      const revision = form.get("revision") ?? "";
+      const id =
+        form.get("id") ?? "";
+
+      const revision =
+        form.get("revision") ?? "";
 
       if (
         id &&
@@ -261,14 +269,15 @@ export async function handleAdmin(
         );
       }
 
-      const recordId = await saveRecord(
-        db,
-        entity,
-        values,
-        user.id,
-        id,
-        revision,
-      );
+      const recordId =
+        await saveRecord(
+          db,
+          entity,
+          values,
+          user.id,
+          id,
+          revision,
+        );
 
       return page(
         "Saved",
@@ -288,41 +297,60 @@ export async function handleAdmin(
      * REPORT PAGES
      */
     if (view === "finance") {
-      return await finance(db, url, user.name);
+      return await finance(
+        db,
+        url,
+        user.name,
+      );
     }
 
     if (view === "activity") {
-      return await activity(db, url, user.name);
+      return await activity(
+        db,
+        url,
+        user.name,
+      );
     }
 
     if (!entity) {
-      return await dashboard(db, user.name);
+      return await dashboard(
+        db,
+        user.name,
+      );
     }
 
     /*
      * CUSTOMER / SHIPMENT ROUTES
      */
-    const id = url.searchParams.get("id");
+    const id =
+      url.searchParams.get("id");
+
     const edit =
-      url.searchParams.get("edit") === "1";
+      url.searchParams.get("edit") ===
+      "1";
+
     const add =
-      url.searchParams.get("new") === "1";
+      url.searchParams.get("new") ===
+      "1";
 
     let record: RecordData = {};
 
     if (id) {
-      if (!/^[\da-f-]{36}$/i.test(id)) {
+      if (
+        !/^[\da-f-]{36}$/i.test(id)
+      ) {
         throw new AdminError(
           "Invalid record ID.",
         );
       }
 
-      const found = await db
-        .prepare(
-          `SELECT * FROM ${entity} WHERE id = ?`,
-        )
-        .bind(id)
-        .first<RecordData>();
+      const found =
+        await db
+          .prepare(
+            `SELECT * FROM ${entity} WHERE id = ?`,
+          )
+          .bind(id)
+          .first<RecordData>();
 
       if (!found) {
         throw new AdminError(
@@ -340,7 +368,8 @@ export async function handleAdmin(
         : "Shipments";
 
     const notice =
-      url.searchParams.get("saved") === "1"
+      url.searchParams.get("saved") ===
+      "1"
         ? '<p class="notice" role="status">Changes saved.</p>'
         : "";
 
@@ -404,6 +433,7 @@ export async function handleAdmin(
               maxlength="1000"
             >${esc(record.address)}</textarea>
           </label>
+
           <label class="wide">
             Notes
             <textarea
@@ -422,60 +452,140 @@ export async function handleAdmin(
             ) ?? ""
           ).trim();
 
-        if (customerSearch.length > 160) {
+        if (
+          customerSearch.length > 160
+        ) {
           throw new AdminError(
             "Search is too long.",
           );
         }
 
         const selectedCustomer =
-          record.customer_id ??
-          url.searchParams.get(
-            "customer_id",
-          ) ??
-          "";
+          String(
+            record.customer_id ??
+            url.searchParams.get(
+              "customer_id",
+            ) ??
+            "",
+          );
 
-        const customers = await db
-          .prepare(
-            `
-            SELECT
-              id,
-              customer_code,
-              full_name
-            FROM customers
-            WHERE
-              (
-                ? != ''
-                AND (
-                  instr(
-                    lower(full_name),
-                    lower(?)
-                  ) > 0
-                  OR
-                  instr(
-                    lower(customer_code),
-                    lower(?)
-                  ) > 0
-                )
+        /*
+         * CUSTOMER PICKER
+         *
+         * When a search term exists:
+         * search customer code, full name,
+         * company, mobile and email.
+         *
+         * When editing or customer_id is
+         * supplied, always include that
+         * selected customer.
+         */
+        let customerRows: RecordData[] =
+          [];
+
+        if (
+          customerSearch ||
+          selectedCustomer
+        ) {
+          const result =
+            await db
+              .prepare(
+                `
+                SELECT
+                  id,
+                  customer_code,
+                  full_name,
+                  company_name,
+                  mobile,
+                  email
+                FROM customers
+                WHERE
+                  (
+                    ? != ''
+                    AND (
+                      instr(
+                        lower(
+                          COALESCE(
+                            customer_code,
+                            ''
+                          )
+                        ),
+                        lower(?)
+                      ) > 0
+
+                      OR instr(
+                        lower(
+                          COALESCE(
+                            full_name,
+                            ''
+                          )
+                        ),
+                        lower(?)
+                      ) > 0
+
+                      OR instr(
+                        lower(
+                          COALESCE(
+                            company_name,
+                            ''
+                          )
+                        ),
+                        lower(?)
+                      ) > 0
+
+                      OR instr(
+                        COALESCE(
+                          mobile,
+                          ''
+                        ),
+                        ?
+                      ) > 0
+
+                      OR instr(
+                        lower(
+                          COALESCE(
+                            email,
+                            ''
+                          )
+                        ),
+                        lower(?)
+                      ) > 0
+                    )
+                  )
+
+                  OR (
+                    ? != ''
+                    AND id = ?
+                  )
+
+                ORDER BY
+                  CASE
+                    WHEN id = ?
+                    THEN 0
+                    ELSE 1
+                  END,
+                  full_name,
+                  customer_code
+
+                LIMIT 50
+                `,
               )
-              OR id = ?
-            ORDER BY
-              CASE
-                WHEN id = ? THEN 0
-                ELSE 1
-              END,
-              full_name
-            LIMIT 50
-            `,
-          )
-          .bind(
-            customerSearch,
-            customerSearch,
-            customerSearch,
-            selectedCustomer,
-            selectedCustomer,
-          )
-          .all<RecordData>();
+              .bind(
+                customerSearch,
+                customerSearch,
+                customerSearch,
+                customerSearch,
+                customerSearch,
+                customerSearch,
+                selectedCustomer,
+                selectedCustomer,
+                selectedCustomer,
+              )
+              .all<RecordData>();
+
+          customerRows =
+            result.results;
+        }
 
         fields =
           `<label class="wide">
@@ -487,17 +597,20 @@ export async function handleAdmin(
               <option value="">
                 Choose an existing customer
               </option>
-              ${customers.results
+
+              ${customerRows
                 .map(
                   (customer) =>
-                    `<option value="${esc(
-                      customer.id,
-                    )}"${
-                      selectedCustomer ===
-                      customer.id
-                        ? " selected"
-                        : ""
-                    }>${esc(
+                    `<option
+                      value="${esc(
+                        customer.id,
+                      )}"${
+                        selectedCustomer ===
+                        String(customer.id)
+                          ? " selected"
+                          : ""
+                      }
+                    >${esc(
                       customer.customer_code,
                     )} — ${esc(
                       customer.full_name,
@@ -599,6 +712,9 @@ export async function handleAdmin(
           );
       }
 
+      /*
+       * SHIPMENT CUSTOMER SEARCH
+       */
       const picker =
         entity === "shipments"
           ? `
@@ -611,33 +727,61 @@ export async function handleAdmin(
                 ${
                   id
                     ? hidden("id", id) +
-                      hidden("edit", "1")
-                    : hidden("new", "1")
+                      hidden(
+                        "edit",
+                        "1",
+                      )
+                    : hidden(
+                        "new",
+                        "1",
+                      )
+                }
+
+                ${
+                  record.customer_id
+                    ? hidden(
+                        "customer_id",
+                        record.customer_id,
+                      )
+                    : url.searchParams.get(
+                          "customer_id",
+                        )
+                      ? hidden(
+                          "customer_id",
+                          url.searchParams.get(
+                            "customer_id",
+                          ),
+                        )
+                      : ""
                 }
 
                 <label>
                   Find customer by name or code
+
                   <input
                     name="customer_search"
                     maxlength="160"
                     value="${esc(
                       url.searchParams.get(
                         "customer_search",
-                      ),
+                      ) ?? "",
                     )}"
                   >
                 </label>
 
-                <button>
+                <button type="submit">
                   Find customer
                 </button>
               </form>
 
               <p class="muted">
-                Find the customer before filling out
-                shipment details. Up to 50 matches
-                are shown.
-                <a href="/admin/customers?new=1">
+                Find the customer before
+                filling out shipment details.
+                Up to 50 matches are shown.
+
+                <a
+                  href="/admin/customers?new=1"
+                >
                   Add a customer
                 </a>
               </p>
@@ -675,7 +819,8 @@ export async function handleAdmin(
 
               ${hidden(
                 "revision",
-                record.updated_at ?? "",
+                record.updated_at ??
+                  "",
               )}
 
               <div class="grid">
@@ -683,14 +828,15 @@ export async function handleAdmin(
               </div>
 
               <p class="muted">
-                * Required. Optional blank values
-                clear the saved field.
+                * Required. Optional blank
+                values clear the saved field.
               </p>
 
               <div class="actions">
-                <button>
+                <button type="submit">
                   Save ${
-                    entity === "customers"
+                    entity ===
+                    "customers"
                       ? "customer"
                       : "shipment"
                   }
@@ -720,18 +866,21 @@ export async function handleAdmin(
       let customer = "";
 
       if (entity === "shipments") {
-        const foundCustomer = await db
-          .prepare(
-            `
-            SELECT
-              customer_code,
-              full_name
-            FROM customers
-            WHERE id = ?
-            `,
-          )
-          .bind(record.customer_id)
-          .first<RecordData>();
+        const foundCustomer =
+          await db
+            .prepare(
+              `
+              SELECT
+                customer_code,
+                full_name
+              FROM customers
+              WHERE id = ?
+              `,
+            )
+            .bind(
+              record.customer_id,
+            )
+            .first<RecordData>();
 
         customer =
           `<p>
@@ -752,47 +901,53 @@ export async function handleAdmin(
           </p>`;
       }
 
-      const details = Object.keys(
-        schemas[entity].shape,
-      )
-        .filter(
-          (key) =>
-            key !== "customer_id",
+      const details =
+        Object.keys(
+          schemas[entity].shape,
         )
-        .concat([
-          "created_at",
-          "updated_at",
-        ])
-        .map((key) => {
-          const monetary =
-            [
-              "shipping_charge",
-              "delivery_charge",
-              "nihao_cost",
-            ].includes(key);
+          .filter(
+            (key) =>
+              key !== "customer_id",
+          )
+          .concat([
+            "created_at",
+            "updated_at",
+          ])
+          .map((key) => {
+            const monetary =
+              [
+                "shipping_charge",
+                "delivery_charge",
+                "nihao_cost",
+              ].includes(key);
 
-          const value =
-            monetary
-              ? record[key] === null
-                ? "Not entered"
-                : pesos(record[key])
-              : esc(record[key]) ||
-                "—";
+            const value =
+              monetary
+                ? record[key] === null
+                  ? "Not entered"
+                  : pesos(
+                      record[key],
+                    )
+                : esc(record[key]) ||
+                  "—";
 
-          return `
-            <dt>
-              ${esc(
-                labels[key] ??
-                  key.replaceAll(
-                    "_",
-                    " ",
-                  ),
-              )}
-            </dt>
-            <dd>${value}</dd>
-          `;
-        })
-        .join("");
+            return `
+              <dt>
+                ${esc(
+                  labels[key] ??
+                    key.replaceAll(
+                      "_",
+                      " ",
+                    ),
+                )}
+              </dt>
+
+              <dd>
+                ${value}
+              </dd>
+            `;
+          })
+          .join("");
 
       const margin =
         entity === "shipments"
@@ -800,6 +955,7 @@ export async function handleAdmin(
             <dt>
               Freight margin
             </dt>
+
             <dd>
               ${
                 record.nihao_cost ===
@@ -868,7 +1024,8 @@ export async function handleAdmin(
                 )}&edit=1"
               >
                 Edit ${
-                  entity === "customers"
+                  entity ===
+                  "customers"
                     ? "customer"
                     : "shipment"
                 }
@@ -959,14 +1116,17 @@ export async function handleAdmin(
                   lower(customer_code),
                   lower(?)
                 ) > 0
+
                 OR instr(
                   lower(full_name),
                   lower(?)
                 ) > 0
+
                 OR instr(
                   mobile,
                   ?
                 ) > 0
+
                 OR instr(
                   lower(
                     COALESCE(
@@ -976,6 +1136,7 @@ export async function handleAdmin(
                   ),
                   lower(?)
                 ) > 0
+
                 OR instr(
                   lower(
                     COALESCE(
@@ -985,9 +1146,11 @@ export async function handleAdmin(
                   ),
                   lower(?)
                 ) > 0
+
               ORDER BY
                 created_at DESC,
                 id
+
               LIMIT 26
               OFFSET ?
               `,
@@ -1027,7 +1190,9 @@ export async function handleAdmin(
                     ),
                     lower(?)
                   ) > 0
+
                   OR
+
                   instr(
                     lower(
                       c.full_name
@@ -1035,17 +1200,21 @@ export async function handleAdmin(
                     lower(?)
                   ) > 0
                 )
+
                 AND (
                   ? = ''
                   OR s.status = ?
                 )
+
                 AND (
                   ? = ''
                   OR s.customer_id = ?
                 )
+
               ORDER BY
                 s.created_at DESC,
                 s.id
+
               LIMIT 26
               OFFSET ?
               `,
@@ -1125,7 +1294,9 @@ export async function handleAdmin(
                             )}"
                           >
                             View
-                            <span class="muted">
+                            <span
+                              class="muted"
+                            >
                               ${esc(
                                 row[
                                   keys[0]
@@ -1174,6 +1345,7 @@ export async function handleAdmin(
           >
             <label>
               Search ${entity}
+
               <input
                 name="q"
                 maxlength="160"
@@ -1195,6 +1367,7 @@ export async function handleAdmin(
                 ? `
                   <label>
                     Status
+
                     <select
                       name="status"
                     >
@@ -1221,7 +1394,7 @@ export async function handleAdmin(
                 : ""
             }
 
-            <button>
+            <button type="submit">
               Search
             </button>
 
@@ -1288,11 +1461,6 @@ export async function handleAdmin(
     const invalid =
       error instanceof ZodError;
 
-    /*
-     * Sanitized unexpected-error logging.
-     * Never log JWTs, cookies, headers,
-     * secrets, or submitted form contents.
-     */
     if (!known && !invalid) {
       console.error(
         "KargoDoor admin request failed",
