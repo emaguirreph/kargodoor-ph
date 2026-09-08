@@ -76,8 +76,8 @@ test("finance dashboard empty page, presets and validation perform zero writes",
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("cache-control"), "no-store, private");
     const html = await response.text();
-    assert.equal((html.match(/<strong>₱0.00<\/strong>/g) ?? []).length, 7);
-    assert.match(html, /<h2>Shipments<\/h2><strong>0<\/strong>/);
+    assert.ok((html.match(/₱0.00/g) ?? []).length >= 9);
+    assert.match(html, /<strong>Shipments<\/strong>[\s\S]*?<strong>0<\/strong>/);
     for (const label of ["This Month", "Last Month", "This Year", "All Time", "Freight Margin", "Expenses"]) assert.ok(html.includes(label));
   }
   await assert.rejects(financeDashboard(f.db, new URL("https://test/admin/finance?from=2026-09-09&to=2026-09-08"), "Admin", now), /From Date/);
@@ -97,11 +97,49 @@ test("finance dashboard scenarios A B C: revenue/cash separation, AR and no dupl
   assert.equal(s.received, BigInt(400000));
   assert.equal(s.receivable, BigInt(600000));
   assert.equal(s.costs, BigInt(700000));
+  assert.equal(s.charges, BigInt(1000000));
   assert.equal(s.margin, BigInt(300000));
   assert.equal(s.operating, BigInt(100000));
   assert.equal(s.profit, BigInt(200000));
   assert.equal(s.shipments, BigInt(1));
   assert.equal(f.sql.prepare("SELECT total_changes() AS n").get()!.n, before);
+});
+
+test("finance overview tables, expense breakdown, actions and formulas use Phase 3A values", async () => {
+  const f = fixture();
+  const sid = f.shipment(BigInt(1000000), BigInt(700000));
+  const id = f.invoice(BigInt(1000000), "2026-09-08", "Partial", BigInt(0), sid);
+  f.payment(id, BigInt(400000));
+  f.expense(BigInt(200000), "Marketing / Advertising");
+  f.expense(BigInt(700000), "Freight / Ni Hao Cost");
+  f.expense(BigInt(300000), "Utilities", "2026-08-31");
+  const before = await readFinanceSummary(f.db, { from: "2026-09-01", to: "2026-09-30" }, now);
+  const changes = f.sql.prepare("SELECT total_changes() AS n").get()!.n;
+  const html = await (await financeDashboard(f.db,
+    new URL("https://test/admin/finance?from=2026-09-01&to=2026-09-30"), "Admin", now)).text();
+  assert.equal(f.sql.prepare("SELECT total_changes() AS n").get()!.n, changes);
+  for (const heading of ["Finance Overview", "Cash &amp; Receivables", "Shipping Performance",
+    "Operating Expenses", "How the Numbers Are Calculated"]) assert.ok(html.includes(`<h2>${heading}</h2>`));
+  assert.ok(html.includes("Reporting period:") && html.includes("September 1, 2026–September 30, 2026"));
+  const expectedMetrics: [string, bigint][] = [["Revenue", before.revenue], ["Payments Received", before.received],
+    ["Accounts Receivable", before.receivable], ["Ni Hao Freight Cost", before.costs],
+    ["Freight Margin", before.margin], ["Operating Expenses", before.operating],
+    ["Net Profit / (Loss)", before.profit]];
+  for (const [label, value] of expectedMetrics) {
+    assert.ok(html.includes(label));
+    assert.ok(html.includes(financePesos(value)));
+  }
+  assert.ok(html.includes("Freight Charges") && html.includes(financePesos(before.charges)));
+  assert.ok(html.includes('href="/admin/finance/expenses?new=1">+ Add Expense</a>'));
+  assert.ok(html.includes('href="/admin/finance/expenses">View Expenses</a>'));
+  assert.ok(html.includes("Marketing / Advertising") && html.includes("Ads, promotions"));
+  assert.ok(html.includes("Freight / Ni Hao Cost") && html.includes("Excluded from Operating Expense total"));
+  assert.ok(!html.includes("Utilities"), "out-of-range category is omitted");
+  assert.equal((html.match(/Marketing \/ Advertising/g) ?? []).length, 1);
+  for (const wording of ["Eligible Invoice Revenue", "Actual Payments Received",
+    "Eligible Invoice Balance − Payments Applied", "KargoDoor Freight Charges − Ni Hao Freight Cost",
+    "Business Expenses − Freight / Ni Hao Cost category", "Revenue − Ni Hao Freight Cost − Operating Expenses",
+    "Revenue and Payments Received are different", "This prevents double counting"]) assert.ok(html.includes(wording));
 });
 
 test("finance dashboard scenarios D E: marketing included; Draft and Void excluded", async () => {

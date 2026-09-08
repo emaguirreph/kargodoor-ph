@@ -199,8 +199,13 @@ try {
     assert.equal(financeResponse.status, 200);
     assert.equal(financeResponse.headers.get("cache-control"), "no-store, private");
     const financeHtml = await financeResponse.text();
-    for (const label of ["Revenue", "Payments Received", "Accounts Receivable", "Freight Costs", "Freight Margin", "Operating Expenses", "Net Profit", "Shipments"])
+    for (const label of ["Finance Overview", "Cash &amp; Receivables", "Shipping Performance", "Operating Expenses", "How the Numbers Are Calculated"])
       assert.ok(financeHtml.includes(`<h2>${label}</h2>`));
+    for (const label of ["Revenue", "Payments Received", "Accounts Receivable", "Ni Hao Freight Cost", "Freight Margin", "Net Profit / (Loss)", "Shipments"])
+      assert.ok(financeHtml.includes(label));
+    assert.ok(financeHtml.includes("Reporting period:") && financeHtml.includes("Freight Charges"));
+    assert.ok(financeHtml.includes('href="/admin/finance/expenses?new=1">+ Add Expense</a>'));
+    assert.ok(financeHtml.includes('href="/admin/finance/expenses">View Expenses</a>'));
     assert.ok(financeHtml.includes("report=freight") && financeHtml.includes('href="/admin/finance/expenses"'));
   }
   assert.equal((await get("/admin/finance?from=2026-09-09&to=2026-09-08")).status, 400);
@@ -208,9 +213,10 @@ try {
   assert.equal((await get("/admin/finance?report=freight")).status, 200);
   assert.equal((await post("/admin/finance", {})).status, 405);
   const financeAll = await (await get("/admin/finance")).text();
-  assert.ok(financeAll.includes("<h2>Operating Expenses</h2><strong>₱0.10</strong>"));
-  assert.ok(financeAll.includes("<h2>Net Profit</h2><strong>-₱0.10</strong>"));
-  console.log("Finance Dashboard HTTP checks passed: admin page, all presets, one-sided/same-day ranges, invalid dates, cards, links, negative profit, and POST rejected.");
+  assert.ok(financeAll.includes("Total Operating Expenses: ₱0.10"));
+  assert.ok(financeAll.includes("Net Profit / (Loss)") && financeAll.includes("-₱0.10"));
+  assert.ok(financeAll.includes("Revenue and Payments Received are different") && financeAll.includes("This prevents double counting"));
+  console.log("Finance Dashboard HTTP checks passed: admin page, all presets, one-sided/same-day ranges, invalid dates, overview tables, Expense actions, formulas, negative profit, and POST rejected.");
   const trackingBefore = await (await get("/api/track?code=KDOOR-0001", false)).json();
   assert.equal(trackingBefore.remarks, "Tracking sentinel");
   for (const path of ["/", "/how-it-works", "/services", "/rates-calculator", "/faq", "/contact-us", "/track"])

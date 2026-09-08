@@ -6,10 +6,49 @@ import { esc, input, page } from "./ui";
 type Invoice = { id: string; issued_at: string | null; total: string; other_charge: string };
 type Payment = { invoice_id: string; payment_date: string; amount: string };
 type Expense = { expense_date: string; amount: string };
+type ExpenseCategory = { category: string; amount: string };
 const zero = BigInt(0);
+
+const expenseDescriptions: Record<string, string> = {
+  "Freight / Ni Hao Cost": "Manual freight/backend cost reference.",
+  "Local Delivery / Trucking": "Local delivery, trucking, hauling, or cargo transfer costs.",
+  "Marketing / Advertising": "Ads, promotions, content, printing, sponsorships, and marketing.",
+  "Salaries / Wages": "Employee or staff salaries, wages, and labor payments.",
+  "Management / Administrative": "General management and administrative business costs.",
+  "Office / Rent": "Office rent, workspace fees, and general office costs.",
+  "Website / Technology": "Website, hosting, domains, software, online services, and technology.",
+  "Permits / Government Fees": "Business permits, registrations, licenses, and government fees.",
+  "Transportation / Fuel / Parking": "Fuel, tolls, parking, fares, and business transportation.",
+  "Supplies / Packaging": "Office supplies, shipping materials, packaging, labels, and consumables.",
+  "Professional Fees": "Accounting, legal, consulting, bookkeeping, and professional services.",
+  Utilities: "Electricity, water, internet, telephone, and similar utilities.",
+  "Bank / Payment Fees": "Bank, transfer, payment processing, and transaction fees.",
+  "Repairs / Maintenance": "Repairs, servicing, maintenance, and business-property upkeep.",
+  "Meals / Representation": "Business meals, meetings, client entertainment, and representation.",
+  Taxes: "Business taxes and tax-related operating expenses.",
+  Miscellaneous: "Valid business expenses that do not fit another category.",
+};
 export function financePesos(centavos: bigint) {
   const absolute = centavos < zero ? -centavos : centavos;
   return `${centavos < zero ? "-" : ""}₱${(absolute / BigInt(100)).toLocaleString("en-PH")}.${(absolute % BigInt(100)).toString().padStart(2, "0")}`;
+}
+
+function metricTable(title: string, rows: [string, string, bigint | string][], emphasize = "") {
+  return `<section><h2>${esc(title)}</h2><div class="table"><table><thead><tr>
+    <th>Category</th><th>Description</th><th>Amount</th></tr></thead><tbody>
+    ${rows.map(([label, description, amount]) => `<tr${label === emphasize ? ' class="finance-emphasis"' : ""}>
+      <td><strong>${esc(label)}</strong></td><td class="muted">${esc(description)}</td>
+      <td><strong>${esc(typeof amount === "bigint" ? financePesos(amount) : amount)}</strong></td></tr>`).join("")}
+    </tbody></table></div></section>`;
+}
+
+function reportingPeriod(range: FinanceRange) {
+  if (!range.from && !range.to) return "All Time";
+  const display = (date: string) => date
+    ? new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", year: "numeric", month: "long", day: "numeric" })
+        .format(new Date(`${date}T00:00:00+08:00`))
+    : "All dates";
+  return `${display(range.from)}–${display(range.to)}`;
 }
 export async function readFinanceSummary(db: D1Database, range: FinanceRange, now = new Date()) {
   // Text crosses D1's JSON boundary exactly. Billing grand total is total + other_charge;
@@ -48,26 +87,21 @@ export async function readFinanceSummary(db: D1Database, range: FinanceRange, no
     if (inFinanceRange(expense.expense_date, range)) operating += BigInt(expense.amount);
   }
   const costs = BigInt(String(freight?.costs ?? "0"));
+  const charges = BigInt(String(freight?.charges ?? "0"));
   const margin = BigInt(String(freight?.margin ?? "0"));
   const shipments = BigInt(String(freight?.shipments ?? "0"));
   const uncosted = shipments - BigInt(String(freight?.costed ?? "0"));
-  return { revenue, received, receivable, costs, margin, operating,
+  return { revenue, received, receivable, charges, costs, margin, operating,
     profit: revenue - costs - operating, shipments, uncosted, asOf,
     undatedInvoices, undatedPayments, undatedExpenses };
 }
 export async function financeDashboard(db: D1Database, url: URL, user: string, now = new Date()) {
   const range = financeRange(url, now);
   const summary = await readFinanceSummary(db, range, now);
-  const metrics: [string, bigint, string][] = [
-    ["Revenue", summary.revenue, "Invoiced charges, including delivery and other charges, by issue date."],
-    ["Payments Received", summary.received, "Actual cash collected by payment date."],
-    ["Accounts Receivable", summary.receivable, `Outstanding as of ${summary.asOf}; From Date does not apply.`],
-    ["Freight Costs", summary.costs, "Recorded backend/Ni Hao freight costs."],
-    ["Freight Margin", summary.margin, "Freight charges less backend costs on costed shipments."],
-    ["Operating Expenses", summary.operating, "By expense date; excludes Freight / Ni Hao Cost."],
-    ["Net Profit", summary.profit, "Revenue less freight costs and operating expenses."],
-    ["Shipments", summary.shipments, "Non-cancelled shipments, including those awaiting costs."],
-  ];
+  const categoryRows = (await db.prepare(`SELECT category, CAST(SUM(amount) AS TEXT) AS amount
+    FROM expenses WHERE amount > 0 AND date(expense_date) = expense_date AND (? = '' OR expense_date >= ?)
+      AND (? = '' OR expense_date <= ?) GROUP BY category HAVING SUM(amount) > 0
+    ORDER BY category`).bind(range.from, range.from, range.to, range.to).all<ExpenseCategory>()).results;
   const notices = [
     summary.uncosted > zero ? `${summary.uncosted} shipments in this range have no Ni Hao cost. Freight Costs and Freight Margin exclude their missing costs; Net Profit uses recorded costs only.` : "",
     summary.undatedInvoices ? `${summary.undatedInvoices} non-Draft/non-Void invoices lack valid issue dates and are excluded from Revenue and Accounts Receivable. These metrics may be incomplete.` : "",
@@ -75,13 +109,54 @@ export async function financeDashboard(db: D1Database, url: URL, user: string, n
     summary.undatedExpenses ? `${summary.undatedExpenses} operating expenses lack valid dates and are excluded. Operating Expenses and Net Profit may be incomplete.` : "",
   ].filter(Boolean);
   const freightLink = `/admin/finance?report=freight&${new URLSearchParams(range)}`;
+  const financeOverview: [string, string, bigint][] = [
+    ["Revenue", "Total eligible customer invoice revenue for the selected period.", summary.revenue],
+    ["Ni Hao Freight Cost", "Backend freight cost paid/payable to Ni Hao for customer shipments.", summary.costs],
+    ["Operating Expenses", "Business overhead such as marketing, salaries, permits, website, office, and transportation.", summary.operating],
+    ["Net Profit / (Loss)", "Revenue remaining after Ni Hao freight costs and operating expenses.", summary.profit],
+  ];
+  const cash: [string, string, bigint][] = [
+    ["Payments Received", "Actual customer payments received during the selected period.", summary.received],
+    ["Accounts Receivable", `Outstanding customer invoice balances as of ${summary.asOf}.`, summary.receivable],
+  ];
+  const shipping: [string, string, bigint | string][] = [
+    ["Freight Charges", "KargoDoor freight charges for eligible costed shipments in the selected period.", summary.charges],
+    ["Ni Hao Freight Cost", "Backend freight cost for those eligible shipments.", summary.costs],
+    ["Freight Margin", "KargoDoor freight charges less Ni Hao freight cost.", summary.margin],
+    ["Shipments", "Qualifying non-cancelled shipments in the selected period.", summary.shipments.toString()],
+  ];
+  const breakdown = categoryRows.length
+    ? `<div class="table"><table><thead><tr><th>Category</th><th>Description</th><th>Amount</th></tr></thead><tbody>
+      ${categoryRows.map((row) => {
+        const excluded = row.category === "Freight / Ni Hao Cost";
+        const description = expenseDescriptions[row.category] ?? "Historical expense category.";
+        return `<tr><td><strong>${esc(row.category)}</strong>${excluded ? '<br><span class="muted">Excluded from Operating Expense total to prevent freight-cost double counting.</span>' : ""}</td>
+          <td class="muted">${esc(description)}</td><td><strong>${esc(financePesos(BigInt(row.amount)))}</strong></td></tr>`;
+      }).join("")}</tbody></table></div>`
+    : '<p class="muted">No expense categories have amounts in this reporting period.</p>';
   return page("Finance", `<section><form action="/admin/finance" method="get" class="search">
     ${input("from", "From Date", range, "date")}${input("to", "To Date", range, "date")}<button type="submit">Apply</button></form>
     <div class="actions"><a href="/admin/finance?preset=month">This Month</a><a href="/admin/finance?preset=last-month">Last Month</a>
     <a href="/admin/finance?preset=year">This Year</a><a href="/admin/finance">All Time</a></div></section>
-    <p class="muted">Period: ${esc(range.from || "All dates")} through ${esc(range.to || "all dates")}. Dates follow Philippine business time.</p>
+    <p class="muted"><strong>Reporting period:</strong> ${esc(reportingPeriod(range))}. Dates follow Philippine business time.</p>
     ${notices.map((notice) => `<p class="notice" role="status">${esc(notice)}</p>`).join("")}
-    <div class="cards">${metrics.map(([label, value, help]) => `<div class="card"><h2>${label}</h2><strong>${esc(label === "Shipments" ? value.toString() : financePesos(value))}</strong><p class="muted">${esc(help)}</p></div>`).join("")}</div>
-    <p class="muted">Freight metrics use warehouse receipt date, or Philippine creation date when receipt date is absent. Cancelled shipments are excluded. Invoice metrics exclude Draft and Void using current invoice status; payments are counted separately. Costs and revenue use their respective business dates.</p>
-    <div class="actions"><a href="${esc(freightLink)}">Freight Margin</a><a href="/admin/finance/expenses">Expenses</a></div>`, user);
+    ${metricTable("Finance Overview", financeOverview, "Net Profit / (Loss)")}
+    ${metricTable("Cash & Receivables", cash)}
+    ${metricTable("Shipping Performance", shipping)}
+    <section><div class="actions"><h2>Operating Expenses</h2><a class="button" href="/admin/finance/expenses?new=1">+ Add Expense</a><a href="/admin/finance/expenses">View Expenses</a></div>
+      <p><strong>Total Operating Expenses: ${esc(financePesos(summary.operating))}</strong></p>${breakdown}</section>
+    <section><h2>How the Numbers Are Calculated</h2><div class="table"><table><tbody>
+      <tr><td><strong>Revenue</strong></td><td class="muted">Eligible Invoice Revenue</td></tr>
+      <tr><td><strong>Payments Received</strong></td><td class="muted">Actual Payments Received</td></tr>
+      <tr><td><strong>Accounts Receivable</strong></td><td class="muted">Eligible Invoice Balance − Payments Applied (as of reporting end date)</td></tr>
+      <tr><td><strong>Freight Margin</strong></td><td class="muted">KargoDoor Freight Charges − Ni Hao Freight Cost</td></tr>
+      <tr><td><strong>Operating Expenses</strong></td><td class="muted">Business Expenses − Freight / Ni Hao Cost category</td></tr>
+      <tr><td><strong>Net Profit</strong></td><td class="muted">Revenue − Ni Hao Freight Cost − Operating Expenses</td></tr>
+    </tbody></table></div>
+    <p class="muted">Revenue and Payments Received are different: Revenue represents eligible invoiced earnings, while Payments Received represents actual cash collected.</p>
+    <p class="muted">Freight / Ni Hao Cost entered under Expenses is excluded from Operating Expenses when the same backend freight cost is already recorded against shipments. This prevents double counting.</p></section>
+    <p class="muted">Freight metrics use warehouse receipt date, or Philippine creation date when receipt date is absent. Cancelled shipments are excluded.</p>
+    <div class="actions"><a href="${esc(freightLink)}">Freight Margin</a><a href="/admin/finance/expenses">Expenses</a></div>
+    <style>.finance-emphasis td{border-top:2px solid #154876;border-bottom:2px solid #154876}.finance-emphasis strong{font-size:1.08rem}
+    @media(max-width:520px){table{min-width:0}thead{display:none}tr{display:block;padding:10px 0;border-bottom:1px solid #d5e4ed}td{display:block;border:0;padding:4px 0}td:last-child{font-size:1.1rem}}</style>`, user);
 }
