@@ -106,7 +106,7 @@ export async function saveRecord(
     const message = String(error);
     if (message.includes("UNIQUE constraint"))
       throw new AdminError(
-        "This customer code or tracking number already exists.",
+        "This account number or tracking number already exists.",
         409,
       );
     if (message.includes("FOREIGN KEY"))

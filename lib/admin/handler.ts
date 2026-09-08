@@ -28,7 +28,7 @@ const labels: Record<string, string> = {
   shipping_charge: "KargoDoor freight charge",
   delivery_charge: "Delivery charge",
   china_warehouse: "Origin warehouse",
-  customer_code: "Customer code",
+  customer_code: "Account number",
   full_name: "Full name",
   company_name: "Company",
   mobile: "Mobile",
@@ -37,7 +37,7 @@ const labels: Record<string, string> = {
   notes: "Notes",
 
   tracking_number: "Tracking number",
-  cargo_code: "Cargo code",
+  cargo_code: "Legacy cargo code",
   service_type: "Service type",
   warehouse_received_date: "Warehouse received date",
   departure_date: "Departure date",
@@ -440,7 +440,7 @@ export async function handleAdmin(
         fields =
           input(
             "customer_code",
-            "Customer code",
+            "Account number",
             record,
             "text",
             true,
@@ -681,10 +681,10 @@ export async function handleAdmin(
           ) +
           input(
             "cargo_code",
-            "Cargo code",
+            "Legacy cargo code (optional)",
             record,
             "text",
-            true,
+            false,
             60,
           ) +
           select(
@@ -861,7 +861,7 @@ export async function handleAdmin(
                 }
 
                 <label>
-                  Find customer by name or code
+                  Find customer by account number, name, company, mobile or email
 
                   <input
                     name="customer_search"
@@ -943,10 +943,8 @@ export async function handleAdmin(
                 "shipments"
                   ? `
                     <p class="muted">
-                      Cargo code is the code customers
-                      will use on Track Package.
-                      Sea Freight uses KDOOR-0001 format.
-                      Air Freight uses AIR-KDOOR-0001 format.
+                      Tracking number is the unique public shipment identifier.
+                      Legacy cargo code is optional and is retained only for older records.
                     </p>
                   `
                   : ""

@@ -135,21 +135,21 @@ const shipmentObjectSchema = z
 
     tracking_number: required(60)
       .regex(
-        /^[A-Za-z0-9-]+$/,
-        "Use letters, numbers and hyphens",
+        /^(?:KD-(?:SEA|AIR)-\d{6,}|(?:AIR-)?KDOOR-\d{4,})$/i,
+        "Use KD-SEA-000001 or KD-AIR-000001. Existing KDOOR numbers are also accepted.",
       )
       .transform((value) =>
         value.toUpperCase(),
       ),
 
-    cargo_code: required(60)
-      .regex(
-        /^(?:AIR-)?KDOOR-\d{4,}$/,
-        "Use a valid cargo code such as KDOOR-0001 or AIR-KDOOR-0001",
+    // Legacy field retained for existing records and the separate tracking editor.
+    // New admin shipments are identified publicly by tracking_number.
+    cargo_code: optional(60)
+      .refine(
+        (value) => value === null || /^[A-Za-z0-9-]+$/.test(value),
+        "Use letters, numbers and hyphens",
       )
-      .transform((value) =>
-        value.toUpperCase(),
-      ),
+      .transform((value) => value?.toUpperCase() ?? null),
 
     service_type: z.enum([
       "Sea Freight",
@@ -206,25 +206,6 @@ const shipmentObjectSchema = z
 export const shipmentSchema =
   shipmentObjectSchema.superRefine(
     (values, context) => {
-      const isAir =
-        values.service_type ===
-        "Air Freight";
-
-      const cargoIsAir =
-        values.cargo_code.startsWith(
-          "AIR-",
-        );
-
-      if (isAir !== cargoIsAir) {
-        context.addIssue({
-          code: "custom",
-          path: ["cargo_code"],
-          message: isAir
-            ? "Air Freight cargo codes must start with AIR-KDOOR-."
-            : "Sea Freight cargo codes must start with KDOOR- and must not use AIR-KDOOR-.",
-        });
-      }
-
       if (
         values.departure_date &&
         values.warehouse_received_date &&

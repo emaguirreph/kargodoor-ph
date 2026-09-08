@@ -26,6 +26,7 @@ function database() {
   sql.exec(readFileSync("migrations/admin/0001_phase1.sql", "utf8"));
   sql.exec(readFileSync("migrations/admin/0002_freight_cost.sql", "utf8"));
   sql.exec(readFileSync("migrations/admin/0003_invoices_payments.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0004_public_tracking.sql", "utf8"));
   const user = randomUUID();
   sql
     .prepare("INSERT INTO admin_users VALUES (?,?,?,?,?,?)")
@@ -81,22 +82,27 @@ const customer = customerSchema.parse({
   address: "",
   notes: "",
 });
-const shipment = (id: string) =>
-  shipmentSchema.parse({
+const shipmentInput = (id: string) =>
+  ({
     customer_id: id,
     tracking_number: "KDOOR-0001",
+    cargo_code: "",
     service_type: "Sea Freight",
     china_warehouse: "Guangzhou",
+    warehouse_received_date: "",
+    departure_date: "",
     cbm: "1.250",
     weight_kg: "425",
     status: "Received at Warehouse",
     estimated_arrival: "2026-10-01",
     actual_arrival: "",
+    tracking_remarks: "",
     shipping_charge: "6500.25",
     nihao_cost: "",
     delivery_charge: "0",
     payment_status: "Unpaid",
   });
+const shipment = (id: string) => shipmentSchema.parse(shipmentInput(id));
 test("required fields, dates, enum, numeric precision and overposting are validated", () => {
   assert.throws(() => customerSchema.parse({ ...customer, full_name: " " }));
   assert.throws(() =>
@@ -106,13 +112,11 @@ test("required fields, dates, enum, numeric precision and overposting are valida
   assert.throws(() => parseForm("customers", form));
   assert.equal(shipment(randomUUID()).shipping_charge, 650025);
   for (const bad of ["-1", "Infinity", "NaN", "1e3", "2.0001", ""])
-    assert.throws(() => shipmentSchema.shape.cbm.parse(bad));
+    assert.equal(shipmentSchema.safeParse({ ...shipmentInput(randomUUID()), cbm: bad }).success, false);
   for (const bad of ["-1", "1.001", "", "NaN"])
-    assert.throws(() => shipmentSchema.shape.shipping_charge.parse(bad));
-  assert.throws(() =>
-    shipmentSchema.shape.estimated_arrival.parse("2026-02-30"),
-  );
-  assert.throws(() => shipmentSchema.shape.status.parse("bad"));
+    assert.equal(shipmentSchema.safeParse({ ...shipmentInput(randomUUID()), shipping_charge: bad }).success, false);
+  assert.equal(shipmentSchema.safeParse({ ...shipmentInput(randomUUID()), estimated_arrival: "2026-02-30" }).success, false);
+  assert.equal(shipmentSchema.safeParse({ ...shipmentInput(randomUUID()), status: "bad" }).success, false);
 });
 test("customer and shipment writes create correct atomic immutable audit logs", async () => {
   const { sql, db, user } = database();
@@ -205,6 +209,15 @@ test("duplicate, foreign-key and audit failure roll back entire write", async ()
     sql.prepare("SELECT COUNT(*) AS n FROM activity_log").get()!.n,
     1,
   );
+});
+test("one account number can own multiple shipments with unique tracking numbers", async () => {
+  const { sql, db, user } = database();
+  const customerId = await saveRecord(db, "customers", { ...customer, customer_code: "KDOOR-0001" }, user, "", "");
+  const sea = await saveRecord(db, "shipments", { ...shipment(customerId), tracking_number: "KD-SEA-000001", cargo_code: null }, user, "", "");
+  const air = await saveRecord(db, "shipments", { ...shipment(customerId), tracking_number: "KD-AIR-000001", cargo_code: null, service_type: "Air Freight" }, user, "", "");
+  assert.notEqual(sea, air);
+  assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM shipments WHERE customer_id = ?").get(customerId)!.n, 2);
+  await assert.rejects(saveRecord(db, "shipments", { ...shipment(customerId), tracking_number: "KD-SEA-000001", cargo_code: null }, user, "", ""), /tracking number already exists/);
 });
 test("invoice and payment customer links cannot disagree and deletes are restricted", async () => {
   const { sql, db, user } = database();
@@ -455,7 +468,7 @@ test("invoice snapshots connected records and supports partial and multiple paym
   assert.equal(sql.prepare("SELECT SUM(amount) AS n FROM payments WHERE invoice_id=?").get(invoiceId)!.n, 715025);
   assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM payments WHERE invoice_id=?").get(invoiceId)!.n, 2);
   assert.equal(sql.prepare("SELECT payment_status FROM shipments WHERE id=?").get(shipmentId)!.payment_status, "Paid");
-  await assert.rejects(recordPayment(db, { invoice_id: invoiceId, amount: "1", payment_method: "Cash", reference_number: "", payment_date: "2026-09-12", notes: "" }, user), /remaining balance|changed/);
+  await assert.rejects(recordPayment(db, { invoice_id: invoiceId, amount: "1", payment_method: "Cash", reference_number: "", payment_date: "2026-09-12", notes: "" }, user), /remaining balance|fully paid|changed/);
   assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM activity_log WHERE entity_type IN ('invoices','payments')").get()!.n, 5);
 });
 

@@ -4,7 +4,7 @@ import { FormEvent, useState } from "react";
 import { Footer, Header } from "@/components/site-chrome";
 
 type Shipment = {
-  cargo_code: string;
+  tracking_number: string;
   freight_type: string;
   origin_warehouse: string | null;
   warehouse_received_date: string | null;
@@ -25,13 +25,13 @@ export default function TrackPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const cargoCode = code.trim().toUpperCase();
+    const trackingNumber = code.trim().toUpperCase();
 
     setError("");
     setShipment(null);
 
-    if (!cargoCode) {
-      setError("Please enter your KargoDoor Cargo Code.");
+    if (!trackingNumber) {
+      setError("Please enter your KargoDoor tracking number.");
       return;
     }
 
@@ -39,13 +39,13 @@ export default function TrackPage() {
 
     try {
       const response = await fetch(
-        `/api/track?code=${encodeURIComponent(cargoCode)}`,
+        `/api/track?code=${encodeURIComponent(trackingNumber)}`,
       );
 
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.error || "Cargo Code not found.");
+        setError(data.error || "Tracking number not found.");
         return;
       }
 
@@ -69,21 +69,21 @@ export default function TrackPage() {
             <header className="kd-track-heading">
               <h1>TRACK YOUR SHIPMENT</h1>
               <p>
-                Enter your KargoDoor Cargo Code to check your latest shipment
+                Enter your KargoDoor tracking number to check your latest shipment
                 status.
               </p>
             </header>
 
             <form className="kd-track-form" onSubmit={handleSubmit}>
-              <label htmlFor="cargo-code">CARGO CODE</label>
+              <label htmlFor="tracking-number">TRACKING NUMBER</label>
 
               <div className="kd-track-input-row">
                 <input
-                  id="cargo-code"
+                  id="tracking-number"
                   type="text"
                   value={code}
                   onChange={(event) => setCode(event.target.value)}
-                  placeholder="Example: KDOOR-0001"
+                  placeholder="Example: KD-SEA-000001"
                   autoComplete="off"
                 />
 
@@ -102,8 +102,8 @@ export default function TrackPage() {
             {shipment && (
               <article className="kd-track-result">
                 <div className="kd-track-result-header">
-                  <span>CARGO CODE</span>
-                  <h2>{shipment.cargo_code}</h2>
+                  <span>TRACKING NUMBER</span>
+                  <h2>{shipment.tracking_number}</h2>
                   <strong>{shipment.current_status}</strong>
                 </div>
 

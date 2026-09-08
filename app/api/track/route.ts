@@ -4,7 +4,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type Shipment = {
-  cargo_code: string;
+  tracking_number: string;
   service_type: string;
   china_warehouse: string | null;
   warehouse_received_date: string | null;
@@ -19,17 +19,17 @@ export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
 
-    const cargoCode =
+    const trackingNumber =
       url.searchParams
         .get("code")
         ?.trim()
         .toUpperCase();
 
-    if (!cargoCode) {
+    if (!trackingNumber) {
       return Response.json(
         {
           error:
-            "Please enter your KargoDoor Cargo Code.",
+            "Please enter your KargoDoor tracking number.",
         },
         {
           status: 400,
@@ -38,14 +38,14 @@ export async function GET(request: Request) {
     }
 
     const validCode =
-      /^KDOOR-\d{4,}$/.test(cargoCode) ||
-      /^AIR-KDOOR-\d{4,}$/.test(cargoCode);
+      /^KD-(?:SEA|AIR)-\d{6,}$/i.test(trackingNumber) ||
+      /^(?:AIR-)?KDOOR-\d{4,}$/i.test(trackingNumber);
 
     if (!validCode) {
       return Response.json(
         {
           error:
-            "Please enter a valid KargoDoor Cargo Code.",
+            "Please enter a valid KargoDoor tracking number.",
         },
         {
           status: 400,
@@ -61,7 +61,7 @@ export async function GET(request: Request) {
         .prepare(
           `
           SELECT
-            cargo_code,
+            tracking_number,
             service_type,
             china_warehouse,
             warehouse_received_date,
@@ -71,18 +71,18 @@ export async function GET(request: Request) {
             tracking_remarks,
             updated_at
           FROM shipments
-          WHERE cargo_code = ?
+          WHERE tracking_number = ?
           LIMIT 1
           `,
         )
-        .bind(cargoCode)
+        .bind(trackingNumber)
         .first<Shipment>();
 
     if (!shipment) {
       return Response.json(
         {
           error:
-            "Cargo Code not found. Please check your code or message KargoDoor PH for assistance.",
+            "Tracking number not found. Please check the number or message KargoDoor PH for assistance.",
         },
         {
           status: 404,
@@ -91,8 +91,8 @@ export async function GET(request: Request) {
     }
 
     return Response.json({
-      cargo_code:
-        shipment.cargo_code,
+      tracking_number:
+        shipment.tracking_number,
 
       freight_type:
         shipment.service_type,
