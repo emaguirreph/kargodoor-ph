@@ -16,12 +16,7 @@ import {
 } from "./security";
 
 import type { RecordData } from "./validation";
-import {
-  esc,
-  hidden,
-  page,
-  pesos,
-} from "./ui";
+import { esc, hidden, page, pesos } from "./ui";
 
 const route = "/admin/invoices";
 
@@ -41,20 +36,14 @@ const paymentMethods = [
 ] as const;
 
 const required = (max: number) =>
-  z
-    .string()
-    .trim()
-    .min(1)
-    .max(max);
+  z.string().trim().min(1).max(max);
 
 function isValidDate(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     return false;
   }
 
-  const date = new Date(
-    `${value}T00:00:00.000Z`,
-  );
+  const date = new Date(`${value}T00:00:00.000Z`);
 
   return (
     !Number.isNaN(date.getTime()) &&
@@ -63,21 +52,18 @@ function isValidDate(value: string) {
 }
 
 /*
- * Accepts:
+ * Allows:
  * - YYYY-MM-DD
- * - blank string
+ * - ""
  * - null
  *
  * Blank becomes null.
  *
- * Accepting null makes this schema safe even if
- * already-transformed values are validated again.
+ * Accepting null also makes already-transformed
+ * values safe if they pass through validation again.
  */
 const optionalDate = z
-  .union([
-    z.string().trim(),
-    z.null(),
-  ])
+  .union([z.string().trim(), z.null()])
   .refine(
     (value) =>
       value === null ||
@@ -85,9 +71,7 @@ const optionalDate = z
       isValidDate(value),
     "Enter a valid date",
   )
-  .transform((value) =>
-    value === "" ? null : value,
-  );
+  .transform((value) => (value === "" ? null : value));
 
 const money = required(30)
   .regex(
@@ -95,16 +79,11 @@ const money = required(30)
     "Use a non-negative peso amount with at most 2 decimals",
   )
   .transform((value) => {
-    const [
-      whole,
-      fraction = "",
-    ] = value.split(".");
+    const [whole, fraction = ""] = value.split(".");
 
     return (
       Number(whole) * 100 +
-      Number(
-        fraction.padEnd(2, "0"),
-      )
+      Number(fraction.padEnd(2, "0"))
     );
   })
   .refine(
@@ -117,126 +96,93 @@ const money = required(30)
 const invoiceSchema = z
   .object({
     shipment_id: z.string().uuid(),
-
     delivery_charge: money,
-
     other_charge: money,
-
-    status: z.enum([
-      "Draft",
-      "Unpaid",
-    ]),
-
+    status: z.enum(["Draft", "Unpaid"]),
     issued_at: optionalDate,
-
     due_at: optionalDate,
   })
   .strict()
-  .superRefine(
-    (values, ctx) => {
-      if (
-        values.status === "Unpaid" &&
-        !values.issued_at
-      ) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["issued_at"],
-          message:
-            "Issue date is required for an unpaid invoice",
-        });
-      }
+  .superRefine((values, ctx) => {
+    if (values.status === "Unpaid" && !values.issued_at) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["issued_at"],
+        message:
+          "Issue date is required for an unpaid invoice",
+      });
+    }
 
-      if (
-        values.issued_at &&
-        values.due_at &&
-        values.due_at <
-          values.issued_at
-      ) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["due_at"],
-          message:
-            "Due date cannot be before the issue date",
-        });
-      }
-    },
-  );
+    if (
+      values.issued_at &&
+      values.due_at &&
+      values.due_at < values.issued_at
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["due_at"],
+        message:
+          "Due date cannot be before the issue date",
+      });
+    }
+  });
 
 const paymentSchema = z
   .object({
-    invoice_id: z
-      .string()
-      .uuid(),
+    invoice_id: z.string().uuid(),
 
     amount: money.refine(
       (value) => value > 0,
       "Payment must be greater than zero",
     ),
 
-    payment_method:
-      z.enum(paymentMethods),
+    payment_method: z.enum(paymentMethods),
 
     reference_number: z
       .string()
       .trim()
       .max(160)
-      .transform(
-        (value) =>
-          value || null,
-      ),
+      .transform((value) => value || null),
 
-    payment_date:
-      optionalDate.refine(
-        (value) =>
-          value !== null,
-        "Payment date is required",
-      ),
+    payment_date: optionalDate.refine(
+      (value) => value !== null,
+      "Payment date is required",
+    ),
 
     notes: z
       .string()
       .trim()
       .max(1000)
-      .transform(
-        (value) =>
-          value || null,
-      ),
+      .transform((value) => value || null),
   })
   .strict();
 
 const issueSchema = z
   .object({
-    invoice_id: z
-      .string()
-      .uuid(),
+    invoice_id: z.string().uuid(),
 
-    issued_at:
-      optionalDate.refine(
-        (value) =>
-          value !== null,
-        "Issue date is required",
-      ),
+    issued_at: optionalDate.refine(
+      (value) => value !== null,
+      "Issue date is required",
+    ),
 
-    due_at:
-      optionalDate,
+    due_at: optionalDate,
   })
   .strict()
-  .superRefine(
-    (values, ctx) => {
-      if (
-        values.due_at &&
-        values.issued_at &&
-        values.due_at <
-          values.issued_at
-      ) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["due_at"],
-          message:
-            "Due date cannot be before the issue date",
-        });
-      }
-    },
-  );
+  .superRefine((values, ctx) => {
+    if (
+      values.due_at &&
+      values.issued_at &&
+      values.due_at < values.issued_at
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["due_at"],
+        message:
+          "Due date cannot be before the issue date",
+      });
+    }
+  });
 
 const invoiceKeys = [
   "shipment_id",
@@ -264,10 +210,7 @@ const issueKeys = [
 
 function parse(
   form: URLSearchParams,
-  action:
-    | "invoice"
-    | "payment"
-    | "issue",
+  action: "invoice" | "payment" | "issue",
 ) {
   const keys =
     action === "invoice"
@@ -276,16 +219,13 @@ function parse(
         ? paymentKeys
         : issueKeys;
 
-  const allowed =
-    new Set([
-      "csrf",
-      "action",
-      ...keys,
-    ]);
+  const allowed = new Set([
+    "csrf",
+    "action",
+    ...keys,
+  ]);
 
-  for (
-    const key of form.keys()
-  ) {
+  for (const key of form.keys()) {
     if (
       !allowed.has(key) ||
       form.getAll(key).length !== 1
@@ -296,31 +236,22 @@ function parse(
     }
   }
 
-  const raw =
-    Object.fromEntries(
-      keys.map(
-        (key) => [
-          key,
-          form.get(key) ?? "",
-        ],
-      ),
-    );
+  const raw = Object.fromEntries(
+    keys.map((key) => [
+      key,
+      form.get(key) ?? "",
+    ]),
+  );
 
   if (action === "invoice") {
-    return invoiceSchema.parse(
-      raw,
-    );
+    return invoiceSchema.parse(raw);
   }
 
   if (action === "payment") {
-    return paymentSchema.parse(
-      raw,
-    );
+    return paymentSchema.parse(raw);
   }
 
-  return issueSchema.parse(
-    raw,
-  );
+  return issueSchema.parse(raw);
 }
 
 async function readForm(
@@ -328,22 +259,14 @@ async function readForm(
   env: AdminEnv,
   userId: string,
 ) {
-  const expectedOrigin =
-    canonicalOrigin(env);
-
-  const requestOrigin =
-    new URL(
-      request.url,
-    ).origin;
+  const expectedOrigin = canonicalOrigin(env);
+  const requestOrigin = new URL(request.url).origin;
 
   /*
-   * The actual request itself must
-   * be on the configured admin origin.
+   * Actual request must be served from the
+   * configured KargoDoor Admin origin.
    */
-  if (
-    requestOrigin !==
-    expectedOrigin
-  ) {
+  if (requestOrigin !== expectedOrigin) {
     throw new AdminError(
       "Admin request origin is invalid.",
       403,
@@ -351,17 +274,13 @@ async function readForm(
   }
 
   /*
-   * Explicit browser cross-site
-   * submissions are rejected.
+   * Reject requests explicitly reported
+   * by the browser as cross-site.
    */
   const fetchSite =
-    request.headers.get(
-      "sec-fetch-site",
-    );
+    request.headers.get("sec-fetch-site");
 
-  if (
-    fetchSite === "cross-site"
-  ) {
+  if (fetchSite === "cross-site") {
     throw new AdminError(
       "Cross-site form submission rejected.",
       403,
@@ -369,32 +288,23 @@ async function readForm(
   }
 
   const originHeader =
-    request.headers.get(
-      "origin",
-    );
+    request.headers.get("origin");
 
   /*
-   * Safari may legitimately send:
+   * Safari may send:
    *
    * Origin: null
    * Sec-Fetch-Site: same-origin
    *
-   * Allow that case.
-   *
-   * Authentication and CSRF
-   * validation remain mandatory.
+   * This is accepted because Cloudflare Access,
+   * request-origin validation and the CSRF token
+   * remain mandatory.
    */
-  if (
-    originHeader &&
-    originHeader !== "null"
-  ) {
+  if (originHeader && originHeader !== "null") {
     let submittedOrigin: string;
 
     try {
-      submittedOrigin =
-        new URL(
-          originHeader,
-        ).origin;
+      submittedOrigin = new URL(originHeader).origin;
     } catch {
       throw new AdminError(
         "Invalid form origin.",
@@ -402,10 +312,7 @@ async function readForm(
       );
     }
 
-    if (
-      submittedOrigin !==
-      expectedOrigin
-    ) {
+    if (submittedOrigin !== expectedOrigin) {
       throw new AdminError(
         "Cross-site form submission rejected.",
         403,
@@ -413,12 +320,11 @@ async function readForm(
     }
   }
 
-  const contentType =
-    request.headers
-      .get("content-type")
-      ?.split(";")[0]
-      ?.trim()
-      .toLowerCase();
+  const contentType = request.headers
+    .get("content-type")
+    ?.split(";")[0]
+    ?.trim()
+    .toLowerCase();
 
   if (
     contentType !==
@@ -430,17 +336,12 @@ async function readForm(
     );
   }
 
-  const contentLength =
-    Number(
-      request.headers.get(
-        "content-length",
-      ) ?? 0,
-    );
+  const contentLength = Number(
+    request.headers.get("content-length") ?? 0,
+  );
 
   if (
-    Number.isFinite(
-      contentLength,
-    ) &&
+    Number.isFinite(contentLength) &&
     contentLength > 24_000
   ) {
     throw new AdminError(
@@ -449,33 +350,21 @@ async function readForm(
     );
   }
 
-  const reader =
-    request.body?.getReader();
+  const reader = request.body?.getReader();
 
   if (!reader) {
-    throw new AdminError(
-      "Form is empty.",
-    );
+    throw new AdminError("Form is empty.");
   }
 
-  const chunks:
-    Uint8Array[] = [];
-
+  const chunks: Uint8Array[] = [];
   let length = 0;
 
   while (true) {
-    const {
-      done,
-      value,
-    } =
-      await reader.read();
+    const { done, value } = await reader.read();
 
-    if (done) {
-      break;
-    }
+    if (done) break;
 
-    length +=
-      value.length;
+    length += value.length;
 
     if (length > 24_000) {
       await reader.cancel();
@@ -489,16 +378,10 @@ async function readForm(
     chunks.push(value);
   }
 
-  const form =
-    new URLSearchParams(
-      Buffer.concat(
-        chunks,
-      ).toString("utf8"),
-    );
+  const form = new URLSearchParams(
+    Buffer.concat(chunks).toString("utf8"),
+  );
 
-  /*
-   * CSRF validation is mandatory.
-   */
   checkCsrf(
     env,
     userId,
@@ -514,53 +397,34 @@ export async function createInvoice(
   raw: unknown,
   adminId: string,
 ) {
-  /*
-   * handleBilling already validates
-   * and transforms form input.
-   *
-   * Direct callers may still provide
-   * raw string form-style values.
-   */
   const values =
     typeof (
       raw as {
-        delivery_charge?:
-          unknown;
+        delivery_charge?: unknown;
       }
-    )?.delivery_charge ===
-    "number"
-      ? (
-          raw as z.infer<
-            typeof invoiceSchema
-          >
-        )
-      : invoiceSchema.parse(
-          raw,
-        );
+    )?.delivery_charge === "number"
+      ? (raw as z.infer<typeof invoiceSchema>)
+      : invoiceSchema.parse(raw);
 
-  const shipment =
-    await db
-      .prepare(
-        `
-        SELECT
-          s.id,
-          s.customer_id,
-          s.tracking_number,
-          s.shipping_charge,
-          c.customer_code,
-          c.full_name
-        FROM shipments s
-        JOIN customers c
-          ON c.id =
-             s.customer_id
-        WHERE s.id = ?
-        LIMIT 1
-        `,
-      )
-      .bind(
-        values.shipment_id,
-      )
-      .first<RecordData>();
+  const shipment = await db
+    .prepare(
+      `
+      SELECT
+        s.id,
+        s.customer_id,
+        s.tracking_number,
+        s.shipping_charge,
+        c.customer_code,
+        c.full_name
+      FROM shipments s
+      JOIN customers c
+        ON c.id = s.customer_id
+      WHERE s.id = ?
+      LIMIT 1
+      `,
+    )
+    .bind(values.shipment_id)
+    .first<RecordData>();
 
   if (!shipment) {
     throw new AdminError(
@@ -569,79 +433,40 @@ export async function createInvoice(
     );
   }
 
-  const id =
-    randomUUID();
-
-  const timestamp =
-    new Date().toISOString();
+  const id = randomUUID();
+  const timestamp = new Date().toISOString();
 
   const number =
-    `INV-${
-      timestamp
-        .slice(0, 10)
-        .replaceAll(
-          "-",
-          "",
-        )
-    }-${
-      id
-        .slice(0, 8)
-        .toUpperCase()
-    }`;
+    `INV-${timestamp
+      .slice(0, 10)
+      .replaceAll("-", "")}-${id
+      .slice(0, 8)
+      .toUpperCase()}`;
 
   const baseTotal =
-    Number(
-      shipment.shipping_charge,
-    ) +
+    Number(shipment.shipping_charge) +
     values.delivery_charge;
 
   const grandTotal =
-    baseTotal +
-    values.other_charge;
+    baseTotal + values.other_charge;
 
   const snapshot = {
-    invoice_number:
-      number,
-
-    customer_id:
-      shipment.customer_id,
-
-    shipment_id:
-      shipment.id,
-
-    tracking_number:
-      shipment.tracking_number,
-
-    customer_code:
-      shipment.customer_code,
-
-    customer_name:
-      shipment.full_name,
-
-    kargodoor_charge:
-      shipment.shipping_charge,
-
-    delivery_charge:
-      values.delivery_charge,
-
-    other_charge:
-      values.other_charge,
-
-    invoice_total:
-      grandTotal,
-
-    status:
-      values.status,
-
-    issued_at:
-      values.issued_at,
-
-    due_at:
-      values.due_at,
+    invoice_number: number,
+    customer_id: shipment.customer_id,
+    shipment_id: shipment.id,
+    tracking_number: shipment.tracking_number,
+    customer_code: shipment.customer_code,
+    customer_name: shipment.full_name,
+    kargodoor_charge: shipment.shipping_charge,
+    delivery_charge: values.delivery_charge,
+    other_charge: values.other_charge,
+    invoice_total: grandTotal,
+    status: values.status,
+    issued_at: values.issued_at,
+    due_at: values.due_at,
   };
 
-  const statements:
-    D1PreparedStatement[] = [
+  const statements: D1PreparedStatement[] = [
     db
       .prepare(
         `
@@ -660,9 +485,7 @@ export async function createInvoice(
           updated_at,
           other_charge
         )
-        VALUES (
-          ?,?,?,?,?,?,?,?,?,?,?,?,?
-        )
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
         `,
       )
       .bind(
@@ -695,9 +518,7 @@ export async function createInvoice(
           notes,
           created_at
         )
-        VALUES (
-          ?,?,?,?,?,NULL,?,?,?
-        )
+        VALUES (?,?,?,?,?,NULL,?,?,?)
         `,
       )
       .bind(
@@ -706,46 +527,33 @@ export async function createInvoice(
         "create_invoice",
         "invoices",
         id,
-        JSON.stringify(
-          snapshot,
-        ),
+        JSON.stringify(snapshot),
         null,
         timestamp,
       ),
   ];
 
-  if (
-    values.status ===
-    "Unpaid"
-  ) {
+  if (values.status === "Unpaid") {
     statements.push(
       db
         .prepare(
           `
           UPDATE shipments
           SET
-            payment_status =
-              'Unpaid',
+            payment_status = 'Unpaid',
             updated_at = ?
           WHERE id = ?
           `,
         )
-        .bind(
-          timestamp,
-          shipment.id,
-        ),
+        .bind(timestamp, shipment.id),
     );
   }
 
   try {
-    await db.batch(
-      statements,
-    );
+    await db.batch(statements);
   } catch (error) {
     if (
-      String(error).includes(
-        "UNIQUE constraint",
-      )
+      String(error).includes("UNIQUE constraint")
     ) {
       throw new AdminError(
         "This shipment already has an invoice.",
@@ -770,37 +578,24 @@ export async function recordPayment(
         amount?: unknown;
       }
     )?.amount === "number"
-      ? (
-          raw as z.infer<
-            typeof paymentSchema
-          >
-        )
-      : paymentSchema.parse(
-          raw,
-        );
+      ? (raw as z.infer<typeof paymentSchema>)
+      : paymentSchema.parse(raw);
 
-  const invoice =
-    await db
-      .prepare(
-        `
-        SELECT
-          i.*,
-          COALESCE(
-            SUM(p.amount),
-            0
-          ) AS amount_paid
-        FROM invoices i
-        LEFT JOIN payments p
-          ON p.invoice_id =
-             i.id
-        WHERE i.id = ?
-        GROUP BY i.id
-        `,
-      )
-      .bind(
-        values.invoice_id,
-      )
-      .first<RecordData>();
+  const invoice = await db
+    .prepare(
+      `
+      SELECT
+        i.*,
+        COALESCE(SUM(p.amount),0) AS amount_paid
+      FROM invoices i
+      LEFT JOIN payments p
+        ON p.invoice_id = i.id
+      WHERE i.id = ?
+      GROUP BY i.id
+      `,
+    )
+    .bind(values.invoice_id)
+    .first<RecordData>();
 
   if (!invoice) {
     throw new AdminError(
@@ -809,20 +604,14 @@ export async function recordPayment(
     );
   }
 
-  if (
-    invoice.status ===
-    "Draft"
-  ) {
+  if (invoice.status === "Draft") {
     throw new AdminError(
       "Issue the invoice before recording a payment.",
       409,
     );
   }
 
-  if (
-    invoice.status ===
-    "Paid"
-  ) {
+  if (invoice.status === "Paid") {
     throw new AdminError(
       "This invoice is already fully paid.",
       409,
@@ -830,43 +619,27 @@ export async function recordPayment(
   }
 
   const grandTotal =
-    Number(
-      invoice.total,
-    ) +
-    Number(
-      invoice.other_charge,
-    );
-
-  const amountPaid =
-    Number(
-      invoice.amount_paid,
-    );
+    Number(invoice.total) +
+    Number(invoice.other_charge);
 
   const remaining =
     grandTotal -
-    amountPaid;
+    Number(invoice.amount_paid);
 
-  if (
-    values.amount >
-    remaining
-  ) {
+  if (values.amount > remaining) {
     throw new AdminError(
       "Payment cannot exceed the remaining balance.",
       409,
     );
   }
 
-  const id =
-    randomUUID();
-
-  const timestamp =
-    new Date().toISOString();
+  const id = randomUUID();
+  const timestamp = new Date().toISOString();
 
   const payment = {
     ...values,
     id,
-    customer_id:
-      invoice.customer_id,
+    customer_id: invoice.customer_id,
   };
 
   const statements = [
@@ -884,30 +657,21 @@ export async function recordPayment(
           notes,
           created_at
         )
-        SELECT
-          ?,?,?,?,?,?,?,?,?
+        SELECT ?,?,?,?,?,?,?,?,?
         WHERE EXISTS (
           SELECT 1
           FROM invoices i
           WHERE
             i.id = ?
-            AND
-            i.status IN (
-              'Unpaid',
-              'Partial'
-            )
-            AND
-            ? <= (
+            AND i.status IN ('Unpaid','Partial')
+            AND ? <= (
               i.total +
               i.other_charge -
               COALESCE(
                 (
-                  SELECT
-                    SUM(amount)
+                  SELECT SUM(amount)
                   FROM payments
-                  WHERE
-                    invoice_id =
-                    i.id
+                  WHERE invoice_id = i.id
                 ),
                 0
               )
@@ -939,28 +703,20 @@ export async function recordPayment(
               WHEN
                 COALESCE(
                   (
-                    SELECT
-                      SUM(amount)
+                    SELECT SUM(amount)
                     FROM payments
-                    WHERE
-                      invoice_id = ?
+                    WHERE invoice_id = ?
                   ),
                   0
                 )
-                >=
-                total +
-                other_charge
+                >= total + other_charge
               THEN 'Paid'
               ELSE 'Partial'
             END,
           updated_at = ?
         WHERE
           id = ?
-          AND
-          status IN (
-            'Unpaid',
-            'Partial'
-          )
+          AND status IN ('Unpaid','Partial')
         `,
       )
       .bind(
@@ -979,19 +735,15 @@ export async function recordPayment(
               WHEN
                 COALESCE(
                   (
-                    SELECT
-                      SUM(amount)
+                    SELECT SUM(amount)
                     FROM payments
-                    WHERE
-                      invoice_id = ?
+                    WHERE invoice_id = ?
                   ),
                   0
                 )
                 >=
                 (
-                  SELECT
-                    total +
-                    other_charge
+                  SELECT total + other_charge
                   FROM invoices
                   WHERE id = ?
                 )
@@ -1023,8 +775,7 @@ export async function recordPayment(
           notes,
           created_at
         )
-        SELECT
-          ?,?,?,?,?,?,?,NULL,?
+        SELECT ?,?,?,?,?,?,?,NULL,?
         WHERE EXISTS (
           SELECT 1
           FROM payments
@@ -1039,9 +790,7 @@ export async function recordPayment(
         "payments",
         id,
         null,
-        JSON.stringify(
-          payment,
-        ),
+        JSON.stringify(payment),
         timestamp,
         id,
       ),
@@ -1065,8 +814,7 @@ export async function recordPayment(
           json_object(
             'status',
             (
-              SELECT
-                status
+              SELECT status
               FROM invoices
               WHERE id = ?
             )
@@ -1087,8 +835,7 @@ export async function recordPayment(
         "invoices",
         invoice.id,
         JSON.stringify({
-          status:
-            invoice.status,
+          status: invoice.status,
         }),
         invoice.id,
         timestamp,
@@ -1096,24 +843,16 @@ export async function recordPayment(
       ),
   ];
 
-  const result =
-    await db.batch(
-      statements,
-    );
+  const result = await db.batch(statements);
 
-  if (
-    !result[0]?.meta
-      .changes
-  ) {
+  if (!result[0]?.meta.changes) {
     throw new AdminError(
       "Invoice changed while the payment was being saved. Reload and try again.",
       409,
     );
   }
 
-  return String(
-    invoice.id,
-  );
+  return String(invoice.id);
 }
 
 export async function issueInvoice(
@@ -1121,132 +860,98 @@ export async function issueInvoice(
   raw: unknown,
   adminId: string,
 ) {
-  /*
-   * parse(form, "issue") has already
-   * validated form submissions.
-   *
-   * optionalDate also accepts null,
-   * so this remains safe for direct
-   * callers and already-transformed
-   * values.
-   */
-  const values =
-    issueSchema.parse(
-      raw,
-    );
+  const values = issueSchema.parse(raw);
+  const timestamp = new Date().toISOString();
 
-  const timestamp =
-    new Date().toISOString();
+  const result = await db.batch([
+    db
+      .prepare(
+        `
+        UPDATE invoices
+        SET
+          status = 'Unpaid',
+          issued_at = ?,
+          due_at = ?,
+          updated_at = ?
+        WHERE
+          id = ?
+          AND status = 'Draft'
+        `,
+      )
+      .bind(
+        values.issued_at,
+        values.due_at,
+        timestamp,
+        values.invoice_id,
+      ),
 
-  const result =
-    await db.batch([
-      db
-        .prepare(
-          `
-          UPDATE invoices
-          SET
-            status =
-              'Unpaid',
-            issued_at = ?,
-            due_at = ?,
-            updated_at = ?
+    db
+      .prepare(
+        `
+        UPDATE shipments
+        SET
+          payment_status = 'Unpaid',
+          updated_at = ?
+        WHERE id = (
+          SELECT shipment_id
+          FROM invoices
           WHERE
             id = ?
-            AND
-            status = 'Draft'
-          `,
+            AND status = 'Unpaid'
         )
-        .bind(
-          values.issued_at,
-          values.due_at,
-          timestamp,
-          values.invoice_id,
-        ),
+        `,
+      )
+      .bind(
+        timestamp,
+        values.invoice_id,
+      ),
 
-      db
-        .prepare(
-          `
-          UPDATE shipments
-          SET
-            payment_status =
-              'Unpaid',
-            updated_at = ?
-          WHERE id = (
-            SELECT
-              shipment_id
-            FROM invoices
-            WHERE
-              id = ?
-              AND
-              status =
-                'Unpaid'
-          )
-          `,
+    db
+      .prepare(
+        `
+        INSERT INTO activity_log (
+          id,
+          admin_user_id,
+          action,
+          entity_type,
+          entity_id,
+          old_value,
+          new_value,
+          notes,
+          created_at
         )
-        .bind(
-          timestamp,
-          values.invoice_id,
-        ),
-
-      db
-        .prepare(
-          `
-          INSERT INTO activity_log (
-            id,
-            admin_user_id,
-            action,
-            entity_type,
-            entity_id,
-            old_value,
-            new_value,
-            notes,
-            created_at
-          )
-          SELECT
-            ?,?,?,?,?,?,?,NULL,?
-          WHERE EXISTS (
-            SELECT 1
-            FROM invoices
-            WHERE
-              id = ?
-              AND
-              status =
-                'Unpaid'
-              AND
-              updated_at = ?
-          )
-          `,
+        SELECT ?,?,?,?,?,?,?,NULL,?
+        WHERE EXISTS (
+          SELECT 1
+          FROM invoices
+          WHERE
+            id = ?
+            AND status = 'Unpaid'
+            AND updated_at = ?
         )
-        .bind(
-          randomUUID(),
-          adminId,
-          "issue_invoice",
-          "invoices",
-          values.invoice_id,
-          JSON.stringify({
-            status:
-              "Draft",
-          }),
-          JSON.stringify({
-            status:
-              "Unpaid",
+        `,
+      )
+      .bind(
+        randomUUID(),
+        adminId,
+        "issue_invoice",
+        "invoices",
+        values.invoice_id,
+        JSON.stringify({
+          status: "Draft",
+        }),
+        JSON.stringify({
+          status: "Unpaid",
+          issued_at: values.issued_at,
+          due_at: values.due_at,
+        }),
+        timestamp,
+        values.invoice_id,
+        timestamp,
+      ),
+  ]);
 
-            issued_at:
-              values.issued_at,
-
-            due_at:
-              values.due_at,
-          }),
-          timestamp,
-          values.invoice_id,
-          timestamp,
-        ),
-    ]);
-
-  if (
-    !result[0]?.meta
-      .changes
-  ) {
+  if (!result[0]?.meta.changes) {
     throw new AdminError(
       "Only a Draft invoice can be issued.",
       409,
@@ -1262,47 +967,28 @@ function paymentForm(
   invoice: RecordData,
 ) {
   if (
-    invoice.status ===
-      "Draft" ||
-    invoice.status ===
-      "Paid"
+    invoice.status === "Draft" ||
+    invoice.status === "Paid"
   ) {
     return "";
   }
 
-  const today =
-    new Date()
-      .toISOString()
-      .slice(0, 10);
+  const today = new Date()
+    .toISOString()
+    .slice(0, 10);
 
   return `
     <section>
-      <h2>
-        Record payment
-      </h2>
+      <h2>Record payment</h2>
 
-      <form
-        method="post"
-        action="${route}"
-      >
+      <form method="post" action="${route}">
         ${hidden(
           "csrf",
-          csrfToken(
-            env,
-            userId,
-            route,
-          ),
+          csrfToken(env, userId, route),
         )}
 
-        ${hidden(
-          "action",
-          "payment",
-        )}
-
-        ${hidden(
-          "invoice_id",
-          invoice.id,
-        )}
+        ${hidden("action", "payment")}
+        ${hidden("invoice_id", invoice.id)}
 
         <div class="grid">
           <label>
@@ -1326,15 +1012,11 @@ function paymentForm(
 
           <label>
             Method *
-            <select
-              name="payment_method"
-            >
+            <select name="payment_method">
               ${paymentMethods
                 .map(
                   (value) =>
-                    `<option>${esc(
-                      value,
-                    )}</option>`,
+                    `<option>${esc(value)}</option>`,
                 )
                 .join("")}
             </select>
@@ -1358,9 +1040,7 @@ function paymentForm(
         </div>
 
         <div class="actions">
-          <button>
-            Record payment
-          </button>
+          <button>Record payment</button>
         </div>
       </form>
     </section>
@@ -1372,46 +1052,26 @@ function issueForm(
   userId: string,
   invoice: RecordData,
 ) {
-  if (
-    invoice.status !==
-    "Draft"
-  ) {
+  if (invoice.status !== "Draft") {
     return "";
   }
 
-  const today =
-    new Date()
-      .toISOString()
-      .slice(0, 10);
+  const today = new Date()
+    .toISOString()
+    .slice(0, 10);
 
   return `
     <section>
-      <h2>
-        Issue invoice
-      </h2>
+      <h2>Issue invoice</h2>
 
-      <form
-        method="post"
-        action="${route}"
-      >
+      <form method="post" action="${route}">
         ${hidden(
           "csrf",
-          csrfToken(
-            env,
-            userId,
-            route,
-          ),
+          csrfToken(env, userId, route),
         )}
 
-        ${hidden(
-          "action",
-          "issue",
-        )}
-
-        ${hidden(
-          "invoice_id",
-          invoice.id,
-        )}
+        ${hidden("action", "issue")}
+        ${hidden("invoice_id", invoice.id)}
 
         <div class="grid">
           <label>
@@ -1438,9 +1098,7 @@ function issueForm(
         </p>
 
         <div class="actions">
-          <button>
-            Issue invoice
-          </button>
+          <button>Issue invoice</button>
         </div>
       </form>
     </section>
@@ -1457,48 +1115,37 @@ async function detail(
   id: string,
   saved: string,
 ) {
-  if (
-    !/^[\da-f-]{36}$/i.test(
-      id,
-    )
-  ) {
+  if (!/^[\da-f-]{36}$/i.test(id)) {
     throw new AdminError(
       "Invalid invoice ID.",
     );
   }
 
-  const invoice =
-    await db
-      .prepare(
-        `
-        SELECT
-          i.*,
-          c.customer_code,
-          c.full_name,
-          c.company_name,
-          s.tracking_number,
-          s.service_type,
-          s.china_warehouse,
-          COALESCE(
-            SUM(p.amount),
-            0
-          ) AS amount_paid
-        FROM invoices i
-        JOIN customers c
-          ON c.id =
-             i.customer_id
-        JOIN shipments s
-          ON s.id =
-             i.shipment_id
-        LEFT JOIN payments p
-          ON p.invoice_id =
-             i.id
-        WHERE i.id = ?
-        GROUP BY i.id
-        `,
-      )
-      .bind(id)
-      .first<RecordData>();
+  const invoice = await db
+    .prepare(
+      `
+      SELECT
+        i.*,
+        c.customer_code,
+        c.full_name,
+        c.company_name,
+        s.tracking_number,
+        s.service_type,
+        s.china_warehouse,
+        COALESCE(SUM(p.amount),0) AS amount_paid
+      FROM invoices i
+      JOIN customers c
+        ON c.id = i.customer_id
+      JOIN shipments s
+        ON s.id = i.shipment_id
+      LEFT JOIN payments p
+        ON p.invoice_id = i.id
+      WHERE i.id = ?
+      GROUP BY i.id
+      `,
+    )
+    .bind(id)
+    .first<RecordData>();
 
   if (!invoice) {
     throw new AdminError(
@@ -1508,265 +1155,192 @@ async function detail(
   }
 
   const grand =
-    Number(
-      invoice.total,
-    ) +
-    Number(
-      invoice.other_charge,
-    );
+    Number(invoice.total) +
+    Number(invoice.other_charge);
 
-  const paid =
-    Number(
-      invoice.amount_paid,
-    );
+  const paid = Number(invoice.amount_paid);
+  const remaining = grand - paid;
 
-  const remaining =
-    grand - paid;
+  const payments = (
+    await db
+      .prepare(
+        `
+        SELECT
+          payment_date,
+          amount,
+          payment_method,
+          reference_number
+        FROM payments
+        WHERE invoice_id = ?
+        ORDER BY
+          payment_date DESC,
+          created_at DESC,
+          id
+        `,
+      )
+      .bind(id)
+      .all<RecordData>()
+  ).results;
 
-  const payments =
-    (
-      await db
-        .prepare(
-          `
-          SELECT
-            payment_date,
-            amount,
-            payment_method,
-            reference_number
-          FROM payments
-          WHERE invoice_id = ?
-          ORDER BY
-            payment_date DESC,
-            created_at DESC,
-            id
-          `,
-        )
-        .bind(id)
-        .all<RecordData>()
-    ).results;
+  const notice = saved
+    ? '<p class="notice" role="status">Changes saved.</p>'
+    : "";
 
-  const notice =
-    saved
-      ? '<p class="notice" role="status">Changes saved.</p>'
-      : "";
+  const connectedRecords = `
+    <div class="table">
+      <table>
+        <tbody>
+          <tr>
+            <th>Customer</th>
+            <td>
+              <a href="/admin/customers?id=${esc(
+                invoice.customer_id,
+              )}">${esc(
+                invoice.customer_code,
+              )} — ${esc(invoice.full_name)}</a>
+            </td>
+          </tr>
 
-  const paymentHistory =
-    payments.length
-      ? `
-        <div class="table">
-          <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Amount</th>
-                <th>Method</th>
-                <th>Reference</th>
-              </tr>
-            </thead>
+          <tr>
+            <th>Shipment</th>
+            <td>
+              <a href="/admin/shipments?id=${esc(
+                invoice.shipment_id,
+              )}">${esc(
+                invoice.tracking_number,
+              )}</a>
+              <br>
+              <span class="muted">${esc(
+                invoice.service_type,
+              )} · ${esc(
+                invoice.china_warehouse,
+              )}</span>
+            </td>
+          </tr>
 
-            <tbody>
-              ${payments
-                .map(
-                  (payment) =>
-                    `<tr>
-                      <td>
-                        ${esc(
-                          payment.payment_date,
-                        )}
-                      </td>
+          <tr>
+            <th>KargoDoor charge</th>
+            <td>${esc(
+              pesos(invoice.subtotal),
+            )}</td>
+          </tr>
 
-                      <td>
-                        ${esc(
-                          pesos(
-                            payment.amount,
-                          ),
-                        )}
-                      </td>
+          <tr>
+            <th>Delivery charge</th>
+            <td>${esc(
+              pesos(invoice.delivery_charge),
+            )}</td>
+          </tr>
 
-                      <td>
-                        ${esc(
-                          payment.payment_method,
-                        )}
-                      </td>
+          <tr>
+            <th>Other charge</th>
+            <td>${esc(
+              pesos(invoice.other_charge),
+            )}</td>
+          </tr>
 
-                      <td>
-                        ${
-                          esc(
-                            payment.reference_number,
-                          ) ||
-                          "—"
-                        }
-                      </td>
-                    </tr>`,
-                )
-                .join("")}
-            </tbody>
-          </table>
-        </div>
-      `
-      : "<p>No payments recorded.</p>";
+          <tr>
+            <th>Issued</th>
+            <td>${
+              esc(invoice.issued_at) || "Draft"
+            }</td>
+          </tr>
+
+          <tr>
+            <th>Due</th>
+            <td>${
+              esc(invoice.due_at) || "—"
+            }</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  const paymentHistory = payments.length
+    ? `
+      <div class="table">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Amount</th>
+              <th>Method</th>
+              <th>Reference</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            ${payments
+              .map(
+                (payment) => `
+                  <tr>
+                    <td>${esc(
+                      payment.payment_date,
+                    )}</td>
+
+                    <td>${esc(
+                      pesos(payment.amount),
+                    )}</td>
+
+                    <td>${esc(
+                      payment.payment_method,
+                    )}</td>
+
+                    <td>${
+                      esc(
+                        payment.reference_number,
+                      ) || "—"
+                    }</td>
+                  </tr>
+                `,
+              )
+              .join("")}
+          </tbody>
+        </table>
+      </div>
+    `
+    : "<p>No payments recorded.</p>";
 
   return page(
-    `Invoice ${
-      invoice.invoice_number
-    }`,
+    `Invoice ${invoice.invoice_number}`,
     `
       ${notice}
 
       <div class="cards">
         <div class="card">
           Invoice total
-          <strong>
-            ${esc(
-              pesos(grand),
-            )}
-          </strong>
+          <strong>${esc(
+            pesos(grand),
+          )}</strong>
         </div>
 
         <div class="card">
           Amount paid
-          <strong>
-            ${esc(
-              pesos(paid),
-            )}
-          </strong>
+          <strong>${esc(
+            pesos(paid),
+          )}</strong>
         </div>
 
         <div class="card">
           Balance
-          <strong>
-            ${esc(
-              pesos(
-                remaining,
-              ),
-            )}
-          </strong>
+          <strong>${esc(
+            pesos(remaining),
+          )}</strong>
         </div>
 
         <div class="card">
           Status
-          <strong>
-            ${esc(
-              invoice.status,
-            )}
-          </strong>
+          <strong>${esc(
+            invoice.status,
+          )}</strong>
         </div>
       </div>
 
       <section>
-        <h2>
-          Connected records
-        </h2>
+        <h2>Connected records</h2>
 
-        <dl>
-          <dt>
-            Customer
-          </dt>
-
-          <dd>
-            <a
-              href="/admin/customers?id=${esc(
-                invoice.customer_id,
-              )}"
-            >
-              ${esc(
-                invoice.customer_code,
-              )}
-              —
-              ${esc(
-                invoice.full_name,
-              )}
-            </a>
-          </dd>
-
-          <dt>
-            Shipment
-          </dt>
-
-          <dd>
-            <a
-              href="/admin/shipments?id=${esc(
-                invoice.shipment_id,
-              )}"
-            >
-              ${esc(
-                invoice.tracking_number,
-              )}
-            </a>
-
-            <br>
-
-            ${esc(
-              invoice.service_type,
-            )}
-            ·
-            ${esc(
-              invoice.china_warehouse,
-            )}
-          </dd>
-
-          <dt>
-            KargoDoor charge
-          </dt>
-
-          <dd>
-            ${esc(
-              pesos(
-                invoice.subtotal,
-              ),
-            )}
-          </dd>
-
-          <dt>
-            Delivery charge
-          </dt>
-
-          <dd>
-            ${esc(
-              pesos(
-                invoice.delivery_charge,
-              ),
-            )}
-          </dd>
-
-          <dt>
-            Other charge
-          </dt>
-
-          <dd>
-            ${esc(
-              pesos(
-                invoice.other_charge,
-              ),
-            )}
-          </dd>
-
-          <dt>
-            Issued
-          </dt>
-
-          <dd>
-            ${
-              esc(
-                invoice.issued_at,
-              ) ||
-              "Draft"
-            }
-          </dd>
-
-          <dt>
-            Due
-          </dt>
-
-          <dd>
-            ${
-              esc(
-                invoice.due_at,
-              ) ||
-              "—"
-            }
-          </dd>
-        </dl>
+        ${connectedRecords}
 
         <div class="actions">
           <a
@@ -1780,10 +1354,7 @@ async function detail(
       </section>
 
       <section>
-        <h2>
-          Payment history
-        </h2>
-
+        <h2>Payment history</h2>
         ${paymentHistory}
       </section>
 
@@ -1812,110 +1383,84 @@ async function createView(
   },
   url: URL,
 ) {
-  const q =
-    (
-      url.searchParams.get(
-        "shipment_search",
-      ) ?? ""
-    ).trim();
+  const q = (
+    url.searchParams.get("shipment_search") ?? ""
+  ).trim();
 
   const selected =
-    url.searchParams.get(
-      "shipment_id",
-    ) ?? "";
+    url.searchParams.get("shipment_id") ?? "";
 
   if (
     q.length > 160 ||
-    (
-      selected &&
-      !/^[\da-f-]{36}$/i.test(
-        selected,
-      )
-    )
+    (selected &&
+      !/^[\da-f-]{36}$/i.test(selected))
   ) {
     throw new AdminError(
       "Invalid shipment search.",
     );
   }
 
-  const shipments =
-    (
-      await db
-        .prepare(
-          `
-          SELECT
-            s.id,
-            s.tracking_number,
-            s.shipping_charge,
-            s.delivery_charge,
-            c.customer_code,
-            c.full_name
-          FROM shipments s
-          JOIN customers c
-            ON c.id =
-               s.customer_id
-          LEFT JOIN invoices i
-            ON i.shipment_id =
-               s.id
-          WHERE
-            i.id IS NULL
-            AND
+  const shipments = (
+    await db
+      .prepare(
+        `
+        SELECT
+          s.id,
+          s.tracking_number,
+          s.shipping_charge,
+          s.delivery_charge,
+          c.customer_code,
+          c.full_name
+        FROM shipments s
+        JOIN customers c
+          ON c.id = s.customer_id
+        LEFT JOIN invoices i
+          ON i.shipment_id = s.id
+        WHERE
+          i.id IS NULL
+          AND (
             (
-              (
-                ? != ''
-                AND
-                (
-                  instr(
-                    lower(
-                      s.tracking_number
-                    ),
-                    lower(?)
-                  ) > 0
-                  OR
-                  instr(
-                    lower(
-                      c.full_name
-                    ),
-                    lower(?)
-                  ) > 0
-                  OR
-                  instr(
-                    lower(
-                      c.customer_code
-                    ),
-                    lower(?)
-                  ) > 0
-                )
+              ? != ''
+              AND (
+                instr(
+                  lower(s.tracking_number),
+                  lower(?)
+                ) > 0
+                OR instr(
+                  lower(c.full_name),
+                  lower(?)
+                ) > 0
+                OR instr(
+                  lower(c.customer_code),
+                  lower(?)
+                ) > 0
               )
-              OR s.id = ?
             )
-          ORDER BY
-            CASE
-              WHEN s.id = ?
-              THEN 0
-              ELSE 1
-            END,
-            s.updated_at DESC
-          LIMIT 50
-          `,
-        )
-        .bind(
-          q,
-          q,
-          q,
-          q,
-          selected,
-          selected,
-        )
-        .all<RecordData>()
-    ).results;
-
-  const chosen =
-    shipments.find(
-      (shipment) =>
-        shipment.id ===
+            OR s.id = ?
+          )
+        ORDER BY
+          CASE
+            WHEN s.id = ? THEN 0
+            ELSE 1
+          END,
+          s.updated_at DESC
+        LIMIT 50
+        `,
+      )
+      .bind(
+        q,
+        q,
+        q,
+        q,
         selected,
-    );
+        selected,
+      )
+      .all<RecordData>()
+  ).results;
+
+  const chosen = shipments.find(
+    (shipment) => shipment.id === selected,
+  );
 
   return page(
     "Create invoice",
@@ -1926,14 +1471,10 @@ async function createView(
           action="${route}"
           class="search"
         >
-          ${hidden(
-            "new",
-            "1",
-          )}
+          ${hidden("new", "1")}
 
           <label>
             Find shipment or customer
-
             <input
               name="shipment_search"
               maxlength="160"
@@ -1941,9 +1482,7 @@ async function createView(
             >
           </label>
 
-          <button>
-            Find shipment
-          </button>
+          <button>Find shipment</button>
         </form>
 
         <p class="muted">
@@ -1954,23 +1493,13 @@ async function createView(
       </section>
 
       <section>
-        <form
-          method="post"
-          action="${route}"
-        >
+        <form method="post" action="${route}">
           ${hidden(
             "csrf",
-            csrfToken(
-              env,
-              user.id,
-              route,
-            ),
+            csrfToken(env, user.id, route),
           )}
 
-          ${hidden(
-            "action",
-            "invoice",
-          )}
+          ${hidden("action", "invoice")}
 
           <div class="grid">
             <label class="wide">
@@ -1986,29 +1515,25 @@ async function createView(
 
                 ${shipments
                   .map(
-                    (shipment) =>
-                      `<option
+                    (shipment) => `
+                      <option
                         value="${esc(
                           shipment.id,
                         )}"${
-                          selected ===
-                          shipment.id
+                          selected === shipment.id
                             ? " selected"
                             : ""
                         }
                       >
                         ${esc(
                           shipment.tracking_number,
-                        )}
-                        —
-                        ${esc(
+                        )} — ${esc(
                           shipment.customer_code,
-                        )}
-                        —
-                        ${esc(
+                        )} — ${esc(
                           shipment.full_name,
                         )}
-                      </option>`,
+                      </option>
+                    `,
                   )
                   .join("")}
               </select>
@@ -2021,20 +1546,14 @@ async function createView(
                     <strong>
                       Auto-filled from connected records
                     </strong>
-
                     <br>
-
                     Customer:
                     ${esc(
                       chosen.customer_code,
-                    )}
-                    —
-                    ${esc(
+                    )} — ${esc(
                       chosen.full_name,
                     )}
-
                     <br>
-
                     KargoDoor charge:
                     ${esc(
                       pesos(
@@ -2079,22 +1598,14 @@ async function createView(
             <label>
               Status *
 
-              <select
-                name="status"
-              >
-                <option>
-                  Draft
-                </option>
-
-                <option>
-                  Unpaid
-                </option>
+              <select name="status">
+                <option>Draft</option>
+                <option>Unpaid</option>
               </select>
             </label>
 
             <label>
               Issue date
-
               <input
                 type="date"
                 name="issued_at"
@@ -2103,7 +1614,6 @@ async function createView(
 
             <label>
               Due date
-
               <input
                 type="date"
                 name="due_at"
@@ -2118,13 +1628,8 @@ async function createView(
           </p>
 
           <div class="actions">
-            <button>
-              Create invoice
-            </button>
-
-            <a href="${route}">
-              Cancel
-            </a>
+            <button>Create invoice</button>
+            <a href="${route}">Cancel</a>
           </div>
         </form>
       </section>
@@ -2140,38 +1645,24 @@ async function list(
   },
   url: URL,
 ) {
-  const q =
-    (
-      url.searchParams.get(
-        "q",
-      ) ?? ""
-    ).trim();
+  const q = (
+    url.searchParams.get("q") ?? ""
+  ).trim();
 
   const status =
-    url.searchParams.get(
-      "status",
-    ) ?? "";
+    url.searchParams.get("status") ?? "";
 
-  const number =
-    Number(
-      url.searchParams.get(
-        "page",
-      ) ?? 1,
-    );
+  const number = Number(
+    url.searchParams.get("page") ?? 1,
+  );
 
   if (
     q.length > 160 ||
-    (
-      status &&
+    (status &&
       !invoiceStatuses.includes(
-        status as (
-          typeof invoiceStatuses
-        )[number],
-      )
-    ) ||
-    !Number.isSafeInteger(
-      number,
-    ) ||
+        status as (typeof invoiceStatuses)[number],
+      )) ||
+    !Number.isSafeInteger(number) ||
     number < 1 ||
     number > 100_000
   ) {
@@ -2180,95 +1671,72 @@ async function list(
     );
   }
 
-  const rows =
-    (
-      await db
-        .prepare(
-          `
-          SELECT
-            i.id,
-            i.invoice_number,
-            i.status,
-            i.issued_at,
-            i.total +
-              i.other_charge
-              AS invoice_total,
-            COALESCE(
-              SUM(p.amount),
-              0
-            ) AS amount_paid,
-            c.full_name,
-            s.tracking_number
-          FROM invoices i
-          JOIN customers c
-            ON c.id =
-               i.customer_id
-          JOIN shipments s
-            ON s.id =
-               i.shipment_id
-          LEFT JOIN payments p
-            ON p.invoice_id =
-               i.id
-          WHERE
-            (
-              instr(
-                lower(
-                  i.invoice_number
-                ),
-                lower(?)
-              ) > 0
-              OR
-              instr(
-                lower(
-                  c.full_name
-                ),
-                lower(?)
-              ) > 0
-              OR
-              instr(
-                lower(
-                  s.tracking_number
-                ),
-                lower(?)
-              ) > 0
-            )
-            AND
-            (
-              ? = ''
-              OR i.status = ?
-            )
-          GROUP BY i.id
-          ORDER BY
-            i.updated_at DESC,
-            i.id
-          LIMIT 26
-          OFFSET ?
-          `,
-        )
-        .bind(
-          q,
-          q,
-          q,
-          status,
-          status,
-          (number - 1) * 25,
-        )
-        .all<RecordData>()
-    ).results;
+  const rows = (
+    await db
+      .prepare(
+        `
+        SELECT
+          i.id,
+          i.invoice_number,
+          i.status,
+          i.issued_at,
+          i.total + i.other_charge AS invoice_total,
+          COALESCE(SUM(p.amount),0) AS amount_paid,
+          c.full_name,
+          s.tracking_number
+        FROM invoices i
+        JOIN customers c
+          ON c.id = i.customer_id
+        JOIN shipments s
+          ON s.id = i.shipment_id
+        LEFT JOIN payments p
+          ON p.invoice_id = i.id
+        WHERE
+          (
+            instr(
+              lower(i.invoice_number),
+              lower(?)
+            ) > 0
+            OR instr(
+              lower(c.full_name),
+              lower(?)
+            ) > 0
+            OR instr(
+              lower(s.tracking_number),
+              lower(?)
+            ) > 0
+          )
+          AND (
+            ? = ''
+            OR i.status = ?
+          )
+        GROUP BY i.id
+        ORDER BY
+          i.updated_at DESC,
+          i.id
+        LIMIT 26
+        OFFSET ?
+        `,
+      )
+      .bind(
+        q,
+        q,
+        q,
+        status,
+        status,
+        (number - 1) * 25,
+      )
+      .all<RecordData>()
+  ).results;
 
-  const link = (
-    pageNumber: number,
-  ) => {
-    const params =
-      new URLSearchParams(
-        url.searchParams,
-      );
+  const link = (pageNumber: number) => {
+    const params = new URLSearchParams(
+      url.searchParams,
+    );
 
     params.set(
       "page",
-      String(
-        pageNumber,
-      ),
+      String(pageNumber),
     );
 
     return `${route}?${esc(
@@ -2276,124 +1744,89 @@ async function list(
     )}`;
   };
 
-  const table =
-    rows.length
-      ? `
-        <div class="table">
-          <table>
-            <thead>
-              <tr>
-                <th>
-                  Invoice
-                </th>
+  const table = rows.length
+    ? `
+      <div class="table">
+        <table>
+          <thead>
+            <tr>
+              <th>Invoice</th>
+              <th>Customer / shipment</th>
+              <th>Status</th>
+              <th>Total</th>
+              <th>Paid</th>
+              <th>Balance</th>
+            </tr>
+          </thead>
 
-                <th>
-                  Customer / shipment
-                </th>
-
-                <th>
-                  Status
-                </th>
-
-                <th>
-                  Total
-                </th>
-
-                <th>
-                  Paid
-                </th>
-
-                <th>
-                  Balance
-                </th>
-              </tr>
-            </thead>
-
-            <tbody>
-              ${rows
-                .slice(0, 25)
-                .map(
-                  (row) =>
-                    `<tr>
-                      <td>
-                        <a
-                          href="${route}?id=${esc(
-                            row.id,
-                          )}"
-                        >
-                          ${esc(
-                            row.invoice_number,
-                          )}
-                        </a>
-
-                        <br>
-
-                        <span class="muted">
-                          ${
-                            esc(
-                              row.issued_at,
-                            ) ||
-                            "Draft"
-                          }
-                        </span>
-                      </td>
-
-                      <td>
+          <tbody>
+            ${rows
+              .slice(0, 25)
+              .map(
+                (row) => `
+                  <tr>
+                    <td>
+                      <a
+                        href="${route}?id=${esc(
+                          row.id,
+                        )}"
+                      >
                         ${esc(
-                          row.full_name,
+                          row.invoice_number,
                         )}
+                      </a>
+                      <br>
+                      <span class="muted">
+                        ${
+                          esc(row.issued_at) ||
+                          "Draft"
+                        }
+                      </span>
+                    </td>
 
-                        <br>
-
-                        <span class="muted">
-                          ${esc(
-                            row.tracking_number,
-                          )}
-                        </span>
-                      </td>
-
-                      <td>
+                    <td>
+                      ${esc(row.full_name)}
+                      <br>
+                      <span class="muted">
                         ${esc(
-                          row.status,
+                          row.tracking_number,
                         )}
-                      </td>
+                      </span>
+                    </td>
 
-                      <td>
-                        ${esc(
-                          pesos(
-                            row.invoice_total,
-                          ),
-                        )}
-                      </td>
+                    <td>${esc(row.status)}</td>
 
-                      <td>
-                        ${esc(
-                          pesos(
+                    <td>${esc(
+                      pesos(
+                        row.invoice_total,
+                      ),
+                    )}</td>
+
+                    <td>${esc(
+                      pesos(
+                        row.amount_paid,
+                      ),
+                    )}</td>
+
+                    <td>${esc(
+                      pesos(
+                        Number(
+                          row.invoice_total,
+                        ) -
+                          Number(
                             row.amount_paid,
                           ),
-                        )}
-                      </td>
-
-                      <td>
-                        ${esc(
-                          pesos(
-                            Number(
-                              row.invoice_total,
-                            ) -
-                            Number(
-                              row.amount_paid,
-                            ),
-                          ),
-                        )}
-                      </td>
-                    </tr>`,
-                )
-                .join("")}
-            </tbody>
-          </table>
-        </div>
-      `
-      : "<p>No matching invoices.</p>";
+                      ),
+                    )}</td>
+                  </tr>
+                `,
+              )
+              .join("")}
+          </tbody>
+        </table>
+      </div>
+    `
+    : "<p>No matching invoices.</p>";
 
   return page(
     "Invoices",
@@ -2417,9 +1850,7 @@ async function list(
           <label>
             Status
 
-            <select
-              name="status"
-            >
+            <select name="status">
               <option value="">
                 All statuses
               </option>
@@ -2428,27 +1859,17 @@ async function list(
                 .map(
                   (value) =>
                     `<option${
-                      status ===
-                      value
+                      status === value
                         ? " selected"
                         : ""
-                    }>
-                      ${esc(
-                        value,
-                      )}
-                    </option>`,
+                    }>${esc(value)}</option>`,
                 )
                 .join("")}
             </select>
           </label>
 
-          <button>
-            Search
-          </button>
-
-          <a href="${route}">
-            Clear
-          </a>
+          <button>Search</button>
+          <a href="${route}">Clear</a>
         </form>
 
         <div class="actions">
@@ -2467,29 +1888,19 @@ async function list(
         <div class="actions">
           ${
             number > 1
-              ? `<a
-                  href="${link(
-                    number - 1,
-                  )}"
-                >
-                  Previous
-                </a>`
+              ? `<a href="${link(
+                  number - 1,
+                )}">Previous</a>`
               : ""
           }
 
-          <span>
-            Page ${number}
-          </span>
+          <span>Page ${number}</span>
 
           ${
             rows.length > 25
-              ? `<a
-                  href="${link(
-                    number + 1,
-                  )}"
-                >
-                  Next
-                </a>`
+              ? `<a href="${link(
+                  number + 1,
+                )}">Next</a>`
               : ""
           }
         </div>
@@ -2502,50 +1913,37 @@ async function list(
 export async function handleBilling(
   request: Request,
 ) {
-  let localChallenge =
-    false;
+  let localChallenge = false;
 
   try {
-    const {
-      env: cf,
-    } =
+    const { env: cf } =
       await getCloudflareContext();
 
     const env =
       cf as unknown as AdminEnv;
 
     localChallenge =
-      env.ADMIN_LOCAL_DEV ===
-        "true" &&
+      env.ADMIN_LOCAL_DEV === "true" &&
       [
         "localhost",
         "127.0.0.1",
       ].includes(
         new URL(
-          canonicalOrigin(
-            env,
-          ),
+          canonicalOrigin(env),
         ).hostname,
       );
 
-    const user =
-      await authenticate(
-        request,
-        env,
-      );
+    const user = await authenticate(
+      request,
+      env,
+    );
 
-    const db =
-      env.ADMIN_DB;
-
-    const url =
-      new URL(
-        request.url,
-      );
+    const db = env.ADMIN_DB;
+    const url = new URL(request.url);
 
     if (
       url.pathname !== route &&
-      url.pathname !==
-        `${route}/`
+      url.pathname !== `${route}/`
     ) {
       throw new AdminError(
         "Admin page not found.",
@@ -2554,10 +1952,8 @@ export async function handleBilling(
     }
 
     if (
-      request.method !==
-        "GET" &&
-      request.method !==
-        "POST"
+      request.method !== "GET" &&
+      request.method !== "POST"
     ) {
       throw new AdminError(
         "Method not allowed.",
@@ -2565,38 +1961,26 @@ export async function handleBilling(
       );
     }
 
-    if (
-      request.method ===
-      "POST"
-    ) {
-      const form =
-        await readForm(
-          request,
-          env,
+    if (request.method === "POST") {
+      const form = await readForm(
+        request,
+        env,
+        user.id,
+      );
+
+      const action = form.get("action");
+
+      if (action === "invoice") {
+        const values = parse(
+          form,
+          "invoice",
+        );
+
+        const id = await createInvoice(
+          db,
+          values,
           user.id,
         );
-
-      const action =
-        form.get(
-          "action",
-        );
-
-      if (
-        action ===
-        "invoice"
-      ) {
-        const values =
-          parse(
-            form,
-            "invoice",
-          );
-
-        const id =
-          await createInvoice(
-            db,
-            values,
-            user.id,
-          );
 
         return page(
           "Saved",
@@ -2612,22 +1996,17 @@ export async function handleBilling(
         );
       }
 
-      if (
-        action ===
-        "issue"
-      ) {
-        const values =
-          parse(
-            form,
-            "issue",
-          );
+      if (action === "issue") {
+        const values = parse(
+          form,
+          "issue",
+        );
 
-        const id =
-          await issueInvoice(
-            db,
-            values,
-            user.id,
-          );
+        const id = await issueInvoice(
+          db,
+          values,
+          user.id,
+        );
 
         return page(
           "Saved",
@@ -2643,22 +2022,17 @@ export async function handleBilling(
         );
       }
 
-      if (
-        action ===
-        "payment"
-      ) {
-        const values =
-          parse(
-            form,
-            "payment",
-          );
+      if (action === "payment") {
+        const values = parse(
+          form,
+          "payment",
+        );
 
-        const id =
-          await recordPayment(
-            db,
-            values,
-            user.id,
-          );
+        const id = await recordPayment(
+          db,
+          values,
+          user.id,
+        );
 
         return page(
           "Saved",
@@ -2680,9 +2054,7 @@ export async function handleBilling(
     }
 
     const id =
-      url.searchParams.get(
-        "id",
-      );
+      url.searchParams.get("id");
 
     if (id) {
       return await detail(
@@ -2690,16 +2062,12 @@ export async function handleBilling(
         env,
         user,
         id,
-        url.searchParams.get(
-          "saved",
-        ) ?? "",
+        url.searchParams.get("saved") ?? "",
       );
     }
 
     if (
-      url.searchParams.get(
-        "new",
-      ) === "1"
+      url.searchParams.get("new") === "1"
     ) {
       return await createView(
         db,
@@ -2716,59 +2084,45 @@ export async function handleBilling(
     );
   } catch (error) {
     const known =
-      error instanceof
-      AdminError;
+      error instanceof AdminError;
 
     const invalid =
-      error instanceof
-      ZodError;
+      error instanceof ZodError;
 
-    /*
-     * Sanitized unexpected error logging.
-     * Never log JWTs, cookies, headers,
-     * secrets or form contents.
-     */
-    if (
-      !known &&
-      !invalid
-    ) {
+    if (!known && !invalid) {
       console.error(
         "KargoDoor billing request failed",
         {
-          path:
-            new URL(
-              request.url,
-            ).pathname,
+          path: new URL(
+            request.url,
+          ).pathname,
 
           error:
-            error instanceof
-            Error
+            error instanceof Error
               ? error.message
               : "Unknown error",
         },
       );
     }
 
-    const message =
-      known
-        ? error.message
-        : invalid
-          ? error.issues
-              .map(
-                (issue) =>
-                  `${issue.path.join(
-                    " ",
-                  )}: ${issue.message}`,
-              )
-              .join("; ")
-          : "Unable to complete this request. Please try again.";
+    const message = known
+      ? error.message
+      : invalid
+        ? error.issues
+            .map(
+              (issue) =>
+                `${issue.path.join(
+                  " ",
+                )}: ${issue.message}`,
+            )
+            .join("; ")
+        : "Unable to complete this request. Please try again.";
 
-    const status =
-      known
-        ? error.status
-        : invalid
-          ? 400
-          : 500;
+    const status = known
+      ? error.status
+      : invalid
+        ? 400
+        : 500;
 
     return page(
       "Invoices",
