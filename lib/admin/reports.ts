@@ -60,6 +60,7 @@ export async function finance(db: D1Database, url: URL, user: string) {
     AND (?=0 OR s.nihao_cost IS NULL) ORDER BY s.updated_at DESC,s.id LIMIT 26 OFFSET ?`)
     .bind(q,q,missing ? 1 : 0,offset).all<RecordData>()).results;
   return page("Freight margin", `
+    <p><a href="/admin/finance/expenses">Expenses</a></p>
     ${cards([["Costed freight charges",pesos(total?.charges)],["Ni Hao freight costs",pesos(total?.costs)],["Freight margin",pesos(total?.margin)],["Costs still needed",Number(total?.shipments ?? 0)-Number(total?.costed ?? 0)]])}
     <p class="muted">Totals cover all non-cancelled shipments with a recorded Ni Hao cost, regardless of the search below. Freight margin = KargoDoor freight charge − Ni Hao freight cost. Delivery charges and other expenses are excluded; this is not net income or cash received.</p>
     <section><form action="/admin/finance" method="get" class="search"><label>Search shipment or customer<input name="q" maxlength="160" value="${esc(q)}"></label><label>Cost status<select name="missing"><option value="0">All costs</option><option value="1"${missing ? " selected" : ""}>Cost not entered</option></select></label><button>Search</button><a href="/admin/finance">Clear</a></form></section>

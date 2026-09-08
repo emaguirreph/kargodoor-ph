@@ -344,3 +344,25 @@ export function parseForm(
 
   return shipmentFormSchema.parse(raw);
 }
+
+export const expenseSchema = z.object({
+  expense_date: date.refine((value) => value !== null, "Expense date is required"),
+  category: required(160),
+  payee: optional(160),
+  description: required(2000),
+  amount: money.refine((value) => value > 0, "Amount must be greater than zero"),
+  payment_method: optional(160),
+  reference_number: optional(160),
+  tracking_number: optional(60),
+  notes: optional(4000),
+}).strict();
+
+export function parseExpenseForm(form: URLSearchParams) {
+  const keys = Object.keys(expenseSchema.shape);
+  for (const key of form.keys()) {
+    if (![...keys, "csrf"].includes(key) || form.getAll(key).length !== 1) {
+      throw new ZodError([{ code: "custom", path: [key], message: "Unexpected or repeated form field" }]);
+    }
+  }
+  return expenseSchema.parse(Object.fromEntries(keys.map((key) => [key, form.get(key) ?? ""])));
+}

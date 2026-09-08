@@ -129,9 +129,29 @@ try {
     "/admin/unknown",
     "/admin/activity",
     "/admin/finance",
+    "/admin/finance/expenses",
     "/admin/invoices",
   ])
     assert.equal((await get(path, false)).status, 401, path + " protected");
+  const expensePath = "/admin/finance/expenses";
+  assert.equal((await get(expensePath)).status, 200);
+  const expenseForm = await get(expensePath + "?new=1");
+  assert.equal(expenseForm.status, 200);
+  const expense = { csrf: token(await expenseForm.text()), expense_date: "2026-09-08",
+    category: "Office", description: "Supplies <script>", amount: "123.45" };
+  for (const amount of ["0", "-1", "1.001"])
+    assert.equal((await post(expensePath, { ...expense, amount })).status, 400);
+  assert.equal((await post(expensePath, { ...expense, csrf: "forged" })).status, 403);
+  assert.equal((await post(expensePath, expense, { Origin: "https://evil.test" })).status, 403);
+  assert.equal((await post(expensePath, expense, { authorization: "" })).status, 401);
+  assert.equal((await post(expensePath, expense)).status, 303);
+  const expenseList = await (await get(expensePath)).text();
+  assert.ok(expenseList.includes("123.45") && expenseList.includes("Supplies &lt;script&gt;"));
+  const savedExpenses = JSON.parse(cli(["d1", "execute", "ADMIN_DB", "--local", "--json",
+    "--command", "SELECT amount FROM expenses"]));
+  assert.deepEqual(savedExpenses[0].results, [{ amount: 12345 }]);
+  assert.ok((await (await get("/admin/finance")).text()).includes('href="/admin/finance/expenses"'));
+  console.log("Expenses HTTP checks passed: page, form, centavos save, invalid amounts, authentication, CSRF, origin, escaped list.");
   const trackingBefore = await (await get("/api/track?code=KDOOR-0001", false)).json();
   assert.equal(trackingBefore.remarks, "Tracking sentinel");
   for (const path of ["/", "/how-it-works", "/services", "/rates-calculator", "/faq", "/contact-us", "/track"])

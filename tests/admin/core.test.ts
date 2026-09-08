@@ -8,6 +8,7 @@ import {
   customerSchema,
   shipmentSchema,
   parseForm,
+  parseExpenseForm,
 } from "../../lib/admin/validation";
 import { marginSummarySql, finance, activity } from "../../lib/admin/reports";
 import { saveRecord } from "../../lib/admin/data";
@@ -20,6 +21,7 @@ import {
   authenticate,
   type AdminEnv,
 } from "../../lib/admin/security";
+import { expensesPage, saveExpense } from "../../lib/admin/expenses";
 function database() {
   const sql = new DatabaseSync(":memory:");
   sql.exec("PRAGMA foreign_keys=ON");
@@ -27,6 +29,7 @@ function database() {
   sql.exec(readFileSync("migrations/admin/0002_freight_cost.sql", "utf8"));
   sql.exec(readFileSync("migrations/admin/0003_invoices_payments.sql", "utf8"));
   sql.exec(readFileSync("migrations/admin/0004_public_tracking.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0005_expenses.sql", "utf8"));
   const user = randomUUID();
   sql
     .prepare("INSERT INTO admin_users VALUES (?,?,?,?,?,?)")
@@ -554,5 +557,52 @@ test("Phase 2B migration preserves populated Phase 2A invoice and payment record
   sql.exec("PRAGMA optimize");
   const plan = sql.prepare("EXPLAIN QUERY PLAN SELECT * FROM invoices ORDER BY updated_at DESC,id LIMIT 25").all().map((r) => String(r.detail)).join(" ");
   assert.match(plan, /idx_invoices_updated/);
+  sql.close();
+});
+
+const expenseInput = { expense_date: "2026-09-08", category: "Office", description: "Supplies <script>", amount: "123.45" };
+test("expenses page and add form load; valid expense saves integer centavos and escapes list", async () => {
+  const { db, sql } = database();
+  const url = new URL("https://admin.test/admin/finance/expenses");
+  const empty = await expensesPage(db, url, "Admin", "token");
+  assert.equal(empty.status, 200);
+  assert.match(await empty.text(), /No expenses yet/);
+  const form = await expensesPage(db, new URL(url + "?new=1"), "Admin", "token");
+  assert.match(await form.text(), /name="csrf" value="token"/);
+  await saveExpense(db, parseExpenseForm(new URLSearchParams(expenseInput)));
+  const row = sql.prepare("SELECT * FROM expenses").get()!;
+  assert.equal(row.amount, 12345);
+  assert.equal(row.payee, null);
+  const html = await (await expensesPage(db, url, "Admin", "token")).text();
+  assert.match(html, /123.45/);
+  assert.match(html, /Supplies &lt;script&gt;/);
+  assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM activity_log").get()!.n, 0);
+});
+for (const amount of ["0", "-1", "1.001"]) {
+  test(`expense amount ${amount} rejected`, () => {
+    assert.throws(() => parseExpenseForm(new URLSearchParams({ ...expenseInput, amount })));
+  });
+}
+test("expense required fields and overposting rejected", () => {
+  for (const field of ["expense_date", "category", "description", "amount"]) {
+    assert.throws(() => parseExpenseForm(new URLSearchParams({ ...expenseInput, [field]: "" })));
+  }
+  assert.throws(() => parseExpenseForm(new URLSearchParams({ ...expenseInput, id: "overwrite" })));
+  const repeated = new URLSearchParams(expenseInput);
+  repeated.append("amount", "1");
+  assert.throws(() => parseExpenseForm(repeated));
+});
+
+test("expense migration preserves existing records", () => {
+  const sql = new DatabaseSync(":memory:");
+  sql.exec(readFileSync("migrations/admin/0001_phase1.sql", "utf8"));
+  sql.prepare("INSERT INTO expenses VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+    .run("existing", "Office", "Existing expense", 150, "2026-09-01", "REF", "Notes", "2026-09-01");
+  sql.exec(readFileSync("migrations/admin/0005_expenses.sql", "utf8"));
+  const row = sql.prepare("SELECT * FROM expenses").get()!;
+  assert.equal(row.amount, 150);
+  assert.equal(row.reference_number, "REF");
+  assert.equal(row.updated_at, row.created_at);
+  assert.equal(row.payee, null);
   sql.close();
 });

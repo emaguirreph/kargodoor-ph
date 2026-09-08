@@ -15,10 +15,12 @@ import {
   warehouses,
   schemaKeys,
   parseForm,
+  parseExpenseForm,
   type Entity,
   type RecordData,
 } from "./validation";
 
+import { expensesPage, saveExpense } from "./expenses";
 import { saveRecord } from "./data";
 import { page, esc, pesos, input, select, hidden } from "./ui";
 import { dashboard, finance, activity } from "./reports";
@@ -105,7 +107,7 @@ function validateFormOrigin(
 
 export async function handleAdmin(
   request: Request,
-  view?: Entity | "finance" | "activity",
+  view?: Entity | "finance" | "finance/expenses" | "activity",
 ) {
   let localChallenge = false;
 
@@ -164,7 +166,7 @@ export async function handleAdmin(
      * POST
      */
     if (request.method === "POST") {
-      if (!entity) {
+      if (!entity && view !== "finance/expenses") {
         throw new AdminError(
           "Use the customer or shipment form.",
           405,
@@ -266,9 +268,14 @@ export async function handleAdmin(
         form.get("csrf") ?? "",
       );
 
+      if (view === "finance/expenses") {
+        await saveExpense(db, parseExpenseForm(form));
+        return page("Saved", "", user.name, 303, { Location: `${path}?saved=1` });
+      }
+
       const values =
         parseForm(
-          entity,
+          entity!,
           form,
         );
 
@@ -294,7 +301,7 @@ export async function handleAdmin(
       const recordId =
         await saveRecord(
           db,
-          entity,
+          entity!,
           values,
           user.id,
           id,
@@ -313,6 +320,10 @@ export async function handleAdmin(
             )}&saved=1`,
         },
       );
+    }
+
+    if (view === "finance/expenses") {
+      return await expensesPage(db, url, user.name, csrfToken(env, user.id, path));
     }
 
     /*
