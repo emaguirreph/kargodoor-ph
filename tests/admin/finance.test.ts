@@ -13,7 +13,7 @@ export const all = { from: "", to: "" };
 export function fixture() {
   const sql = new DatabaseSync(":memory:");
   sql.exec("PRAGMA foreign_keys=ON");
-  for (const file of ["0001_phase1.sql", "0002_freight_cost.sql", "0003_invoices_payments.sql", "0004_public_tracking.sql", "0005_expenses.sql", "0006_admin_viewer_role.sql", "0007_staff_follow_up.sql"])
+  for (const file of ["0001_phase1.sql", "0002_freight_cost.sql", "0003_invoices_payments.sql", "0004_public_tracking.sql", "0005_expenses.sql", "0006_admin_viewer_role.sql", "0007_staff_follow_up.sql", "0008_customer_accounts.sql"])
     sql.exec(readFileSync(`migrations/admin/${file}`, "utf8"));
   sql.exec("INSERT INTO customers VALUES ('c','KDOOR0001','Test customer',NULL,'12345',NULL,NULL,NULL,'2026-01-01','2026-01-01')");
   const queries: string[] = [];

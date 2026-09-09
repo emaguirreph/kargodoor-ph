@@ -35,6 +35,7 @@ function database() {
   sql.exec(readFileSync("migrations/admin/0005_expenses.sql", "utf8"));
   sql.exec(readFileSync("migrations/admin/0006_admin_viewer_role.sql", "utf8"));
   sql.exec(readFileSync("migrations/admin/0007_staff_follow_up.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0008_customer_accounts.sql", "utf8"));
   const user = randomUUID();
   sql
     .prepare("INSERT INTO admin_users VALUES (?,?,?,?,?,?)")
@@ -111,6 +112,24 @@ const shipmentInput = (id: string) =>
     payment_status: "Unpaid",
   });
 const shipment = (id: string) => shipmentSchema.parse(shipmentInput(id));
+test("customer account foundation preserves existing records and enforces isolated credential structures", async () => {
+  const { sql, db, user } = database();
+  const customerId = await saveRecord(db, "customers", customer, user, "", "");
+  const accountId = randomUUID();
+  const account = [accountId, customerId, "customer@example.test", "a".repeat(64), "b".repeat(32), "scrypt", 32768, 8, 1, 64, 1, "2026-09-09T00:00:00.000Z", "2026-09-09T00:00:00.000Z"];
+  sql.prepare(`INSERT INTO customer_accounts VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(...account);
+  assert.equal(sql.prepare("SELECT full_name FROM customers WHERE id=?").get(customerId)!.full_name, "Test customer");
+  assert.equal(sql.prepare("SELECT role FROM admin_users WHERE id=?").get(user)!.role, "admin");
+  assert.throws(() => sql.prepare(`INSERT INTO customer_accounts VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(randomUUID(), customerId, "other@example.test", "a".repeat(64), "b".repeat(32), "scrypt", 32768, 8, 1, 64, 1, "2026-09-09T00:00:00.000Z", "2026-09-09T00:00:00.000Z"), /UNIQUE/);
+  assert.throws(() => sql.prepare(`INSERT INTO customer_accounts VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(randomUUID(), randomUUID(), "UPPER@example.test", "a".repeat(64), "b".repeat(32), "scrypt", 32768, 8, 1, 64, 1, "2026-09-09T00:00:00.000Z", "2026-09-09T00:00:00.000Z"), /CHECK|FOREIGN KEY/);
+  assert.throws(() => sql.prepare(`INSERT INTO customer_accounts VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(randomUUID(), randomUUID(), "missing@example.test", "a".repeat(64), "b".repeat(32), "scrypt", 32768, 8, 1, 64, 1, "2026-09-09T00:00:00.000Z", "2026-09-09T00:00:00.000Z"), /FOREIGN KEY/);
+  sql.prepare("INSERT INTO customer_sessions VALUES (?,?,?,?,?)").run(randomUUID(), accountId, "c".repeat(64), "2026-09-09T00:00:00.000Z", "2026-09-10T00:00:00.000Z");
+  sql.prepare("INSERT INTO customer_password_reset_tokens VALUES (?,?,?,?,?,NULL)").run(randomUUID(), accountId, "d".repeat(64), "2026-09-09T00:00:00.000Z", "2026-09-09T01:00:00.000Z");
+  assert.throws(() => sql.prepare("INSERT INTO customer_sessions VALUES (?,?,?,?,?)").run(randomUUID(), randomUUID(), "e".repeat(64), "2026-09-09T00:00:00.000Z", "2026-09-10T00:00:00.000Z"), /FOREIGN KEY/);
+  assert.throws(() => sql.prepare("INSERT INTO customer_password_reset_tokens VALUES (?,?,?,?,?,?)").run(randomUUID(), accountId, "f".repeat(64), "2026-09-09T00:00:00.000Z", "2026-09-09T01:00:00.000Z", "2026-09-08T00:00:00.000Z"), /CHECK/);
+  assert.equal(sql.prepare("SELECT customer_account_id FROM customer_sessions").get()!.customer_account_id, accountId);
+  assert.equal(sql.prepare("SELECT used_at FROM customer_password_reset_tokens").get()!.used_at, null);
+});
 test("dashboard attention and shared follow-up note preserve role boundaries", async () => {
   const { sql, db, user } = database();
   const admin = { id: user, name: "Admin", email: "admin@example.test", role: "admin" as const };
