@@ -69,19 +69,19 @@ function TrackContent() {
     }
   }, []);
 
-  useEffect(() => {
-    if (!trackingFromUrl) {
-      return;
-    }
+ useEffect(() => {
+  const tracking = searchParams.get("tracking");
 
-    const timer = window.setTimeout(() => {
-      void trackShipment(trackingFromUrl);
-    }, 0);
+  if (!tracking) return;
 
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [trackingFromUrl, trackShipment]);
+  const normalized = tracking.trim().toUpperCase();
+
+  const timer = window.setTimeout(() => {
+    void trackShipment(normalized);
+  }, 0);
+
+  return () => window.clearTimeout(timer);
+}, [searchParams, trackShipment]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
