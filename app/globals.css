@@ -3070,3 +3070,115 @@ margin: 0;
     margin-top: 16px;
   }
 }
+/* MY KargoDoorPH Dashboard */
+
+.kd-customer-dashboard {
+  width: min(1100px, calc(100% - 40px));
+  padding: 36px;
+}
+
+.kd-customer-dashboard-heading {
+  margin-bottom: 32px;
+}
+
+.kd-customer-dashboard-heading h1 {
+  margin-bottom: 6px;
+}
+
+.kd-customer-dashboard-heading p {
+  margin: 0;
+  color: #66788a;
+}
+
+.kd-customer-dashboard-section {
+  margin-top: 30px;
+}
+
+.kd-customer-dashboard-section h2 {
+  margin: 0 0 12px;
+  color: var(--kd-blue);
+  font-size: 1.15rem;
+}
+
+.kd-customer-table-wrap {
+  overflow-x: auto;
+  border: 1px solid #dce6f2;
+  border-radius: 8px;
+}
+
+.kd-customer-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.kd-customer-table th,
+.kd-customer-table td {
+  padding: 13px 14px;
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid #e7edf4;
+}
+
+.kd-customer-table th {
+  background: #f6f9fc;
+  color: #66788a;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.kd-customer-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.kd-customer-track {
+  color: var(--kd-strong-blue);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.kd-customer-track:hover {
+  text-decoration: underline;
+}
+
+.kd-customer-empty {
+  padding: 18px;
+  margin: 0;
+  border: 1px solid #dce6f2;
+  border-radius: 8px;
+  color: #66788a;
+}
+
+.kd-customer-dashboard-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-top: 36px;
+  padding-top: 24px;
+  border-top: 1px solid #dce6f2;
+}
+
+.kd-customer-dashboard-actions form {
+  margin: 0;
+}
+
+/* Mobile */
+
+@media (max-width: 700px) {
+  .kd-customer-dashboard {
+    width: calc(100% - 24px);
+    padding: 22px 16px;
+  }
+
+  .kd-customer-page {
+    padding: 32px 0;
+  }
+
+  .kd-customer-table {
+    min-width: 780px;
+  }
+
+  .kd-customer-dashboard-actions {
+    flex-wrap: wrap;
+  }
+}
