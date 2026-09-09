@@ -69,19 +69,19 @@ function TrackContent() {
     }
   }, []);
 
- useEffect(() => {
-  const tracking = searchParams.get("tracking");
+  useEffect(() => {
+    if (!trackingFromUrl) {
+      return;
+    }
 
-  if (!tracking) return;
+    const timer = window.setTimeout(() => {
+      void trackShipment(trackingFromUrl);
+    }, 0);
 
-  const normalized = tracking.trim().toUpperCase();
-
-  const timer = window.setTimeout(() => {
-    void trackShipment(normalized);
-  }, 0);
-
-  return () => window.clearTimeout(timer);
-}, [searchParams, trackShipment]);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [trackingFromUrl, trackShipment]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -92,6 +92,7 @@ function TrackContent() {
     <>
       <header className="kd-track-heading">
         <h1>TRACK YOUR SHIPMENT</h1>
+
         <p>
           Enter your KargoDoor tracking number to check your latest shipment
           status.
@@ -99,7 +100,9 @@ function TrackContent() {
       </header>
 
       <form className="kd-track-form" onSubmit={handleSubmit}>
-        <label htmlFor="tracking-number">TRACKING NUMBER</label>
+        <label htmlFor="tracking-number">
+          TRACKING NUMBER
+        </label>
 
         <div className="kd-track-input-row">
           <input
@@ -127,7 +130,9 @@ function TrackContent() {
         <article className="kd-track-result">
           <div className="kd-track-result-header">
             <span>TRACKING NUMBER</span>
+
             <h2>{shipment.tracking_number}</h2>
+
             <strong>{shipment.current_status}</strong>
           </div>
 
@@ -139,12 +144,16 @@ function TrackContent() {
 
             <div>
               <span>ORIGIN WAREHOUSE</span>
-              <strong>{shipment.origin_warehouse || "—"}</strong>
+              <strong>
+                {shipment.origin_warehouse || "—"}
+              </strong>
             </div>
 
             <div>
               <span>WAREHOUSE RECEIVED</span>
-              <strong>{shipment.warehouse_received_date || "—"}</strong>
+              <strong>
+                {shipment.warehouse_received_date || "—"}
+              </strong>
             </div>
 
             <div>
@@ -156,7 +165,9 @@ function TrackContent() {
 
             <div>
               <span>ESTIMATED ARRIVAL</span>
-              <strong>{shipment.eta || "To be updated"}</strong>
+              <strong>
+                {shipment.eta || "To be updated"}
+              </strong>
             </div>
 
             <div>
