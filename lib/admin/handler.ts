@@ -29,6 +29,7 @@ import { expensesPage, mutateExpense } from "./expenses";
 import { saveRecord } from "./data";
 import { page, esc, pesos, input, select, hidden } from "./ui";
 import { dashboard, finance, activity, saveStaffFollowUp } from "./reports";
+import { createPortal, disablePortal, portalFor, portalStatus, resetPortal } from "./customer-portal";
 
 const labels: Record<string, string> = {
   nihao_cost: "Ni Hao freight cost",
@@ -280,6 +281,19 @@ export async function handleAdmin(
         path,
         form.get("csrf") ?? "",
       );
+
+      const portalAction = form.get("action") ?? "";
+      if (entity === "customers" && ["portal_create", "portal_reset", "portal_disable", "portal_reenable"].includes(portalAction)) {
+        const allowed = new Set(["csrf", "action", "customer_id"]);
+        for (const key of form.keys()) if (!allowed.has(key) || form.getAll(key).length !== 1) throw new AdminError("Unexpected or repeated form field.");
+        const customerId = form.get("customer_id") ?? "";
+        if (!/^[\da-f-]{36}$/i.test(customerId)) throw new AdminError("Invalid customer ID.");
+        const customer = await db.prepare("SELECT email FROM customers WHERE id=?").bind(customerId).first<RecordData>();
+        if (!customer) throw new AdminError("Record not found.", 404);
+        if (portalAction === "portal_disable") { await disablePortal(db, customerId); return page("Saved", "", user.name, 303, { Location: `${path}?id=${customerId}&portal_saved=1` }); }
+        const result = portalAction === "portal_create" ? await createPortal(db, customerId, customer.email) : await resetPortal(db, customerId, portalAction === "portal_reenable");
+        return page("Customer account created", `<section><h2>Customer account created.</h2><p><strong>Login Email:</strong> ${esc(result.email)}</p><p><strong>Temporary Password:</strong> <code>${esc(result.password)}</code></p><p class="muted">Copy the temporary password now. It is shown only once and the customer must change it after first login.</p></section>`, user.name);
+      }
 
       if (!entity && view === undefined) {
         const allowed = new Set(["csrf", "note"]);
@@ -1153,6 +1167,9 @@ export async function handleAdmin(
             </a>
           ` : "";
 
+      const portal = entity === "customers" ? await portalFor(db, id) : null;
+      const portalSection = entity === "customers" ? `<section><h2>Customer Portal Access</h2><dl><dt>Status</dt><dd>${portalStatus(portal)}</dd><dt>Login Email</dt><dd>${esc(portal?.login_email ?? record.email) || "—"}</dd></dl>${canWrite ? !portal ? `<form method="post" action="${path}">${hidden("csrf",csrfToken(env,user.id,path))}${hidden("action","portal_create")}${hidden("customer_id",id)}<button>Create Customer Account</button></form>` : !portal.enabled ? `<form method="post" action="${path}">${hidden("csrf",csrfToken(env,user.id,path))}${hidden("action","portal_reenable")}${hidden("customer_id",id)}<button>Re-enable Access</button></form>` : `<form method="post" action="${path}">${hidden("csrf",csrfToken(env,user.id,path))}${hidden("action","portal_reset")}${hidden("customer_id",id)}<button>Generate New Temporary Password</button></form><form method="post" action="${path}">${hidden("csrf",csrfToken(env,user.id,path))}${hidden("action","portal_disable")}${hidden("customer_id",id)}<button>Disable Access</button></form>` : ""}</section>` : "";
+
       return page(
         title,
         `
@@ -1192,6 +1209,7 @@ export async function handleAdmin(
               </a>` : ""}
             </div>
           </section>
+          ${portalSection}
         `,
         user.name,
         200,

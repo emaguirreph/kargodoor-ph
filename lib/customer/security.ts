@@ -16,6 +16,7 @@ export type CustomerAccount = {
   password_p: number;
   password_key_length: number;
   enabled: number;
+  password_state: "temporary" | "active";
 };
 
 export const normalizeCustomerEmail = (email: string) => email.trim().toLowerCase();
@@ -59,11 +60,18 @@ export async function createCustomerSession(db: D1Database, accountId: string, n
 
 export async function customerSession(db: D1Database, token: string | undefined, now = new Date()) {
   if (!token || token.length > 512) return null;
-  return await db.prepare(`SELECT a.id,a.customer_id,c.full_name,a.login_email
+  return await db.prepare(`SELECT a.id,a.customer_id,c.full_name,a.login_email,a.password_state
     FROM customer_sessions s JOIN customer_accounts a ON a.id=s.customer_account_id
     JOIN customers c ON c.id=a.customer_id
     WHERE s.token_hash=? AND s.expires_at>? AND a.enabled=1 LIMIT 1`)
-    .bind(hashSessionToken(token), now.toISOString()).first<Pick<CustomerAccount, "id" | "customer_id" | "full_name" | "login_email">>();
+    .bind(hashSessionToken(token), now.toISOString()).first<Pick<CustomerAccount, "id" | "customer_id" | "full_name" | "login_email" | "password_state">>();
+}
+
+export async function replaceCustomerPassword(db: D1Database, accountId: string, password: string) {
+  const salt = randomBytes(32).toString("hex"), now = new Date().toISOString();
+  await db.prepare("UPDATE customer_accounts SET password_hash=?,password_salt=?,password_algorithm='scrypt',password_n=32768,password_r=8,password_p=1,password_key_length=64,password_state='active',updated_at=? WHERE id=?")
+    .bind(customerPasswordHash(password, salt), salt, now, accountId).run();
+  await db.prepare("DELETE FROM customer_sessions WHERE customer_account_id=?").bind(accountId).run();
 }
 
 export async function deleteCustomerSession(db: D1Database, token: string | undefined) {
