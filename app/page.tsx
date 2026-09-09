@@ -98,7 +98,7 @@ export default function HomePage() {
           aria-labelledby="why-title"
         >
           <div className="kd-container">
-            <h2 id="why-title">WHY KARGODOOR PH?</h2>
+            <h2 id="why-title">Why KargoDoorPH?</h2>
 
             <p className="kd-section-lead">
               Shipping from China to the Philippines made effortless. We help
