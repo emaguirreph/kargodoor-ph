@@ -10,7 +10,7 @@ import {
   parseForm,
   parseExpenseForm,
 } from "../../lib/admin/validation";
-import { marginSummarySql, finance, activity } from "../../lib/admin/reports";
+import { marginSummarySql, finance, activity, dashboard, saveStaffFollowUp } from "../../lib/admin/reports";
 import { saveRecord } from "../../lib/admin/data";
 import { createInvoice, issueInvoice, recordPayment } from "../../lib/admin/billing";
 import {
@@ -111,6 +111,35 @@ const shipmentInput = (id: string) =>
     payment_status: "Unpaid",
   });
 const shipment = (id: string) => shipmentSchema.parse(shipmentInput(id));
+test("dashboard attention and shared follow-up note preserve role boundaries", async () => {
+  const { sql, db, user } = database();
+  const admin = { id: user, name: "Admin", email: "admin@example.test", role: "admin" as const };
+  let html = await (await dashboard(db, admin, "csrf", true)).text();
+  assert.match(html, /No items need attention/);
+  const customerId = await saveRecord(db, "customers", customer, user, "", "");
+  const shipmentId = await saveRecord(db, "shipments", shipment(customerId), user, "", "");
+  const invoiceId = randomUUID();
+  sql.prepare(`INSERT INTO invoices (id,invoice_number,customer_id,shipment_id,subtotal,delivery_charge,total,status,issued_at,due_at,created_at,updated_at,other_charge)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(invoiceId, "INV-ATTN", customerId, shipmentId, 100000, 0, 100000, "Partial", "2026-09-01", "2026-09-15", "2026-09-01", "2026-09-01", 0);
+  sql.prepare("INSERT INTO payments VALUES (?,?,?,?,?,?,?,?,?)").run(randomUUID(), invoiceId, customerId, 25000, "Cash", null, "2026-09-02", null, "2026-09-02");
+  html = await (await dashboard(db, admin, "csrf", true)).text();
+  assert.match(html, /Needs Attention/);
+  assert.match(html, /Unpaid invoices \(1\)/);
+  assert.match(html, /₱750\.00/);
+  assert.match(html, new RegExp(`/admin/invoices\\?id=${invoiceId}`));
+  assert.match(html, /Shipments missing Nihao cost \(1\)/);
+  assert.match(html, new RegExp(`/admin/shipments\\?id=${shipmentId}`));
+  assert.match(html, /No follow-up note has been added/);
+  await saveStaffFollowUp(db, "Call customer\nConfirm delivery", admin);
+  await saveStaffFollowUp(db, "Updated priority", admin);
+  await assert.rejects(saveStaffFollowUp(db, "x".repeat(4001), admin), /4,000/);
+  assert.equal(sql.prepare("SELECT note FROM staff_follow_up WHERE id=1").get()!.note, "Updated priority");
+  assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM activity_log WHERE entity_type='staff_follow_up'").get()!.n, 2);
+  html = await (await dashboard(db, { ...admin, role: "viewer" }, "csrf", false)).text();
+  assert.match(html, /Updated priority/);
+  assert.ok(!html.includes("Save follow-up"));
+  assert.ok(!html.includes("Shipments missing Nihao cost"));
+});
 test("required fields, dates, enum, numeric precision and overposting are validated", () => {
   assert.throws(() => customerSchema.parse({ ...customer, full_name: " " }));
   assert.throws(() =>

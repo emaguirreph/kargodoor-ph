@@ -271,10 +271,10 @@ try {
     "/admin/finance/expenses?edit=00000000-0000-4000-8000-000000000001",
     "/admin/finance/expenses?delete=00000000-0000-4000-8000-000000000001",
   ]) assert.equal((await get(path)).status, 403, path + " viewer denied");
-  for (const path of ["/admin/customers", "/admin/shipments", "/admin/invoices", "/admin/finance/expenses"])
+  for (const path of ["/admin/dashboard", "/admin/customers", "/admin/shipments", "/admin/invoices", "/admin/finance/expenses"])
     assert.equal((await post(path, {})).status, 403, path + " viewer mutation denied");
   const viewerDashboard = await (await get("/admin/dashboard")).text();
-  for (const forbidden of ["Add customer", "Add shipment", "Create invoice", "Import / Export", "Tracking editor"])
+  for (const forbidden of ["Add customer", "Add shipment", "Create invoice", "Import / Export", "Tracking editor", "Save follow-up"])
     assert.ok(!viewerDashboard.includes(forbidden), forbidden + " hidden from viewer");
   cli(["d1", "execute", "ADMIN_DB", "--local", "--command",
     "UPDATE admin_users SET role='owner' WHERE email='local-admin@example.test'"]);
