@@ -28,7 +28,7 @@ import { financeCsv } from "./finance-report";
 import { expensesPage, mutateExpense } from "./expenses";
 import { saveRecord } from "./data";
 import { page, esc, pesos, input, select, hidden } from "./ui";
-import { dashboard, finance, activity } from "./reports";
+import { dashboard, finance, activity, saveStaffFollowUp } from "./reports";
 
 const labels: Record<string, string> = {
   nihao_cost: "Ni Hao freight cost",
@@ -179,7 +179,7 @@ export async function handleAdmin(
      */
     if (request.method === "POST") {
       requireAdminMutation(user);
-      if (!entity && view !== "finance/expenses") {
+      if (!entity && view !== "finance/expenses" && view !== undefined) {
         throw new AdminError(
           "Use the customer or shipment form.",
           405,
@@ -281,6 +281,17 @@ export async function handleAdmin(
         form.get("csrf") ?? "",
       );
 
+      if (!entity && view === undefined) {
+        const allowed = new Set(["csrf", "note"]);
+        for (const key of form.keys()) {
+          if (!allowed.has(key) || form.getAll(key).length !== 1)
+            throw new AdminError("Unexpected or repeated form field.");
+        }
+        const note = (form.get("note") ?? "").trim();
+        await saveStaffFollowUp(db, note, user);
+        return page("Saved", "", user.name, 303, { Location: "/admin/dashboard?saved=1" });
+      }
+
       if (view === "finance/expenses") {
         const outcome = await mutateExpense(db, form);
         return page("Saved", "", user.name, 303, { Location: `${path}?${outcome}=1` });
@@ -368,7 +379,7 @@ export async function handleAdmin(
     }
 
     if (!entity) {
-      return await dashboard(db, user.name, canWrite);
+      return await dashboard(db, user, csrfToken(env, user.id, path), canWrite);
     }
 
     /*

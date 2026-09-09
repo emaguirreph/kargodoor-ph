@@ -34,6 +34,7 @@ function database() {
   sql.exec(readFileSync("migrations/admin/0004_public_tracking.sql", "utf8"));
   sql.exec(readFileSync("migrations/admin/0005_expenses.sql", "utf8"));
   sql.exec(readFileSync("migrations/admin/0006_admin_viewer_role.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0007_staff_follow_up.sql", "utf8"));
   const user = randomUUID();
   sql
     .prepare("INSERT INTO admin_users VALUES (?,?,?,?,?,?)")
