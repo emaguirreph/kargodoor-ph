@@ -1,7 +1,6 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import { Footer, Header } from "@/components/site-chrome";
 
 type Shipment = {
@@ -18,8 +17,6 @@ type Shipment = {
 };
 
 export default function TrackPage() {
-  const searchParams = useSearchParams();
-
   const [code, setCode] = useState("");
   const [shipment, setShipment] = useState<Shipment | null>(null);
   const [error, setError] = useState("");
@@ -61,7 +58,8 @@ export default function TrackPage() {
   }, []);
 
   useEffect(() => {
-    const tracking = searchParams.get("tracking");
+    const params = new URLSearchParams(window.location.search);
+    const tracking = params.get("tracking");
 
     if (!tracking) return;
 
@@ -69,7 +67,7 @@ export default function TrackPage() {
 
     setCode(normalized);
     void trackShipment(normalized);
-  }, [searchParams, trackShipment]);
+  }, [trackShipment]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
