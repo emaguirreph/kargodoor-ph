@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Footer, Header } from "@/components/site-chrome";
 
 type Shipment = {
@@ -17,20 +18,20 @@ type Shipment = {
 };
 
 export default function TrackPage() {
+  const searchParams = useSearchParams();
+
   const [code, setCode] = useState("");
   const [shipment, setShipment] = useState<Shipment | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    const trackingNumber = code.trim().toUpperCase();
+  const trackShipment = useCallback(async (trackingNumber: string) => {
+    const normalized = trackingNumber.trim().toUpperCase();
 
     setError("");
     setShipment(null);
 
-    if (!trackingNumber) {
+    if (!normalized) {
       setError("Please enter your KargoDoor tracking number.");
       return;
     }
@@ -39,7 +40,7 @@ export default function TrackPage() {
 
     try {
       const response = await fetch(
-        `/api/track?code=${encodeURIComponent(trackingNumber)}`,
+        `/api/track?code=${encodeURIComponent(normalized)}`,
       );
 
       const data = await response.json();
@@ -57,6 +58,22 @@ export default function TrackPage() {
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    const tracking = searchParams.get("tracking");
+
+    if (!tracking) return;
+
+    const normalized = tracking.trim().toUpperCase();
+
+    setCode(normalized);
+    void trackShipment(normalized);
+  }, [searchParams, trackShipment]);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await trackShipment(code);
   }
 
   return (
@@ -69,8 +86,8 @@ export default function TrackPage() {
             <header className="kd-track-heading">
               <h1>TRACK YOUR SHIPMENT</h1>
               <p>
-                Enter your KargoDoor tracking number to check your latest shipment
-                status.
+                Enter your KargoDoor tracking number to check your latest
+                shipment status.
               </p>
             </header>
 
@@ -125,7 +142,9 @@ export default function TrackPage() {
 
                   <div>
                     <span>DEPARTURE DATE</span>
-                    <strong>{shipment.departure_date || "Not yet departed"}</strong>
+                    <strong>
+                      {shipment.departure_date || "Not yet departed"}
+                    </strong>
                   </div>
 
                   <div>
