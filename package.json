@@ -15,6 +15,7 @@
     "admin:setup:local": "node scripts/admin-local.mjs",
     "admin:dev": "node scripts/admin-dev.mjs",
     "test:admin": "node scripts/test-admin.mjs",
+    "test:customer-auth": "node scripts/test-customer-auth.mjs",
     "test:admin:http": "node scripts/test-admin-http.mjs"
   },
   "dependencies": {

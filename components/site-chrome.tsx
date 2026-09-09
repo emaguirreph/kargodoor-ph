@@ -51,6 +51,8 @@ export function Header() {
           ))}
         </nav>
 
+        <Link className="kd-header-login" href="/customer/login">LOGIN</Link>
+
         <MessengerLink
           className="kd-header-quote"
           target="_blank"
@@ -88,6 +90,8 @@ export function Header() {
                 {item.label}
               </Link>
             ))}
+
+            <Link href="/customer/login" onClick={() => setMobileMenuOpen(false)}>LOGIN</Link>
 
             <MessengerLink
               className="kd-mobile-quote"

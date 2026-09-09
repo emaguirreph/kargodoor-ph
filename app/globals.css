@@ -247,6 +247,26 @@ color: white;
 background: var(--kd-green);
 }
 
+.kd-header-login {
+color: var(--kd-blue);
+font-family: var(--kd-body-font);
+font-size: clamp(16px, 1.1vw, 17px);
+font-weight: 600;
+white-space: nowrap;
+}
+
+.kd-customer-page { min-height: 58vh; padding: 72px 0; background: var(--kd-pale); }
+.kd-customer-card { width: min(460px, calc(100% - 40px)); margin: 0 auto; padding: 36px; background: #fff; border: 1px solid #dce6f2; border-radius: 12px; color: var(--kd-text); }
+.kd-customer-card h1 { margin: 0 0 12px; color: var(--kd-blue); font-family: var(--kd-heading-font); }
+.kd-customer-card h2 { font-size: 1.2rem; }
+.kd-customer-card form { display: grid; gap: 16px; margin: 24px 0; }
+.kd-customer-card label { display: grid; gap: 6px; font-weight: 600; }
+.kd-customer-card input { border: 1px solid #b9cce0; border-radius: 6px; padding: 11px; font: inherit; }
+.kd-customer-card button { border: 0; border-radius: 6px; padding: 12px 18px; background: var(--kd-strong-blue); color: #fff; font: 600 1rem var(--kd-body-font); cursor: pointer; }
+.kd-customer-error { padding: 10px; color: #9f1d1d; background: #fff1f1; border-radius: 6px; }
+.kd-customer-actions { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.kd-customer-actions form { margin: 0; display: block; }
+
 .kd-mobile-menu {
 display: none;
 margin-left: auto;
