@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { trackEvent } from "@/lib/analytics";
-import { MESSENGER_URL } from "@/lib/contact-links";
+import { MessengerLink } from "@/components/messenger-link";
 
 const navigation = [
   { label: "HOME", href: "/" },
@@ -51,15 +51,14 @@ export function Header() {
           ))}
         </nav>
 
-        <a
+        <MessengerLink
           className="kd-header-quote"
-          href={MESSENGER_URL}
           target="_blank"
           rel="noopener noreferrer"
-          onClick={() => trackEvent("generate_lead")}
+          analyticsEvent="generate_lead"
         >
           GET A QUOTE
-        </a>
+        </MessengerLink>
 
         <div className="kd-mobile-menu">
           <button
@@ -90,18 +89,17 @@ export function Header() {
               </Link>
             ))}
 
-            <a
+            <MessengerLink
               className="kd-mobile-quote"
-              href={MESSENGER_URL}
               target="_blank"
               rel="noopener noreferrer"
+              analyticsEvent="generate_lead"
               onClick={() => {
                 setMobileMenuOpen(false);
-                trackEvent("generate_lead");
               }}
             >
               GET A QUOTE
-            </a>
+            </MessengerLink>
           </nav>
         </div>
       </div>
@@ -179,13 +177,12 @@ export function Footer() {
         </p>
       </div>
 
-      <a
+      <MessengerLink
         className="kd-floating-message"
-        href={MESSENGER_URL}
         target="_blank"
         rel="noopener noreferrer"
         aria-label="Message KargoDoor PH"
-        onClick={() => trackEvent("contact")}
+        analyticsEvent="contact"
       >
         <video autoPlay loop muted playsInline preload="metadata" aria-hidden="true">
           <source
@@ -193,7 +190,7 @@ export function Footer() {
             type="video/webm"
           />
         </video>
-      </a>
+      </MessengerLink>
     </footer>
   );
 }

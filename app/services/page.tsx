@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { Calculator, FileText } from "lucide-react";
 import { Footer, Header } from "@/components/site-chrome";
-import { TrackedLink } from "@/components/tracked-link";
-import { MESSENGER_URL } from "@/lib/contact-links";
+import { MessengerLink } from "@/components/messenger-link";
 
 const services = [
   {
@@ -151,16 +150,15 @@ export default function ServicesPage() {
             </div>
 
             <div className="kd-services-cta-actions">
-              <TrackedLink
+              <MessengerLink
                 className="kd-button kd-button-green"
-                href={MESSENGER_URL}
                 target="_blank"
                 rel="noopener noreferrer"
                 analyticsEvent="generate_lead"
               >
                 <FileText aria-hidden="true" />
                 GET A QUOTE
-              </TrackedLink>
+              </MessengerLink>
 
               <Link
                 className="kd-button kd-button-white"

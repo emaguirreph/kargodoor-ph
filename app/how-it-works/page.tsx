@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { Footer, Header } from "@/components/site-chrome";
-import { MESSENGER_URL } from "@/lib/contact-links";
-import { TrackedLink } from "@/components/tracked-link";
+import { MessengerLink } from "@/components/messenger-link";
 
 const processSteps = [
   {
@@ -78,9 +77,9 @@ export default function HowItWorksPage() {
               <h2 id="ready-title">READY TO SHIP?</h2>
               <p>From China to the Philippines, we make cargo simple.</p>
             </div>
-            <TrackedLink className="kd-button kd-button-green kd-ready-button" href={MESSENGER_URL} target="_blank" rel="noopener noreferrer" analyticsEvent="generate_lead">
+            <MessengerLink className="kd-button kd-button-green kd-ready-button" target="_blank" rel="noopener noreferrer" analyticsEvent="generate_lead">
               GET A QUOTE
-            </TrackedLink>
+            </MessengerLink>
           </div>
         </section>
       </main>

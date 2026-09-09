@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { Plane, Ship, Truck } from "lucide-react";
 import { Footer, Header } from "@/components/site-chrome";
-import { TrackedLink } from "@/components/tracked-link";
-import { MESSENGER_URL } from "@/lib/contact-links";
+import { MessengerLink } from "@/components/messenger-link";
 
 const whyCards = [
   {
@@ -74,15 +73,14 @@ export default function HomePage() {
               />
 
               <div className="kd-hero-actions">
-                <TrackedLink
+                <MessengerLink
                   className="kd-button kd-button-green"
-                  href={MESSENGER_URL}
                   target="_blank"
                   rel="noopener noreferrer"
                   analyticsEvent="generate_lead"
                 >
                   GET A QUOTE
-                </TrackedLink>
+                </MessengerLink>
 
                 <Link
                   className="kd-button kd-button-white"

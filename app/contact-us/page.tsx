@@ -1,7 +1,7 @@
 import { ArrowRight, Clock3, Mail, MessageCircle } from "lucide-react";
 import { Footer, Header } from "@/components/site-chrome";
-import { TrackedAnchor, TrackedLink } from "@/components/tracked-link";
-import { MESSENGER_URL } from "@/lib/contact-links";
+import { TrackedAnchor } from "@/components/tracked-link";
+import { MessengerLink } from "@/components/messenger-link";
 
 type ContactCard = {
   icon: typeof MessageCircle;
@@ -167,16 +167,15 @@ export default function ContactUsPage() {
               <p>Tell us about your cargo and we’ll help you get started.</p>
             </div>
 
-            <TrackedLink
+            <MessengerLink
               className="kd-contact-ready-button"
-              href={MESSENGER_URL}
               target="_blank"
               rel="noopener noreferrer"
               analyticsEvent="generate_lead"
             >
               <span>GET A QUOTE</span>
               <ArrowRight aria-hidden="true" />
-            </TrackedLink>
+            </MessengerLink>
           </div>
         </section>
       </main>
