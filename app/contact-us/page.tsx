@@ -17,11 +17,11 @@ const contactCards: ContactCard[] = [
     title: "MESSAGE US",
     details: [
       {
-        label: "0917 157 7370",
-        href: "tel:+639171577370",
+        label: "+63 918 943 4747",
+        href: "tel:+639189434747",
       },
       {
-        label: "0908 889 0664",
+        label: "+63 908 889 0664",
         href: "tel:+639088890664",
       },
     ],

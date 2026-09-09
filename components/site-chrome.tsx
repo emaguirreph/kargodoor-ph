@@ -116,8 +116,8 @@ export function Footer() {
         <div className="kd-footer-grid">
           <section>
             <h2>CONTACT INFORMATION</h2>
-            <p>Mobile: 0917 157 7370</p>
-            <p>Mobile: 0908 889 0664</p>
+            <p><a href="tel:+639189434747">+63 918 943 4747</a></p>
+            <p><a href="tel:+639088890664">+63 908 889 0664</a></p>
             <p>
               Email:{" "}
               <a href="mailto:support@kargodoorph.com">
