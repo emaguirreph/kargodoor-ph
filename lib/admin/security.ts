@@ -66,6 +66,23 @@ export function canonicalOrigin(env: AdminEnv) {
   return url.origin;
 }
 
+export function adminOriginAllowed(env: AdminEnv, candidate: string) {
+  const canonical = new URL(canonicalOrigin(env));
+  const allowed = new Set([canonical.origin]);
+  if (
+    canonical.protocol === "https:" &&
+    (canonical.hostname === "kargodoorph.com" || canonical.hostname === "www.kargodoorph.com")
+  ) {
+    allowed.add("https://kargodoorph.com");
+    allowed.add("https://www.kargodoorph.com");
+  }
+  try {
+    return allowed.has(new URL(candidate).origin);
+  } catch {
+    return false;
+  }
+}
+
 const equal = (a: string, b: string) => {
   const left = Buffer.from(a);
   const right = Buffer.from(b);
@@ -241,7 +258,7 @@ export async function authenticate(
   const origin = canonicalOrigin(env);
   const requestUrl = new URL(request.url);
 
-  if (requestUrl.origin !== origin) {
+  if (!adminOriginAllowed(env, requestUrl.origin)) {
     throw new AdminError(
       "Admin is unavailable on this address.",
       403,

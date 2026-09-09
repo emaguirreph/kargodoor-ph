@@ -18,6 +18,7 @@ import {
   csrfToken,
   checkCsrf,
   canonicalOrigin,
+  adminOriginAllowed,
   authenticate,
   type AdminEnv,
 } from "../../lib/admin/security";
@@ -325,6 +326,23 @@ test("CSRF is signed, expiring, user-bound and route-bound; origin fails closed"
     }),
   );
 });
+test("admin production origin allows only KargoDoor apex and www hosts", () => {
+  const env = { ADMIN_ORIGIN: "https://kargodoorph.com" } as AdminEnv;
+  assert.equal(adminOriginAllowed(env, "https://kargodoorph.com"), true);
+  assert.equal(adminOriginAllowed(env, "https://www.kargodoorph.com"), true);
+  for (const origin of [
+    "https://evil.test",
+    "https://kargodoorph.com.evil.test",
+    "http://kargodoorph.com",
+    "https://admin.kargodoorph.com",
+  ]) assert.equal(adminOriginAllowed(env, origin), false);
+  const local = {
+    ADMIN_ORIGIN: "http://localhost:8787",
+    ADMIN_LOCAL_DEV: "true",
+  } as AdminEnv;
+  assert.equal(adminOriginAllowed(local, "http://localhost:8787"), true);
+  assert.equal(adminOriginAllowed(local, "http://127.0.0.1:8787"), false);
+});
 test("JWT rejects forged, expired, wrong audience/issuer and missing identity tokens", () => {
   const { privateKey, publicKey } = generateKeyPairSync("rsa", {
     modulusLength: 2048,
@@ -397,7 +415,7 @@ test("valid Access identity still requires an enabled admin database entry", asy
   };
   const original = globalThis.fetch;
   globalThis.fetch = async () => Response.json({ keys: [key] });
-  const request = (email: string) => {
+  const request = (email: string, origin = env.ADMIN_ORIGIN) => {
     const now = Math.floor(Date.now() / 1000);
     const body = [
       { alg: "RS256", kid: "allowlist" },
@@ -416,13 +434,17 @@ test("valid Access identity still requires an enabled admin database entry", asy
       body +
       "." +
       sign("RSA-SHA256", Buffer.from(body), privateKey).toString("base64url");
-    return new Request(env.ADMIN_ORIGIN + "/admin", {
+    return new Request(origin + "/admin", {
       headers: { "cf-access-jwt-assertion": token },
     });
   };
   try {
     assert.equal(
       (await authenticate(request("admin@example.test"), env)).role,
+      "admin",
+    );
+    assert.equal(
+      (await authenticate(request("admin@example.test", "https://www.kargodoorph.com"), env)).role,
       "admin",
     );
     await assert.rejects(

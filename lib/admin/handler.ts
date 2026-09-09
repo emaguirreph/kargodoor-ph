@@ -5,6 +5,7 @@ import {
   authenticate,
   AdminError,
   canonicalOrigin,
+  adminOriginAllowed,
   csrfToken,
   checkCsrf,
   type AdminEnv,
@@ -59,10 +60,9 @@ function validateFormOrigin(
   request: Request,
   env: AdminEnv,
 ) {
-  const expectedOrigin = canonicalOrigin(env);
   const requestOrigin = new URL(request.url).origin;
 
-  if (requestOrigin !== expectedOrigin) {
+  if (!adminOriginAllowed(env, requestOrigin)) {
     throw new AdminError(
       "Admin request origin is invalid.",
       403,
@@ -98,7 +98,7 @@ function validateFormOrigin(
     );
   }
 
-  if (submittedOrigin !== expectedOrigin) {
+  if (submittedOrigin !== requestOrigin) {
     throw new AdminError(
       "Cross-site form submission rejected.",
       403,

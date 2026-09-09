@@ -10,6 +10,7 @@ import {
   authenticate,
   AdminError,
   canonicalOrigin,
+  adminOriginAllowed,
   checkCsrf,
   csrfToken,
   type AdminEnv,
@@ -259,14 +260,13 @@ async function readForm(
   env: AdminEnv,
   userId: string,
 ) {
-  const expectedOrigin = canonicalOrigin(env);
   const requestOrigin = new URL(request.url).origin;
 
   /*
    * Actual request must be served from the
    * configured KargoDoor Admin origin.
    */
-  if (requestOrigin !== expectedOrigin) {
+  if (!adminOriginAllowed(env, requestOrigin)) {
     throw new AdminError(
       "Admin request origin is invalid.",
       403,
@@ -312,7 +312,7 @@ async function readForm(
       );
     }
 
-    if (submittedOrigin !== expectedOrigin) {
+    if (submittedOrigin !== requestOrigin) {
       throw new AdminError(
         "Cross-site form submission rejected.",
         403,

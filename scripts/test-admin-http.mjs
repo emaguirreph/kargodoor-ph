@@ -123,6 +123,7 @@ try {
     }
   }
   for (const path of [
+    "/admin",
     "/admin/dashboard",
     "/admin/customers",
     "/admin/shipments",
@@ -134,6 +135,9 @@ try {
     "/admin/invoices",
   ])
     assert.equal((await get(path, false)).status, 401, path + " protected");
+  const adminRoot = await get("/admin");
+  assert.equal(adminRoot.status, 307);
+  assert.equal(adminRoot.headers.get("location"), origin + "/admin/dashboard");
   const expensePath = "/admin/finance/expenses";
   assert.equal((await get(expensePath)).status, 200);
   const expenseForm = await get(expensePath + "?new=1");
@@ -235,12 +239,25 @@ try {
   assert.ok(!exportText.includes("cargo_code") && !exportText.includes("customer_id") && !exportText.includes("invoice_id"));
   assert.equal((await post("/admin/finance/export", {})).status, 405);
   console.log("Finance Phase 4 HTTP checks passed: reports, authenticated CSV, filename, UTF-8 BOM, sections, safe fields, and POST rejected.");
+  for (const path of [
+    "/admin/dashboard",
+    "/admin/customers",
+    "/admin/shipments",
+    "/admin/invoices",
+    "/admin/finance",
+    "/admin/finance/expenses",
+    "/admin/activity",
+    "/admin/import-export",
+  ]) assert.equal((await get(path)).status, 200, path + " works");
+  const legacy = await (await get("/admin/tracking-editor", false)).text();
+  assert.ok(legacy.includes("Find an existing shipment") && legacy.includes("KDOOR-0001") &&
+    legacy.includes("Hong Kong") &&
+    (legacy.match(/action="\/admin\/tracking-editor"/g) ?? []).length === 2);
+  console.log("Admin routing HTTP checks passed: dashboard redirect, all Admin pages, authentication, and Tracking Editor.");
   const trackingBefore = await (await get("/api/track?code=KDOOR-0001", false)).json();
   assert.equal(trackingBefore.remarks, "Tracking sentinel");
   for (const path of ["/", "/how-it-works", "/services", "/rates-calculator", "/faq", "/contact-us", "/track"])
     assert.equal((await get(path, false)).status, 200, path + " public route works");
-  const legacy = await (await get("/admin", false)).text();
-  assert.ok(legacy.includes("Find an existing shipment") && legacy.includes("KDOOR-0001") && legacy.includes("Hong Kong"));
   let response = await get("/admin/dashboard");
   assert.equal(response.status, 200);
   assert.match(await response.text(), /Payments Received/);
@@ -455,7 +472,7 @@ try {
   assert.equal(JSON.parse(tables)[0].results.length, 7);
   assert.deepEqual(await (await get("/api/track?code=KDOOR-0001", false)).json(), trackingBefore);
   console.log(
-    "HTTP integration passed: public routes and legacy editor preserved; tracking sentinel unchanged; customer/shipment/invoice/payment workflows; partial and multiple payments; balances and automatic statuses; search and activity; validation; CSRF; duplicates; stale edits; 14 audit records; 7 tables. All operations were local.",
+    "HTTP integration passed: /admin dashboard redirect and legacy editor preserved; tracking sentinel unchanged; customer/shipment/invoice/payment workflows; partial and multiple payments; balances and automatic statuses; search and activity; validation; CSRF; duplicates; stale edits; 14 audit records; 7 tables. All operations were local.",
   );
 } catch (error) {
   console.error(error);
