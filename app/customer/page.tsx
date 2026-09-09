@@ -67,78 +67,99 @@ function deliveryCharge(shipment: CustomerShipment) {
   return shipment.shipment_delivery_charge;
 }
 
-function ShipmentCard({
+function ShipmentRow({
   shipment,
 }: {
   shipment: CustomerShipment;
 }) {
+  const measurement =
+    shipment.service_type === "Sea Freight"
+      ? shipment.cbm > 0
+        ? `${shipment.cbm.toLocaleString("en-PH", {
+            maximumFractionDigits: 3,
+          })} CBM`
+        : "—"
+      : shipment.weight_kg > 0
+        ? `${shipment.weight_kg.toLocaleString("en-PH", {
+            maximumFractionDigits: 2,
+          })} kg`
+        : "—";
+
   return (
-    <article className="kd-customer-shipment">
-      <div className="kd-customer-shipment-heading">
-        <div>
-          <span>Tracking Number</span>
-          <strong>{shipment.tracking_number}</strong>
-        </div>
+    <tr>
+      <td>
+        <strong>{shipment.tracking_number}</strong>
+      </td>
 
-        <span className="kd-customer-shipment-status">
-          {shipment.status}
-        </span>
-      </div>
+      <td>{shipment.status}</td>
 
-      <div className="kd-customer-shipment-details">
-        <div>
-          <span>Service</span>
-          <strong>{shipment.service_type}</strong>
-        </div>
+      <td>{shipment.service_type}</td>
 
-        <div>
-          <span>CBM</span>
-          <strong>
-            {shipment.cbm > 0
-              ? shipment.cbm.toLocaleString("en-PH", {
-                  maximumFractionDigits: 3,
-                })
-              : "—"}
-          </strong>
-        </div>
+      <td>{measurement}</td>
 
-        <div>
-          <span>Weight</span>
-          <strong>
-            {shipment.weight_kg > 0
-              ? `${shipment.weight_kg.toLocaleString("en-PH", {
-                  maximumFractionDigits: 2,
-                })} kg`
-              : "—"}
-          </strong>
-        </div>
+      <td>{formatMoney(shipment.shipping_charge)}</td>
 
-        <div>
-          <span>Freight Charge</span>
-          <strong>{formatMoney(shipment.shipping_charge)}</strong>
-        </div>
+      <td>{formatMoney(deliveryCharge(shipment))}</td>
 
-        <div>
-          <span>Delivery Charge</span>
-          <strong>{formatMoney(deliveryCharge(shipment))}</strong>
-        </div>
+      <td>
+        <strong>{paymentLabel(shipment)}</strong>
+      </td>
 
-        <div>
-          <span>Payment</span>
-          <strong>{paymentLabel(shipment)}</strong>
-        </div>
-      </div>
-
-      <div className="kd-customer-shipment-actions">
+      <td>
         <a
+          className="kd-customer-track"
           href={`/track?tracking=${encodeURIComponent(
             shipment.tracking_number,
           )}`}
         >
-          TRACK SHIPMENT
+          TRACK
         </a>
-      </div>
-    </article>
+      </td>
+    </tr>
+  );
+}
+
+function ShipmentTable({
+  shipments,
+  emptyMessage,
+}: {
+  shipments: CustomerShipment[];
+  emptyMessage: string;
+}) {
+  if (shipments.length === 0) {
+    return (
+      <p className="kd-customer-empty">
+        {emptyMessage}
+      </p>
+    );
+  }
+
+  return (
+    <div className="kd-customer-table-wrap">
+      <table className="kd-customer-table">
+        <thead>
+          <tr>
+            <th>Tracking No.</th>
+            <th>Status</th>
+            <th>Service</th>
+            <th>CBM / Weight</th>
+            <th>Freight</th>
+            <th>Delivery</th>
+            <th>Payment</th>
+            <th></th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {shipments.map((shipment) => (
+            <ShipmentRow
+              key={shipment.id}
+              shipment={shipment}
+            />
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -162,11 +183,6 @@ export default async function CustomerPage() {
     redirect("/customer/change-password");
   }
 
-  /*
-   * SECURITY:
-   * customer_id comes ONLY from the authenticated server-side
-   * customer session. Never accept a customer ID from the browser.
-   */
   const result = await env.ADMIN_DB.prepare(
     `
       SELECT
@@ -230,70 +246,44 @@ export default async function CustomerPage() {
       <Header />
 
       <main className="kd-customer-page">
-        <section className="kd-customer-card">
+        <section className="kd-customer-card kd-customer-dashboard">
           <div className="kd-customer-dashboard-heading">
             <h1>MY KargoDoorPH</h1>
-            <h2>Welcome, {customer.full_name}</h2>
+            <p>Welcome, {customer.full_name}</p>
           </div>
 
           <section className="kd-customer-dashboard-section">
             <h2>My Shipments</h2>
 
-            {activeShipments.length > 0 ? (
-              <div className="kd-customer-shipment-list">
-                {activeShipments.map((shipment) => (
-                  <ShipmentCard
-                    key={shipment.id}
-                    shipment={shipment}
-                  />
-                ))}
-              </div>
-            ) : (
-              <p className="kd-customer-empty">
-                You have no active shipments.
-              </p>
-            )}
+            <ShipmentTable
+              shipments={activeShipments}
+              emptyMessage="You have no active shipments."
+            />
           </section>
 
           <section className="kd-customer-dashboard-section">
             <h2>Shipment History</h2>
 
-            {shipmentHistory.length > 0 ? (
-              <div className="kd-customer-shipment-list">
-                {shipmentHistory.map((shipment) => (
-                  <ShipmentCard
-                    key={shipment.id}
-                    shipment={shipment}
-                  />
-                ))}
-              </div>
-            ) : (
-              <p className="kd-customer-empty">
-                No shipment history yet.
-              </p>
-            )}
+            <ShipmentTable
+              shipments={shipmentHistory}
+              emptyMessage="No shipment history yet."
+            />
           </section>
 
-          <section className="kd-customer-dashboard-contact">
-            <h2>Need Help?</h2>
-            <p>
-              Contact KargoDoor if you have questions about your
-              shipment.
-            </p>
+          <div className="kd-customer-dashboard-actions">
+            <MessengerLink
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              CONTACT KARGODOOR
+            </MessengerLink>
 
-            <div className="kd-customer-actions">
-              <MessengerLink
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                CONTACT KARGODOOR
-              </MessengerLink>
-
-              <form action="/customer/logout" method="post">
-                <button type="submit">LOG OUT</button>
-              </form>
-            </div>
-          </section>
+            <form action="/customer/logout" method="post">
+              <button type="submit">
+                LOG OUT
+              </button>
+            </form>
+          </div>
         </section>
       </main>
 
