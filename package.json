@@ -16,6 +16,7 @@
     "admin:dev": "node scripts/admin-dev.mjs",
     "test:admin": "node scripts/test-admin.mjs",
     "test:customer-auth": "node scripts/test-customer-auth.mjs",
+    "test:customer-password-state-migration": "node scripts/test-customer-password-state-migration.mjs",
     "test:admin:http": "node scripts/test-admin-http.mjs"
   },
   "dependencies": {
