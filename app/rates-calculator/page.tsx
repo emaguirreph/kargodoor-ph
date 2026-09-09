@@ -10,6 +10,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { Footer, Header } from "@/components/site-chrome";
+import { MESSENGER_URL } from "@/lib/contact-links";
 import { TrackedAnchor } from "@/components/tracked-link";
 import { trackEvent } from "@/lib/analytics";
 import { getAirEstimate, getSeaEstimate } from "@/lib/shipping-estimate.mjs";
@@ -329,7 +330,7 @@ export default function RatesCalculatorPage() {
                 )}
                 <TrackedAnchor
                   className="kd-button kd-button-green kd-result-quote"
-                  href="http://m.me/kargodoorph"
+                  href={MESSENGER_URL}
                   target="_blank"
                   rel="noopener noreferrer"
                   analyticsEvent="generate_lead"

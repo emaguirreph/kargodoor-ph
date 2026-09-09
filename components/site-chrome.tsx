@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { trackEvent } from "@/lib/analytics";
+import { MESSENGER_URL } from "@/lib/contact-links";
 
 const navigation = [
   { label: "HOME", href: "/" },
@@ -52,7 +53,7 @@ export function Header() {
 
         <a
           className="kd-header-quote"
-          href="http://m.me/kargodoorph"
+          href={MESSENGER_URL}
           target="_blank"
           rel="noopener noreferrer"
           onClick={() => trackEvent("generate_lead")}
@@ -91,7 +92,7 @@ export function Header() {
 
             <a
               className="kd-mobile-quote"
-              href="http://m.me/kargodoorph"
+              href={MESSENGER_URL}
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => {
@@ -180,7 +181,7 @@ export function Footer() {
 
       <a
         className="kd-floating-message"
-        href="https://m.me/KargoDoorPH"
+        href={MESSENGER_URL}
         target="_blank"
         rel="noopener noreferrer"
         aria-label="Message KargoDoor PH"

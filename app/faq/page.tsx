@@ -2,8 +2,7 @@
 
 import { useId, useState, type ReactNode } from "react";
 import { Footer, Header } from "@/components/site-chrome";
-
-const messengerUrl = "https://m.me/KargoDoorPH";
+import { MESSENGER_URL } from "@/lib/contact-links";
 
 const trackingUrl =
   "https://kargodoor-ph.em-aguirreph.workers.dev/track";
@@ -15,7 +14,7 @@ function ContactLink({
 }) {
   return (
     <a
-      href={messengerUrl}
+      href={MESSENGER_URL}
       target="_blank"
       rel="noopener noreferrer"
     >
