@@ -17,9 +17,11 @@ export async function POST(request: Request) {
     const { env } = await getCloudflareContext();
     const login = await loginCustomer(env.ADMIN_DB, email, password);
     if (!login) return failed(request);
-    const response = Response.redirect(new URL(login.account.password_state === "temporary" ? "/customer/change-password" : "/customer", request.url), 303);
-    response.headers.set("Set-Cookie", customerSessionCookieValue(login.session.token));
-    return response;
+    return new Response(null, { status: 303, headers: {
+      Location: new URL(login.account.password_state === "temporary" ? "/customer/change-password" : "/customer", request.url).href,
+      "Set-Cookie": customerSessionCookieValue(login.session.token),
+      "Cache-Control": "no-store",
+    } });
   } catch {
     return failed(request);
   }

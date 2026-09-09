@@ -9,9 +9,11 @@ export async function POST(request: Request) {
     return new Response("Invalid request origin.", { status: 403 });
   const { env } = await getCloudflareContext();
   await deleteCustomerSession(env.ADMIN_DB, requestCookie(request, customerSessionCookie));
-  const response = Response.redirect(new URL("/customer/login", request.url), 303);
-  response.headers.set("Set-Cookie", clearCustomerSessionCookie());
-  return response;
+  return new Response(null, { status: 303, headers: {
+    Location: new URL("/customer/login", request.url).href,
+    "Set-Cookie": clearCustomerSessionCookie(),
+    "Cache-Control": "no-store",
+  } });
 }
 
 export const GET = () => new Response("Method not allowed.", { status: 405, headers: { Allow: "POST" } });
