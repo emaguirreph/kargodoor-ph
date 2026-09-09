@@ -26,10 +26,10 @@ type Shipment = {
 function TrackContent() {
   const searchParams = useSearchParams();
 
-  const initialTracking =
+  const trackingFromUrl =
     searchParams.get("tracking")?.trim().toUpperCase() ?? "";
 
-  const [code, setCode] = useState(initialTracking);
+  const [code, setCode] = useState(trackingFromUrl);
   const [shipment, setShipment] = useState<Shipment | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -70,14 +70,14 @@ function TrackContent() {
   }, []);
 
   useEffect(() => {
-    if (!initialTracking) return;
+    if (!trackingFromUrl) return;
 
     const timer = window.setTimeout(() => {
-      void trackShipment(initialTracking);
+      void trackShipment(trackingFromUrl);
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [initialTracking, trackShipment]);
+  }, [trackingFromUrl, trackShipment]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -187,10 +187,10 @@ export default function TrackPage() {
           <div className="kd-container">
             <Suspense
               fallback={
-                <div className="kd-track-heading">
+                <header className="kd-track-heading">
                   <h1>TRACK YOUR SHIPMENT</h1>
                   <p>Loading tracking...</p>
-                </div>
+                </header>
               }
             >
               <TrackContent />
