@@ -14,6 +14,8 @@ import {
   checkCsrf,
   csrfToken,
   type AdminEnv,
+  canMutateAdmin,
+  requireAdminMutation,
 } from "./security";
 
 import type { RecordData } from "./validation";
@@ -1111,6 +1113,7 @@ async function detail(
   user: {
     id: string;
     name: string;
+    role: "owner" | "admin" | "viewer";
   },
   id: string,
   saved: string,
@@ -1358,19 +1361,19 @@ async function detail(
         ${paymentHistory}
       </section>
 
-      ${issueForm(
+      ${canMutateAdmin(user) ? issueForm(
         env,
         user.id,
         invoice,
-      )}
+      ) : ""}
 
-      ${paymentForm(
+      ${canMutateAdmin(user) ? paymentForm(
         env,
         user.id,
         invoice,
-      )}
+      ) : ""}
     `,
-    user.name,
+    user.name, 200, {}, canMutateAdmin(user),
   );
 }
 
@@ -1642,6 +1645,7 @@ async function list(
   db: D1Database,
   user: {
     name: string;
+    role: "owner" | "admin" | "viewer";
   },
   url: URL,
 ) {
@@ -1872,14 +1876,14 @@ async function list(
           <a href="${route}">Clear</a>
         </form>
 
-        <div class="actions">
+        ${canMutateAdmin(user) ? `<div class="actions">
           <a
             class="button"
             href="${route}?new=1"
           >
             Create invoice
           </a>
-        </div>
+        </div>` : ""}
       </section>
 
       <section>
@@ -1906,7 +1910,7 @@ async function list(
         </div>
       </section>
     `,
-    user.name,
+    user.name, 200, {}, canMutateAdmin(user),
   );
 }
 
@@ -1962,6 +1966,7 @@ export async function handleBilling(
     }
 
     if (request.method === "POST") {
+      requireAdminMutation(user);
       const form = await readForm(
         request,
         env,
@@ -2069,6 +2074,7 @@ export async function handleBilling(
     if (
       url.searchParams.get("new") === "1"
     ) {
+      requireAdminMutation(user);
       return await createView(
         db,
         env,

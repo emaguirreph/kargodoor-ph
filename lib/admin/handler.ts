@@ -9,6 +9,9 @@ import {
   csrfToken,
   checkCsrf,
   type AdminEnv,
+  canMutateAdmin,
+  requireAdminMutation,
+  requireOperationalAdmin,
 } from "./security";
 
 import {
@@ -129,6 +132,7 @@ export async function handleAdmin(
 
     const user =
       await authenticate(request, env);
+    const canWrite = canMutateAdmin(user);
 
     const db = env.ADMIN_DB;
     const url = new URL(request.url);
@@ -142,6 +146,13 @@ export async function handleAdmin(
     const path = view
       ? `/admin/${view}`
       : "/admin/dashboard";
+
+    if (!canWrite && (view === "activity" || view === "finance/export")) {
+      requireOperationalAdmin(user);
+    }
+    if (!canWrite && ["new", "edit", "delete"].some((key) => url.searchParams.has(key))) {
+      requireAdminMutation(user);
+    }
 
     if (
       url.pathname !== path &&
@@ -167,6 +178,7 @@ export async function handleAdmin(
      * POST
      */
     if (request.method === "POST") {
+      requireAdminMutation(user);
       if (!entity && view !== "finance/expenses") {
         throw new AdminError(
           "Use the customer or shipment form.",
@@ -324,7 +336,7 @@ export async function handleAdmin(
     }
 
     if (view === "finance/expenses") {
-      return await expensesPage(db, url, user.name, csrfToken(env, user.id, path));
+      return await expensesPage(db, url, user.name, csrfToken(env, user.id, path), canWrite);
     }
 
     if (view === "finance/export") {
@@ -339,9 +351,9 @@ export async function handleAdmin(
       "finance"
     ) {
       if (url.searchParams.get("report") === "freight" || ["q", "missing", "page"].some((key) => url.searchParams.has(key))) {
-        return await finance(db, url, user.name);
+        return await finance(db, url, user.name, canWrite);
       }
-      return await financeDashboard(db, url, user.name);
+      return await financeDashboard(db, url, user.name, undefined, canWrite);
     }
 
     if (
@@ -356,10 +368,7 @@ export async function handleAdmin(
     }
 
     if (!entity) {
-      return await dashboard(
-        db,
-        user.name,
-      );
+      return await dashboard(db, user.name, canWrite);
     }
 
     /*
@@ -877,11 +886,11 @@ export async function handleAdmin(
                 Customers are shown automatically below.
                 Use search to narrow the list.
 
-                <a
+                ${canWrite ? `<a
                   href="/admin/customers?new=1"
                 >
                   Add a customer
-                </a>
+                </a>` : ""}
               </p>
             </section>
           `
@@ -963,6 +972,9 @@ export async function handleAdmin(
           </section>
         `,
         user.name,
+        200,
+        {},
+        canWrite,
       );
     }
 
@@ -1102,7 +1114,7 @@ export async function handleAdmin(
 
       const relatedLinks =
         entity ===
-        "customers"
+          "customers"
           ? `
             <a
               href="/admin/shipments?customer_id=${esc(
@@ -1111,16 +1123,16 @@ export async function handleAdmin(
             >
               View shipments
             </a>
-
+            ${canWrite ? `
             <a
               href="/admin/shipments?new=1&customer_id=${esc(
                 id,
               )}"
             >
               Add shipment
-            </a>
+            </a>` : ""}
           `
-          : `
+          : canWrite ? `
             <a
               href="/admin/invoices?new=1&shipment_id=${esc(
                 id,
@@ -1128,7 +1140,7 @@ export async function handleAdmin(
             >
               Create or view invoice
             </a>
-          `;
+          ` : "";
 
       return page(
         title,
@@ -1144,7 +1156,7 @@ export async function handleAdmin(
             </dl>
 
             <div class="actions">
-              <a
+              ${canWrite ? `<a
                 class="button"
                 href="${path}?id=${esc(
                   id,
@@ -1156,21 +1168,24 @@ export async function handleAdmin(
                     ? "customer"
                     : "shipment"
                 }
-              </a>
+              </a>` : ""}
 
               ${relatedLinks}
 
-              <a
+              ${canWrite ? `<a
                 href="/admin/activity?entity_type=${entity}&entity_id=${esc(
                   id,
                 )}"
               >
                 View activity
-              </a>
+              </a>` : ""}
             </div>
           </section>
         `,
         user.name,
+        200,
+        {},
+        canWrite,
       );
     }
 
@@ -1580,7 +1595,7 @@ export async function handleAdmin(
             </a>
           </form>
 
-          <div class="actions">
+          ${canWrite ? `<div class="actions">
             <a
               class="button"
               href="${path}?new=1"
@@ -1592,7 +1607,7 @@ export async function handleAdmin(
                   : "shipment"
               }
             </a>
-          </div>
+          </div>` : ""}
         </section>
 
         <section>
@@ -1634,6 +1649,9 @@ export async function handleAdmin(
         </section>
       `,
       user.name,
+      200,
+      {},
+      canWrite,
     );
   } catch (error) {
     const known =

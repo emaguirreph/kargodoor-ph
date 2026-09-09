@@ -90,7 +90,7 @@ function totalPesos(rows: RecordData[]) {
   return `₱${(total / BigInt(100)).toLocaleString("en-PH")}.${(total % BigInt(100)).toString().padStart(2, "0")}`;
 }
 
-export async function expensesPage(db: D1Database, url: URL, user: string, csrf: string) {
+export async function expensesPage(db: D1Database, url: URL, user: string, csrf: string, canWrite = true) {
   const edit = url.searchParams.get("edit");
   const remove = url.searchParams.get("delete");
   const add = url.searchParams.get("new") === "1";
@@ -111,7 +111,7 @@ export async function expensesPage(db: D1Database, url: URL, user: string, csrf:
       <form method="post" action="${path}">${hidden("csrf", csrf)}${hidden("action", "delete")}
       ${hidden("id", record.id)}${hidden("revision", record.updated_at)}
       <div class="actions"><button type="submit" name="confirm" value="yes">Confirm Delete</button>
-      <a href="${path}">Cancel</a></div></form></section>`, user);
+      <a href="${path}">Cancel</a></div></form></section>`, user, 200, {}, canWrite);
   }
   if (add || edit !== null) {
     const historical = edit !== null && !expenseCategories.some((category) => category === record.category)
@@ -130,7 +130,7 @@ export async function expensesPage(db: D1Database, url: URL, user: string, csrf:
       ${hidden("csrf", csrf)}${edit !== null ? hidden("action", "edit") + hidden("id", record.id) + hidden("revision", record.updated_at) : ""}
       <div class="grid">${form}</div><p class="muted">* Required.</p>
       <div class="actions"><button type="submit">Save expense</button><a href="${path}">Cancel</a></div>
-      </form></section>`, user);
+      </form></section>`, user, 200, {}, canWrite);
   }
   const filters = filterSchema.parse(Object.fromEntries(
     ["from", "to", "category", "payment_method", "q"].map((key) => [key, url.searchParams.get(key) ?? ""]),
@@ -148,13 +148,13 @@ export async function expensesPage(db: D1Database, url: URL, user: string, csrf:
       filters.payment_method, filters.payment_method, filters.q, filters.q, filters.q, filters.q, filters.q)
     .all<RecordData>();
   const table = results.length ? `<div class="table"><table><thead><tr>
-    ${fields.map(([, label]) => `<th>${label}</th>`).join("")}<th>Actions</th></tr></thead><tbody>
+    ${fields.map(([, label]) => `<th>${label}</th>`).join("")}${canWrite ? "<th>Actions</th>" : ""}</tr></thead><tbody>
     ${results.map((row) => `<tr>${fields.map(([key]) => `<td>${key === "amount" ? esc(pesos(row[key])) : esc(row[key]) || "—"}</td>`).join("")}
-      <td><a href="${path}?edit=${esc(encodeURIComponent(String(row.id)))}">Edit</a> <a href="${path}?delete=${esc(encodeURIComponent(String(row.id)))}">Delete</a></td></tr>`).join("")}
+      ${canWrite ? `<td><a href="${path}?edit=${esc(encodeURIComponent(String(row.id)))}">Edit</a> <a href="${path}?delete=${esc(encodeURIComponent(String(row.id)))}">Delete</a></td>` : ""}</tr>`).join("")}
     </tbody></table></div>` : "<p>No expenses found.</p>";
   const notice = url.searchParams.get("deleted") === "1" ? "Expense deleted." : url.searchParams.get("updated") === "1" ? "Expense updated." : url.searchParams.get("saved") === "1" ? "Expense saved." : "";
   return page("Expenses", `${notice ? `<p class="notice" role="status">${notice}</p>` : ""}
-    <section><div class="actions"><a class="button" href="${path}?new=1">Add Expense</a>
+    <section><div class="actions">${canWrite ? `<a class="button" href="${path}?new=1">Add Expense</a>` : ""}
     <a href="/admin/finance">Back to Finance</a></div></section>
     <section><form method="get" action="${path}" class="search">
       ${input("q", "Search", filters)}${input("from", "From Date", filters, "date")}${input("to", "To Date", filters, "date")}
@@ -162,5 +162,5 @@ export async function expensesPage(db: D1Database, url: URL, user: string, csrf:
       ${dropdown("payment_method", "Payment Method", expensePaymentMethods, filters.payment_method, "All Payment Methods")}
       <button type="submit">Apply Filters</button><a href="${path}">Clear Filters</a></form></section>
     <div class="card"><h2>Total Expenses</h2><strong>${esc(totalPesos(results))}</strong></div>
-    <section>${table}</section>`, user);
+    <section>${table}</section>`, user, 200, {}, canWrite);
 }

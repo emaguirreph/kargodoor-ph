@@ -1,4 +1,10 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import {
+  AdminError,
+  authenticate,
+  requireOperationalAdmin,
+  type AdminEnv,
+} from "@/lib/admin/security";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -656,6 +662,8 @@ export async function GET(request: Request) {
   try {
 
     const env = await getEnvironment();
+    const user = await authenticate(request, env as unknown as AdminEnv);
+    requireOperationalAdmin(user);
 
     const shipmentOptions =
       await getShipmentOptions(env);
@@ -724,7 +732,8 @@ export async function GET(request: Request) {
           : "Shipment loaded. Edit the details, then select Update Shipment.",
     );
 
-  } catch {
+  } catch (error) {
+    if (error instanceof AdminError) return response(error.message, error.status);
 
     return response(
       "Unable to load admin. Check the existing TRACKING_DB connection and try again.",
@@ -740,6 +749,8 @@ export async function POST(request: Request) {
   try {
 
     const env = await getEnvironment();
+    const user = await authenticate(request, env as unknown as AdminEnv);
+    requireOperationalAdmin(user);
 
     const shipmentOptions =
       await getShipmentOptions(env);
@@ -934,7 +945,8 @@ export async function POST(request: Request) {
       },
     );
 
-  } catch {
+  } catch (error) {
+    if (error instanceof AdminError) return response(error.message, error.status);
 
     return response(
       "Could not save the shipment. Return to the Tracking Editor and load the cargo code to check its current details before retrying.",

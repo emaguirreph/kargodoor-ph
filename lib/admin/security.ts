@@ -17,6 +17,14 @@ export type AdminEnv = {
   LOCAL_ADMIN_EMAIL?: string;
   LOCAL_ADMIN_HASH?: string;
 };
+export type AdminRole = "owner" | "admin" | "viewer";
+export type AdminUser = { id: string; name: string; email: string; role: AdminRole };
+export const canMutateAdmin = (user: Pick<AdminUser, "role">) =>
+  user.role === "owner" || user.role === "admin";
+export function requireAdminMutation(user: Pick<AdminUser, "role">) {
+  if (!canMutateAdmin(user)) throw new AdminError("Viewer access is read-only.", 403);
+}
+export const requireOperationalAdmin = requireAdminMutation;
 
 export class AdminError extends Error {
   constructor(
@@ -413,17 +421,12 @@ export async function authenticate(
       SELECT id, name, email, role
       FROM admin_users
       WHERE email = ?
-        AND role IN ('admin', 'owner')
+        AND role IN ('admin', 'owner', 'viewer')
       LIMIT 1
     `,
   )
     .bind(email)
-    .first<{
-      id: string;
-      name: string;
-      email: string;
-      role: string;
-    }>();
+    .first<AdminUser>();
 
   if (!user) {
     throw new AdminError(

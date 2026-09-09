@@ -95,7 +95,7 @@ export async function readFinanceSummary(db: D1Database, range: FinanceRange, no
     profit: revenue - costs - operating, shipments, uncosted, asOf,
     undatedInvoices, undatedPayments, undatedExpenses };
 }
-export async function financeDashboard(db: D1Database, url: URL, user: string, now = new Date()) {
+export async function financeDashboard(db: D1Database, url: URL, user: string, now = new Date(), canWrite = true) {
   const range = financeRange(url, now);
   const summary = await readFinanceSummary(db, range, now);
   const report = await readFinanceReport(db, url, now, summary);
@@ -152,10 +152,10 @@ export async function financeDashboard(db: D1Database, url: URL, user: string, n
     ${metricTable("Finance Overview", financeOverview, "Net Profit / (Loss)")}
     ${metricTable("Cash & Receivables", cash)}
     ${metricTable("Shipping Performance", shipping)}
-    <section><div class="actions"><h2>Operating Expenses</h2><a class="button" href="/admin/finance/expenses?new=1">+ Add Expense</a><a href="/admin/finance/expenses">View Expenses</a></div>
+    <section><div class="actions"><h2>Operating Expenses</h2>${canWrite ? '<a class="button" href="/admin/finance/expenses?new=1">+ Add Expense</a>' : ""}<a href="/admin/finance/expenses">View Expenses</a></div>
       <p><strong>Total Operating Expenses: ${esc(financePesos(summary.operating))}</strong></p>${breakdown}</section>
     <section><h2>Period Comparison</h2>${comparison}</section>
-    <section><div class="actions"><h2>Monthly Summary</h2><a class="button" href="${esc(exportLink)}">Export Finance CSV</a></div>${monthly}</section>
+    <section><div class="actions"><h2>Monthly Summary</h2>${canWrite ? `<a class="button" href="${esc(exportLink)}">Export Finance CSV</a>` : ""}</div>${monthly}</section>
     <section><h2>How the Numbers Are Calculated</h2><div class="table"><table><tbody>
       <tr><td><strong>Revenue</strong></td><td class="muted">Eligible Invoice Revenue</td></tr>
       <tr><td><strong>Payments Received</strong></td><td class="muted">Actual Payments Received</td></tr>
@@ -169,5 +169,5 @@ export async function financeDashboard(db: D1Database, url: URL, user: string, n
     <p class="muted">Freight metrics use warehouse receipt date, or Philippine creation date when receipt date is absent. Cancelled shipments are excluded.</p>
     <div class="actions"><a href="${esc(freightLink)}">Freight Margin</a><a href="/admin/finance/expenses">Expenses</a></div>
     <style>.finance-emphasis td{border-top:2px solid #154876;border-bottom:2px solid #154876}.finance-emphasis strong{font-size:1.08rem}.finance-wide{overflow-x:auto}
-    @media(max-width:520px){table{min-width:0}thead{display:none}tr{display:block;padding:10px 0;border-bottom:1px solid #d5e4ed}td{display:block;border:0;padding:4px 0}td:last-child{font-size:1.1rem}}</style>`, user);
+    @media(max-width:520px){table{min-width:0}thead{display:none}tr{display:block;padding:10px 0;border-bottom:1px solid #d5e4ed}td{display:block;border:0;padding:4px 0}td:last-child{font-size:1.1rem}}</style>`, user, 200, {}, canWrite);
 }

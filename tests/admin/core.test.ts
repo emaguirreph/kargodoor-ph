@@ -21,6 +21,8 @@ import {
   adminOriginAllowed,
   authenticate,
   type AdminEnv,
+  canMutateAdmin,
+  requireAdminMutation,
 } from "../../lib/admin/security";
 import { expensesPage, saveExpense, mutateExpense } from "../../lib/admin/expenses";
 function database() {
@@ -31,6 +33,7 @@ function database() {
   sql.exec(readFileSync("migrations/admin/0003_invoices_payments.sql", "utf8"));
   sql.exec(readFileSync("migrations/admin/0004_public_tracking.sql", "utf8"));
   sql.exec(readFileSync("migrations/admin/0005_expenses.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0006_admin_viewer_role.sql", "utf8"));
   const user = randomUUID();
   sql
     .prepare("INSERT INTO admin_users VALUES (?,?,?,?,?,?)")
@@ -343,6 +346,38 @@ test("admin production origin allows only KargoDoor apex and www hosts", () => {
   assert.equal(adminOriginAllowed(local, "http://localhost:8787"), true);
   assert.equal(adminOriginAllowed(local, "http://127.0.0.1:8787"), false);
 });
+test("viewer authorization is centralized and mutation attempts are forbidden", () => {
+  assert.equal(canMutateAdmin({ role: "owner" }), true);
+  assert.equal(canMutateAdmin({ role: "admin" }), true);
+  assert.equal(canMutateAdmin({ role: "viewer" }), false);
+  assert.throws(
+    () => requireAdminMutation({ role: "viewer" }),
+    (error: unknown) => error instanceof Error && error.message === "Viewer access is read-only." &&
+      "status" in error && error.status === 403,
+  );
+});
+
+test("viewer migration preserves users and seeds the exact approved role records", () => {
+  const sql = new DatabaseSync(":memory:");
+  sql.exec(readFileSync("migrations/admin/0001_phase1.sql", "utf8"));
+  sql.exec(`INSERT INTO admin_users VALUES
+    ('existing-owner','Existing Owner','owner@example.test','owner','created-owner','updated-owner'),
+    ('existing-admin','Existing Admin','archie.aguirre@gmail.com','admin','created-admin','updated-admin'),
+    ('existing-disabled','Disabled','disabled@example.test','disabled','created-disabled','updated-disabled')`);
+  sql.exec(`INSERT INTO activity_log VALUES
+    ('log','existing-owner','create_customer','customers','customer',NULL,NULL,NULL,'then')`);
+  sql.exec(readFileSync("migrations/admin/0006_admin_viewer_role.sql", "utf8"));
+  const roles = sql.prepare("SELECT id,email,role,created_at FROM admin_users ORDER BY email").all();
+  assert.ok(roles.some((row) => row.id === "existing-owner" && row.role === "owner" && row.created_at === "created-owner"));
+  assert.ok(roles.some((row) => row.id === "existing-admin" && row.email === "archie.aguirre@gmail.com" && row.role === "admin" && row.created_at === "created-admin"));
+  for (const [email, role] of [
+    ["em.aguirreph@gmail.com", "owner"],
+    ["lapid.patrick@gmail.com", "viewer"],
+    ["keahreyes.inquiry@gmail.com", "viewer"],
+  ]) assert.ok(roles.some((row) => row.email === email && row.role === role));
+  assert.equal(sql.prepare("SELECT admin_user_id FROM activity_log").get()!.admin_user_id, "existing-owner");
+  assert.throws(() => sql.exec("INSERT INTO admin_users VALUES ('x','X','x@example.test','other','x','x')"), /CHECK/);
+});
 test("JWT rejects forged, expired, wrong audience/issuer and missing identity tokens", () => {
   const { privateKey, publicKey } = generateKeyPairSync("rsa", {
     modulusLength: 2048,
@@ -450,6 +485,11 @@ test("valid Access identity still requires an enabled admin database entry", asy
     await assert.rejects(
       authenticate(request("customer@example.test"), env),
       /not authorized/,
+    );
+    sql.exec("UPDATE admin_users SET role='viewer'");
+    assert.equal(
+      (await authenticate(request("admin@example.test"), env)).role,
+      "viewer",
     );
     sql.exec("UPDATE admin_users SET role='disabled'");
     await assert.rejects(

@@ -5,10 +5,10 @@ if (
   !email ||
   !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
   !name?.trim() ||
-  !["owner", "admin"].includes(role)
+  !["owner", "admin", "viewer"].includes(role)
 ) {
   console.error(
-    'Usage: node scripts/admin-user.mjs email "Full name" [admin|owner]',
+    'Usage: node scripts/admin-user.mjs email "Full name" [viewer|admin|owner]',
   );
   process.exit(1);
 }

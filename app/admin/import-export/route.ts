@@ -1,5 +1,5 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { authenticate, type AdminEnv } from "@/lib/admin/security";
+import { authenticate, canMutateAdmin, type AdminEnv } from "@/lib/admin/security";
 import { page } from "@/lib/admin/ui";
 
 const headers = { customers:["Account Number","Full Name","Company","Mobile","Email","Address","Notes","Created","Updated"], shipments:["Tracking Number","Account Number","Customer Name","Service Type","Origin Warehouse","Warehouse Received Date","Departure Date","CBM","Weight KG","Status","Estimated Arrival","Actual Arrival","Tracking Remarks","KargoDoor Freight Charge","Ni Hao Freight Cost","Delivery Charge","Payment Status","Created","Updated"] };
@@ -8,6 +8,7 @@ const file = (name:string, columns:string[], rows:Record<string,unknown>[]) => n
 
 export async function GET(request: Request) {
  const {env}=await getCloudflareContext(); const admin=env as unknown as AdminEnv; const user=await authenticate(request,admin); const action=new URL(request.url).searchParams.get("download"); const date=new Date().toISOString().slice(0,10);
+ if(!canMutateAdmin(user)) return page("Import / Export",'<p class="notice" role="alert">Viewer access is read-only.</p>',user.name,403);
  if(action==="customer-template") return file("KargoDoor-Customer-Import-Template.csv",headers.customers.slice(0,7),[]);
  if(action==="shipment-template") return file("KargoDoor-Shipment-Import-Template.csv",headers.shipments.filter(x=>!["Customer Name","Created","Updated"].includes(x)),[]);
  if(action==="customers") { const rows=(await admin.ADMIN_DB.prepare("SELECT customer_code AS 'Account Number', full_name AS 'Full Name', company_name AS Company, mobile AS Mobile, email AS Email, address AS Address, notes AS Notes, created_at AS Created, updated_at AS Updated FROM customers ORDER BY created_at").all<Record<string,unknown>>()).results; return file(`KargoDoor-Customers-${date}.csv`,headers.customers,rows); }

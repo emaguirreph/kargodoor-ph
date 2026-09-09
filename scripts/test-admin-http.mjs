@@ -132,6 +132,7 @@ try {
     "/admin/finance",
     "/admin/finance/expenses",
     "/admin/finance/export",
+    "/admin/tracking-editor",
     "/admin/invoices",
   ])
     assert.equal((await get(path, false)).status, 401, path + " protected");
@@ -249,11 +250,36 @@ try {
     "/admin/activity",
     "/admin/import-export",
   ]) assert.equal((await get(path)).status, 200, path + " works");
-  const legacy = await (await get("/admin/tracking-editor", false)).text();
+  const legacy = await (await get("/admin/tracking-editor")).text();
   assert.ok(legacy.includes("Find an existing shipment") && legacy.includes("KDOOR-0001") &&
     legacy.includes("Hong Kong") &&
     (legacy.match(/action="\/admin\/tracking-editor"/g) ?? []).length === 2);
   console.log("Admin routing HTTP checks passed: dashboard redirect, all Admin pages, authentication, and Tracking Editor.");
+  cli(["d1", "execute", "ADMIN_DB", "--local", "--command",
+    "UPDATE admin_users SET role='viewer' WHERE email='local-admin@example.test'"]);
+  for (const path of [
+    "/admin", "/admin/dashboard", "/admin/customers", "/admin/shipments",
+    "/admin/invoices", "/admin/finance", "/admin/finance/expenses",
+    "/admin/finance?report=freight",
+  ]) assert.ok([200, 307].includes((await get(path)).status), path + " viewer read access");
+  for (const path of [
+    "/admin/activity", "/admin/import-export", "/admin/import-export?download=customers",
+    "/admin/finance/export", "/admin/tracking-editor",
+    "/admin/customers?new=1", "/admin/customers?edit=1",
+    "/admin/shipments?new=1", "/admin/shipments?edit=1",
+    "/admin/invoices?new=1", "/admin/finance/expenses?new=1",
+    "/admin/finance/expenses?edit=00000000-0000-4000-8000-000000000001",
+    "/admin/finance/expenses?delete=00000000-0000-4000-8000-000000000001",
+  ]) assert.equal((await get(path)).status, 403, path + " viewer denied");
+  for (const path of ["/admin/customers", "/admin/shipments", "/admin/invoices", "/admin/finance/expenses"])
+    assert.equal((await post(path, {})).status, 403, path + " viewer mutation denied");
+  const viewerDashboard = await (await get("/admin/dashboard")).text();
+  for (const forbidden of ["Add customer", "Add shipment", "Create invoice", "Import / Export", "Tracking editor"])
+    assert.ok(!viewerDashboard.includes(forbidden), forbidden + " hidden from viewer");
+  cli(["d1", "execute", "ADMIN_DB", "--local", "--command",
+    "UPDATE admin_users SET role='owner' WHERE email='local-admin@example.test'"]);
+  assert.equal((await get("/admin/tracking-editor")).status, 200);
+  console.log("Viewer HTTP checks passed: read pages, hidden controls, protected tools, typed write URLs, and POST mutations.");
   const trackingBefore = await (await get("/api/track?code=KDOOR-0001", false)).json();
   assert.equal(trackingBefore.remarks, "Tracking sentinel");
   for (const path of ["/", "/how-it-works", "/services", "/rates-calculator", "/faq", "/contact-us", "/track"])

@@ -40,7 +40,7 @@ const recordLink = (type: unknown, id: unknown, label: unknown) =>
     ? `<a href="/admin/${esc(type)}?id=${encodeURIComponent(String(id))}">${esc(label || id)}</a>`
     : esc(label || id);
 
-export async function dashboard(db: D1Database, user: string) {
+export async function dashboard(db: D1Database, user: string, canWrite = true) {
   const summary = await db.prepare(`SELECT
     (SELECT COUNT(*) FROM customers) AS customers,
     (SELECT COUNT(*) FROM shipments WHERE status NOT IN ('Delivered','Cancelled')) AS active,
@@ -50,16 +50,16 @@ export async function dashboard(db: D1Database, user: string) {
   const recent = (await db.prepare(`SELECT s.id,s.tracking_number,c.full_name,s.status,s.updated_at
     FROM shipments s JOIN customers c ON c.id=s.customer_id ORDER BY s.updated_at DESC,s.id LIMIT 8`).all<RecordData>()).results;
   return page("Dashboard", `
-    <div class="actions"><a class="button" href="/admin/customers?new=1">Add customer</a><a class="button" href="/admin/shipments?new=1">Add shipment</a><a class="button" href="/admin/invoices?new=1">Create invoice</a></div>
-    <p class="muted">Customer and shipment records for the new admin. Public tracking is managed in the <a href="/admin">tracking editor</a> during this phase.</p>
+    ${canWrite ? '<div class="actions"><a class="button" href="/admin/customers?new=1">Add customer</a><a class="button" href="/admin/shipments?new=1">Add shipment</a><a class="button" href="/admin/invoices?new=1">Create invoice</a></div>' : '<p class="notice">Viewer access is read-only.</p>'}
+    <p class="muted">Customer and shipment records for the new admin.${canWrite ? ' Public tracking is managed in the <a href="/admin/tracking-editor">tracking editor</a> during this phase.' : ""}</p>
     ${cards([["Total Customers",summary?.customers ?? 0],["Active Shipments",summary?.active ?? 0],["Unpaid Invoices",summary?.unpaid ?? 0],["Payments Received",pesos(summary?.payments)]])}
     <section><h2>Freight margin</h2><p><strong>${esc(pesos(margin?.margin))}</strong> across ${esc(margin?.costed ?? 0)} shipments with Ni Hao cost entered.</p>
     <p>${Number(margin?.shipments ?? 0) - Number(margin?.costed ?? 0)} shipments still need a cost. Excludes cancelled shipments, delivery charges and business expenses.</p><a href="/admin/finance">Review charges and costs</a></section>
-    <section><h2>Recently updated shipments</h2>${recent.length ? `<div class="table"><table><thead><tr><th>Shipment</th><th>Customer</th><th>Status</th></tr></thead><tbody>${recent.map(r => `<tr><td>${recordLink("shipments", r.id, r.tracking_number)}</td><td>${esc(r.full_name)}</td><td>${esc(r.status)}</td></tr>`).join("")}</tbody></table></div>` : '<p>No shipments yet. <a href="/admin/customers?new=1">Add your first customer</a>, then create their shipment.</p>'}</section>
-    <section><h2>Invoices and payments</h2><p>Create invoices from connected shipments, record partial or full payments, and review balances.</p><div class="actions"><a href="/admin/invoices">Review invoices</a><a href="/admin/activity">Review activity log</a></div></section>`, user);
+    <section><h2>Recently updated shipments</h2>${recent.length ? `<div class="table"><table><thead><tr><th>Shipment</th><th>Customer</th><th>Status</th></tr></thead><tbody>${recent.map(r => `<tr><td>${recordLink("shipments", r.id, r.tracking_number)}</td><td>${esc(r.full_name)}</td><td>${esc(r.status)}</td></tr>`).join("")}</tbody></table></div>` : canWrite ? '<p>No shipments yet. <a href="/admin/customers?new=1">Add your first customer</a>, then create their shipment.</p>' : '<p>No shipments yet.</p>'}</section>
+    <section><h2>Invoices and payments</h2><p>Review invoices, payments, and balances.</p><div class="actions"><a href="/admin/invoices">Review invoices</a>${canWrite ? '<a href="/admin/activity">Review activity log</a>' : ""}</div></section>`, user, 200, {}, canWrite);
 }
 
-export async function finance(db: D1Database, url: URL, user: string) {
+export async function finance(db: D1Database, url: URL, user: string, canWrite = true) {
   const { q, number, offset } = filters(url);
   const missing = url.searchParams.get("missing") === "1";
   const range = financeRange(url);
@@ -77,7 +77,7 @@ export async function finance(db: D1Database, url: URL, user: string) {
     ${cards([["Costed freight charges",pesos(total?.charges)],["Ni Hao freight costs",pesos(total?.costs)],["Freight margin",pesos(total?.margin)],["Costs still needed",Number(total?.shipments ?? 0)-Number(total?.costed ?? 0)]])}
     <p class="muted">Totals cover non-cancelled shipments in the selected date range with a recorded Ni Hao cost, regardless of the search below. Freight margin = KargoDoor freight charge − Ni Hao freight cost. Delivery charges and other expenses are excluded; this is not net income or cash received.</p>
     <section><form action="/admin/finance" method="get" class="search">${hidden("report", "freight")}${hidden("from", range.from)}${hidden("to", range.to)}<label>Search shipment or customer<input name="q" maxlength="160" value="${esc(q)}"></label><label>Cost status<select name="missing"><option value="0">All costs</option><option value="1"${missing ? " selected" : ""}>Cost not entered</option></select></label><button>Search</button><a href="/admin/finance?report=freight&amp;from=${esc(range.from)}&amp;to=${esc(range.to)}">Clear</a></form></section>
-    <section>${rows.length ? `<div class="table"><table><thead><tr><th>Shipment / customer</th><th>Status</th><th>Freight charge</th><th>Ni Hao cost</th><th>Freight margin</th></tr></thead><tbody>${rows.slice(0,25).map(r => `<tr><td>${recordLink("shipments",r.id,r.tracking_number)}<br><span class="muted">${esc(r.full_name)}</span></td><td>${esc(r.status)}</td><td>${esc(pesos(r.shipping_charge))}</td><td>${r.nihao_cost === null ? "Not entered" : esc(pesos(r.nihao_cost))}</td><td>${r.nihao_cost === null ? "—" : esc(pesos(Number(r.shipping_charge)-Number(r.nihao_cost)))}</td></tr>`).join("")}</tbody></table></div>` : "<p>No matching shipments.</p>"}${pager(url,number,rows.length > 25)}</section>`, user);
+    <section>${rows.length ? `<div class="table"><table><thead><tr><th>Shipment / customer</th><th>Status</th><th>Freight charge</th><th>Ni Hao cost</th><th>Freight margin</th></tr></thead><tbody>${rows.slice(0,25).map(r => `<tr><td>${recordLink("shipments",r.id,r.tracking_number)}<br><span class="muted">${esc(r.full_name)}</span></td><td>${esc(r.status)}</td><td>${esc(pesos(r.shipping_charge))}</td><td>${r.nihao_cost === null ? "Not entered" : esc(pesos(r.nihao_cost))}</td><td>${r.nihao_cost === null ? "—" : esc(pesos(Number(r.shipping_charge)-Number(r.nihao_cost)))}</td></tr>`).join("")}</tbody></table></div>` : "<p>No matching shipments.</p>"}${pager(url,number,rows.length > 25)}</section>`, user, 200, {}, canWrite);
 }
 
 const fieldLabels: Record<string,string> = {nihao_cost:"Ni Hao freight cost",shipping_charge:"KargoDoor freight charge",delivery_charge:"Delivery charge",cbm:"CBM",weight_kg:"Weight (kg)"};
