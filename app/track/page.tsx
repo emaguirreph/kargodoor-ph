@@ -70,13 +70,17 @@ function TrackContent() {
   }, []);
 
   useEffect(() => {
-    if (!trackingFromUrl) return;
+    if (!trackingFromUrl) {
+      return;
+    }
 
     const timer = window.setTimeout(() => {
       void trackShipment(trackingFromUrl);
     }, 0);
 
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, [trackingFromUrl, trackShipment]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
