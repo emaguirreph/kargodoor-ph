@@ -1,6 +1,7 @@
 import type { D1Database } from "@cloudflare/workers-types";
 import { itemCategories } from "../../lib/admin/quotation-pricing";
 import { calculateTotalCbm } from "../../lib/admin/quotation-cbm";
+import { calculateDensity, densityStatus, densityThreshold } from "../../lib/admin/quotation-density";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
@@ -116,6 +117,18 @@ const shipmentInput = (id: string) =>
 const shipment = (id: string) => shipmentSchema.parse(shipmentInput(id));
 
 
+
+test("admin quotation density uses the strict 425 kg/CBM threshold", () => {
+  assert.equal(densityThreshold, 425);
+  assert.equal(calculateDensity("8.38593", "3400")!.toFixed(2), "405.44");
+  assert.equal(calculateDensity("2", "800"), 400);
+  assert.equal(densityStatus(calculateDensity("2", "800")), "WITHIN THRESHOLD");
+  assert.equal(calculateDensity("2", "850"), 425);
+  assert.equal(densityStatus(calculateDensity("2", "850")), "WITHIN THRESHOLD");
+  assert.equal(densityStatus(calculateDensity("2", "850.01")), "ABOVE THRESHOLD — WEIGHT CHARGE COMPARISON APPLIES");
+  assert.equal(calculateDensity("0", "100"), null);
+  assert.throws(() => calculateDensity("1", "-1"));
+});
 test("admin quotation CBM conversion is authoritative and rejects invalid dimensions", () => {
   assert.equal(calculateTotalCbm({ length: "1000", width: "500", height: "200", measurementUnit: "mm", quantity: "2" }), 0.1);
   assert.equal(calculateTotalCbm({ length: "100", width: "50", height: "20", measurementUnit: "cm", quantity: "1" }), 0.1);
