@@ -166,7 +166,7 @@ test("admin quotation density uses the strict 425 kg/CBM threshold", () => {
   assert.throws(() => calculateDensity("1", "-1"));
 });
 test("admin quotation CBM conversion is authoritative and rejects invalid dimensions", () => {
-  assert.equal(calculateTotalCbm({ length: "1000", width: "500", height: "200", measurementUnit: "mm", quantity: "2" }), 0.1);
+  assert.equal(calculateTotalCbm({ length: "1000", width: "500", height: "200", measurementUnit: "mm", quantity: "2" }), 0.2);
   assert.equal(calculateTotalCbm({ length: "100", width: "50", height: "20", measurementUnit: "cm", quantity: "1" }), 0.1);
   assert.equal(calculateTotalCbm({ length: "2", width: "1", height: "0.5", measurementUnit: "m", quantity: "3" }), 3);
   assert.equal(calculateTotalCbm({ length: "2465", width: "1134", height: "30", measurementUnit: "mm", quantity: "100" }), 8.38593);
