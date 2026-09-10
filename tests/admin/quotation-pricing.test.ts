@@ -22,3 +22,13 @@ test("air weight and piece calculations", () => {
   assert.equal(airQuote("Tablets",0,0,10).final,10000);
   assert.equal(airQuote("Laptop Computers",0,0,5).final,10000);
 });
+test("pricing engines reject malformed or missing pricing inputs", () => {
+  assert.throws(() => seaQuote("LOW VALUE GOODS", Number.NaN, 10));
+  assert.throws(() => seaQuote("MOBILE / COMPUTERS / TABLETS", .5, 10, 0));
+  assert.throws(() => airQuote("Ordinary Items", .1, -1, 1));
+  assert.throws(() => airQuote("Mobile Phones", 0, 0, 0));
+});
+test("air recalculates billable weight from changed CBM or actual weight", () => {
+  assert.equal(airQuote("Ordinary Items", .1, 10, 1).billableWeight, 17);
+  assert.equal(airQuote("Ordinary Items", .1, 30, 1).billableWeight, 30);
+});
