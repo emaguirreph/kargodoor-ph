@@ -1,4 +1,5 @@
 import type { D1Database } from "@cloudflare/workers-types";
+import { itemCategories } from "../../lib/admin/quotation-pricing";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
@@ -112,6 +113,18 @@ const shipmentInput = (id: string) =>
     payment_status: "Unpaid",
   });
 const shipment = (id: string) => shipmentSchema.parse(shipmentInput(id));
+
+test("quotation category mapping and origin warehouses stay controlled", () => {
+  assert.equal(itemCategories["Solar panels"], "COMMODITIES");
+  assert.equal(itemCategories["Mobile phones"], "MOBILE / COMPUTERS / TABLETS");
+  assert.equal(itemCategories.Computers, "MOBILE / COMPUTERS / TABLETS");
+  assert.equal(itemCategories.Tablets, "MOBILE / COMPUTERS / TABLETS");
+  assert.equal(itemCategories["Mobile / computer parts & accessories"], "HIGH VALUE");
+  const quotationSource = readFileSync("lib/admin/quotations.ts", "utf8");
+  for (const warehouse of ["Guangzhou", "Yiwu", "Shishi", "Hong Kong", "Taiwan"])
+    assert.match(quotationSource, new RegExp('originWarehouses = \\[.*"' + warehouse + '"'));
+  assert.doesNotMatch(quotationSource.match(/const originWarehouses[^;]+;/)![0], /Malabon/i);
+});
 test("customer account foundation preserves existing records and enforces isolated credential structures", async () => {
   const { sql, db, user } = database();
   const customerId = await saveRecord(db, "customers", customer, user, "", "");
