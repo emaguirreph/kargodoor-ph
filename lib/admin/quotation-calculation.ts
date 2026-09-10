@@ -1,4 +1,4 @@
-import { itemCategories, seaQuote, seaRates, type SeaCategory } from "./quotation-pricing";
+import { airItems, airQuote, itemCategories, seaQuote, seaRates, type AirItem, type SeaCategory } from "./quotation-pricing";
 
 const numeric = (value: unknown, label: string, required = true) => {
   const raw = String(value ?? "").trim();
@@ -29,4 +29,21 @@ export function calculateAdminSeaQuote(input: Record<string, unknown>) {
     densityRate: seaRates[category].densityRate,
     ...calculation,
   };
+}
+
+export function calculateAdminAirQuote(input: Record<string, unknown>) {
+  if (input.freightType !== "Air Freight") throw new Error("Live calculation is available for Air Freight only.");
+  const item = String(input.item ?? "") as AirItem;
+  if (!airItems.includes(item)) throw new Error("Choose a valid Air Freight item.");
+  const cbm = numeric(input.cbm, "Total CBM");
+  const weight = numeric(input.weight, "actual weight");
+  const quantity = numeric(input.quantity, "quantity");
+  const calculation = airQuote(item, cbm, weight, quantity);
+  return { item, airCategory: item, cbm, weight, quantity, ...calculation };
+}
+
+export function calculateAdminQuote(input: Record<string, unknown>) {
+  if (input.freightType === "Sea Freight") return calculateAdminSeaQuote(input);
+  if (input.freightType === "Air Freight") return calculateAdminAirQuote(input);
+  throw new Error("Choose a valid freight type.");
 }
