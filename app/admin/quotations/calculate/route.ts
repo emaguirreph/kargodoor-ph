@@ -1,5 +1,5 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { calculateAdminSeaQuote } from "@/lib/admin/quotation-calculation";
+import { calculateAdminQuote } from "@/lib/admin/quotation-calculation";
 import { AdminError, authenticate, canMutateAdmin, checkCsrf, secureHeaders, type AdminEnv } from "@/lib/admin/security";
 
 export const runtime = "nodejs";
@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     checkCsrf(env, user.id, "/admin/quotations", request.headers.get("x-csrf-token") ?? "");
     const body = await request.json();
     if (!body || typeof body !== "object" || Array.isArray(body)) throw new AdminError("Invalid calculation input.");
-    return Response.json(calculateAdminSeaQuote(body as Record<string, unknown>), { headers: secureHeaders });
+    return Response.json(calculateAdminQuote(body as Record<string, unknown>), { headers: secureHeaders });
   } catch (error) {
     const status = error instanceof AdminError ? error.status : 400;
     const message = error instanceof Error ? error.message : "Invalid calculation input.";
