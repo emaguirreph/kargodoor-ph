@@ -127,12 +127,12 @@ test("live admin Sea calculation delegates to the authoritative pricing engine",
   assert.equal(solar.packageTier, "KD Standard");
   assert.equal(solar.densityApplies, false);
   assert.equal(solar.final.toFixed(2), "79666.34");
-  assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Bags", cbm: ".01", weight: "1", units: "0" }).packageTier, "KD Mini");
-  assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Bags", cbm: ".05", weight: "1", units: "0" }).packageTier, "KD Lite");
-  assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Bags", cbm: ".125", weight: "1", units: "0" }).packageTier, "KD Plus");
+  assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Bags", cbm: "0.01", weight: "1", units: "0" }).packageTier, "KD Mini");
+  assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Bags", cbm: "0.05", weight: "1", units: "0" }).packageTier, "KD Lite");
+  assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Bags", cbm: "0.125", weight: "1", units: "0" }).packageTier, "KD Plus");
   assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Bags", cbm: "1", weight: "425", units: "0" }).densityApplies, false);
   assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Bags", cbm: "1", weight: "500", units: "0" }).packageTier, "KD Max");
-  assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Bags", cbm: ".01", weight: "100", units: "0" }).packageTier, "KD Max");
+  assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Bags", cbm: "0.01", weight: "100", units: "0" }).packageTier, "KD Max");
   for (const item of ["Mobile phones", "Computers", "Tablets"])
     assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item, cbm: "1", weight: "1", units: "1" }).final, 10750);
   assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Mobile / computer parts & accessories", cbm: "1", weight: "1", units: "0" }).category, "HIGH VALUE");
