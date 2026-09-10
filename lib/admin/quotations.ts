@@ -1,3 +1,4 @@
+import type { D1Database } from "@cloudflare/workers-types";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { randomUUID } from "node:crypto";
 import { authenticate, AdminError, canMutateAdmin, checkCsrf, csrfToken, secureHeaders, type AdminEnv } from "./security";
