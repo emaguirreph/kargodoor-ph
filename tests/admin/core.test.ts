@@ -2,6 +2,7 @@ import type { D1Database } from "@cloudflare/workers-types";
 import { itemCategories } from "../../lib/admin/quotation-pricing";
 import { calculateTotalCbm } from "../../lib/admin/quotation-cbm";
 import { calculateDensity, densityStatus, densityThreshold } from "../../lib/admin/quotation-density";
+import { calculateAdminSeaQuote } from "../../lib/admin/quotation-calculation";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
@@ -118,6 +119,24 @@ const shipment = (id: string) => shipmentSchema.parse(shipmentInput(id));
 
 
 
+
+test("live admin Sea calculation delegates to the authoritative pricing engine", () => {
+  const solar = calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Solar panels", cbm: "8.38593", weight: "3400", units: "0" });
+  assert.equal(solar.category, "COMMODITIES");
+  assert.equal(solar.cbmRate, 9500);
+  assert.equal(solar.packageTier, "KD Standard");
+  assert.equal(solar.densityApplies, false);
+  assert.equal(solar.final.toFixed(2), "79666.34");
+  assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Bags", cbm: ".01", weight: "1", units: "0" }).packageTier, "KD Mini");
+  assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Bags", cbm: ".05", weight: "1", units: "0" }).packageTier, "KD Lite");
+  assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Bags", cbm: ".125", weight: "1", units: "0" }).packageTier, "KD Plus");
+  assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Bags", cbm: "1", weight: "425", units: "0" }).densityApplies, false);
+  assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Bags", cbm: "1", weight: "500", units: "0" }).packageTier, "KD Max");
+  assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Bags", cbm: ".01", weight: "100", units: "0" }).packageTier, "KD Max");
+  for (const item of ["Mobile phones", "Computers", "Tablets"])
+    assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item, cbm: "1", weight: "1", units: "1" }).final, 10750);
+  assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Mobile / computer parts & accessories", cbm: "1", weight: "1", units: "0" }).category, "HIGH VALUE");
+});
 test("admin quotation density uses the strict 425 kg/CBM threshold", () => {
   assert.equal(densityThreshold, 425);
   assert.equal(calculateDensity("8.38593", "3400")!.toFixed(2), "405.44");
