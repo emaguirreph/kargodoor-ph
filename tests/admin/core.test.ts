@@ -1,5 +1,6 @@
 import type { D1Database } from "@cloudflare/workers-types";
 import { itemCategories } from "../../lib/admin/quotation-pricing";
+import { calculateTotalCbm } from "../../lib/admin/quotation-cbm";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
@@ -114,6 +115,20 @@ const shipmentInput = (id: string) =>
   });
 const shipment = (id: string) => shipmentSchema.parse(shipmentInput(id));
 
+
+test("admin quotation CBM conversion is authoritative and rejects invalid dimensions", () => {
+  assert.equal(calculateTotalCbm({ length: "1000", width: "500", height: "200", measurementUnit: "mm", quantity: "2" }), 0.1);
+  assert.equal(calculateTotalCbm({ length: "100", width: "50", height: "20", measurementUnit: "cm", quantity: "1" }), 0.1);
+  assert.equal(calculateTotalCbm({ length: "2", width: "1", height: "0.5", measurementUnit: "m", quantity: "3" }), 3);
+  assert.equal(calculateTotalCbm({ length: "2465", width: "1134", height: "30", measurementUnit: "mm", quantity: "100" }), 8.38593);
+  for (const input of [
+    { length: "0", width: "1", height: "1", measurementUnit: "m", quantity: "1" },
+    { length: "-1", width: "1", height: "1", measurementUnit: "m", quantity: "1" },
+    { length: "1", width: "", height: "1", measurementUnit: "m", quantity: "1" },
+    { length: "1", width: "1", height: "1", measurementUnit: "in", quantity: "1" },
+  ]) assert.throws(() => calculateTotalCbm(input));
+  assert.equal(calculateTotalCbm({ length: "", width: "", height: "", measurementUnit: "cm", quantity: "1" }), null);
+});
 test("quotation category mapping and origin warehouses stay controlled", () => {
   assert.equal(itemCategories["Solar panels"], "COMMODITIES");
   assert.equal(itemCategories["Mobile phones"], "MOBILE / COMPUTERS / TABLETS");
