@@ -3,6 +3,7 @@ import { itemCategories } from "../../lib/admin/quotation-pricing";
 import { calculateTotalCbm } from "../../lib/admin/quotation-cbm";
 import { calculateDensity, densityStatus, densityThreshold } from "../../lib/admin/quotation-density";
 import { calculateAdminAirQuote, calculateAdminSeaQuote } from "../../lib/admin/quotation-calculation";
+import { isQuotationNumeric } from "../../lib/admin/quotations";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
@@ -188,6 +189,13 @@ test("quotation category mapping and origin warehouses stay controlled", () => {
   for (const warehouse of ["Guangzhou", "Yiwu", "Shishi", "Hong Kong", "Taiwan"])
     assert.match(quotationSource, new RegExp('originWarehouses = \\[.*"' + warehouse + '"'));
   assert.doesNotMatch(quotationSource.match(/const originWarehouses[^;]+;/)![0], /Malabon/i);
+});
+test("quotation numeric validator accepts valid decimals and rejects malformed values", () => {
+  for (const value of ["8", "8.38593", "0.10", "3400", "2465", "0", "80000"])
+    assert.equal(isQuotationNumeric(value), true, value);
+  for (const value of ["abc", "8.3.2", "NaN", "Infinity", "-Infinity"])
+    assert.equal(isQuotationNumeric(value), false, value);
+  assert.equal(isQuotationNumeric("8.38593"), true);
 });
 test("customer account foundation preserves existing records and enforces isolated credential structures", async () => {
   const { sql, db, user } = database();
