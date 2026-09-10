@@ -1,8 +1,8 @@
 import type { D1Database } from "@cloudflare/workers-types";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { randomUUID } from "node:crypto";
-import { authenticate, AdminError, canMutateAdmin, checkCsrf, csrfToken, secureHeaders, type AdminEnv } from "./security";
-import { esc, page, pesos, hidden } from "./ui";
+import { authenticate, AdminError, canMutateAdmin, checkCsrf, csrfToken, type AdminEnv } from "./security";
+import { esc, page, pesos } from "./ui";
 import { airItems, airQuote, itemCategories, seaQuote, seaRates, type AirItem, type SeaCategory } from "./quotation-pricing";
 type Row=Record<string, unknown>;
 const cents=(v:string)=>{if(!/^\d+(\.\d{1,2})?$/.test(v))throw new AdminError("Enter a valid non-negative currency amount.");const [a,b=""]=v.split(".");return Number(a)*100+Number(b.padEnd(2,"0"));};
