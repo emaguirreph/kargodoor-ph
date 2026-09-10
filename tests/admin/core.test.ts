@@ -2,7 +2,7 @@ import type { D1Database } from "@cloudflare/workers-types";
 import { itemCategories } from "../../lib/admin/quotation-pricing";
 import { calculateTotalCbm } from "../../lib/admin/quotation-cbm";
 import { calculateDensity, densityStatus, densityThreshold } from "../../lib/admin/quotation-density";
-import { calculateAdminSeaQuote } from "../../lib/admin/quotation-calculation";
+import { calculateAdminAirQuote, calculateAdminSeaQuote } from "../../lib/admin/quotation-calculation";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
@@ -120,6 +120,23 @@ const shipment = (id: string) => shipmentSchema.parse(shipmentInput(id));
 
 
 
+
+test("live admin Air calculation delegates to the authoritative pricing engine", () => {
+  const ordinary = calculateAdminAirQuote({ freightType: "Air Freight", item: "Ordinary Items", cbm: "0.10", weight: "10", quantity: "1" });
+  assert.equal(ordinary.rate, 350);
+  assert.equal(ordinary.volumetricWeight, 16.7);
+  assert.equal(ordinary.billableWeight, 17);
+  assert.equal(ordinary.final, 5950);
+  const actualWeight = calculateAdminAirQuote({ freightType: "Air Freight", item: "Ordinary Items", cbm: "0.01", weight: "20.1", quantity: "1" });
+  assert.equal(actualWeight.billableWeight, 21);
+  assert.equal(calculateAdminAirQuote({ freightType: "Air Freight", item: "Liquid, Powder, Food, Computer Parts, Electronics", cbm: "0.01", weight: "1", quantity: "1" }).rate, 450);
+  assert.equal(calculateAdminAirQuote({ freightType: "Air Freight", item: "Medicine and Food Supplements", cbm: "0.01", weight: "1", quantity: "1" }).rate, 500);
+  for (const [item, rate] of [["Mobile Phones", 800], ["Tablets", 1000], ["Laptop Computers", 2000]] as const) {
+    const result = calculateAdminAirQuote({ freightType: "Air Freight", item, cbm: "0", weight: "0", quantity: "2" });
+    assert.equal(result.rateBasis, "Per piece");
+    assert.equal(result.final, rate * 2);
+  }
+});
 test("live admin Sea calculation delegates to the authoritative pricing engine", () => {
   const solar = calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Solar panels", cbm: "8.38593", weight: "3400", units: "0" });
   assert.equal(solar.category, "COMMODITIES");
