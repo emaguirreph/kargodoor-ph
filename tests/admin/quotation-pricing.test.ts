@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { airQuote, seaQuote } from "../../lib/admin/quotation-pricing";
+import { airQuote, itemCategories, seaQuote } from "../../lib/admin/quotation-pricing";
 
 test("sea package tiers and density rule preserve boundaries", () => {
   assert.equal(seaQuote("LOW VALUE GOODS", .01, 4).final, 250);
@@ -32,3 +32,6 @@ test("air recalculates billable weight from changed CBM or actual weight", () =>
   assert.equal(airQuote("Ordinary Items", .1, 10, 1).billableWeight, 17);
   assert.equal(airQuote("Ordinary Items", .1, 30, 1).billableWeight, 30);
 });
+
+test("sea density, high-value mappings, and special items retain workbook rules",()=>{const smallDense=seaQuote("LOW VALUE GOODS",.01,100);assert.equal(smallDense.densityApplies,true);assert.equal(smallDense.packageTier,"KD Max");const high=seaQuote(itemCategories["Mobile / computer parts & accessories"],1,500);assert.equal(high.final,13000);for(const item of ["Mobile phones","Computers","Tablets"]){assert.equal(itemCategories[item],"MOBILE / COMPUTERS / TABLETS");assert.equal(seaQuote(itemCategories[item],.5,20,2).final,5750);}});
+test("air categories retain actual, volumetric, rounded, and per-piece pricing",()=>{assert.equal(airQuote("Medicine and Food Supplements",.1,10,1).final,8500);assert.equal(airQuote("Ordinary Items",.01,10,1).billableWeight,10);assert.equal(airQuote("Ordinary Items",.011,1,1).billableWeight,2);assert.throws(()=>airQuote("Ordinary Items",Infinity,1,1));});
