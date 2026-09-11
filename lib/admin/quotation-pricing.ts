@@ -29,9 +29,9 @@ export function seaQuote(category: SeaCategory, cbm: number, weight: number, uni
   const volumeCharge = fixed ?? cbm * rate.cbmRate;
   const base = fixed ?? Math.max(1700, volumeCharge);
   const densityApplies = density > 425;
-  const densityCharge = densityApplies ? weight * rate.densityRate! : 0;
-  const final = Math.max(base, densityCharge);
-  return { packageTier: densityApplies && densityCharge > base ? "KD Max" : fixed === 250 ? "KD Mini" : fixed === 750 ? "KD Lite" : fixed === 1400 ? "KD Plus" : "KD Standard", density, base, volumeCharge, densityCharge, unitCharge:0, densityApplies, final, pricingMethod:densityApplies && densityCharge > base ? "Weight × category density rate" : fixed ? "Fixed package rate" : "Category CBM rate" };
+  const densityCharge = weight * rate.densityRate!;
+  const final = Math.max(base, densityApplies ? densityCharge : 0);
+  return { packageTier: densityApplies && densityCharge > base ? "KD Max" : fixed === 250 ? "KD Mini" : fixed === 750 ? "KD Lite" : fixed === 1400 ? "KD Plus" : "KD Standard", density, base, volumeCharge, densityCharge, unitCharge:0, densityApplies, final, pricingMethod:densityApplies && densityCharge > base ? "Density-Based" : fixed ? "Fixed Rate" : "CBM-Based" };
 }
 export function airQuote(item: AirItem, cbm: number, weight: number, quantity: number) {
   if (!valid(quantity) || !Number.isInteger(quantity) || quantity < 1) throw new Error("Quantity is required.");
