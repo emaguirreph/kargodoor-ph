@@ -947,3 +947,5 @@ test("expense filters and search combine with exact integer totals and clear res
 import "./finance.test";
 import "./finance-phase4.test";
 import "../messenger.test";
+
+import "./quotation-renderer.test";
