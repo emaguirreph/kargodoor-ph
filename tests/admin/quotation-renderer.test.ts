@@ -94,33 +94,65 @@ const requiredSeaOutputs = [
   "Total Unit Amount",
 ];
 
-function assertSeaPricingMarkup(html: string) {
-  for (const name of ["item", "cbm", "weight", "units"]) {
-    assert.match(html, new RegExp(`name="${name}"`), `Sea input ${name} should be present`);
-  }
+function assertCargoDetailsMarkup(html: string, includeSeaOutputs = true) {
+  assert.ok(html.includes("2. CARGO DETAILS"), "Cargo Details section must be rendered");
+  assert.ok(html.includes("CARGO PACKAGING"), "Cargo Packaging subsection must be rendered");
+  assert.ok(html.includes("Item / Commodity"), "Item / Commodity must be rendered");
+  assert.ok(html.includes("Supplier / Origin Location"), "Supplier / Origin Location must be rendered");
+  assert.ok(html.includes("KargoDoor Warehouse"), "KargoDoor Warehouse must be rendered");
+  assert.ok(html.includes("Freight Type"), "Freight Type must be rendered");
+  assert.ok(html.includes("Total CBM"), "Total CBM must be rendered");
+  assert.ok(html.includes("Actual Weight"), "Actual Weight must be rendered");
+  assert.ok(
+    html.includes("Applicable to Mobile Phones / Computers / Tablets."),
+    "Units helper text must be rendered",
+  );
 
   for (const name of [
-    "quantity",
-    "unit_type",
+    "item",
+    "origin",
+    "origin_warehouse",
+    "freight_type",
     "length",
     "width",
     "height",
     "measurement_unit",
-    "category",
+    "weight",
+    "units",
   ]) {
+    assert.match(html, new RegExp(`name="${name}"`), `Cargo Details input ${name} should be present`);
+  }
+
+  for (const warehouse of ["Guangzhou", "Yiwu", "Shishi", "Hong Kong", "Taiwan"]) {
+    assert.ok(html.includes(`>${warehouse}</option>`), `Missing warehouse option: ${warehouse}`);
+  }
+
+  assert.match(html, /data-category-output[^>]*readonly/, "Category must be read-only");
+  assert.match(html, /data-cbm-output[^>]*readonly/, "Total CBM must be read-only");
+
+  for (const name of ["quantity", "unit_type", "category", "cbm"]) {
     assert.doesNotMatch(
       html,
       new RegExp(`name="${name}"`),
-      `Legacy Sea input ${name} must not be rendered`,
+      `Prohibited editable field ${name} must not be rendered`,
     );
   }
 
-  for (const label of requiredSeaOutputs) {
-    assert.ok(html.includes(label), `Missing Sea read-only output: ${label}`);
+  assert.ok(!html.includes("Package Quantity"), "Package Quantity must not be rendered");
+
+  if (includeSeaOutputs) {
+    for (const label of requiredSeaOutputs) {
+      assert.ok(html.includes(label), `Missing Sea read-only output: ${label}`);
+    }
   }
+
+  assert.ok(
+    html.includes(`<script src="/admin-quotation-cargo.js" defer></script>`),
+    "Cargo Details external script must be loaded",
+  );
 }
 
-test("Sea Freight Create renderer exposes only four editable pricing inputs", async () => {
+test("Sea Freight Create renderer uses the new Cargo Details structure", async () => {
   const { env } = quotationDatabase();
   const response = await quotationsPage(
     new Request("http://localhost:3000/admin/quotations?new=1", {
@@ -133,7 +165,7 @@ test("Sea Freight Create renderer exposes only four editable pricing inputs", as
   const html = await response.text();
 
   assert.ok(html.includes("Create quotation"));
-  assertSeaPricingMarkup(html);
+  assertCargoDetailsMarkup(html);
 });
 
 test("Sea Freight Solar Panels persists exact pricing and Edit renderer stays clean", async () => {
@@ -147,7 +179,10 @@ test("Sea Freight Solar Panels persists exact pricing and Edit renderer stays cl
     quotation_date: "2026-09-11",
     customer_name: "Solar Test Customer",
     item: "Solar panels",
-    cbm: "8.39",
+    length: "8.39",
+    width: "1",
+    height: "1",
+    measurement_unit: "m",
     weight: "3400",
     units: "0",
   });
@@ -210,7 +245,7 @@ test("Sea Freight Solar Panels persists exact pricing and Edit renderer stays cl
   const html = await edit.text();
 
   assert.ok(html.includes("Edit quotation"));
-  assertSeaPricingMarkup(html);
+  assertCargoDetailsMarkup(html);
 
   const updateForm = new URLSearchParams({
     csrf: csrfToken(env, user, "/admin/quotations"),
@@ -221,7 +256,10 @@ test("Sea Freight Solar Panels persists exact pricing and Edit renderer stays cl
     quotation_date: "2026-09-11",
     customer_name: "Solar Test Customer",
     item: "Solar panels",
-    cbm: "8.40",
+    length: "8.40",
+    width: "1",
+    height: "1",
+    measurement_unit: "m",
     weight: "3400",
     units: "0",
   });
@@ -254,7 +292,7 @@ test("Sea Freight Solar Panels persists exact pricing and Edit renderer stays cl
   const updatedCargo = JSON.parse(updated.cargo_snapshot);
   const updatedPricing = JSON.parse(updated.pricing_snapshot);
 
-  assert.equal(updatedCargo.cbm, "8.40");
+  assert.equal(updatedCargo.cbm, "8.4");
   assert.equal(updatedCargo.weight, "3400");
   assert.equal(updatedCargo.units, "0");
   assert.equal(updatedCargo.category, "COMMODITIES");
@@ -271,7 +309,7 @@ test("Sea Freight Solar Panels persists exact pricing and Edit renderer stays cl
   assert.equal(updated.final_amount, 7_980_000);
 });
 
-test("Air Freight Create renderer retains legacy Air pricing inputs", async () => {
+test("Air Freight Create renderer uses the new Cargo Details structure", async () => {
   const { env } = quotationDatabase();
   const response = await quotationsPage(
     new Request(
@@ -284,17 +322,5 @@ test("Air Freight Create renderer retains legacy Air pricing inputs", async () =
   assert.equal(response.status, 200);
   const html = await response.text();
 
-  for (const name of [
-    "item",
-    "quantity",
-    "unit_type",
-    "length",
-    "width",
-    "height",
-    "measurement_unit",
-    "cbm",
-    "weight",
-  ]) {
-    assert.match(html, new RegExp(`name="${name}"`), `Air input ${name} should remain present`);
-  }
+  assertCargoDetailsMarkup(html, false);
 });
