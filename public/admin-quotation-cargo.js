@@ -280,6 +280,9 @@
     weight?.addEventListener("input", calculate);
     units?.addEventListener("input", calculate);
 
+    const calculateButton = form.querySelector("[data-quotation-calculate]");
+    calculateButton?.addEventListener("click", calculate);
+
     updateItems();
     updateCbm();
     calculate();
