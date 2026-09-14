@@ -7,7 +7,7 @@ import { airItems, airQuote, itemCategories, seaQuote, seaRates, type AirItem, t
 import { measurementUnits } from "./quotation-cbm";
 import { densityThreshold } from "./quotation-density";
 type Row=Record<string, unknown>;
-export const isQuotationNumeric=(raw:string)=>/^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(raw)&&Number.isFinite(Number(raw));
+export const isQuotationNumeric=(raw:string)=>/^(?:(?:0|[1-9]\d*)(?:\.\d+)?|\.\d+)$/.test(raw)&&Number.isFinite(Number(raw));
 const originWarehouses = ["Guangzhou","Yiwu","Shishi","Hong Kong","Taiwan"] as const;
 const cents=(v:string)=>{if(!/^\d+(\.\d{1,2})?$/.test(v))throw new AdminError("Enter a valid non-negative currency amount.");const [a,b=""]=v.split(".");return Number(a)*100+Number(b.padEnd(2,"0"));};
 const date=()=>new Date().toISOString().slice(0,10);

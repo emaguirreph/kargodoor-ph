@@ -3,7 +3,7 @@ import { airItems, airQuote, itemCategories, seaQuote, seaRates, type AirItem, t
 const numeric = (value: unknown, label: string, required = true) => {
   const raw = String(value ?? "").trim();
   if (!raw && !required) return 0;
-  if (!/^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(raw)) throw new Error(`Enter a valid non-negative ${label}.`);
+  if (!/^(?:(?:0|[1-9]\d*)(?:\.\d+)?|\.\d+)$/.test(raw)) throw new Error(`Enter a valid non-negative ${label}.`);
   const parsed = Number(raw);
   if (!Number.isFinite(parsed)) throw new Error(`Enter a valid non-negative ${label}.`);
   return parsed;

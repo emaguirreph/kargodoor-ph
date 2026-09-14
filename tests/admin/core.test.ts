@@ -209,7 +209,7 @@ test("quotation category mapping and origin warehouses stay controlled", () => {
   assert.doesNotMatch(quotationSource.match(/const originWarehouses[^;]+;/)![0], /Malabon/i);
 });
 test("quotation numeric validator accepts valid decimals and rejects malformed values", () => {
-  for (const value of ["8", "8.38593", "0.10", "3400", "2465", "0", "80000"])
+  for (const value of ["8", "8.38593", ".125", "0.10", "3400", "2465", "0", "80000"])
     assert.equal(isQuotationNumeric(value), true, value);
   for (const value of ["abc", "8.3.2", "NaN", "Infinity", "-Infinity"])
     assert.equal(isQuotationNumeric(value), false, value);
