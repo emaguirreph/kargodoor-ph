@@ -20,6 +20,9 @@ writeFileSync(
   { mode: 0o600, flag: "wx" },
 );
 const source = JSON.parse(readFileSync("wrangler.jsonc", "utf8"));
+// The production self-reference would force `wrangler dev` into a remote preview.
+// Local admin previews do not use it.
+delete source.services;
 source.d1_databases = source.d1_databases.map((db) =>
   db.binding === "ADMIN_DB"
     ? { ...db, database_id: "00000000-0000-0000-0000-000000000001" }

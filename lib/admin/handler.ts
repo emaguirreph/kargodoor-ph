@@ -26,6 +26,7 @@ import {
 import { financeDashboard } from "./finance-summary";
 import { financeCsv } from "./finance-report";
 import { expensesPage, mutateExpense } from "./expenses";
+import { messageCenterPage } from "./message-center";
 import { financeCashPage, mutateFinanceCash } from "./finance-cash";
 import { saveRecord } from "./data";
 import { page, esc, pesos, input, select, hidden } from "./ui";
@@ -113,7 +114,7 @@ function validateFormOrigin(
 
 export async function handleAdmin(
   request: Request,
-  view?: Entity | "finance" | "finance/expenses" | "finance/cash" | "finance/export" | "activity",
+  view?: Entity | "finance" | "finance/expenses" | "finance/cash" | "finance/export" | "message-center" | "activity",
 ) {
   let localChallenge = false;
 
@@ -374,6 +375,9 @@ export async function handleAdmin(
 
     if (view === "finance/export") {
       return await financeCsv(db, url);
+    }
+    if (view === "message-center") {
+      return messageCenterPage(user.name, canWrite);
     }
 
     /*
