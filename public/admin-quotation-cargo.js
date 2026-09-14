@@ -208,6 +208,20 @@
       setAir("system", money(result.final));
     };
 
+    const showAirMessage = (message = "") => {
+      const pricingSection = form.querySelector("[data-air-pricing]");
+      if (!pricingSection) return;
+      let notice = pricingSection.querySelector("[data-air-calculation-message]");
+      if (!notice) {
+        notice = document.createElement("p");
+        notice.dataset.airCalculationMessage = "";
+        notice.className = "notice";
+        pricingSection.appendChild(notice);
+      }
+      notice.textContent = message;
+      notice.hidden = !message;
+    };
+
     let timer;
 
     const calculate = () => {
@@ -232,10 +246,17 @@
       if (freight.value === "Sea Freight") {
         if (!cbm.value || !weight.value) return;
       } else if (isPieceAir) {
-        if (!units.value || Number(units.value) < 1) return;
+        if (!units.value || Number(units.value) < 1) {
+          showAirMessage("Enter Units (at least 1) for per-piece Air pricing.");
+          return;
+        }
       } else {
-        if (!cbm.value || !weight.value) return;
+        if (!cbm.value || !weight.value) {
+          showAirMessage("Enter both Total CBM and Actual Weight to calculate Air Freight.");
+          return;
+        }
       }
+      showAirMessage();
 
       const payload =
         freight.value === "Sea Freight"
@@ -280,6 +301,7 @@
           }
         } catch (error) {
           console.error("Live quotation calculation failed:", error);
+          showAirMessage(error instanceof Error ? error.message : "Unable to calculate Air Freight.");
         }
       }, 150);
     };
