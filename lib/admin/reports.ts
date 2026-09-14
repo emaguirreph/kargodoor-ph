@@ -290,8 +290,10 @@ export async function dashboard(
         }
         .communication-note-text{
           white-space:pre-wrap;
+          font-size:16px;
+          line-height:1.55;
           font-weight:600;
-          color:#243746
+          color:#B45309
         }
         .communication-badge{
           display:inline-block;
