@@ -10,7 +10,7 @@
     const form = section.closest("form");
     if (!form) return;
 
-    const item = section.querySelector('select[name="item"]');
+    const item = section.querySelector('[name="item"]');
     const freight = section.querySelector('select[name="freight_type"]');
     const category = section.querySelector("[data-category-output]");
     const cbm = section.querySelector("[data-cbm-output]");
@@ -268,6 +268,7 @@
       }, 150);
     };
 
+    item?.addEventListener("input", calculate);
     item?.addEventListener("change", calculate);
     freight?.addEventListener("change", () => {
       updateItems();

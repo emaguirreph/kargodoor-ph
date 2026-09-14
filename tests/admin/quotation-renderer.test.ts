@@ -168,6 +168,15 @@ test("Sea Freight Create renderer uses the new Cargo Details structure", async (
   assertCargoDetailsMarkup(html);
 });
 
+test("cargo category auto-population accepts item input and selection changes", () => {
+  const script = readFileSync("public/admin-quotation-cargo.js", "utf8");
+
+  assert.match(script, /querySelector\('\[name="item"\]'\)/);
+  assert.match(script, /item\?\.addEventListener\("input", calculate\)/);
+  assert.match(script, /item\?\.addEventListener\("change", calculate\)/);
+  assert.match(script, /category\.value = seaCategories\[item\.value\] \|\| ""/);
+});
+
 test("Sea Freight Solar Panels persists exact pricing and Edit renderer stays clean", async () => {
   const { sql, env, user } = quotationDatabase();
 
