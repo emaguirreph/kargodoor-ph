@@ -363,54 +363,45 @@ export async function financeDashboard(
       range,
     )}`;
 
-  const financeOverview: [
-    string,
-    string,
-    bigint,
-  ][] = [
-    [
-      "Revenue",
-      "Total eligible customer invoice revenue for the selected period.",
-      summary.revenue,
-    ],
-    [
-      "Ni Hao Freight Cost",
-      "Backend freight cost paid/payable to Ni Hao for customer shipments.",
-      summary.costs,
-    ],
-    [
-      "Operating Expenses",
-      "Business overhead such as marketing, salaries, permits, website, office, and transportation.",
-      summary.operating,
-    ],
-    [
-      "Net Profit / (Loss)",
-      "Revenue remaining after Ni Hao freight costs and operating expenses.",
-      summary.profit,
-    ],
-  ];
+  const totalExpenses =
+    summary.costs + summary.operating;
 
-  const cash: [
-    string,
-    string,
-    bigint,
-  ][] = [
-    [
-      "Payments Received",
-      "Actual customer payments received during the selected period.",
-      summary.received,
-    ],
-    [
-      "Manual Cash Records",
-      "Opening balance, owner funds, manual cash receipts, and adjustments recorded through Cash Flow & Customer Credits as of the reporting end date.",
-      summary.manualCash,
-    ],
-    [
-      "Accounts Receivable",
-      `Outstanding invoice and customer reimbursement balances as of ${summary.asOf}.`,
-      summary.receivable,
-    ],
-  ];
+  const summaryCards = `
+    <section>
+      <h2>Finance Overview</h2>
+
+      <div class="cards finance-summary-cards">
+        <div class="card">
+          <span class="muted">Revenue</span>
+          <strong>${esc(financePesos(summary.revenue))}</strong>
+        </div>
+
+        <div class="card">
+          <span class="muted">Expenses</span>
+          <strong>${esc(financePesos(totalExpenses))}</strong>
+        </div>
+
+        <div class="card">
+          <span class="muted">Net Profit / Loss</span>
+          <strong>${esc(financePesos(summary.profit))}</strong>
+        </div>
+
+        <div class="card">
+          <span class="muted">Cash Received</span>
+          <strong>${esc(financePesos(summary.received))}</strong>
+        </div>
+
+        <div class="card">
+          <span class="muted">Accounts Receivable</span>
+          <strong>${esc(financePesos(summary.receivable))}</strong>
+        </div>
+      </div>
+
+      <p class="muted">
+        Expenses include Ni Hao Freight Cost and Operating Expenses.
+      </p>
+    </section>
+  `;
 
   const shipping: [
     string,
@@ -667,14 +658,6 @@ export async function financeDashboard(
     "Finance",
     `
       <section>
-        <div class="actions">
-          <a href="/admin/finance"><strong>Dashboard</strong></a>
-          <a href="/admin/finance/expenses">Expenses</a>
-          <a href="/admin/finance/cash">Cash Flow &amp; Customer Credits</a>
-        </div>
-      </section>
-
-      <section>
         <form
           action="/admin/finance"
           method="get"
@@ -736,36 +719,7 @@ export async function financeDashboard(
         )
         .join("")}
 
-      ${metricTable(
-        "Finance Overview",
-        financeOverview,
-        "Net Profit / (Loss)",
-      )}
-
-      <div class="actions">
-        <a href="/admin/finance/expenses">
-          View Expenses
-        </a>
-        <a href="/admin/finance/cash">
-          Cash Flow &amp; Customer Credits
-        </a>
-
-        ${
-          canWrite
-            ? `<a
-                class="button"
-                href="/admin/finance/expenses?new=1"
-              >
-                + Add Expense
-              </a>`
-            : ""
-        }
-      </div>
-
-      ${metricTable(
-        "Cash & Receivables",
-        cash,
-      )}
+      ${summaryCards}
 
       ${metricTable(
         "Shipping Performance",
