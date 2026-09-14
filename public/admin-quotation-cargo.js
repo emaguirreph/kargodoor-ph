@@ -21,6 +21,8 @@
     const weight = section.querySelector('input[name="weight"]');
     const units = section.querySelector('input[name="units"]');
     const unitsField = section.querySelector("[data-units-field]");
+    const seaPricing = form.querySelector("[data-sea-pricing]");
+    const airPricing = form.querySelector("[data-air-pricing]");
     const csrf = form.querySelector('input[name="csrf"]');
 
     let seaCategories = {};
@@ -49,6 +51,12 @@
       unitsField.hidden = !itemUsesUnits;
     };
 
+    const syncPricingPanel = () => {
+      if (!freight) return;
+      if (seaPricing) seaPricing.hidden = freight.value !== "Sea Freight";
+      if (airPricing) airPricing.hidden = freight.value !== "Air Freight";
+    };
+
     const updateItems = () => {
       if (!item || !freight) return;
 
@@ -73,6 +81,7 @@
 
       updateCategory();
       syncUnits();
+      syncPricingPanel();
     };
 
     const updateCbm = () => {

@@ -190,6 +190,8 @@ test("cargo category auto-population accepts item input and selection changes", 
   assert.match(script, /item\?\.addEventListener\("change", calculate\)/);
   assert.match(script, /category\.value = seaCategories\[item\.value\] \|\| ""/);
   assert.match(script, /unitsField\.hidden = !itemUsesUnits/);
+  assert.match(script, /seaPricing\.hidden = freight\.value !== "Sea Freight"/);
+  assert.match(script, /airPricing\.hidden = freight\.value !== "Air Freight"/);
 });
 
 test("CBM converter only copies its total after the explicit use action", () => {
@@ -406,4 +408,6 @@ test("Air Freight Create renderer uses the new Cargo Details structure", async (
   const html = await response.text();
 
   assertCargoDetailsMarkup(html, false);
+  assert.ok(html.includes('data-sea-pricing'), "Sea panel must be available after a freight switch");
+  assert.ok(html.includes('data-air-pricing'), "Air panel must be available after a freight switch");
 });
