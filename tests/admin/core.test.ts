@@ -127,14 +127,14 @@ const shipment = (id: string) => shipmentSchema.parse(shipmentInput(id));
 
 test("live admin Air calculation delegates to the authoritative pricing engine", () => {
   const ordinary = calculateAdminAirQuote({ freightType: "Air Freight", item: "Ordinary Items", cbm: "0.10", weight: "10", quantity: "1" });
-  assert.equal(ordinary.rate, 350);
+  assert.equal(ordinary.rate, 500);
   assert.equal(ordinary.volumetricWeight, 16.7);
   assert.equal(ordinary.billableWeight, 16.7);
-  assert.equal(ordinary.final, 5845);
+  assert.equal(ordinary.final, 8350);
   const actualWeight = calculateAdminAirQuote({ freightType: "Air Freight", item: "Ordinary Items", cbm: "0.01", weight: "20.1", quantity: "1" });
   assert.equal(actualWeight.billableWeight, 20.1);
-  assert.equal(calculateAdminAirQuote({ freightType: "Air Freight", item: "Liquid, Powder, Food, Computer Parts, Electronics", cbm: "0.01", weight: "1", quantity: "1" }).rate, 450);
-  assert.equal(calculateAdminAirQuote({ freightType: "Air Freight", item: "Medicine and Food Supplements", cbm: "0.01", weight: "1", quantity: "1" }).rate, 500);
+  assert.equal(calculateAdminAirQuote({ freightType: "Air Freight", item: "Liquid, Powder, Food, Computer Parts, Electronics", cbm: "0.01", weight: "1", quantity: "1" }).rate, 600);
+  assert.equal(calculateAdminAirQuote({ freightType: "Air Freight", item: "Medicine and Food Supplements", cbm: "0.01", weight: "1", quantity: "1" }).rate, 650);
   for (const [item, rate] of [["Mobile Phones", 950], ["Tablets", 1200], ["Laptop Computers", 2800]] as const) {
     const result = calculateAdminAirQuote({ freightType: "Air Freight", item, cbm: "0", weight: "0", quantity: "2" });
     assert.equal(result.rateBasis, "Per piece");

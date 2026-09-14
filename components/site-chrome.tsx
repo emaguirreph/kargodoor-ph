@@ -120,7 +120,7 @@ export function Footer() {
         <div className="kd-footer-grid">
           <section>
             <h2>CONTACT INFORMATION</h2>
-            <p><a href="tel:+639189434747">+63 918 943 4747</a></p>
+            <p><a href="tel:+639171577370">+63 917 157 7370</a></p>
             <p><a href="tel:+639088890664">+63 908 889 0664</a></p>
             <p>
               Email:{" "}

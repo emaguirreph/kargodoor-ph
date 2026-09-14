@@ -18,7 +18,7 @@ export const itemCategories: Record<string, SeaCategory> = {
 export const airItems = ["Ordinary Items","Liquid, Powder, Food, Computer Parts, Electronics","Medicine and Food Supplements","Mobile Phones","Tablets","Laptop Computers"] as const;
 export type AirItem = typeof airItems[number];
 export const airPieceRates: Partial<Record<AirItem, number>> = { "Mobile Phones": 950, Tablets: 1200, "Laptop Computers": 2800 };
-export const airPerKgRates = { ordinary: 350, restricted: 450, medicine: 500 } as const;
+export const airPerKgRates = { ordinary: 500, restricted: 600, medicine: 650 } as const;
 export const airVolumetricFactor = 167;
 const valid = (value: number) => Number.isFinite(value) && value >= 0;
 export function seaQuote(category: SeaCategory, cbm: number, weight: number, units = 0) {

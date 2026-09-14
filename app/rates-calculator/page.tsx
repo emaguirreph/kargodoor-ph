@@ -382,7 +382,7 @@ export default function RatesCalculatorPage() {
               />
               <img
                 src="/assets/kargodoor-air-freight-rates-approved.png"
-                alt="Air Freight Rates starting at 450 pesos per kilogram from China to the Philippines"
+                alt="Air Freight Rates starting at 500 pesos per kilogram from China to the Philippines"
                 width={1923}
                 height={818}
                 loading="lazy"

@@ -104,7 +104,7 @@ function customerQuotationPdf(q: QuotationPdfData): Uint8Array<ArrayBuffer> {
   lines.push(`${blue} RG 52 193 m 543 193 l S`);
   text("KARGODOOR PH", 52, 8, true, blue);
   text("China to PH, made SIMPLE.", 52, 7, false, blue);
-  text("+63 918 943 4747 | +63 908 889 0664", 52, 7, false, blue);
+  text("+63 917 157 7370 | +63 908 889 0664", 52, 7, false, blue);
   text("support@kargodoorph.com | www.kargodoorph.com | facebook.com/KargoDoorPH", 52, 7, false, blue);
   text("Instagram: @kargodoorph | SOURCE · SHIP · RECEIVE", 52, 7, false, blue);
   const stream = lines.join("\n"), objects = ["<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [3 0 R] /Count 1 >>", "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>", "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>", "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>", `<< /Length ${new TextEncoder().encode(stream).length} >>
