@@ -5,7 +5,8 @@ import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 import { randomUUID, scryptSync } from "node:crypto";
 import { quotationsPage } from "../../lib/admin/quotations";
-import { ratesGuidePage } from "../../lib/admin/rates-guide";
+import { kargoDoorPackageTiers, ratesGuidePage } from "../../lib/admin/rates-guide";
+import { niHaoRatesPage } from "../../lib/admin/nihao-rates";
 import { csrfToken, type AdminEnv } from "../../lib/admin/security";
 
 const email = "quotation-admin@example.test";
@@ -202,6 +203,26 @@ test("rates guide renders authoritative pricing, navigation, and item filtering"
   assert.match(html, /Check Density Pricing<\/td><td>Density &gt;425 kg\/CBM/);
   assert.doesNotMatch(html, /≥425/);
   assert.doesNotMatch(html, /Medicines \/ health supplements/);
+});
+
+test("Ni Hao rates page compares supplier costs with reused KargoDoorPH rates and is read-only", async () => {
+  const { env } = quotationDatabase();
+  const response = await niHaoRatesPage(
+    new Request("http://localhost:3000/admin/nihao-rates", { headers: authHeaders() }),
+    env,
+  );
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  for (const value of ["INTERNAL REFERENCE", "₱7,500 / CBM", "₱8,500 / CBM", "₱1,000 / piece", "₱10,500 / CBM", "₱950 / piece", "Return to Rates &amp; Pricing Guide", "Ni Hao reference rules"]) assert.ok(html.includes(value), value);
+  assert.match(html, /<span class="nav-group"><a href="\/admin\/rates-guide">Rates &amp; Pricing Guide<\/a><a class="nav-sub" href="\/admin\/nihao-rates">↳ Ni Hao Rates<\/a><\/span>/);
+  for (const tier of kargoDoorPackageTiers) {
+    assert.ok(html.includes(tier.base), tier.base);
+    assert.ok(html.includes(tier.rule.replaceAll(">", "&gt;")), tier.rule);
+  }
+  const source = readFileSync("lib/admin/nihao-rates.ts", "utf8");
+  assert.doesNotMatch(source, /KD Mini: ₱250|MOBILE \/ COMPUTERS \/ TABLETS: ₱10,500/);
+  assert.ok(!html.includes("<form"), "comparison page has no mutation controls");
 });
 
 test("Sea Freight Solar Panels persists exact pricing and Edit renderer stays clean", async () => {
