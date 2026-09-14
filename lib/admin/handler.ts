@@ -26,6 +26,7 @@ import {
 import { financeDashboard } from "./finance-summary";
 import { financeCsv } from "./finance-report";
 import { expensesPage, mutateExpense } from "./expenses";
+import { financeCashPage, mutateFinanceCash } from "./finance-cash";
 import { saveRecord } from "./data";
 import { page, esc, pesos, input, select, hidden } from "./ui";
 import { dashboard, finance, activity, saveStaffFollowUp } from "./reports";
@@ -112,7 +113,7 @@ function validateFormOrigin(
 
 export async function handleAdmin(
   request: Request,
-  view?: Entity | "finance" | "finance/expenses" | "finance/export" | "activity",
+  view?: Entity | "finance" | "finance/expenses" | "finance/cash" | "finance/export" | "activity",
 ) {
   let localChallenge = false;
 
@@ -180,7 +181,7 @@ export async function handleAdmin(
      */
     if (request.method === "POST") {
       requireAdminMutation(user);
-      if (!entity && view !== "finance/expenses" && view !== undefined) {
+      if (!entity && view !== "finance/expenses" && view !== "finance/cash" && view !== undefined) {
         throw new AdminError(
           "Use the customer or shipment form.",
           405,
@@ -310,6 +311,10 @@ export async function handleAdmin(
         const outcome = await mutateExpense(db, form);
         return page("Saved", "", user.name, 303, { Location: `${path}?${outcome}=1` });
       }
+      if (view === "finance/cash") {
+        const outcome = await mutateFinanceCash(db, form);
+        return page("Saved", "", user.name, 303, { Location: `${path}?${outcome}=1` });
+      }
 
       const values =
         parseForm(
@@ -362,6 +367,9 @@ export async function handleAdmin(
 
     if (view === "finance/expenses") {
       return await expensesPage(db, url, user.name, csrfToken(env, user.id, path), canWrite);
+    }
+    if (view === "finance/cash") {
+      return await financeCashPage(db, url, user.name, csrfToken(env, user.id, path), canWrite);
     }
 
     if (view === "finance/export") {

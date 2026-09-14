@@ -126,7 +126,7 @@ export async function expensesPage(db: D1Database, url: URL, user: string, csrf:
       + dropdown("payment_method", "Payment Method", expensePaymentMethods, record.payment_method, "Select payment method")
       + input("reference_number", "Reference number", record)
       + `<label class="wide">Notes<textarea name="notes" maxlength="4000">${esc(record.notes)}</textarea></label>`;
-    return page(edit !== null ? "Edit Expense" : "Add Expense", `<section>${historical}${oldMethod}<form method="post" action="${path}">
+    return page(edit !== null ? "Edit Expense" : "Add Expense", `<section><p class="notice"><strong>Use this form when KargoDoor pays money out</strong> for a supplier, freight partner, package cost, or operating cost. This reduces cash. If the customer must reimburse a package cost, save the expense first, then record the amount owed in <a href="/admin/finance/cash?new=1&amp;type=Customer%20Reimbursement%20Due">Cash Flow &amp; Customer Credits</a>.</p>${historical}${oldMethod}<form method="post" action="${path}">
       ${hidden("csrf", csrf)}${edit !== null ? hidden("action", "edit") + hidden("id", record.id) + hidden("revision", record.updated_at) : ""}
       <div class="grid">${form}</div><p class="muted">* Required.</p>
       <div class="actions"><button type="submit">Save expense</button><a href="${path}">Cancel</a></div>
@@ -154,8 +154,7 @@ export async function expensesPage(db: D1Database, url: URL, user: string, csrf:
     </tbody></table></div>` : "<p>No expenses found.</p>";
   const notice = url.searchParams.get("deleted") === "1" ? "Expense deleted." : url.searchParams.get("updated") === "1" ? "Expense updated." : url.searchParams.get("saved") === "1" ? "Expense saved." : "";
   return page("Expenses", `${notice ? `<p class="notice" role="status">${notice}</p>` : ""}
-    <section><div class="actions">${canWrite ? `<a class="button" href="${path}?new=1">Add Expense</a>` : ""}
-    <a href="/admin/finance">Back to Finance</a></div></section>
+    <section><div class="actions"><a href="/admin/finance">Dashboard</a><a href="${path}"><strong>Expenses</strong></a><a href="/admin/finance/cash">Cash Flow &amp; Customer Credits</a>${canWrite ? `<a class="button" href="${path}?new=1">Add Expense</a>` : ""}</div></section>
     <section><form method="get" action="${path}" class="search">
       ${input("q", "Search", filters)}${input("from", "From Date", filters, "date")}${input("to", "To Date", filters, "date")}
       ${dropdown("category", "Category", expenseCategories, filters.category, "All Categories")}

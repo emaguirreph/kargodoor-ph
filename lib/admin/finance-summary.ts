@@ -9,6 +9,7 @@ import {
 } from "./finance-dates";
 import { readFinanceReport } from "./finance-report";
 import { esc, input, page } from "./ui";
+import { readManualCashSummary } from "./finance-cash";
 
 type Invoice = {
   id: string;
@@ -290,10 +291,14 @@ export async function readFinanceSummary(
       String(freight?.costed ?? "0"),
     );
 
+  const manual = await readManualCashSummary(db, asOf);
   return {
     revenue,
     received,
-    receivable,
+    manualCash: manual.cash,
+    receivable: receivable + manual.receivable,
+    invoiceReceivable: receivable,
+    manualReceivable: manual.receivable,
     charges,
     costs,
     margin,
@@ -396,8 +401,13 @@ export async function financeDashboard(
       summary.received,
     ],
     [
+      "Manual Cash Records",
+      "Opening balance, owner funds, manual cash receipts, and adjustments recorded through Cash Flow & Customer Credits as of the reporting end date.",
+      summary.manualCash,
+    ],
+    [
       "Accounts Receivable",
-      `Outstanding customer invoice balances as of ${summary.asOf}.`,
+      `Outstanding invoice and customer reimbursement balances as of ${summary.asOf}.`,
       summary.receivable,
     ],
   ];
@@ -657,6 +667,14 @@ export async function financeDashboard(
     "Finance",
     `
       <section>
+        <div class="actions">
+          <a href="/admin/finance"><strong>Dashboard</strong></a>
+          <a href="/admin/finance/expenses">Expenses</a>
+          <a href="/admin/finance/cash">Cash Flow &amp; Customer Credits</a>
+        </div>
+      </section>
+
+      <section>
         <form
           action="/admin/finance"
           method="get"
@@ -727,6 +745,9 @@ export async function financeDashboard(
       <div class="actions">
         <a href="/admin/finance/expenses">
           View Expenses
+        </a>
+        <a href="/admin/finance/cash">
+          Cash Flow &amp; Customer Credits
         </a>
 
         ${

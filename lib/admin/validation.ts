@@ -82,6 +82,27 @@ const date = z
   )
   .transform((value) => value || null);
 
+export const cashEntryTypes = [
+  "Opening Cash Balance", "Owner Contribution", "Other Cash Received",
+  "Customer Reimbursement Due", "Customer Payment Received",
+  "Adjustment Increase", "Adjustment Decrease",
+] as const;
+
+export const cashEntrySchema = z.object({
+  entry_date: date.refine((value) => value !== null, "Date is required"),
+  entry_type: z.enum(cashEntryTypes),
+  customer_id: z.union([z.string().uuid(), z.literal("")]).transform((value) => value || null),
+  related_entry_id: z.union([z.string().uuid(), z.literal("")]).transform((value) => value || null),
+  amount: money.refine((value) => value > 0, "Amount must be greater than zero"),
+  reference_number: optional(160),
+  notes: required(4000),
+}).superRefine((values, context) => {
+  if (["Customer Reimbursement Due", "Customer Payment Received"].includes(values.entry_type) && !values.customer_id)
+    context.addIssue({ code: "custom", path: ["customer_id"], message: "Choose the customer" });
+  if (values.entry_type !== "Customer Payment Received" && values.related_entry_id)
+    context.addIssue({ code: "custom", path: ["related_entry_id"], message: "Only customer payments may settle a balance due" });
+});
+
 export const customerSchema = z
   .object({
     customer_code: required(40)
