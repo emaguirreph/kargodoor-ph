@@ -127,13 +127,7 @@ export async function handleAdmin(
     const env =
       cf as unknown as AdminEnv;
 
-    localChallenge =
-      env.ADMIN_LOCAL_DEV === "true" &&
-      ["localhost", "127.0.0.1"].includes(
-        new URL(
-          canonicalOrigin(env),
-        ).hostname,
-      );
+    localChallenge = env.ADMIN_LOCAL_DEV === "true";
 
     const user =
       await authenticate(request, env);

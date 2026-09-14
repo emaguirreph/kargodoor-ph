@@ -296,53 +296,67 @@ export async function authenticate(
     const auth =
       request.headers.get("authorization") ?? "";
 
-    if (
-      !auth.startsWith("Basic ") ||
-      auth.length > 2048
-    ) {
-      throw new AdminError(
-        "Local admin sign-in required.",
-        401,
-      );
-    }
-
-    const credentials = Buffer.from(
-      auth.slice(6),
-      "base64",
-    ).toString();
-
-    const colon = credentials.indexOf(":");
-    const [salt, hash] = (
-      env.LOCAL_ADMIN_HASH ?? ""
-    ).split(":");
-
     const configuredEmail =
       env.LOCAL_ADMIN_EMAIL?.toLowerCase();
 
-    if (
-      !salt ||
-      !hash ||
-      !configuredEmail ||
-      colon < 0 ||
-      !equal(
-        scryptSync(
-          credentials.slice(colon + 1),
-          salt,
-          64,
-        ).toString("hex"),
-        hash,
-      ) ||
-      credentials
-        .slice(0, colon)
-        .toLowerCase() !== configuredEmail
-    ) {
+    if (!configuredEmail) {
       throw new AdminError(
-        "Local admin sign-in required.",
-        401,
+        "Local admin configuration is incomplete.",
+        503,
       );
     }
 
-    email = configuredEmail;
+    // OpenNext/Wrangler local previews strip WWW-Authenticate, so browsers
+    // cannot display a Basic Auth prompt. The preview is bound to localhost
+    // and explicitly enabled through .dev.vars; use its seeded local account.
+    if (!auth) {
+      email = configuredEmail;
+    } else {
+
+      if (
+        !auth.startsWith("Basic ") ||
+        auth.length > 2048
+      ) {
+        throw new AdminError(
+          "Local admin sign-in required.",
+          401,
+        );
+      }
+
+      const credentials = Buffer.from(
+        auth.slice(6),
+        "base64",
+      ).toString();
+
+      const colon = credentials.indexOf(":");
+      const [salt, hash] = (
+        env.LOCAL_ADMIN_HASH ?? ""
+      ).split(":");
+
+      if (
+        !salt ||
+        !hash ||
+        colon < 0 ||
+        !equal(
+          scryptSync(
+            credentials.slice(colon + 1),
+            salt,
+            64,
+          ).toString("hex"),
+          hash,
+        ) ||
+        credentials
+          .slice(0, colon)
+          .toLowerCase() !== configuredEmail
+      ) {
+        throw new AdminError(
+          "Local admin sign-in required.",
+          401,
+        );
+      }
+
+      email = configuredEmail;
+    }
   } else {
     const domain = env.ACCESS_TEAM_DOMAIN;
     const audience = env.ACCESS_AUD;
