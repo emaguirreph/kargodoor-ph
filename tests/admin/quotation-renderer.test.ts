@@ -5,6 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 import { randomUUID, scryptSync } from "node:crypto";
 import { quotationsPage } from "../../lib/admin/quotations";
+import { ratesGuidePage } from "../../lib/admin/rates-guide";
 import { csrfToken, type AdminEnv } from "../../lib/admin/security";
 
 const email = "quotation-admin@example.test";
@@ -175,6 +176,32 @@ test("cargo category auto-population accepts item input and selection changes", 
   assert.match(script, /item\?\.addEventListener\("input", calculate\)/);
   assert.match(script, /item\?\.addEventListener\("change", calculate\)/);
   assert.match(script, /category\.value = seaCategories\[item\.value\] \|\| ""/);
+});
+
+test("rates guide renders authoritative pricing, navigation, and item filtering", async () => {
+  const { env } = quotationDatabase();
+  const response = await ratesGuidePage(
+    new Request("http://localhost:3000/admin/rates-guide?q=computer&category=MOBILE+%2F+COMPUTERS+%2F+TABLETS", {
+      headers: authHeaders(),
+    }),
+    env,
+  );
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /href="\/admin\/rates-guide"[^>]*>Rates &amp; Pricing Guide/);
+  assert.match(html, /Mobile \/ computer parts &amp; accessories/);
+  assert.match(html, /₱10,500 \/ CBM/);
+  assert.match(html, /₱950 \/ piece/);
+  assert.match(html, /₱1,200 \/ piece/);
+  assert.match(html, /₱2,800 \/ piece/);
+  assert.match(html, /MAX\(Actual Weight, CBM × 167\)/);
+  assert.match(html, /No rounding\./);
+  assert.match(html, /KD Standard<\/td><td>&gt;0\.125 CBM/);
+  assert.match(html, /KD Max<\/td><td>Density charge wins<\/td><td>Density-based charge<\/td><td>Applies only when density is &gt;425 kg\/CBM and the density charge is higher than the base charge\./);
+  assert.match(html, /Check Density Pricing<\/td><td>Density &gt;425 kg\/CBM/);
+  assert.doesNotMatch(html, /≥425/);
+  assert.doesNotMatch(html, /Medicines \/ health supplements/);
 });
 
 test("Sea Freight Solar Panels persists exact pricing and Edit renderer stays clean", async () => {

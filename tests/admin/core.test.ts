@@ -126,13 +126,13 @@ test("live admin Air calculation delegates to the authoritative pricing engine",
   const ordinary = calculateAdminAirQuote({ freightType: "Air Freight", item: "Ordinary Items", cbm: "0.10", weight: "10", quantity: "1" });
   assert.equal(ordinary.rate, 350);
   assert.equal(ordinary.volumetricWeight, 16.7);
-  assert.equal(ordinary.billableWeight, 17);
-  assert.equal(ordinary.final, 5950);
+  assert.equal(ordinary.billableWeight, 16.7);
+  assert.equal(ordinary.final, 5845);
   const actualWeight = calculateAdminAirQuote({ freightType: "Air Freight", item: "Ordinary Items", cbm: "0.01", weight: "20.1", quantity: "1" });
-  assert.equal(actualWeight.billableWeight, 21);
+  assert.equal(actualWeight.billableWeight, 20.1);
   assert.equal(calculateAdminAirQuote({ freightType: "Air Freight", item: "Liquid, Powder, Food, Computer Parts, Electronics", cbm: "0.01", weight: "1", quantity: "1" }).rate, 450);
   assert.equal(calculateAdminAirQuote({ freightType: "Air Freight", item: "Medicine and Food Supplements", cbm: "0.01", weight: "1", quantity: "1" }).rate, 500);
-  for (const [item, rate] of [["Mobile Phones", 800], ["Tablets", 1000], ["Laptop Computers", 2000]] as const) {
+  for (const [item, rate] of [["Mobile Phones", 950], ["Tablets", 1200], ["Laptop Computers", 2800]] as const) {
     const result = calculateAdminAirQuote({ freightType: "Air Freight", item, cbm: "0", weight: "0", quantity: "2" });
     assert.equal(result.rateBasis, "Per piece");
     assert.equal(result.final, rate * 2);
@@ -160,7 +160,7 @@ test("live admin Sea calculation delegates to the authoritative pricing engine",
   assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Bags", cbm: "0.01", weight: "100", units: "0" }).packageTier, "KD Max");
   for (const item of ["Mobile phones", "Computers", "Tablets"])
     assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item, cbm: "1", weight: "1", units: "1" }).final, 10750);
-  assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Mobile / computer parts & accessories", cbm: "1", weight: "1", units: "0" }).category, "HIGH VALUE");
+  assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Mobile / computer parts & accessories", cbm: "1", weight: "1", units: "1" }).category, "MOBILE / COMPUTERS / TABLETS");
 });
 test("admin quotation density uses the strict 425 kg/CBM threshold", () => {
   assert.equal(densityThreshold, 425);
@@ -191,7 +191,7 @@ test("quotation category mapping and origin warehouses stay controlled", () => {
   assert.equal(itemCategories["Mobile phones"], "MOBILE / COMPUTERS / TABLETS");
   assert.equal(itemCategories.Computers, "MOBILE / COMPUTERS / TABLETS");
   assert.equal(itemCategories.Tablets, "MOBILE / COMPUTERS / TABLETS");
-  assert.equal(itemCategories["Mobile / computer parts & accessories"], "HIGH VALUE");
+  assert.equal(itemCategories["Mobile / computer parts & accessories"], "MOBILE / COMPUTERS / TABLETS");
   const quotationSource = readFileSync("lib/admin/quotations.ts", "utf8");
   for (const warehouse of ["Guangzhou", "Yiwu", "Shishi", "Hong Kong", "Taiwan"])
     assert.match(quotationSource, new RegExp('originWarehouses = \\[.*"' + warehouse + '"'));
