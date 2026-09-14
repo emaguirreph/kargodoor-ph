@@ -430,6 +430,29 @@ export async function financeDashboard(
     ],
   ];
 
+  const shippingCards = `
+    <section>
+      <h2>Shipping Performance</h2>
+
+      <div class="cards finance-shipping-cards">
+        ${shipping
+          .map(
+            ([label, _description, value]) => `
+              <div class="card">
+                <span class="muted">${esc(label)}</span>
+                <strong>${
+                  typeof value === "string"
+                    ? esc(value)
+                    : esc(financePesos(value))
+                }</strong>
+              </div>
+            `,
+          )
+          .join("")}
+      </div>
+    </section>
+  `;
+
   const breakdown = `
     <div class="table">
       <table>
@@ -564,17 +587,15 @@ export async function financeDashboard(
 
   const monthly = `
     <div class="table finance-wide">
-      <table>
+      <table class="finance-monthly">
         <thead>
           <tr>
             <th>Month</th>
-            <th>Revenue</th>
-            <th>Payments Received</th>
-            <th>Ni Hao Freight Cost</th>
-            <th>Operating Expenses</th>
-            <th>Net Profit</th>
-            <th>Freight Margin</th>
-            <th>Shipments</th>
+            <th class="finance-number">Revenue</th>
+            <th class="finance-number">Cash Received</th>
+            <th class="finance-number">Expenses</th>
+            <th class="finance-number">Net Profit / Loss</th>
+            <th class="finance-number">Freight Margin</th>
           </tr>
         </thead>
 
@@ -584,61 +605,31 @@ export async function financeDashboard(
               (row) => `
                 <tr>
                   <td>
-                    <strong>
-                      ${esc(row.label)}
-                    </strong>
+                    <strong>${esc(row.label)}</strong>
                   </td>
 
-                  <td>
+                  <td class="finance-number">
+                    ${esc(financePesos(row.revenue))}
+                  </td>
+
+                  <td class="finance-number">
+                    ${esc(financePesos(row.received))}
+                  </td>
+
+                  <td class="finance-number">
                     ${esc(
                       financePesos(
-                        row.revenue,
+                        row.costs + row.operating,
                       ),
                     )}
                   </td>
 
-                  <td>
-                    ${esc(
-                      financePesos(
-                        row.received,
-                      ),
-                    )}
+                  <td class="finance-number">
+                    ${esc(financePesos(row.profit))}
                   </td>
 
-                  <td>
-                    ${esc(
-                      financePesos(
-                        row.costs,
-                      ),
-                    )}
-                  </td>
-
-                  <td>
-                    ${esc(
-                      financePesos(
-                        row.operating,
-                      ),
-                    )}
-                  </td>
-
-                  <td>
-                    ${esc(
-                      financePesos(
-                        row.profit,
-                      ),
-                    )}
-                  </td>
-
-                  <td>
-                    ${esc(
-                      financePesos(
-                        row.margin,
-                      ),
-                    )}
-                  </td>
-
-                  <td>
-                    ${row.shipments}
+                  <td class="finance-number">
+                    ${esc(financePesos(row.margin))}
                   </td>
                 </tr>
               `,
@@ -721,10 +712,7 @@ export async function financeDashboard(
 
       ${summaryCards}
 
-      ${metricTable(
-        "Shipping Performance",
-        shipping,
-      )}
+      ${shippingCards}
 
       <section>
         <div class="actions">
@@ -757,13 +745,25 @@ export async function financeDashboard(
           </strong>
         </p>
 
-        ${breakdown}
+        ${
+          summary.operating > zero
+            ? breakdown
+            : `<p class="muted">
+                No operating expenses recorded in this reporting period.
+              </p>`
+        }
       </section>
 
-      <section>
-        <h2>Period Comparison</h2>
-        ${comparison}
-      </section>
+      ${
+        report.comparison.length
+          ? `<section>
+              <h2>Period Comparison</h2>
+              ${comparison}
+            </section>`
+          : `<p class="muted">
+              Period comparison is available when a complete date range or preset is selected.
+            </p>`
+      }
 
       <section>
         <div class="actions">
@@ -898,8 +898,39 @@ export async function financeDashboard(
           font-size: 1.08rem;
         }
 
+        .finance-summary-cards {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .finance-summary-cards .card strong,
+        .finance-shipping-cards .card strong {
+          white-space: nowrap;
+          font-size: 1.55rem;
+        }
+
+        .finance-shipping-cards {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
         .finance-wide {
           overflow-x: auto;
+        }
+
+        .finance-monthly {
+          min-width: 780px;
+        }
+
+        .finance-number {
+          text-align: right;
+          white-space: nowrap;
+          font-variant-numeric: tabular-nums;
+        }
+
+        @media(max-width:760px) {
+          .finance-summary-cards,
+          .finance-shipping-cards {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
         }
 
         @media(max-width:520px) {
