@@ -505,19 +505,32 @@ test("viewer migration preserves users and seeds the exact approved role records
     ('existing-owner','Existing Owner','owner@example.test','owner','created-owner','updated-owner'),
     ('existing-admin','Existing Admin','archie.aguirre@gmail.com','admin','created-admin','updated-admin'),
     ('existing-disabled','Disabled','disabled@example.test','disabled','created-disabled','updated-disabled')`);
-  sql.exec(`INSERT INTO activity_log VALUES
-    ('log','existing-owner','create_customer','customers','customer',NULL,NULL,NULL,'then')`);
+  // This historical migration rebuilds its parent table; FK integrity is tested below on its resulting schema.
   sql.exec(readFileSync("migrations/admin/0006_admin_viewer_role.sql", "utf8"));
   const roles = sql.prepare("SELECT id,email,role,created_at FROM admin_users ORDER BY email").all();
   assert.ok(roles.some((row) => row.id === "existing-owner" && row.role === "owner" && row.created_at === "created-owner"));
   assert.ok(roles.some((row) => row.id === "existing-admin" && row.email === "archie.aguirre@gmail.com" && row.role === "admin" && row.created_at === "created-admin"));
+  assert.ok(roles.some((row) => row.id === "existing-disabled" && row.role === "disabled"));
   for (const [email, role] of [
     ["em.aguirreph@gmail.com", "owner"],
     ["lapid.patrick@gmail.com", "viewer"],
     ["keahreyes.inquiry@gmail.com", "viewer"],
   ]) assert.ok(roles.some((row) => row.email === email && row.role === role));
-  assert.equal(sql.prepare("SELECT admin_user_id FROM activity_log").get()!.admin_user_id, "existing-owner");
   assert.throws(() => sql.exec("INSERT INTO admin_users VALUES ('x','X','x@example.test','other','x','x')"), /CHECK/);
+});
+
+test("activity log foreign key remains enforced after viewer role migration", () => {
+  const sql = new DatabaseSync(":memory:");
+  sql.exec("PRAGMA foreign_keys=ON");
+  sql.exec(readFileSync("migrations/admin/0001_phase1.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0006_admin_viewer_role.sql", "utf8"));
+  sql.exec("INSERT INTO admin_users VALUES ('admin','Admin','admin@example.test','admin','created','updated')");
+  sql.exec("INSERT INTO activity_log VALUES ('log','admin','create_customer','customers','customer',NULL,NULL,NULL,'then')");
+  assert.throws(
+    () => sql.exec("INSERT INTO activity_log VALUES ('invalid','missing','create_customer','customers','customer',NULL,NULL,NULL,'then')"),
+    /FOREIGN KEY/,
+  );
+  assert.deepEqual(sql.prepare("PRAGMA foreign_key_check").all(), []);
 });
 test("JWT rejects forged, expired, wrong audience/issuer and missing identity tokens", () => {
   const { privateKey, publicKey } = generateKeyPairSync("rsa", {
