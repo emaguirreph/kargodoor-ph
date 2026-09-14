@@ -98,7 +98,8 @@ const requiredSeaOutputs = [
 
 function assertCargoDetailsMarkup(html: string, includeSeaOutputs = true) {
   assert.ok(html.includes("2. CARGO DETAILS"), "Cargo Details section must be rendered");
-  assert.ok(html.includes("CARGO PACKAGING"), "Cargo Packaging subsection must be rendered");
+  assert.ok(!html.includes("CARGO PACKAGING"), "Cargo Packaging subsection must not be rendered");
+  assert.ok(!html.includes("SHIPPING MEASUREMENT"), "Shipping Measurement subsection must not be rendered");
   assert.ok(html.includes("Item / Commodity"), "Item / Commodity must be rendered");
   assert.ok(html.includes("Supplier / Origin Location"), "Supplier / Origin Location must be rendered");
   assert.ok(html.includes("KargoDoor Warehouse"), "KargoDoor Warehouse must be rendered");
@@ -132,8 +133,16 @@ function assertCargoDetailsMarkup(html: string, includeSeaOutputs = true) {
   assert.match(html, /data-category-output[^>]*readonly/, "Category must be read-only");
   assert.match(html, /name="cbm"[^>]*data-cbm-output/, "Total CBM must be editable");
   assert.ok(html.includes("Editable — use confirmed total package CBM when provided by supplier."));
-  assert.ok(html.includes("CBM Converter"));
+  assert.ok(html.includes("CBM CONVERTER"));
   assert.ok(html.includes("Use this CBM"));
+  assert.ok(html.includes("Optional helper — calculate CBM from package dimensions."));
+  assert.ok(html.includes("Total Converted CBM"));
+  assert.equal((html.match(/data-cbm-converter/g) ?? []).length, 1, "Converter must render once");
+  for (const name of ["length", "width", "height", "measurement_unit"]) {
+    assert.equal((html.match(new RegExp(`name="${name}"`, "g")) ?? []).length, 1, `${name} must render once`);
+  }
+  const order = ["Item / Commodity", "Category", "Supplier / Origin Location", "KargoDoor Warehouse", "Total CBM", "Freight Type", "Actual Weight (kg)"];
+  for (let index = 1; index < order.length; index++) assert.ok(html.indexOf(order[index - 1]) < html.indexOf(order[index]), `${order[index - 1]} must precede ${order[index]}`);
 
   for (const name of ["quantity", "unit_type", "category"]) {
     assert.doesNotMatch(
@@ -180,6 +189,7 @@ test("cargo category auto-population accepts item input and selection changes", 
   assert.match(script, /item\?\.addEventListener\("input", calculate\)/);
   assert.match(script, /item\?\.addEventListener\("change", calculate\)/);
   assert.match(script, /category\.value = seaCategories\[item\.value\] \|\| ""/);
+  assert.match(script, /unitsField\.hidden = !itemUsesUnits/);
 });
 
 test("CBM converter only copies its total after the explicit use action", () => {

@@ -20,6 +20,7 @@
     const measurement = section.querySelector('select[name="measurement_unit"]');
     const weight = section.querySelector('input[name="weight"]');
     const units = section.querySelector('input[name="units"]');
+    const unitsField = section.querySelector("[data-units-field]");
     const csrf = form.querySelector('input[name="csrf"]');
 
     let seaCategories = {};
@@ -40,6 +41,12 @@
       } else {
         category.value = airItems.includes(item.value) ? item.value : "";
       }
+    };
+
+    const syncUnits = () => {
+      if (!unitsField || !item || !freight) return;
+      const itemUsesUnits = ["Mobile phones", "Computers", "Tablets", "Mobile Phones", "Tablets", "Laptop Computers"].includes(item.value);
+      unitsField.hidden = !itemUsesUnits;
     };
 
     const updateItems = () => {
@@ -65,6 +72,7 @@
       }
 
       updateCategory();
+      syncUnits();
     };
 
     const updateCbm = () => {
