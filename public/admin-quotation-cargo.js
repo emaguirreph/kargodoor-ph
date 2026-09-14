@@ -148,6 +148,19 @@
       setSea("system", money(result.final));
     };
 
+    const showSeaMessage = (message = "") => {
+      if (!seaPricing) return;
+      let notice = seaPricing.querySelector("[data-sea-calculation-message]");
+      if (!notice) {
+        notice = document.createElement("p");
+        notice.dataset.seaCalculationMessage = "";
+        notice.className = "notice";
+        seaPricing.appendChild(notice);
+      }
+      notice.textContent = message;
+      notice.hidden = !message;
+    };
+
     const ensureAirResults = () => {
       let panel = form.querySelector("[data-air-live-results]");
       if (panel) return panel;
@@ -244,7 +257,10 @@
         ["Mobile Phones", "Tablets", "Laptop Computers"].includes(item.value);
 
       if (freight.value === "Sea Freight") {
-        if (!cbm.value || !weight.value) return;
+        if (!cbm.value || !weight.value) {
+          showSeaMessage("Enter both Total CBM and Actual Weight to calculate Sea Freight.");
+          return;
+        }
       } else if (isPieceAir) {
         if (!units.value || Number(units.value) < 1) {
           showAirMessage("Enter Units (at least 1) for per-piece Air pricing.");
@@ -256,7 +272,8 @@
           return;
         }
       }
-      showAirMessage();
+      if (freight.value === "Sea Freight") showSeaMessage();
+      else showAirMessage();
 
       const payload =
         freight.value === "Sea Freight"
@@ -301,7 +318,9 @@
           }
         } catch (error) {
           console.error("Live quotation calculation failed:", error);
-          showAirMessage(error instanceof Error ? error.message : "Unable to calculate Air Freight.");
+          const message = error instanceof Error ? error.message : "Unable to calculate quotation.";
+          if (freight.value === "Sea Freight") showSeaMessage(message);
+          else showAirMessage(message);
         }
       }, 150);
     };
