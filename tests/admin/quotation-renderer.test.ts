@@ -214,7 +214,9 @@ test("Ni Hao rates page compares supplier costs with reused KargoDoorPH rates an
 
   assert.equal(response.status, 200);
   const html = await response.text();
-  for (const value of ["INTERNAL REFERENCE", "₱7,500 / CBM", "₱8,500 / CBM", "₱1,000 / piece", "₱10,500 / CBM", "₱950 / piece", "Return to Rates &amp; Pricing Guide", "Ni Hao reference rules"]) assert.ok(html.includes(value), value);
+  for (const value of ["INTERNAL REFERENCE", "₱7,000 / CBM", "₱7,500 / CBM", "₱8,500 / CBM", "₱1,000 / piece", "₱10,500 / CBM", "₱950 / piece", "Return to Rates &amp; Pricing Guide", "Ni Hao reference rules"]) assert.ok(html.includes(value), value);
+  assert.match(html, /nihao-category[^]*width:14%[^]*width:50%[^]*width:16%[^]*width:20%/);
+  assert.match(html, /nihao-comparison th:nth-child\(3\),\.nihao-comparison td:nth-child\(3\)\{white-space:nowrap\}/);
   assert.match(html, /<span class="nav-group"><a href="\/admin\/rates-guide">Rates &amp; Pricing Guide<\/a><a class="nav-sub" href="\/admin\/nihao-rates">↳ Ni Hao Rates<\/a><\/span>/);
   for (const tier of kargoDoorPackageTiers) {
     assert.ok(html.includes(tier.base), tier.base);
