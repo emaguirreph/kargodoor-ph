@@ -195,7 +195,6 @@
 
     const calculate = () => {
       updateCategory();
-      updateCbm();
 
       if (
         !item ||
@@ -285,7 +284,55 @@
     calculateButton?.addEventListener("click", calculate);
 
     updateItems();
-    updateCbm();
     calculate();
+  });
+})();
+
+(() => {
+  const validPositive = (value) => Number.isFinite(value) && value > 0;
+  const formatCbm = (value) => Number(value.toFixed(12)).toString();
+
+  document.querySelectorAll("[data-cargo-details]").forEach((section) => {
+    const form = section.closest("form");
+    const cbm = section.querySelector("[data-cbm-output]");
+    const converter = section.querySelector("[data-cbm-converter]");
+    if (!form || !cbm || !converter) return;
+
+    const calculateButton = form.querySelector("[data-quotation-calculate]");
+    cbm.addEventListener("input", () => calculateButton?.click());
+
+    const fields = ["length", "width", "height", "unit", "quantity"].map((key) =>
+      converter.querySelector(`[data-converter-${key}]`),
+    );
+    const single = converter.querySelector("[data-converter-single]");
+    const total = converter.querySelector("[data-converter-total]");
+    const use = converter.querySelector("[data-use-converted-cbm]");
+    let convertedTotal = null;
+    const update = () => {
+      const [length, width, height, unit, quantity] = fields.map((field) => field?.value.trim() || "");
+      const values = [length, width, height, quantity].map(Number);
+      if (!length || !width || !height || !quantity || !["cm", "mm"].includes(unit) || values.some((value) => !validPositive(value)) || !Number.isInteger(values[3])) {
+        convertedTotal = null;
+        if (single) single.textContent = "—";
+        if (total) total.textContent = "—";
+        if (use) use.disabled = true;
+        return;
+      }
+      const divisor = unit === "mm" ? 1e9 : 1e6;
+      const singleCbm = (values[0] * values[1] * values[2]) / divisor;
+      const totalCbm = singleCbm * values[3];
+      if (!Number.isFinite(singleCbm) || !Number.isFinite(totalCbm)) return;
+      convertedTotal = totalCbm;
+      if (single) single.textContent = formatCbm(singleCbm);
+      if (total) total.textContent = formatCbm(totalCbm);
+      if (use) use.disabled = false;
+    };
+    fields.forEach((field) => field?.addEventListener(field.tagName === "SELECT" ? "change" : "input", update));
+    use?.addEventListener("click", () => {
+      if (convertedTotal === null) return;
+      cbm.value = formatCbm(convertedTotal);
+      cbm.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    update();
   });
 })();

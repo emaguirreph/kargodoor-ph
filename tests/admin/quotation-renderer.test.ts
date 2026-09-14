@@ -130,9 +130,12 @@ function assertCargoDetailsMarkup(html: string, includeSeaOutputs = true) {
   }
 
   assert.match(html, /data-category-output[^>]*readonly/, "Category must be read-only");
-  assert.match(html, /data-cbm-output[^>]*readonly/, "Total CBM must be read-only");
+  assert.match(html, /name="cbm"[^>]*data-cbm-output/, "Total CBM must be editable");
+  assert.ok(html.includes("Editable — use confirmed total package CBM when provided by supplier."));
+  assert.ok(html.includes("CBM Converter"));
+  assert.ok(html.includes("Use this CBM"));
 
-  for (const name of ["quantity", "unit_type", "category", "cbm"]) {
+  for (const name of ["quantity", "unit_type", "category"]) {
     assert.doesNotMatch(
       html,
       new RegExp(`name="${name}"`),
@@ -177,6 +180,15 @@ test("cargo category auto-population accepts item input and selection changes", 
   assert.match(script, /item\?\.addEventListener\("input", calculate\)/);
   assert.match(script, /item\?\.addEventListener\("change", calculate\)/);
   assert.match(script, /category\.value = seaCategories\[item\.value\] \|\| ""/);
+});
+
+test("CBM converter only copies its total after the explicit use action", () => {
+  const script = readFileSync("public/admin-quotation-cargo.js", "utf8");
+  assert.match(script, /const divisor = unit === "mm" \? 1e9 : 1e6/);
+  assert.match(script, /const totalCbm = singleCbm \* values\[3\]/);
+  assert.match(script, /data-use-converted-cbm/);
+  assert.match(script, /cbm\.value = formatCbm\(convertedTotal\)/);
+  assert.doesNotMatch(script.match(/const calculate = \(\) => \{[\s\S]*?\n    \};/)![0], /updateCbm\(\)/);
 });
 
 test("rates guide renders authoritative pricing, navigation, and item filtering", async () => {
@@ -238,10 +250,11 @@ test("Sea Freight Solar Panels persists exact pricing and Edit renderer stays cl
     quotation_date: "2026-09-11",
     customer_name: "Solar Test Customer",
     item: "Solar panels",
-    length: "8.39",
+    length: "1",
     width: "1",
     height: "1",
     measurement_unit: "m",
+    cbm: "8.39",
     weight: "3400",
     units: "0",
   });
@@ -315,10 +328,11 @@ test("Sea Freight Solar Panels persists exact pricing and Edit renderer stays cl
     quotation_date: "2026-09-11",
     customer_name: "Solar Test Customer",
     item: "Solar panels",
-    length: "8.40",
+    length: "1",
     width: "1",
     height: "1",
     measurement_unit: "m",
+    cbm: "8.4",
     weight: "3400",
     units: "0",
   });

@@ -1,6 +1,6 @@
 import type { D1Database } from "@cloudflare/workers-types";
 import { itemCategories } from "../../lib/admin/quotation-pricing";
-import { calculateTotalCbm } from "../../lib/admin/quotation-cbm";
+import { calculateCbmConversion, calculateTotalCbm } from "../../lib/admin/quotation-cbm";
 import { calculateDensity, densityStatus, densityThreshold } from "../../lib/admin/quotation-density";
 import { calculateAdminAirQuote, calculateAdminSeaQuote } from "../../lib/admin/quotation-calculation";
 import { isQuotationNumeric } from "../../lib/admin/quotations";
@@ -185,6 +185,17 @@ test("admin quotation CBM conversion is authoritative and rejects invalid dimens
     { length: "1", width: "1", height: "1", measurementUnit: "in", quantity: "1" },
   ]) assert.throws(() => calculateTotalCbm(input));
   assert.equal(calculateTotalCbm({ length: "", width: "", height: "", measurementUnit: "cm", quantity: "1" }), null);
+});
+test("CBM converter uses cm or mm, quantity, and never yields invalid results", () => {
+  assert.deepEqual(calculateCbmConversion({ length: "100", width: "50", height: "20", unit: "cm", quantity: "2" }), { single: 0.1, total: 0.2 });
+  assert.deepEqual(calculateCbmConversion({ length: "1000", width: "500", height: "200", unit: "mm", quantity: "2" }), { single: 0.1, total: 0.2 });
+  assert.equal(calculateCbmConversion({ length: "", width: "50", height: "20", unit: "cm", quantity: "1" }), null);
+  for (const input of [
+    { length: "0", width: "1", height: "1", unit: "cm", quantity: "1" },
+    { length: "1", width: "1", height: "1", unit: "cm", quantity: "0" },
+    { length: "1", width: "1", height: "1", unit: "cm", quantity: "1.5" },
+    { length: "NaN", width: "1", height: "1", unit: "cm", quantity: "1" },
+  ]) assert.throws(() => calculateCbmConversion(input));
 });
 test("quotation category mapping and origin warehouses stay controlled", () => {
   assert.equal(itemCategories["Solar panels"], "COMMODITIES");

@@ -28,3 +28,24 @@ export function calculateTotalCbm(input: {
   const divisor = unit === "mm" ? 1_000_000_000 : unit === "cm" ? 1_000_000 : 1;
   return (length * width * height * quantity) / divisor;
 }
+
+/** Calculates a converter result only; it never changes a quotation field. */
+export function calculateCbmConversion(input: {
+  length: unknown;
+  width: unknown;
+  height: unknown;
+  unit: unknown;
+  quantity: unknown;
+}) {
+  const dimensions = [input.length, input.width, input.height].map((value) => String(value ?? "").trim());
+  if (dimensions.some((value) => !value)) return null;
+  const [length, width, height] = dimensions.map((value, index) => numeric(value, ["length", "width", "height"][index]));
+  const quantity = numeric(input.quantity, "quantity");
+  const unit = String(input.unit ?? "").trim();
+  if (!Number.isInteger(quantity) || quantity < 1) throw new Error("Quantity must be a whole number of at least 1.");
+  if (length <= 0 || width <= 0 || height <= 0) throw new Error("Length, width, and height must be greater than zero.");
+  if (unit !== "cm" && unit !== "mm") throw new Error("Choose cm or mm as the measurement unit.");
+  const divisor = unit === "mm" ? 1_000_000_000 : 1_000_000;
+  const single = (length * width * height) / divisor;
+  return { single, total: single * quantity };
+}
