@@ -1,6 +1,6 @@
 -- ADMIN_DB only. Adds a restricted staff role and ownership for new quotations and expenses.
 -- Existing records retain NULL ownership and remain available to owner/admin users only.
-PRAGMA foreign_keys = OFF;
+PRAGMA defer_foreign_keys = ON;
 
 CREATE TABLE admin_users_new (
  id TEXT PRIMARY KEY NOT NULL,
@@ -16,7 +16,6 @@ SELECT id, name, email, role, created_at, updated_at FROM admin_users;
 
 DROP TABLE admin_users;
 ALTER TABLE admin_users_new RENAME TO admin_users;
-PRAGMA foreign_keys = ON;
 
 ALTER TABLE quotations ADD COLUMN prepared_by_admin_user_id TEXT REFERENCES admin_users(id) ON DELETE RESTRICT;
 ALTER TABLE expenses ADD COLUMN created_by_admin_user_id TEXT REFERENCES admin_users(id) ON DELETE RESTRICT;
