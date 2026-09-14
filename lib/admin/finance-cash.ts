@@ -11,6 +11,17 @@ const receivableType = "Customer Reimbursement Due";
 type Customer = { id: string; customer_code: string; full_name: string };
 type CashEntry = RecordData & { id: string; entry_date: string; entry_type: string; amount: number; customer_name: string | null; customer_code: string | null };
 
+type AutomaticPayment = {
+  payment_date: string;
+  amount: number;
+  payment_method: string;
+  reference_number: string | null;
+  invoice_id: string;
+  invoice_number: string;
+  customer_name: string;
+  customer_code: string;
+};
+
 function amountInput(values: RecordData) {
   const amount = values.amount;
   const value = amount === undefined || amount === null ? "" : (Number(amount) / 100).toFixed(2);
@@ -62,9 +73,124 @@ export async function financeCashPage(db: D1Database, url: URL, user: string, cs
   }
   const { results } = await db.prepare(`SELECT e.id, e.entry_date, e.entry_type, e.amount, e.reference_number, e.notes, c.full_name AS customer_name, c.customer_code
     FROM finance_cash_entries e LEFT JOIN customers c ON c.id = e.customer_id ORDER BY e.entry_date DESC, e.created_at DESC`).all<CashEntry>();
+  const { results: automaticPayments } = await db.prepare(`
+    SELECT
+      p.payment_date,
+      p.amount,
+      p.payment_method,
+      p.reference_number,
+      i.id AS invoice_id,
+      i.invoice_number,
+      c.full_name AS customer_name,
+      c.customer_code
+    FROM payments p
+    JOIN invoices i
+      ON i.id = p.invoice_id
+    JOIN customers c
+      ON c.id = p.customer_id
+    ORDER BY
+      p.payment_date DESC,
+      p.created_at DESC
+  `).all<AutomaticPayment>();
+
+  const automaticTotal = automaticPayments.reduce(
+    (sum, payment) => sum + Number(payment.amount),
+    0,
+  );
+
+  const automaticRows = automaticPayments
+    .map(
+      (payment) => `
+        <tr>
+          <td>${esc(payment.payment_date)}</td>
+          <td>
+            ${esc(payment.customer_name)}
+            <br>
+            <span class="muted">${esc(payment.customer_code)}</span>
+          </td>
+          <td>
+            <a href="/admin/invoices?id=${esc(payment.invoice_id)}">
+              ${esc(payment.invoice_number)}
+            </a>
+          </td>
+          <td>${esc(pesos(payment.amount))}</td>
+          <td>${esc(payment.payment_method)}</td>
+          <td>${esc(payment.reference_number) || "—"}</td>
+        </tr>
+      `,
+    )
+    .join("") ||
+    `<tr><td colspan="6">No invoice payments recorded yet.</td></tr>`;
+
   const rows = results.map((entry) => `<tr><td>${esc(entry.entry_date)}</td><td><strong>${esc(entry.entry_type)}</strong></td><td>${esc(entry.customer_name ? `${entry.customer_name} (${entry.customer_code})` : "—")}</td><td>${esc(pesos(entry.amount))}</td><td>${esc(entry.reference_number) || "—"}</td><td>${esc(entry.notes)}</td><td><code>${esc(entry.id)}</code></td></tr>`).join("") || `<tr><td colspan="7">No manual cash or customer-credit records yet.</td></tr>`;
-  return page("Cash Flow & Customer Credits", `<section><p class="notice"><strong>Automatic records:</strong> issued invoices, invoice payments, and invoice receivables are calculated separately from shipment and invoice data. Do not re-enter them here.</p><div class="actions">${canWrite ? `<a class="button" href="${path}?new=1">+ Add cash or credit record</a>` : ""}<a href="/admin/finance">Finance Dashboard</a><a href="/admin/finance/expenses">Expenses</a></div></section>
-    <section><h2>Manual Cash & Customer Credit Records</h2><div class="table"><table><thead><tr><th>Date</th><th>Type</th><th>Customer</th><th>Amount</th><th>Reference</th><th>Notes</th><th>Record ID</th></tr></thead><tbody>${rows}</tbody></table></div></section>`, user, 200, {}, canWrite);
+  return page("Cash Flow & Customer Credits", `
+    <section>
+      <p class="notice">
+        <strong>Automatic records:</strong>
+        Invoice payments below are recorded automatically from Billing.
+        Do not enter ordinary invoice payments again as manual cash records.
+      </p>
+
+      <div class="actions">
+        ${canWrite ? `<a class="button" href="${path}?new=1">+ Add Manual Record</a>` : ""}
+        <a href="/admin/finance">Finance Dashboard</a>
+        <a href="/admin/finance/expenses">Expenses</a>
+      </div>
+    </section>
+
+    <section>
+      <div class="actions">
+        <h2>Automatic Customer Payments</h2>
+        <strong>Total: ${esc(pesos(automaticTotal))}</strong>
+      </div>
+
+      <p class="muted">
+        Automatically recorded from invoice payments. No manual entry required.
+      </p>
+
+      <div class="table">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Customer</th>
+              <th>Invoice</th>
+              <th>Amount</th>
+              <th>Method</th>
+              <th>Reference</th>
+            </tr>
+          </thead>
+          <tbody>${automaticRows}</tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>Manual Cash & Customer Credit Records</h2>
+
+      <p class="muted">
+        For owner contributions, opening cash, adjustments, other cash received,
+        and customer reimbursements that are not ordinary invoice payments.
+      </p>
+
+      <div class="table">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Type</th>
+              <th>Customer</th>
+              <th>Amount</th>
+              <th>Reference</th>
+              <th>Notes</th>
+              <th>Record ID</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </section>
+  `, user, 200, {}, canWrite);
 }
 
 export async function mutateFinanceCash(db: D1Database, form: URLSearchParams) {
