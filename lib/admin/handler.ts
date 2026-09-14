@@ -10,6 +10,8 @@ import {
   checkCsrf,
   type AdminEnv,
   canMutateAdmin,
+  canManageStaffRecords,
+  isRestrictedStaff,
   requireAdminMutation,
   requireOperationalAdmin,
 } from "./security";
@@ -136,6 +138,7 @@ export async function handleAdmin(
     const user =
       await authenticate(request, env);
     const canWrite = canMutateAdmin(user);
+    const staff = isRestrictedStaff(user);
 
     const db = env.ADMIN_DB;
     const url = new URL(request.url);
@@ -150,11 +153,14 @@ export async function handleAdmin(
       ? `/admin/${view}`
       : "/admin/dashboard";
 
+    if (staff && view !== "finance/expenses") {
+      throw new AdminError("This account can access only Quotations and Expenses.", 403);
+    }
     if (!canWrite && (view === "activity" || view === "finance/export")) {
       requireOperationalAdmin(user);
     }
-    if (!canWrite && ["new", "edit", "delete"].some((key) => url.searchParams.has(key))) {
-      requireAdminMutation(user);
+    if (!canWrite && !staff && ["new", "edit", "delete"].some((key) => url.searchParams.has(key))) {
+      if (!canWrite && !(staff && view === "finance/expenses")) requireAdminMutation(user);
     }
 
     if (
@@ -309,7 +315,7 @@ export async function handleAdmin(
       }
 
       if (view === "finance/expenses") {
-        const outcome = await mutateExpense(db, form);
+        const outcome = await mutateExpense(db, form, user);
         return page("Saved", "", user.name, 303, { Location: `${path}?${outcome}=1` });
       }
       if (view === "finance/cash") {
@@ -367,7 +373,7 @@ export async function handleAdmin(
     }
 
     if (view === "finance/expenses") {
-      return await expensesPage(db, url, user.name, csrfToken(env, user.id, path), canWrite);
+      return await expensesPage(db, url, user, csrfToken(env, user.id, path), canManageStaffRecords(user));
     }
     if (view === "finance/cash") {
       return await financeCashPage(db, url, user.name, csrfToken(env, user.id, path), canWrite);

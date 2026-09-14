@@ -1113,7 +1113,7 @@ async function detail(
   user: {
     id: string;
     name: string;
-    role: "owner" | "admin" | "viewer";
+    role: "owner" | "admin" | "viewer" | "staff";
   },
   id: string,
   saved: string,
@@ -1645,7 +1645,7 @@ async function list(
   db: D1Database,
   user: {
     name: string;
-    role: "owner" | "admin" | "viewer";
+    role: "owner" | "admin" | "viewer" | "staff";
   },
   url: URL,
 ) {

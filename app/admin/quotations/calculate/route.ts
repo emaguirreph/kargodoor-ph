@@ -1,6 +1,6 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { calculateAdminQuote } from "@/lib/admin/quotation-calculation";
-import { AdminError, authenticate, canMutateAdmin, checkCsrf, secureHeaders, type AdminEnv } from "@/lib/admin/security";
+import { AdminError, authenticate, canManageStaffRecords, checkCsrf, secureHeaders, type AdminEnv } from "@/lib/admin/security";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,7 +10,7 @@ export async function POST(request: Request) {
     const { env: cf } = await getCloudflareContext();
     const env = cf as unknown as AdminEnv;
     const user = await authenticate(request, env);
-    if (!canMutateAdmin(user)) throw new AdminError("Viewer access is read-only.", 403);
+    if (!canManageStaffRecords(user)) throw new AdminError("Viewer access is read-only.", 403);
     checkCsrf(env, user.id, "/admin/quotations", request.headers.get("x-csrf-token") ?? "");
     const body = await request.json();
     if (!body || typeof body !== "object" || Array.isArray(body)) throw new AdminError("Invalid calculation input.");

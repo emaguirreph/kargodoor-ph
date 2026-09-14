@@ -41,6 +41,9 @@ function database() {
   sql.exec(readFileSync("migrations/admin/0006_admin_viewer_role.sql", "utf8"));
   sql.exec(readFileSync("migrations/admin/0007_staff_follow_up.sql", "utf8"));
   sql.exec(readFileSync("migrations/admin/0008_customer_accounts.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0010_quotations.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0011_finance_cash_entries.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0012_staff_quotation_expense_access.sql", "utf8"));
   const user = randomUUID();
   sql
     .prepare("INSERT INTO admin_users VALUES (?,?,?,?,?,?)")

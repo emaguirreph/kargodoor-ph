@@ -1,7 +1,7 @@
 import type { D1Database } from "@cloudflare/workers-types";
 import { z } from "zod";
 import { expenseSchema, expenseCategories, expensePaymentMethods, parseExpenseForm, type RecordData } from "./validation";
-import { AdminError } from "./security";
+import { AdminError, isRestrictedStaff, type AdminUser } from "./security";
 import { page, esc, pesos, input, hidden } from "./ui";
 
 const path = "/admin/finance/expenses";
@@ -12,15 +12,15 @@ const fields = [
   ["notes", "Notes"],
 ] as const;
 
-export async function saveExpense(db: D1Database, values: z.infer<typeof expenseSchema>) {
+export async function saveExpense(db: D1Database, values: z.infer<typeof expenseSchema>, createdBy?: string) {
   const now = new Date().toISOString();
   await db.prepare(`INSERT INTO expenses
     (id, expense_date, category, payee, description, amount, payment_method,
-     reference_number, notes, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+     reference_number, notes, created_by_admin_user_id, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(crypto.randomUUID(), values.expense_date, values.category, values.payee,
       values.description, values.amount, values.payment_method, values.reference_number,
-      values.notes, now, now).run();
+      values.notes, createdBy ?? null, now, now).run();
 }
 
 const mutationSchema = z.object({
@@ -30,9 +30,9 @@ const mutationSchema = z.object({
 });
 
 // Called only after the shared handler authenticates and checks origin and CSRF.
-export async function mutateExpense(db: D1Database, form: URLSearchParams) {
+export async function mutateExpense(db: D1Database, form: URLSearchParams, user: AdminUser = { id: "", name: "Admin", email: "", role: "admin" }) {
   if (!form.has("action")) {
-    await saveExpense(db, parseExpenseForm(form));
+    await saveExpense(db, parseExpenseForm(form), user.id);
     return "saved";
   }
   const metadata = mutationSchema.parse(Object.fromEntries(
@@ -46,6 +46,7 @@ export async function mutateExpense(db: D1Database, form: URLSearchParams) {
       throw new AdminError("Unexpected or repeated expense field.");
   }
   if (metadata.action === "delete") {
+    if (isRestrictedStaff(user)) throw new AdminError("Staff cannot delete expenses.", 403);
     if (form.get("confirm") !== "yes") throw new AdminError("Confirm the expense deletion.");
     const result = await db.prepare("DELETE FROM expenses WHERE id = ? AND updated_at = ?")
       .bind(metadata.id, metadata.revision).run();
@@ -60,9 +61,10 @@ export async function mutateExpense(db: D1Database, form: URLSearchParams) {
   const now = new Date(Math.max(Date.now(), Number.isFinite(previousTime) ? previousTime + 1 : 0)).toISOString();
   const result = await db.prepare(`UPDATE expenses SET expense_date = ?, category = ?, payee = ?,
     description = ?, amount = ?, payment_method = ?, reference_number = ?, notes = ?, updated_at = ?
-    WHERE id = ? AND updated_at = ?`)
+    WHERE id = ? AND updated_at = ?${isRestrictedStaff(user) ? " AND created_by_admin_user_id = ?" : ""}`)
     .bind(values.expense_date, values.category, values.payee, values.description, values.amount,
-      values.payment_method, values.reference_number, values.notes, now, metadata.id, metadata.revision).run();
+      values.payment_method, values.reference_number, values.notes, now, metadata.id, metadata.revision,
+      ...(isRestrictedStaff(user) ? [user.id] : [])).run();
   if (result.meta.changes !== 1) throw new AdminError("Expense changed or no longer exists. Reload Expenses before trying again.", 409);
   return "updated";
 }
@@ -90,17 +92,21 @@ function totalPesos(rows: RecordData[]) {
   return `₱${(total / BigInt(100)).toLocaleString("en-PH")}.${(total % BigInt(100)).toString().padStart(2, "0")}`;
 }
 
-export async function expensesPage(db: D1Database, url: URL, user: string, csrf: string, canWrite = true) {
+export async function expensesPage(db: D1Database, url: URL, user: AdminUser | string, csrf: string, canWrite = true) {
+  const actor: AdminUser = typeof user === "string" ? { id: "", name: user, email: "", role: "admin" } : user;
+  const staff = isRestrictedStaff(actor);
   const edit = url.searchParams.get("edit");
   const remove = url.searchParams.get("delete");
   const add = url.searchParams.get("new") === "1";
+  if (staff && remove !== null) throw new AdminError("Staff cannot delete expenses.", 403);
   if ([Boolean(edit), Boolean(remove), add].filter(Boolean).length > 1)
     throw new AdminError("Choose one expense action.");
   let record: RecordData = {};
   if (edit !== null || remove !== null) {
     const id = z.string().uuid().parse(edit ?? remove);
     const found = await db.prepare(`SELECT id, expense_date, category, payee, description, amount,
-      payment_method, reference_number, notes, updated_at FROM expenses WHERE id = ?`).bind(id).first<RecordData>();
+      payment_method, reference_number, notes, updated_at FROM expenses WHERE id = ?${staff ? " AND created_by_admin_user_id = ?" : ""}`)
+      .bind(id, ...(staff ? [actor.id] : [])).first<RecordData>();
     if (!found) throw new AdminError("Expense not found.", 404);
     record = found;
   }
@@ -111,7 +117,7 @@ export async function expensesPage(db: D1Database, url: URL, user: string, csrf:
       <form method="post" action="${path}">${hidden("csrf", csrf)}${hidden("action", "delete")}
       ${hidden("id", record.id)}${hidden("revision", record.updated_at)}
       <div class="actions"><button type="submit" name="confirm" value="yes">Confirm Delete</button>
-      <a href="${path}">Cancel</a></div></form></section>`, user, 200, {}, canWrite);
+      <a href="${path}">Cancel</a></div></form></section>`, actor.name, 200, {}, canWrite, staff);
   }
   if (add || edit !== null) {
     const historical = edit !== null && !expenseCategories.some((category) => category === record.category)
@@ -130,36 +136,36 @@ export async function expensesPage(db: D1Database, url: URL, user: string, csrf:
       ${hidden("csrf", csrf)}${edit !== null ? hidden("action", "edit") + hidden("id", record.id) + hidden("revision", record.updated_at) : ""}
       <div class="grid">${form}</div><p class="muted">* Required.</p>
       <div class="actions"><button type="submit">Save expense</button><a href="${path}">Cancel</a></div>
-      </form></section>`, user, 200, {}, canWrite);
+      </form></section>`, actor.name, 200, {}, canWrite, staff);
   }
   const filters = filterSchema.parse(Object.fromEntries(
     ["from", "to", "category", "payment_method", "q"].map((key) => [key, url.searchParams.get(key) ?? ""]),
   ));
   const { results } = await db.prepare(`SELECT id, expense_date, category, payee, description,
     amount, payment_method, reference_number, notes FROM expenses
-    WHERE (? = '' OR expense_date >= ?) AND (? = '' OR expense_date <= ?)
+    WHERE (${staff ? "created_by_admin_user_id = ?" : "1 = 1"}) AND (? = '' OR expense_date >= ?) AND (? = '' OR expense_date <= ?)
       AND (? = '' OR category = ?) AND (? = '' OR payment_method = ?)
       AND (? = '' OR instr(lower(COALESCE(payee, '')), lower(?)) > 0
         OR instr(lower(description), lower(?)) > 0
         OR instr(lower(COALESCE(reference_number, '')), lower(?)) > 0
         OR instr(lower(COALESCE(notes, '')), lower(?)) > 0)
     ORDER BY expense_date DESC, created_at DESC, id DESC`)
-    .bind(filters.from, filters.from, filters.to, filters.to, filters.category, filters.category,
+    .bind(...(staff ? [actor.id] : []), filters.from, filters.from, filters.to, filters.to, filters.category, filters.category,
       filters.payment_method, filters.payment_method, filters.q, filters.q, filters.q, filters.q, filters.q)
     .all<RecordData>();
   const table = results.length ? `<div class="table"><table><thead><tr>
     ${fields.map(([, label]) => `<th>${label}</th>`).join("")}${canWrite ? "<th>Actions</th>" : ""}</tr></thead><tbody>
     ${results.map((row) => `<tr>${fields.map(([key]) => `<td>${key === "amount" ? esc(pesos(row[key])) : esc(row[key]) || "—"}</td>`).join("")}
-      ${canWrite ? `<td><a href="${path}?edit=${esc(encodeURIComponent(String(row.id)))}">Edit</a> <a href="${path}?delete=${esc(encodeURIComponent(String(row.id)))}">Delete</a></td>` : ""}</tr>`).join("")}
+      ${canWrite ? `<td><a href="${path}?edit=${esc(encodeURIComponent(String(row.id)))}">Edit</a>${staff ? "" : ` <a href="${path}?delete=${esc(encodeURIComponent(String(row.id)))}">Delete</a>`}</td>` : ""}</tr>`).join("")}
     </tbody></table></div>` : "<p>No expenses found.</p>";
   const notice = url.searchParams.get("deleted") === "1" ? "Expense deleted." : url.searchParams.get("updated") === "1" ? "Expense updated." : url.searchParams.get("saved") === "1" ? "Expense saved." : "";
   return page("Expenses", `${notice ? `<p class="notice" role="status">${notice}</p>` : ""}
-    <section><div class="actions"><a href="/admin/finance">Dashboard</a><a href="${path}"><strong>Expenses</strong></a><a href="/admin/finance/cash">Cash Flow &amp; Customer Credits</a>${canWrite ? `<a class="button" href="${path}?new=1">Add Expense</a>` : ""}</div></section>
+    <section><div class="actions">${staff ? "" : `<a href="/admin/finance">Dashboard</a>`}<a href="${path}"><strong>Expenses</strong></a>${staff ? "" : `<a href="/admin/finance/cash">Cash Flow &amp; Customer Credits</a>`}${canWrite ? `<a class="button" href="${path}?new=1">Add Expense</a>` : ""}</div></section>
     <section><form method="get" action="${path}" class="search">
       ${input("q", "Search", filters)}${input("from", "From Date", filters, "date")}${input("to", "To Date", filters, "date")}
       ${dropdown("category", "Category", expenseCategories, filters.category, "All Categories")}
       ${dropdown("payment_method", "Payment Method", expensePaymentMethods, filters.payment_method, "All Payment Methods")}
       <button type="submit">Apply Filters</button><a href="${path}">Clear Filters</a></form></section>
     <div class="card"><h2>Total Expenses</h2><strong>${esc(totalPesos(results))}</strong></div>
-    <section>${table}</section>`, user, 200, {}, canWrite);
+    <section>${table}</section>`, actor.name, 200, {}, canWrite, staff);
 }
