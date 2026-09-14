@@ -365,18 +365,26 @@ export default function RatesCalculatorPage() {
           </div>
         </section>
 
-        <section className="kd-size-guide" aria-label="Package size guide">
+        <section className="kd-size-guide" aria-label="Sea and air freight rate guides">
           <div className="kd-container kd-rates-container">
             <p className="kd-size-guide-mobile-hint">
-              Swipe to view full size guide →
+              Swipe to view each rate guide →
             </p>
 
             <div className="kd-size-guide-scroll">
               <img
                 src="/assets/kargodoor-package-size-guide-approved.png"
-                alt="Package size guide for KD Mini, KD Lite, KD Plus, KD Standard, and KD Max"
-                width={1643}
-                height={1044}
+                alt="Sea Freight Rates package size guide for KD Mini, KD Lite, KD Plus, KD Standard, and KD Max"
+                width={1572}
+                height={1001}
+                loading="lazy"
+                decoding="async"
+              />
+              <img
+                src="/assets/kargodoor-air-freight-rates-approved.png"
+                alt="Air Freight Rates starting at 450 pesos per kilogram from China to the Philippines"
+                width={1923}
+                height={818}
                 loading="lazy"
                 decoding="async"
               />
