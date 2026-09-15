@@ -1,7 +1,7 @@
 import type { D1Database } from "@cloudflare/workers-types";
 import { z } from "zod";
 import { expenseSchema, expenseCategories, expensePaymentMethods, parseExpenseForm, type RecordData } from "./validation";
-import { AdminError, isRestrictedStaff, type AdminUser } from "./security";
+import { AdminError, canDeleteAdmin, isRestrictedStaff, type AdminUser } from "./security";
 import { page, esc, pesos, input, hidden } from "./ui";
 
 const path = "/admin/finance/expenses";
@@ -46,7 +46,7 @@ export async function mutateExpense(db: D1Database, form: URLSearchParams, user:
       throw new AdminError("Unexpected or repeated expense field.");
   }
   if (metadata.action === "delete") {
-    if (isRestrictedStaff(user)) throw new AdminError("Staff cannot delete expenses.", 403);
+    if (!canDeleteAdmin(user)) throw new AdminError("Only the owner can delete expenses.", 403);
     if (form.get("confirm") !== "yes") throw new AdminError("Confirm the expense deletion.");
     const result = await db.prepare("DELETE FROM expenses WHERE id = ? AND updated_at = ?")
       .bind(metadata.id, metadata.revision).run();
@@ -95,10 +95,11 @@ function totalPesos(rows: RecordData[]) {
 export async function expensesPage(db: D1Database, url: URL, user: AdminUser | string, csrf: string, canWrite = true) {
   const actor: AdminUser = typeof user === "string" ? { id: "", name: user, email: "", role: "admin" } : user;
   const staff = isRestrictedStaff(actor);
+  const canDelete = canDeleteAdmin(actor);
   const edit = url.searchParams.get("edit");
   const remove = url.searchParams.get("delete");
   const add = url.searchParams.get("new") === "1";
-  if (staff && remove !== null) throw new AdminError("Staff cannot delete expenses.", 403);
+  if (!canDelete && remove !== null) throw new AdminError("Only the owner can delete expenses.", 403);
   if ([Boolean(edit), Boolean(remove), add].filter(Boolean).length > 1)
     throw new AdminError("Choose one expense action.");
   let record: RecordData = {};
@@ -156,7 +157,7 @@ export async function expensesPage(db: D1Database, url: URL, user: AdminUser | s
   const table = results.length ? `<div class="table"><table><thead><tr>
     ${fields.map(([, label]) => `<th>${label}</th>`).join("")}${canWrite ? "<th>Actions</th>" : ""}</tr></thead><tbody>
     ${results.map((row) => `<tr>${fields.map(([key]) => `<td>${key === "amount" ? esc(pesos(row[key])) : esc(row[key]) || "—"}</td>`).join("")}
-      ${canWrite ? `<td><a href="${path}?edit=${esc(encodeURIComponent(String(row.id)))}">Edit</a>${staff ? "" : ` <a href="${path}?delete=${esc(encodeURIComponent(String(row.id)))}">Delete</a>`}</td>` : ""}</tr>`).join("")}
+      ${canWrite ? `<td><a href="${path}?edit=${esc(encodeURIComponent(String(row.id)))}">Edit</a>${canDelete ? ` <a href="${path}?delete=${esc(encodeURIComponent(String(row.id)))}">Delete</a>` : ""}</td>` : ""}</tr>`).join("")}
     </tbody></table></div>` : "<p>No expenses found.</p>";
   const notice = url.searchParams.get("deleted") === "1" ? "Expense deleted." : url.searchParams.get("updated") === "1" ? "Expense updated." : url.searchParams.get("saved") === "1" ? "Expense saved." : "";
   return page("Expenses", `${notice ? `<p class="notice" role="status">${notice}</p>` : ""}

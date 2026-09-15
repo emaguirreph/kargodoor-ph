@@ -10,6 +10,7 @@ import {
   checkCsrf,
   type AdminEnv,
   canMutateAdmin,
+  requireAdminDelete,
   canManageStaffRecords,
   isRestrictedStaff,
   requireAdminMutation,
@@ -153,7 +154,10 @@ export async function handleAdmin(
     if (!canWrite && (view === "activity" || view === "finance/export")) {
       requireOperationalAdmin(user);
     }
-    if (!canWrite && !staff && ["new", "edit", "delete"].some((key) => url.searchParams.has(key))) {
+    if (url.searchParams.has("delete")) {
+      requireAdminDelete(user);
+    }
+    if (!canWrite && !staff && ["new", "edit"].some((key) => url.searchParams.has(key))) {
       if (!canWrite && !(staff && view === "finance/expenses")) requireAdminMutation(user);
     }
 

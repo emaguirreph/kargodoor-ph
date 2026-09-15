@@ -25,6 +25,8 @@ import {
   canonicalOrigin,
   adminOriginAllowed,
   authenticate,
+  canDeleteAdmin,
+  requireAdminDelete,
   type AdminEnv,
   canMutateAdmin,
   requireAdminMutation,
@@ -505,9 +507,16 @@ test("viewer authorization is centralized and mutation attempts are forbidden", 
   assert.equal(canMutateAdmin({ role: "owner" }), true);
   assert.equal(canMutateAdmin({ role: "admin" }), true);
   assert.equal(canMutateAdmin({ role: "viewer" }), false);
+  assert.equal(canDeleteAdmin({ role: "owner" }), true);
+  assert.equal(canDeleteAdmin({ role: "admin" }), false);
   assert.throws(
     () => requireAdminMutation({ role: "viewer" }),
     (error: unknown) => error instanceof Error && error.message === "Viewer access is read-only." &&
+      "status" in error && error.status === 403,
+  );
+  assert.throws(
+    () => requireAdminDelete({ role: "admin" }),
+    (error: unknown) => error instanceof Error && error.message === "Only the owner can delete records." &&
       "status" in error && error.status === 403,
   );
 });
@@ -924,7 +933,9 @@ test("expense deletion requires confirmation, preserves other rows and rejects s
   await saveExpense(db, parseExpenseForm(new URLSearchParams(expenseInput)));
   await saveExpense(db, parseExpenseForm(new URLSearchParams({ ...expenseInput, description: "Keep this expense" })));
   const original = sql.prepare("SELECT * FROM expenses WHERE description=?").get(expenseInput.description)!;
-  const response = await expensesPage(db, new URL(`https://admin.test/admin/finance/expenses?delete=${original.id}`), "Admin", "token");
+  const owner = { id: "owner", name: "Owner", email: "owner@example.test", role: "owner" as const };
+  const admin = { id: "admin", name: "Admin", email: "admin@example.test", role: "admin" as const };
+  const response = await expensesPage(db, new URL(`https://admin.test/admin/finance/expenses?delete=${original.id}`), owner, "token");
   const html = await response.text();
   assert.match(html, /Confirm Delete/);
   assert.match(html, /method="post"/);
@@ -934,9 +945,10 @@ test("expense deletion requires confirmation, preserves other rows and rejects s
   assert.match(html, /123.45/);
   assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM expenses").get()!.n, 2);
   const deletion = { action: "delete", id: String(original.id), revision: String(original.updated_at) };
-  await assert.rejects(mutateExpense(db, new URLSearchParams(deletion)), /Confirm/);
-  await assert.rejects(mutateExpense(db, new URLSearchParams({ ...deletion, confirm: "yes", revision: "stale" })), /changed or no longer exists/);
-  assert.equal(await mutateExpense(db, new URLSearchParams({ ...deletion, confirm: "yes" })), "deleted");
+  await assert.rejects(mutateExpense(db, new URLSearchParams({ ...deletion, confirm: "yes" }), admin), /Only the owner/);
+  await assert.rejects(mutateExpense(db, new URLSearchParams(deletion), owner), /Confirm/);
+  await assert.rejects(mutateExpense(db, new URLSearchParams({ ...deletion, confirm: "yes", revision: "stale" }), owner), /changed or no longer exists/);
+  assert.equal(await mutateExpense(db, new URLSearchParams({ ...deletion, confirm: "yes" }), owner), "deleted");
   const remaining = sql.prepare("SELECT * FROM expenses").all();
   assert.equal(remaining.length, 1);
   assert.equal(remaining[0].description, "Keep this expense");

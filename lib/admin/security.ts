@@ -21,12 +21,17 @@ export type AdminRole = "owner" | "admin" | "viewer" | "staff";
 export type AdminUser = { id: string; name: string; email: string; role: AdminRole };
 export const canMutateAdmin = (user: Pick<AdminUser, "role">) =>
   user.role === "owner" || user.role === "admin";
+export const canDeleteAdmin = (user: Pick<AdminUser, "role">) =>
+  user.role === "owner";
 export const canManageStaffRecords = (user: Pick<AdminUser, "role">) =>
   canMutateAdmin(user) || user.role === "staff";
 export const isRestrictedStaff = (user: Pick<AdminUser, "role">) =>
   user.role === "staff";
 export function requireAdminMutation(user: Pick<AdminUser, "role">) {
   if (!canMutateAdmin(user)) throw new AdminError("Viewer access is read-only.", 403);
+}
+export function requireAdminDelete(user: Pick<AdminUser, "role">) {
+  if (!canDeleteAdmin(user)) throw new AdminError("Only the owner can delete records.", 403);
 }
 export const requireOperationalAdmin = requireAdminMutation;
 
