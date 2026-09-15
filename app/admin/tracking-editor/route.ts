@@ -181,6 +181,7 @@ body {
 }
 
 main {
+  width: min(720px, calc(100% - 48px));
   max-width: 720px;
   margin: 32px auto;
   padding: 24px;
@@ -311,11 +312,25 @@ a {
   color: #0753ad;
 }
 
-@media (max-width: 600px) {
+.admin-return {
+  display: inline-block;
+  margin: 18px 0 2px;
+  padding: 10px 12px;
+  border: 1px solid #adc7d8;
+  border-radius: 7px;
+  background: #e7f3fa;
+  color: #154876;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+@media (max-width: 760px) {
 
   main {
-    margin: 12px;
+    width: 100%;
+    margin: 0;
     padding: 18px;
+    border-radius: 0;
   }
 
   .grid {
@@ -324,6 +339,12 @@ a {
 
   .actions {
     flex-direction: column;
+  }
+
+  .actions button,
+  .admin-return {
+    width: 100%;
+    min-height: 44px;
   }
 
   h1 {
@@ -356,6 +377,8 @@ a {
 </div>
 
 </header>
+
+<a class="admin-return" href="/admin/dashboard">← Back to Admin Dashboard</a>
 
 <p>
 Add a shipment, or load an existing shipment to update the details.

@@ -933,31 +933,6 @@ export async function financeDashboard(
           }
         }
 
-        @media(max-width:520px) {
-          table {
-            min-width: 0;
-          }
-
-          thead {
-            display: none;
-          }
-
-          tr {
-            display: block;
-            padding: 10px 0;
-            border-bottom: 1px solid #d5e4ed;
-          }
-
-          td {
-            display: block;
-            border: 0;
-            padding: 4px 0;
-          }
-
-          td:last-child {
-            font-size: 1.1rem;
-          }
-        }
       </style>
     `,
     user,
