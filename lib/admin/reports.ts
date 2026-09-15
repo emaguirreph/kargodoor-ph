@@ -397,23 +397,73 @@ export async function dashboard(
             Welcome back, ${esc(user.name)}.
           </p>
         </div>
+      </div>
+
+      <section class="dashboard-panel">
+        <div class="dashboard-panel-header">
+          <h2>Staff Communication</h2>
+          ${
+            canWrite
+              ? `<span class="communication-badge">Shared Team Note</span>`
+              : ""
+          }
+        </div>
+
+        <div class="communication-note">
+          ${
+            note
+              ? `
+                  <div class="communication-badge">Important</div>
+                  <p class="communication-note-text">${esc(note)}</p>
+
+                  <p class="muted">
+                    Last updated ${esc(followUp?.updated_at || "—")}
+                    by ${esc(
+                      followUp?.updater_name ||
+                        followUp?.updater_email ||
+                        "—",
+                    )}
+                  </p>
+                `
+              : `
+                  <p class="muted">
+                    No staff communication has been added yet.
+                  </p>
+                `
+          }
+        </div>
 
         ${
           canWrite
-            ? `<div class="dashboard-actions">
-                 <a class="button" href="/admin/customers?new=1">
-                   + Add Customer
-                 </a>
-                 <a class="button" href="/admin/shipments?new=1">
-                   + Add Shipment
-                 </a>
-                 <a class="button" href="/admin/invoices?new=1">
-                   + Create Invoice
-                 </a>
-               </div>`
-            : `<p class="notice">Viewer access is read-only.</p>`
+            ? `
+                <details class="communication-editor">
+                  <summary>+ Add / Edit Message</summary>
+
+                  <form action="/admin/dashboard" method="post">
+                    <input
+                      name="csrf"
+                      type="hidden"
+                      value="${esc(csrf)}"
+                    >
+
+                    <label>
+                      Message
+                      <textarea
+                        name="note"
+                        maxlength="4000"
+                        placeholder="Add an announcement, reminder, urgent note, task, or general staff message..."
+                      >${esc(note)}</textarea>
+                    </label>
+
+                    <div class="actions">
+                      <button>Save Communication</button>
+                    </div>
+                  </form>
+                </details>
+              `
+            : ""
         }
-      </div>
+      </section>
 
       <h2 class="dashboard-heading">Business Snapshot</h2>
 
@@ -440,72 +490,6 @@ export async function dashboard(
       </div>
 
       <div class="dashboard-middle">
-        <section class="dashboard-panel">
-          <div class="dashboard-panel-header">
-            <h2>Staff Communication</h2>
-            ${
-              canWrite
-                ? `<span class="communication-badge">Shared Team Note</span>`
-                : ""
-            }
-          </div>
-
-          <div class="communication-note">
-            ${
-              note
-                ? `
-                  <div class="communication-badge">Important</div>
-                  <p class="communication-note-text">${esc(note)}</p>
-
-                  <p class="muted">
-                    Last updated ${esc(followUp?.updated_at || "—")}
-                    by ${esc(
-                      followUp?.updater_name ||
-                        followUp?.updater_email ||
-                        "—",
-                    )}
-                  </p>
-                `
-                : `
-                  <p class="muted">
-                    No staff communication has been added yet.
-                  </p>
-                `
-            }
-          </div>
-
-          ${
-            canWrite
-              ? `
-                <details class="communication-editor">
-                  <summary>+ Add / Edit Message</summary>
-
-                  <form action="/admin/dashboard" method="post">
-                    <input
-                      name="csrf"
-                      type="hidden"
-                      value="${esc(csrf)}"
-                    >
-
-                    <label>
-                      Message
-                      <textarea
-                        name="note"
-                        maxlength="4000"
-                        placeholder="Add an announcement, reminder, urgent note, task, or general staff message..."
-                      >${esc(note)}</textarea>
-                    </label>
-
-                    <div class="actions">
-                      <button>Save Communication</button>
-                    </div>
-                  </form>
-                </details>
-              `
-              : ""
-          }
-        </section>
-
         ${
           canWrite
             ? `
