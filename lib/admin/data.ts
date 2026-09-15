@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 import { AdminError } from "./security";
 import type { Entity, RecordData } from "./validation";
 
-async function generatedIdentifier(db: D1Database, entity: Entity, values: RecordData) {
+export async function generatedIdentifier(db: D1Database, entity: Entity, values: RecordData) {
   const field = entity === "customers" ? "customer_code" : "tracking_number";
   if (values[field]) return undefined;
   const prefix = entity === "customers" ? "KDOOR" : values.service_type === "Air Freight" ? "KDAIR" : "KDSEA";

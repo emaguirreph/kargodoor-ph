@@ -17,6 +17,7 @@ import {
 } from "../../lib/admin/validation";
 import { marginSummarySql, finance, activity, dashboard, saveStaffFollowUp } from "../../lib/admin/reports";
 import { saveRecord } from "../../lib/admin/data";
+import { createShipmentFromApprovedQuotation } from "../../lib/admin/quotation-shipment";
 import { createInvoice, issueInvoice, recordPayment } from "../../lib/admin/billing";
 import {
   validateJwt,
@@ -32,7 +33,7 @@ import {
   requireAdminMutation,
 } from "../../lib/admin/security";
 import { expensesPage, saveExpense, mutateExpense } from "../../lib/admin/expenses";
-function database() {
+function database(includePhase1 = true) {
   const sql = new DatabaseSync(":memory:");
   sql.exec("PRAGMA foreign_keys=ON");
   sql.exec(readFileSync("migrations/admin/0001_phase1.sql", "utf8"));
@@ -46,6 +47,9 @@ function database() {
   sql.exec(readFileSync("migrations/admin/0010_quotations.sql", "utf8"));
   sql.exec(readFileSync("migrations/admin/0011_finance_cash_entries.sql", "utf8"));
   sql.exec(readFileSync("migrations/admin/0012_staff_quotation_expense_access.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0013_promote_managers_to_admin.sql", "utf8"));
+  if (includePhase1)
+    sql.exec(readFileSync("migrations/admin/0014_approved_quotation_shipments.sql", "utf8"));
   const user = randomUUID();
   sql
     .prepare("INSERT INTO admin_users VALUES (?,?,?,?,?,?)")
@@ -122,6 +126,54 @@ const shipmentInput = (id: string) =>
     payment_status: "Unpaid",
   });
 const shipment = (id: string) => shipmentSchema.parse(shipmentInput(id));
+
+function insertQuotation(sql: DatabaseSync, values: {
+  id?: string;
+  number?: string;
+  status?: string;
+  customerId?: string | null;
+  customer?: Record<string, unknown>;
+  cargo?: Record<string, unknown>;
+} = {}) {
+  const id = values.id ?? randomUUID();
+  const now = "2026-09-15T00:00:00.000Z";
+  sql.prepare(`INSERT INTO quotations (
+    id, quotation_number, customer_id, status, freight_type, quotation_date,
+    valid_until, prepared_by, customer_snapshot, cargo_snapshot, pricing_snapshot,
+    calculated_amount, override_amount, override_reason, final_amount, backend_cost,
+    additional_cost, delivery_cost, notes, prepared_by_admin_user_id, created_at, updated_at
+  ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+    id,
+    values.number ?? `KD-Q-2026-${id.slice(0, 3)}`,
+    values.customerId ?? null,
+    values.status ?? "Approved",
+    "Sea Freight",
+    "2026-09-15",
+    null,
+    "Admin",
+    JSON.stringify(values.customer ?? {
+      name: "Quotation customer", company: "Test Co", mobile: "+639171234567",
+      email: "quotation@example.test", address: "Manila",
+    }),
+    JSON.stringify(values.cargo ?? {
+      item: "Bags", description: "Bags", cbm: "1.25", weight: "425",
+      originWarehouse: "Guangzhou",
+    }),
+    JSON.stringify({ final: 5000 }),
+    500000,
+    null,
+    null,
+    500000,
+    null,
+    null,
+    null,
+    null,
+    null,
+    now,
+    now,
+  );
+  return id;
+}
 
 
 
@@ -219,6 +271,67 @@ test("quotation numeric validator accepts valid decimals and rejects malformed v
   for (const value of ["abc", "8.3.2", "NaN", "Infinity", "-Infinity"])
     assert.equal(isQuotationNumeric(value), false, value);
   assert.equal(isQuotationNumeric("8.38593"), true);
+});
+test("approved quotations create one pending, unpaid shipment with a safe customer match and audit log", async () => {
+  const { sql, db, user } = database();
+  const existingCustomerId = await saveRecord(db, "customers", {
+    ...customer,
+    customer_code: "KD-EXISTING",
+    email: "quotation@example.test",
+  }, user, "", "");
+  const quotationId = insertQuotation(sql);
+  const result = await createShipmentFromApprovedQuotation(db, user, quotationId);
+  const created = sql.prepare("SELECT * FROM shipments WHERE id = ?").get(result.shipmentId)!;
+  assert.equal(result.customerId, existingCustomerId);
+  assert.equal(result.customerCreated, false);
+  assert.match(result.trackingNumber, /^KDSEA\d{6}$/);
+  assert.equal(created.source_quotation_id, quotationId);
+  assert.equal(created.status, "Pending Warehouse Receipt");
+  assert.equal(created.payment_status, "Unpaid");
+  assert.equal(created.warehouse_received_date, null);
+  assert.equal(created.departure_date, null);
+  assert.equal(created.shipping_charge, 500000);
+  assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM invoices").get()!.n, 0);
+  const log = sql.prepare("SELECT * FROM activity_log WHERE entity_id = ? AND action = 'create_from_approved_quotation'").get(result.shipmentId)!;
+  assert.equal(log.admin_user_id, user);
+  assert.equal(JSON.parse(String(log.new_value)).source_quotation_id, quotationId);
+  await assert.rejects(createShipmentFromApprovedQuotation(db, user, quotationId), /already exists/);
+});
+test("quotation shipment conversion rejects non-approved quotes and creates a customer for ambiguous or absent matches", async () => {
+  const { sql, db, user } = database();
+  const draftId = insertQuotation(sql, { status: "Draft" });
+  await assert.rejects(createShipmentFromApprovedQuotation(db, user, draftId), /Only approved/);
+  const firstId = await saveRecord(db, "customers", { ...customer, customer_code: "KD-ONE", email: "shared@example.test" }, user, "", "");
+  await saveRecord(db, "customers", { ...customer, customer_code: "KD-TWO", email: "different@example.test" }, user, "", "");
+  sql.prepare("UPDATE customers SET email = ? WHERE id != ? AND customer_code = 'KD-TWO'").run("shared@example.test", firstId);
+  const quotationId = insertQuotation(sql, { customer: {
+    name: "New customer", company: "New Co", mobile: "+639179999999",
+    email: "shared@example.test", address: "Cebu",
+  } });
+  const result = await createShipmentFromApprovedQuotation(db, user, quotationId);
+  assert.equal(result.customerCreated, true);
+  assert.equal(sql.prepare("SELECT full_name FROM customers WHERE id = ?").get(result.customerId)!.full_name, "New customer");
+  assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM customers WHERE lower(email) = 'shared@example.test'").get()!.n, 3);
+});
+test("approved quotation conversion validates required saved operational details", async () => {
+  const { sql, db, user } = database();
+  const quotationId = insertQuotation(sql, { cargo: { cbm: "1", weight: "10", originWarehouse: "" } });
+  await assert.rejects(createShipmentFromApprovedQuotation(db, user, quotationId), /China warehouse/);
+  assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM shipments").get()!.n, 0);
+});
+test("phase 1 migration preserves existing shipment, invoice, and payment relationships", async () => {
+  const { sql, db, user } = database(false);
+  const customerId = await saveRecord(db, "customers", customer, user, "", "");
+  const shipmentId = await saveRecord(db, "shipments", shipment(customerId), user, "", "");
+  const invoiceId = randomUUID();
+  sql.prepare(`INSERT INTO invoices (id, invoice_number, customer_id, shipment_id, subtotal, delivery_charge, total, status, issued_at, due_at, created_at, updated_at, other_charge)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(invoiceId, "INV-MIGRATE", customerId, shipmentId, 10000, 0, 10000, "Unpaid", null, null, "2026-09-15", "2026-09-15", 0);
+  sql.prepare("INSERT INTO payments VALUES (?,?,?,?,?,?,?,?,?)").run(randomUUID(), invoiceId, customerId, 1000, "Cash", null, "2026-09-15", null, "2026-09-15");
+  sql.exec(readFileSync("migrations/admin/0014_approved_quotation_shipments.sql", "utf8"));
+  assert.equal(sql.prepare("SELECT source_quotation_id FROM shipments WHERE id = ?").get(shipmentId)!.source_quotation_id, null);
+  assert.equal(sql.prepare("SELECT shipment_id FROM invoices WHERE id = ?").get(invoiceId)!.shipment_id, shipmentId);
+  assert.equal(sql.prepare("SELECT invoice_id FROM payments").get()!.invoice_id, invoiceId);
+  sql.prepare("INSERT INTO shipments (id, customer_id, tracking_number, service_type, china_warehouse, cbm, weight_kg, status, shipping_charge, delivery_charge, payment_status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)").run(randomUUID(), customerId, "KDSEA999999", "Sea Freight", "Guangzhou", 0, 0, "Pending Warehouse Receipt", 0, 0, "Unpaid", "2026-09-15", "2026-09-15");
 });
 test("customer account foundation preserves existing records and enforces isolated credential structures", async () => {
   const { sql, db, user } = database();

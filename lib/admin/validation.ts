@@ -9,6 +9,7 @@ export const warehouses = [
 ] as const;
 
 export const statuses = [
+  "Pending Warehouse Receipt",
   "Received at Warehouse",
   "In Transit",
   "Arrived in Philippines",
