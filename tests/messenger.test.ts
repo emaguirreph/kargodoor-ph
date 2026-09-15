@@ -11,7 +11,7 @@ import {
 test("Messenger uses the verified Page ID and canonical web fallback", () => {
   assert.equal(MESSENGER_PAGE_ID, "1348315835021469");
   assert.equal(MESSENGER_APP_URL, "fb-messenger://user-thread/1348315835021469");
-  assert.equal(MESSENGER_URL, "https://www.messenger.com/t/1348315835021469");
+  assert.equal(MESSENGER_URL, "https://m.me/KargoDoorPH");
 });
 
 test("Messenger platform detection covers iOS, iPadOS, Android and desktop", () => {
