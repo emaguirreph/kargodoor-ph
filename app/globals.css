@@ -339,12 +339,11 @@ place-items: center;
 background: transparent;
 }
 
-.kd-floating-message video {
+.kd-floating-message-icon {
 display: block;
 width: 100%;
 height: 100%;
-object-fit: contain;
-border-radius: 50%;
+filter: drop-shadow(0 4px 8px rgb(7 83 173 / 24%));
 }
 
 .kd-floating-message:focus-visible,

@@ -1,4 +1,6 @@
-export const MESSENGER_URL = "https://m.me/KargoDoorPH";
+// Use the page's direct Messenger conversation URL. The m.me short link can
+// redirect some browsers to the generic Messenger landing page instead.
+export const MESSENGER_URL = "https://www.messenger.com/t/1348315835021469";
 export const MESSENGER_PAGE_ID = "1348315835021469";
 export const MESSENGER_APP_URL = `fb-messenger://user-thread/${MESSENGER_PAGE_ID}`;
 
