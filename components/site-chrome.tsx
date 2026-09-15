@@ -188,17 +188,9 @@ export function Footer() {
         aria-label="Message KargoDoor PH"
         analyticsEvent="contact"
       >
-        <svg
-          className="kd-floating-message-icon"
-          viewBox="0 0 48 48"
-          aria-hidden="true"
-        >
-          <circle cx="24" cy="24" r="24" fill="#0084ff" />
-          <path
-            d="M24 10c-8.1 0-14.5 5.9-14.5 13.8 0 4.5 2.1 8.4 5.5 10.9v5.5l5.1-2.8c1.3.4 2.7.6 3.9.6 8.1 0 14.5-5.9 14.5-13.8S32.1 10 24 10Zm1.5 18.6-3.7-4-7.2 4 7.9-8.4 3.8 4 7.1-4-7.9 8.4Z"
-            fill="white"
-          />
-        </svg>
+        <video autoPlay loop muted playsInline preload="metadata" aria-hidden="true">
+          <source src="/assets/kargodoor-message-us-approved.webm" type="video/webm" />
+        </video>
       </MessengerLink>
     </footer>
   );
