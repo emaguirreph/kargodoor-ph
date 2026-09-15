@@ -17,7 +17,7 @@ export async function freightCalculatorPage(request: Request, envOverride?: Admi
     .cbm-result{font-size:1.3rem;font-weight:700;color:#0753ad}
     @media(max-width:600px){.freight-calculator-results{grid-template-columns:1fr}}
   </style>
-  <section>
+  <section data-freight-calculator data-sea-items="${esc(JSON.stringify(itemCategories))}" data-air-items="${esc(JSON.stringify(airItems))}">
     <h2>Freight Calculator</h2>
     <p class="muted">Internal estimate only. This uses the same live KargoDoor pricing rules as quotations and does not save any data.</p>
   </section>
@@ -51,6 +51,14 @@ export async function freightCalculatorPage(request: Request, envOverride?: Admi
       <div><dt>Total estimated freight</dt><dd data-air-total data-total>—</dd></div>
     </dl>
   </section>
+  <section data-sea-rules>
+    <h2>Sea Freight rules</h2>
+    <ul><li>Your selected item assigns its Sea category automatically.</li><li>Density = actual weight ÷ CBM. Above <strong>425 kg/CBM</strong>, the density charge is compared with the base charge.</li><li>KD Mini applies up to 0.01 CBM, KD Lite up to 0.05 CBM, and KD Plus up to 0.125 CBM. Standard Sea Freight has a ₱1,700 minimum.</li><li>Mobile phones, computers, and tablets use a special CBM rate plus per-unit charge; density pricing does not apply.</li></ul>
+  </section>
+  <section data-air-rules hidden>
+    <h2>Air Freight rules</h2>
+    <ul><li>Ordinary items: <strong>₱500/kg</strong>. Restricted items: <strong>₱600/kg</strong>. Medicine and food supplements: <strong>₱650/kg</strong>.</li><li>For per-kilogram items, volumetric weight = <strong>CBM × 167</strong>. The higher of actual and volumetric weight is charged.</li><li>Mobile phones, tablets, and laptops use per-piece pricing.</li></ul>
+  </section>
   <section data-cbm-converter>
     <h2>CBM Conversion</h2>
     <p class="muted">Calculate total CBM from package dimensions, then optionally use it in the freight calculator above.</p>
@@ -64,6 +72,8 @@ export async function freightCalculatorPage(request: Request, envOverride?: Admi
     <p>Single package: <strong data-single>—</strong> CBM</p><p class="cbm-result">Total: <span data-total>—</span> CBM</p>
     <p class="actions"><button type="button" data-use-cbm disabled>Use this CBM in Freight Calculator</button></p>
   </section>
-  <script data-sea-items="${esc(JSON.stringify(itemCategories))}" data-air-items="${esc(JSON.stringify(airItems))}" src="/admin-freight-calculator.js" defer></script>`;
-  return page("Freight Calculator", body, user.name);
+  <script src="/admin-freight-calculator.js" defer></script>`;
+  return page("Freight Calculator", body, user.name, 200, {
+    "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; font-src 'self'; script-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+  });
 }
