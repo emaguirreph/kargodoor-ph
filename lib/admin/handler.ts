@@ -30,12 +30,13 @@ import {
 import { financeDashboard } from "./finance-summary";
 import { financeCsv } from "./finance-report";
 import { expensesPage, mutateExpense } from "./expenses";
-import { messageCenterPage } from "./message-center";
+import { messageLibraryPage, resetMessageTemplate, saveMessageTemplate } from "./message-center";
 import { financeCashPage, mutateFinanceCash } from "./finance-cash";
 import { saveRecord, deleteRecord } from "./data";
 import { page, esc, pesos, input, select, hidden } from "./ui";
 import { dashboard, finance, activity, saveStaffFollowUp } from "./reports";
 import { createPortal, disablePortal, portalFor, portalStatus, resetPortal } from "./customer-portal";
+import { copyButton, copyScript, customerShippingInstructions, shipmentShippingInstructions } from "./shipping-instructions";
 
 const labels: Record<string, string> = {
   nihao_cost: "Ni Hao freight cost",
@@ -191,7 +192,7 @@ export async function handleAdmin(
      */
     if (request.method === "POST") {
       requireAdminMutation(user);
-      if (!entity && view !== "finance/expenses" && view !== "finance/cash" && view !== undefined) {
+      if (!entity && view !== "finance/expenses" && view !== "finance/cash" && view !== "message-center" && view !== undefined) {
         throw new AdminError(
           "Use the customer or shipment form.",
           405,
@@ -328,6 +329,18 @@ export async function handleAdmin(
 
       const action = form.get("action") ?? "";
 
+      if (view === "message-center" && (action === "message_save" || action === "message_reset")) {
+        const allowed = action === "message_save"
+          ? new Set(["csrf", "action", "template_key", "title", "body"])
+          : new Set(["csrf", "action", "template_key"]);
+        for (const key of form.keys()) {
+          if (!allowed.has(key) || form.getAll(key).length !== 1) throw new AdminError("Unexpected or repeated form field.");
+        }
+        if (action === "message_save") await saveMessageTemplate(db, user, form);
+        else await resetMessageTemplate(db, user, form.get("template_key") ?? "");
+        return page("Saved", "", user.name, 303, { Location: `${path}?saved=1` });
+      }
+
       if (action === "delete") {
         requireAdminDelete(user);
 
@@ -451,7 +464,7 @@ export async function handleAdmin(
       return await financeCsv(db, url);
     }
     if (view === "message-center") {
-      return messageCenterPage(user.name, canWrite);
+      return await messageLibraryPage(db, user, path, env, canWrite);
     }
 
     /*
@@ -1210,6 +1223,7 @@ export async function handleAdmin(
 
       let customer =
         "";
+      let linkedCustomer: RecordData | null = null;
 
       if (
         entity ===
@@ -1230,6 +1244,7 @@ export async function handleAdmin(
               record.customer_id,
             )
             .first<RecordData>();
+        linkedCustomer = foundCustomer;
 
         customer =
           `<p>
@@ -1370,6 +1385,17 @@ export async function handleAdmin(
 
       const portal = entity === "customers" ? await portalFor(db, id) : null;
       const portalSection = entity === "customers" ? `<section><h2>Customer Portal Access</h2><dl><dt>Status</dt><dd>${portalStatus(portal)}</dd><dt>Login Email</dt><dd>${esc(portal?.login_email ?? record.email) || "—"}</dd></dl>${canWrite ? !portal ? `<form method="post" action="${path}">${hidden("csrf",csrfToken(env,user.id,path))}${hidden("action","portal_create")}${hidden("customer_id",id)}<button>Create Customer Account</button></form>` : !portal.enabled ? `<form method="post" action="${path}">${hidden("csrf",csrfToken(env,user.id,path))}${hidden("action","portal_reenable")}${hidden("customer_id",id)}<button>Re-enable Access</button></form>` : `<form method="post" action="${path}">${hidden("csrf",csrfToken(env,user.id,path))}${hidden("action","portal_reset")}${hidden("customer_id",id)}<button>Generate New Temporary Password</button></form><form method="post" action="${path}">${hidden("csrf",csrfToken(env,user.id,path))}${hidden("action","portal_disable")}${hidden("customer_id",id)}<button>Disable Access</button></form>` : ""}</section>` : "";
+      const instructionId = `shipping-instructions-${id}`;
+      const instructionMessage = entity === "customers"
+        ? customerShippingInstructions({ name: record.full_name, customerCode: record.customer_code })
+        : shipmentShippingInstructions({
+            name: linkedCustomer?.full_name,
+            customerCode: linkedCustomer?.customer_code,
+            warehouse: record.china_warehouse,
+            supplierCourier: record.supplier_courier,
+            supplierWaybill: record.supplier_waybill_number,
+          });
+      const shippingInstructions = canWrite ? `<section><h2>Shipping Instructions</h2><p class="muted">Review the message, add the warehouse address, then copy it into Messenger, WhatsApp, or another customer chat.</p><textarea id="${instructionId}" readonly aria-label="Shipping instructions">${esc(instructionMessage)}</textarea><div class="actions">${copyButton(instructionId, "Send shipping instructions")}</div>${copyScript()}</section>` : "";
 
       return page(
         title,
@@ -1424,6 +1450,7 @@ export async function handleAdmin(
             </div>
           </section>
           ${portalSection}
+          ${shippingInstructions}
         `,
         user.name,
         200,

@@ -1,4 +1,5 @@
 // lib/admin/quotation-pdf.ts
+import { quotationLogoJpegBase64, quotationLogoWidth, quotationLogoHeight } from "./quotation-logo";
 var blue = "0.04 0.33 0.68";
 var green = "0.16 0.60 0.20";
 type CustomerSnapshot = {
@@ -38,6 +39,10 @@ type QuotationPdfData = {
 type PdfText = (value: unknown, x?: number, size?: number, bold?: boolean, color?: string) => void;
 
 var clean = (value: unknown): string => String(value ?? "").replace(/[\\()]/g, "\\$&").replace(/\u00b7/g, "\\267").replace(/\u00d7/g, "\\327").replace(/[^\x20-\x7e]/g, "?");
+var base64ToHex = (value: string): string => {
+  const bytes = Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+};
 var money = (cents: unknown): string => "PHP " + (Number(cents ?? 0) / 100).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 var wrap = (value: unknown, width = 88): string[] => {
   const out = [];
@@ -71,6 +76,7 @@ function customerQuotationPdf(q: QuotationPdfData): Uint8Array<ArrayBuffer> {
     if (String(value ?? "").trim()) text(`${label}: ${value}`);
   };
   lines.push(`${blue} rg 52 756 491 54 re f`);
+  lines.push(`q ${quotationLogoWidth / 2} 0 0 ${quotationLogoHeight / 2} 58 761 cm /Im1 Do Q`);
   y = 790;
   text("KargoDoorPH", 68, 20, true, "1 1 1");
   text("China to PH, made SIMPLE.", 68, 10, false, "0.88 0.96 1");
@@ -187,9 +193,12 @@ function customerQuotationPdf(q: QuotationPdfData): Uint8Array<ArrayBuffer> {
   text("+63 917 157 7370 | +63 908 889 0664", 52, 7, false, blue);
   text("support@kargodoorph.com | www.kargodoorph.com | facebook.com/KargoDoorPH", 52, 7, false, blue);
   text("Instagram: @kargodoorph | SOURCE · SHIP · RECEIVE", 52, 7, false, blue);
-  const stream = lines.join("\n"), objects = ["<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [3 0 R] /Count 1 >>", "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>", "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>", "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>", `<< /Length ${new TextEncoder().encode(stream).length} >>
+  const stream = lines.join("\n"), logoHex = base64ToHex(quotationLogoJpegBase64), objects = ["<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [3 0 R] /Count 1 >>", "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> /XObject << /Im1 7 0 R >> >> /Contents 6 0 R >>", "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>", "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>", `<< /Length ${new TextEncoder().encode(stream).length} >>
 stream
 ${stream}
+endstream`, `<< /Type /XObject /Subtype /Image /Width ${quotationLogoWidth} /Height ${quotationLogoHeight} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /ASCIIHexDecode /Length ${logoHex.length + 1} >>
+stream
+${logoHex}
 endstream`];
   let pdf = "%PDF-1.4\n% KargoDoor quotation\n", offsets = [0];
   for (let i = 0; i < objects.length; i++) {
