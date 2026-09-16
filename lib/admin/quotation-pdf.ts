@@ -1,7 +1,13 @@
 // lib/admin/quotation-pdf.ts
 var blue = "0.04 0.33 0.68";
 var green = "0.16 0.60 0.20";
-type CustomerSnapshot = { name?: unknown };
+type CustomerSnapshot = {
+  name?: unknown;
+  company?: unknown;
+  mobile?: unknown;
+  email?: unknown;
+  address?: unknown;
+};
 type CargoSnapshot = {
   description?: unknown;
   item?: unknown;
@@ -15,15 +21,17 @@ type CargoSnapshot = {
   measurementUnit?: unknown;
   cbm?: unknown;
   weight?: unknown;
+  supplierName?: unknown;
+  origin?: unknown;
   originWarehouse?: unknown;
 };
-type PricingSnapshot = { density?: unknown; rateBasis?: unknown; pricingMethod?: unknown; formula?: unknown };
 type QuotationPdfData = {
   customer_snapshot?: unknown;
   cargo_snapshot?: unknown;
   pricing_snapshot?: unknown;
   quotation_date?: unknown;
   quotation_number?: unknown;
+  valid_until?: unknown;
   freight_type?: unknown;
   final_amount?: unknown;
 };
@@ -43,7 +51,7 @@ var wrap = (value: unknown, width = 88): string[] => {
   return line ? [...out, line] : out;
 };
 function customerQuotationPdf(q: QuotationPdfData): Uint8Array<ArrayBuffer> {
-  const customer: CustomerSnapshot = JSON.parse(String(q.customer_snapshot ?? "{}")), cargo: CargoSnapshot = JSON.parse(String(q.cargo_snapshot ?? "{}")), pricing: PricingSnapshot = JSON.parse(String(q.pricing_snapshot ?? "{}"));
+  const customer: CustomerSnapshot = JSON.parse(String(q.customer_snapshot ?? "{}")), cargo: CargoSnapshot = JSON.parse(String(q.cargo_snapshot ?? "{}"));
   const lines: string[] = [];
   let y = 790;
   const text: PdfText = (value, x = 52, size = 9, bold = false, color = "0.12 0.18 0.25") => {
@@ -71,24 +79,47 @@ function customerQuotationPdf(q: QuotationPdfData): Uint8Array<ArrayBuffer> {
   y = 730;
   text(`Date: ${q.quotation_date ?? ""}`, 52, 9, false, blue);
   text(`Quotation No.: ${q.quotation_number ?? ""}`, 52, 9, false, blue);
+  if (String(q.valid_until ?? "").trim()) {
+    text(`Valid Until: ${q.valid_until}`, 52, 9, false, blue);
+  }
   y -= 4;
   heading("CLIENT INFORMATION");
   pair("Client Name", customer.name);
+  pair("Company", customer.company);
+  pair("Phone Number", customer.mobile);
+  pair("Email", customer.email);
+  pair("Address", customer.address);
+
+  if (
+    String(cargo.supplierName ?? "").trim() ||
+    String(cargo.origin ?? "").trim()
+  ) {
+    heading("SUPPLIER INFORMATION");
+    pair("Supplier Name", cargo.supplierName);
+    pair("Supplier Location", cargo.origin);
+  }
+
   heading("CARGO DETAILS");
   pair("Item", cargo.description || cargo.item);
   pair("Category", cargo.category);
   text("Quantity / Packages: 1 package");
-  if (cargo.length || cargo.width || cargo.height) pair("Dimensions (L × W × H)", [cargo.length, cargo.width, cargo.height].filter(Boolean).join(" × ") + ` ${cargo.measurementUnit ?? "cm"}`);
+  const dimensions = [cargo.length, cargo.width, cargo.height]
+    .map((value) => Number(value ?? 0));
+  if (dimensions.some((value) => value > 0)) {
+    pair(
+      "Dimensions (L × W × H)",
+      `${cargo.length ?? ""} × ${cargo.width ?? ""} × ${cargo.height ?? ""} ${cargo.measurementUnit ?? "cm"}`,
+    );
+  }
   pair("Total CBM", cargo.cbm);
   if (cargo.weight !== void 0) pair("Actual Weight", `${cargo.weight} kg`);
   pair("Freight", q.freight_type);
   pair("Origin Warehouse", cargo.originWarehouse);
-  heading("SHIPPING CALCULATION");
+  heading("SHIPPING SUMMARY");
   pair("Total CBM", cargo.cbm);
   if (cargo.weight !== void 0) pair("Actual Weight", `${cargo.weight} kg`);
-  pair("Density", pricing.density === void 0 ? "Not applicable" : `${Number(pricing.density).toFixed(2)} kg/CBM`);
-  pair("Applicable Rate / Basis", pricing.rateBasis || pricing.pricingMethod || cargo.category);
-  pair("Calculation", pricing.formula || pricing.pricingMethod || "Saved quotation calculation");
+  pair("Freight", q.freight_type);
+  pair("Origin Warehouse", cargo.originWarehouse);
   heading("ESTIMATED ALL-IN RATE");
   y -= 12;
   text(money(q.final_amount), 52, 21, true, green);
