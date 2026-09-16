@@ -78,6 +78,7 @@ test("Phase 4 CSV is Excel-compatible, escaped, injection-safe and contains no i
 
 test("Phase 4 dated CSV filename and dashboard report UI preserve the active range", async () => {
   const f = fixture();
+  f.expense(BigInt(1000), "Marketing / Advertising", "2026-09-10");
   const url = new URL("https://test/admin/finance?from=2026-09-01&to=2026-09-30");
   const csv = await financeCsv(f.db, url, now);
   assert.equal(csv.headers.get("content-disposition"),
