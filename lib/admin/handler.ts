@@ -61,6 +61,10 @@ const labels: Record<string, string> = {
   payment_status: "Payment status",
   cbm: "CBM",
   weight_kg: "Weight (kg)",
+  supplier_waybill_number: "Supplier waybill number",
+  supplier_courier: "Supplier courier",
+  verified_cbm: "Verified CBM",
+  verified_weight_kg: "Verified weight (kg)",
 
   created_at: "Created",
   updated_at: "Updated",
@@ -794,7 +798,7 @@ export async function handleAdmin(
          * SHIPMENT IDENTITY
          */
         fields +=
-          `<p class="wide muted"><strong>Tracking Number</strong><br>${id ? esc(record.tracking_number) : "Automatically generated when saved."}</p>` +
+          `<p class="wide muted"><strong>Tracking Number</strong><br>${id ? esc(record.tracking_number || "Not assigned at supplier intake") : "Automatically generated after supplier dispatch."}</p>` +
           select(
             "service_type",
             "Service type",
@@ -863,6 +867,38 @@ export async function handleAdmin(
             "Actual arrival",
             record,
             "date",
+          );
+
+        fields +=
+          input(
+            "supplier_waybill_number",
+            "Supplier waybill number",
+            record,
+            "text",
+            false,
+            120,
+          ) +
+          input(
+            "supplier_courier",
+            "Supplier courier",
+            record,
+            "text",
+            false,
+            120,
+          ) +
+          input(
+            "verified_cbm",
+            "Verified CBM",
+            record,
+            "number",
+            false,
+          ) +
+          input(
+            "verified_weight_kg",
+            "Verified weight (kg)",
+            record,
+            "number",
+            false,
           );
 
         /*

@@ -8,6 +8,7 @@ import type { Entity, RecordData } from "./validation";
 
 export async function generatedIdentifier(db: D1Database, entity: Entity, values: RecordData) {
   const field = entity === "customers" ? "customer_code" : "tracking_number";
+  if (entity === "shipments" && values.status === "Awaiting Supplier Dispatch") return undefined;
   if (values[field]) return undefined;
   const prefix = entity === "customers" ? "KDOOR" : values.service_type === "Air Freight" ? "KDAIR" : "KDSEA";
   const pattern = entity === "customers"

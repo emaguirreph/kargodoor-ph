@@ -9,6 +9,7 @@ export const warehouses = [
 ] as const;
 
 export const statuses = [
+  "Awaiting Supplier Dispatch",
   "Pending Warehouse Receipt",
   "Received at Warehouse",
   "In Transit",
@@ -45,6 +46,12 @@ const decimal = (max: number) =>
         number <= max,
       "Number is too large",
     );
+
+const optionalDecimal = (max: number) =>
+  z.union([
+    z.literal("").transform(() => null),
+    decimal(max),
+  ]);
 
 const money = required(30)
   .regex(
@@ -155,14 +162,15 @@ const shipmentObjectSchema = z
       .string()
       .uuid(),
 
-    tracking_number: required(60)
-      .regex(
-        /^(?:KD-?(?:SEA|AIR)-?\d{6,}|(?:AIR-)?KDOOR-?\d{4,})$/i,
-        "Use KDSEA000001 or KDAIR000001. Existing dashed numbers are also accepted.",
-      )
-      .transform((value) =>
-        value.toUpperCase(),
-      ),
+    tracking_number: z.union([
+      z.literal("").transform(() => null),
+      required(60)
+        .regex(
+          /^(?:KD-?(?:SEA|AIR)-?\d{6,}|(?:AIR-)?KDOOR-?\d{4,})$/i,
+          "Use KDSEA000001 or KDAIR000001. Existing dashed numbers are also accepted.",
+        )
+        .transform((value) => value.toUpperCase()),
+    ]),
 
     // Legacy field retained for existing records and the separate tracking editor.
     // New admin shipments are identified publicly by tracking_number.
@@ -222,6 +230,11 @@ const shipmentObjectSchema = z
       "Partial",
       "Paid",
     ]),
+
+    supplier_waybill_number: optional(120),
+    supplier_courier: optional(120),
+    verified_cbm: optionalDecimal(1000000),
+    verified_weight_kg: optionalDecimal(100000000),
   })
   .strict();
 
@@ -253,6 +266,14 @@ export const shipmentSchema =
           path: ["actual_arrival"],
           message:
             "Actual arrival cannot be before the departure date",
+        });
+      }
+
+      if (values.status !== "Awaiting Supplier Dispatch" && !values.tracking_number) {
+        context.addIssue({
+          code: "custom",
+          path: ["tracking_number"],
+          message: "Tracking number is required after supplier dispatch",
         });
       }
     },
@@ -303,6 +324,10 @@ export const schemaKeys: Record<
     "nihao_cost",
     "delivery_charge",
     "payment_status",
+    "supplier_waybill_number",
+    "supplier_courier",
+    "verified_cbm",
+    "verified_weight_kg",
   ],
 };
 
