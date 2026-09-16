@@ -1,0 +1,423 @@
+import type { D1Database } from "@cloudflare/workers-types";
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { DatabaseSync } from "node:sqlite";
+import { readFileSync } from "node:fs";
+import { randomUUID, scryptSync } from "node:crypto";
+import { quotationsPage } from "../../lib/admin/quotations";
+import { kargoDoorPackageTiers, ratesGuidePage } from "../../lib/admin/rates-guide";
+import { niHaoRatesPage } from "../../lib/admin/nihao-rates";
+import { csrfToken, type AdminEnv } from "../../lib/admin/security";
+
+const email = "quotation-admin@example.test";
+const password = "quotation-test-password";
+const salt = "quotation-test-salt";
+const hash = scryptSync(password, salt, 64).toString("hex");
+
+function quotationDatabase() {
+  const sql = new DatabaseSync(":memory:");
+  sql.exec("PRAGMA foreign_keys=ON");
+  sql.exec(readFileSync("migrations/admin/0001_phase1.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0002_freight_cost.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0003_invoices_payments.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0004_public_tracking.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0005_expenses.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0006_admin_viewer_role.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0007_staff_follow_up.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0008_customer_accounts.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0009_customer_account_password_state.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0010_quotations.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0011_finance_cash_entries.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0012_staff_quotation_expense_access.sql", "utf8"));
+
+  const user = randomUUID();
+  sql.prepare("INSERT INTO admin_users VALUES (?,?,?,?,?,?)").run(
+    user,
+    "Quotation Admin",
+    email,
+    "admin",
+    "2026-01-01",
+    "2026-01-01",
+  );
+
+  function prepare(query: string) {
+    let args: unknown[] = [];
+    return {
+      bind(...values: unknown[]) {
+        args = values;
+        return this;
+      },
+      async first() {
+        return sql.prepare(query).get(...(args as never[])) ?? null;
+      },
+      async all() {
+        return { results: sql.prepare(query).all(...(args as never[])) };
+      },
+      async run() {
+        return { meta: sql.prepare(query).run(...(args as never[])) };
+      },
+    };
+  }
+
+  const db = {
+    prepare,
+    async batch(statements: ReturnType<typeof prepare>[]) {
+      sql.exec("BEGIN");
+      try {
+        const out = [];
+        for (const statement of statements) out.push(await statement.run());
+        sql.exec("COMMIT");
+        return out;
+      } catch (error) {
+        sql.exec("ROLLBACK");
+        throw error;
+      }
+    },
+  } as unknown as D1Database;
+
+  const env: AdminEnv = {
+    ADMIN_DB: db,
+    ADMIN_ORIGIN: "http://localhost:3000",
+    ADMIN_LOCAL_DEV: "true",
+    LOCAL_ADMIN_EMAIL: email,
+    LOCAL_ADMIN_HASH: `${salt}:${hash}`,
+    ADMIN_CSRF_SECRET: "quotation-renderer-test-secret-1234567890",
+  };
+
+  return { sql, env, user };
+}
+
+function authHeaders() {
+  return {
+    authorization: `Basic ${Buffer.from(`${email}:${password}`).toString("base64")}`,
+  };
+}
+
+const requiredSeaOutputs = [
+  "Category",
+  "Package Tier",
+  "Actual Density (kg/CBM)",
+  "CBM Price",
+  "Density Rate / kg",
+  "Fixed / Base Charge",
+  "Density-Based Charge",
+  "Density Rule Applies?",
+  "Pricing Method",
+  "Total Unit Amount",
+];
+
+function assertCargoDetailsMarkup(html: string, includeSeaOutputs = true) {
+  assert.ok(html.includes("2. CARGO DETAILS"), "Cargo Details section must be rendered");
+  assert.ok(!html.includes("CARGO PACKAGING"), "Cargo Packaging subsection must not be rendered");
+  assert.ok(!html.includes("SHIPPING MEASUREMENT"), "Shipping Measurement subsection must not be rendered");
+  assert.ok(html.includes("Item / Commodity"), "Item / Commodity must be rendered");
+  assert.ok(html.includes("Supplier / Origin Location"), "Supplier / Origin Location must be rendered");
+  assert.ok(html.includes("KargoDoor Warehouse"), "KargoDoor Warehouse must be rendered");
+  assert.ok(html.includes("Freight Type"), "Freight Type must be rendered");
+  assert.ok(html.includes("Total CBM"), "Total CBM must be rendered");
+  assert.ok(html.includes("Actual Weight"), "Actual Weight must be rendered");
+  assert.ok(
+    html.includes("Applicable to Mobile Phones / Computers / Tablets."),
+    "Units helper text must be rendered",
+  );
+
+  for (const name of [
+    "item",
+    "origin",
+    "origin_warehouse",
+    "freight_type",
+    "length",
+    "width",
+    "height",
+    "measurement_unit",
+    "weight",
+    "units",
+  ]) {
+    assert.match(html, new RegExp(`name="${name}"`), `Cargo Details input ${name} should be present`);
+  }
+
+  for (const warehouse of ["Guangzhou", "Yiwu", "Shishi", "Hong Kong", "Taiwan"]) {
+    assert.ok(html.includes(`>${warehouse}</option>`), `Missing warehouse option: ${warehouse}`);
+  }
+
+  assert.match(html, /data-category-output[^>]*readonly/, "Category must be read-only");
+  assert.match(html, /name="cbm"[^>]*data-cbm-output/, "Total CBM must be editable");
+  assert.ok(html.includes("Editable — use confirmed total package CBM when provided by supplier."));
+  assert.ok(html.includes("CBM CONVERTER"));
+  assert.ok(html.includes("Use this CBM"));
+  assert.ok(html.includes("Optional helper — calculate CBM from package dimensions."));
+  assert.ok(html.includes("Total Converted CBM"));
+  assert.equal((html.match(/data-cbm-converter/g) ?? []).length, 1, "Converter must render once");
+  for (const name of ["length", "width", "height", "measurement_unit"]) {
+    assert.equal((html.match(new RegExp(`name="${name}"`, "g")) ?? []).length, 1, `${name} must render once`);
+  }
+  const order = ["Item / Commodity", "Category", "Supplier / Origin Location", "KargoDoor Warehouse", "Total CBM", "Freight Type", "Actual Weight (kg)"];
+  for (let index = 1; index < order.length; index++) assert.ok(html.indexOf(order[index - 1]) < html.indexOf(order[index]), `${order[index - 1]} must precede ${order[index]}`);
+
+  for (const name of ["quantity", "unit_type", "category"]) {
+    assert.doesNotMatch(
+      html,
+      new RegExp(`name="${name}"`),
+      `Prohibited editable field ${name} must not be rendered`,
+    );
+  }
+
+  assert.ok(!html.includes("Package Quantity"), "Package Quantity must not be rendered");
+
+  if (includeSeaOutputs) {
+    for (const label of requiredSeaOutputs) {
+      assert.ok(html.includes(label), `Missing Sea read-only output: ${label}`);
+    }
+  }
+
+  assert.ok(
+    html.includes(`<script src="/admin-quotation-cargo.js" defer></script>`),
+    "Cargo Details external script must be loaded",
+  );
+}
+
+test("Sea Freight Create renderer uses the new Cargo Details structure", async () => {
+  const { env } = quotationDatabase();
+  const response = await quotationsPage(
+    new Request("http://localhost:3000/admin/quotations?new=1", {
+      headers: authHeaders(),
+    }),
+    env,
+  );
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+
+  assert.ok(html.includes("Create quotation"));
+  assertCargoDetailsMarkup(html);
+});
+
+test("cargo category auto-population accepts item input and selection changes", () => {
+  const script = readFileSync("public/admin-quotation-cargo.js", "utf8");
+
+  assert.match(script, /querySelector\('\[name="item"\]'\)/);
+  assert.match(script, /item\?\.addEventListener\("input", calculate\)/);
+  assert.match(script, /item\?\.addEventListener\("change", calculate\)/);
+  assert.match(script, /category\.value = seaCategories\[item\.value\] \|\| ""/);
+  assert.match(script, /unitsField\.hidden = !itemUsesUnits/);
+  assert.match(script, /seaPricing\.hidden = freight\.value !== "Sea Freight"/);
+  assert.match(script, /airPricing\.hidden = freight\.value !== "Air Freight"/);
+});
+
+test("CBM converter only copies its total after the explicit use action", () => {
+  const script = readFileSync("public/admin-quotation-cargo.js", "utf8");
+  assert.match(script, /const divisor = unit === "mm" \? 1e9 : 1e6/);
+  assert.match(script, /const totalCbm = singleCbm \* values\[3\]/);
+  assert.match(script, /data-use-converted-cbm/);
+  assert.match(script, /cbm\.value = formatCbm\(convertedTotal\)/);
+  assert.doesNotMatch(script.match(/const calculate = \(\) => \{[\s\S]*?\n    \};/)![0], /updateCbm\(\)/);
+});
+
+test("rates guide renders authoritative pricing, navigation, and item filtering", async () => {
+  const { env } = quotationDatabase();
+  const response = await ratesGuidePage(
+    new Request("http://localhost:3000/admin/rates-guide?q=computer&category=MOBILE+%2F+COMPUTERS+%2F+TABLETS", {
+      headers: authHeaders(),
+    }),
+    env,
+  );
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /href="\/admin\/rates-guide"[^>]*>Rates &amp; Pricing/);
+  assert.match(html, /Mobile \/ computer parts &amp; accessories/);
+  assert.match(html, /₱10,500 \/ CBM/);
+  assert.match(html, /₱950 \/ piece/);
+  assert.match(html, /₱1,200 \/ piece/);
+  assert.match(html, /₱2,800 \/ piece/);
+  assert.match(html, /MAX\(Actual Weight, CBM × 167\)/);
+  assert.match(html, /No rounding\./);
+  assert.match(html, /KD Standard<\/td><td>&gt;0\.125 CBM/);
+  assert.match(html, /KD Max<\/td><td>Density charge wins<\/td><td>Density-based charge<\/td><td>Applies only when density is &gt;425 kg\/CBM and the density charge is higher than the base charge\./);
+  assert.match(html, /Check Density Pricing<\/td><td>Density &gt;425 kg\/CBM/);
+  assert.doesNotMatch(html, /≥425/);
+  assert.doesNotMatch(html, /Medicines \/ health supplements/);
+});
+
+test("Ni Hao rates page compares supplier costs with reused KargoDoorPH rates and is read-only", async () => {
+  const { env } = quotationDatabase();
+  const response = await niHaoRatesPage(
+    new Request("http://localhost:3000/admin/nihao-rates", { headers: authHeaders() }),
+    env,
+  );
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  for (const value of ["INTERNAL REFERENCE", "₱7,000 / CBM", "₱7,500 / CBM", "₱8,500 / CBM", "₱1,000 / piece", "₱10,500 / CBM", "₱950 / piece", "Return to Rates &amp; Pricing Guide", "Ni Hao reference rules"]) assert.ok(html.includes(value), value);
+  assert.match(html, /nihao-category[^]*width:14%[^]*width:50%[^]*width:16%[^]*width:20%/);
+  assert.match(html, /nihao-comparison th:nth-child\(3\),\.nihao-comparison td:nth-child\(3\)\{white-space:nowrap\}/);
+  assert.match(html, /href="\/admin\/rates-guide">Rates &amp; Pricing<\/a>[\s\S]*href="\/admin\/nihao-rates">Ni Hao Rates<\/a>/);
+  for (const tier of kargoDoorPackageTiers) {
+    assert.ok(html.includes(tier.base), tier.base);
+    assert.ok(html.includes(tier.rule.replaceAll(">", "&gt;")), tier.rule);
+  }
+  const source = readFileSync("lib/admin/nihao-rates.ts", "utf8");
+  assert.doesNotMatch(source, /KD Mini: ₱250|MOBILE \/ COMPUTERS \/ TABLETS: ₱10,500/);
+  assert.ok(!html.includes("<form"), "comparison page has no mutation controls");
+});
+
+test("Sea Freight Solar Panels persists exact pricing and Edit renderer stays clean", async () => {
+  const { sql, env, user } = quotationDatabase();
+
+  const form = new URLSearchParams({
+    csrf: csrfToken(env, user, "/admin/quotations"),
+    action: "save",
+    freight_type: "Sea Freight",
+    status: "Draft",
+    quotation_date: "2026-09-11",
+    customer_name: "Solar Test Customer",
+    item: "Solar panels",
+    length: "1",
+    width: "1",
+    height: "1",
+    measurement_unit: "m",
+    cbm: "8.39",
+    weight: "3400",
+    units: "0",
+  });
+
+  const save = await quotationsPage(
+    new Request("http://localhost:3000/admin/quotations", {
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: form,
+    }),
+    env,
+  );
+
+  assert.equal(save.status, 303);
+
+  const row = sql
+    .prepare(
+      "SELECT id, cargo_snapshot, pricing_snapshot, calculated_amount, final_amount FROM quotations LIMIT 1",
+    )
+    .get() as {
+      id: string;
+      cargo_snapshot: string;
+      pricing_snapshot: string;
+      calculated_amount: number;
+      final_amount: number;
+    };
+
+  assert.ok(row);
+  const cargo = JSON.parse(row.cargo_snapshot);
+  const pricing = JSON.parse(row.pricing_snapshot);
+
+  assert.equal(cargo.item, "Solar panels");
+  assert.equal(cargo.category, "COMMODITIES");
+  assert.equal(cargo.cbm, 8.39);
+  assert.equal(cargo.weight, 3400);
+  assert.equal(cargo.units, 0);
+
+  assert.equal(pricing.packageTier, "KD Standard");
+  assert.ok(Math.abs(pricing.density - 405.24433849821216) < 0.000001);
+  assert.equal(pricing.base, 79705);
+  assert.equal(pricing.densityCharge, 74800);
+  assert.equal(pricing.densityApplies, false);
+  assert.equal(pricing.pricingMethod, "CBM-Based");
+  assert.equal(pricing.final, 79705);
+
+  assert.equal(row.calculated_amount, 7_970_500);
+  assert.equal(row.final_amount, 7_970_500);
+
+  const edit = await quotationsPage(
+    new Request(`http://localhost:3000/admin/quotations?edit=${row.id}`, {
+      headers: authHeaders(),
+    }),
+    env,
+  );
+
+  assert.equal(edit.status, 200);
+  const html = await edit.text();
+
+  assert.ok(html.includes("Edit quotation"));
+  assertCargoDetailsMarkup(html);
+
+  const updateForm = new URLSearchParams({
+    csrf: csrfToken(env, user, "/admin/quotations"),
+    action: "update",
+    quotation_id: row.id,
+    freight_type: "Sea Freight",
+    status: "Draft",
+    quotation_date: "2026-09-11",
+    customer_name: "Solar Test Customer",
+    item: "Solar panels",
+    length: "1",
+    width: "1",
+    height: "1",
+    measurement_unit: "m",
+    cbm: "8.4",
+    weight: "3400",
+    units: "0",
+  });
+
+  const update = await quotationsPage(
+    new Request("http://localhost:3000/admin/quotations", {
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: updateForm,
+    }),
+    env,
+  );
+
+  assert.equal(update.status, 303);
+
+  const updated = sql
+    .prepare(
+      "SELECT cargo_snapshot, pricing_snapshot, calculated_amount, final_amount FROM quotations WHERE id=?",
+    )
+    .get(row.id) as {
+      cargo_snapshot: string;
+      pricing_snapshot: string;
+      calculated_amount: number;
+      final_amount: number;
+    };
+
+  const updatedCargo = JSON.parse(updated.cargo_snapshot);
+  const updatedPricing = JSON.parse(updated.pricing_snapshot);
+
+  assert.equal(updatedCargo.cbm, "8.4");
+  assert.equal(updatedCargo.weight, "3400");
+  assert.equal(updatedCargo.units, "0");
+  assert.equal(updatedCargo.category, "COMMODITIES");
+
+  assert.equal(updatedPricing.packageTier, "KD Standard");
+  assert.ok(Math.abs(updatedPricing.density - 404.76190476190476) < 0.000001);
+  assert.equal(updatedPricing.base, 79800);
+  assert.equal(updatedPricing.densityCharge, 74800);
+  assert.equal(updatedPricing.densityApplies, false);
+  assert.equal(updatedPricing.pricingMethod, "CBM-Based");
+  assert.equal(updatedPricing.final, 79800);
+
+  assert.equal(updated.calculated_amount, 7_980_000);
+  assert.equal(updated.final_amount, 7_980_000);
+});
+
+test("Air Freight Create renderer uses the new Cargo Details structure", async () => {
+  const { env } = quotationDatabase();
+  const response = await quotationsPage(
+    new Request(
+      "http://localhost:3000/admin/quotations?new=1&freight=Air%20Freight",
+      { headers: authHeaders() },
+    ),
+    env,
+  );
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+
+  assertCargoDetailsMarkup(html, false);
+  assert.ok(html.includes('data-sea-pricing'), "Sea panel must be available after a freight switch");
+  assert.ok(html.includes('data-air-pricing'), "Air panel must be available after a freight switch");
+});
