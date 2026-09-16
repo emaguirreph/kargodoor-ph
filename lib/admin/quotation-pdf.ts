@@ -76,63 +76,112 @@ function customerQuotationPdf(q: QuotationPdfData): Uint8Array<ArrayBuffer> {
   text("China to PH, made SIMPLE.", 68, 10, false, "0.88 0.96 1");
   y = 788;
   text("QUOTATION", 412, 16, true, "1 1 1");
+  // Header metadata
   y = 730;
   text(`Date: ${q.quotation_date ?? ""}`, 52, 9, false, blue);
-  text(`Quotation No.: ${q.quotation_number ?? ""}`, 52, 9, false, blue);
   if (String(q.valid_until ?? "").trim()) {
     text(`Valid Until: ${q.valid_until}`, 52, 9, false, blue);
   }
-  y -= 4;
-  heading("CLIENT INFORMATION");
+
+  // Quotation number stays on the right.
+  const headerInfoY = y;
+  y = 730;
+  text(`Quotation No.: ${q.quotation_number ?? ""}`, 360, 9, false, blue);
+  y = headerInfoY - 5;
+
+  // Client + Supplier Information
+  rule();
+  const infoHeadingY = y;
+  text("CLIENT INFORMATION", 52, 11, true, blue);
+  y = infoHeadingY;
+  text("SUPPLIER INFORMATION", 310, 11, true, blue);
+
+  const infoBodyY = Math.min(y, infoHeadingY - 17);
+
+  y = infoBodyY;
   pair("Client Name", customer.name);
   pair("Company", customer.company);
   pair("Phone Number", customer.mobile);
   pair("Email", customer.email);
   pair("Address", customer.address);
+  const clientEndY = y;
 
-  if (
-    String(cargo.supplierName ?? "").trim() ||
-    String(cargo.origin ?? "").trim()
-  ) {
-    heading("SUPPLIER INFORMATION");
-    pair("Supplier Name", cargo.supplierName);
-    pair("Supplier Location", cargo.origin);
+  y = infoBodyY;
+  if (String(cargo.supplierName ?? "").trim()) {
+    text(`Supplier Name: ${cargo.supplierName}`, 310, 9);
   }
+  if (String(cargo.origin ?? "").trim()) {
+    text(`Supplier Location: ${cargo.origin}`, 310, 9);
+  }
+  const supplierEndY = y;
 
-  heading("CARGO DETAILS");
+  y = Math.min(clientEndY, supplierEndY) - 6;
+
+  // Cargo Details + Estimated All-In Rate
+  rule();
+  const cargoHeadingY = y;
+  text("CARGO DETAILS", 52, 11, true, blue);
+  y = cargoHeadingY;
+  text("ESTIMATED ALL-IN RATE", 310, 11, true, blue);
+
+  const cargoBodyY = cargoHeadingY - 22;
+
+  // Left column: cargo only
+  y = cargoBodyY;
   pair("Item", cargo.description || cargo.item);
-  pair("Category", cargo.category);
   text("Quantity / Packages: 1 package");
+
   const dimensions = [cargo.length, cargo.width, cargo.height]
     .map((value) => Number(value ?? 0));
+
   if (dimensions.some((value) => value > 0)) {
     pair(
       "Dimensions (L × W × H)",
       `${cargo.length ?? ""} × ${cargo.width ?? ""} × ${cargo.height ?? ""} ${cargo.measurementUnit ?? "cm"}`,
     );
   }
+
   pair("Total CBM", cargo.cbm);
   if (cargo.weight !== void 0) pair("Actual Weight", `${cargo.weight} kg`);
-  pair("Freight", q.freight_type);
-  pair("Origin Warehouse", cargo.originWarehouse);
-  heading("SHIPPING SUMMARY");
-  pair("Total CBM", cargo.cbm);
-  if (cargo.weight !== void 0) pair("Actual Weight", `${cargo.weight} kg`);
-  pair("Freight", q.freight_type);
-  pair("Origin Warehouse", cargo.originWarehouse);
-  heading("ESTIMATED ALL-IN RATE");
-  y -= 12;
-  text(money(q.final_amount), 52, 21, true, green);
-  y -= 1;
-  text("Incoterm: FCA - KargoDoor Origin Warehouse", 52, 8);
-  text("Service Coverage: Origin Warehouse > Manila Customs Clearance >", 52, 8);
-  text("KargoDoor Metro Manila Warehouse", 52, 8);
-  heading("DISCLAIMER");
-  for (const line of wrap("This quotation is based on the cargo information provided. Final charges may change if the actual dimensions, CBM, weight, quantity, cargo category, or other shipment details differ upon warehouse inspection.", 96)) text(line, 52, 7);
+  const cargoEndY = y;
+
+  // Right column: rate + freight + origin warehouse
+  y = cargoBodyY - 3;
+  text(money(q.final_amount), 310, 21, true, green);
   y -= 4;
-  for (const line of wrap("Rates and transit times are estimates and are subject to final warehouse confirmation. Additional charges may apply for special handling, restricted or regulated cargo, permits, taxes, or other government requirements.", 96)) text(line, 52, 7);
-  y = 170;
-  lines.push(`${blue} RG 52 193 m 543 193 l S`);
+  text(q.freight_type ?? "", 310, 9);
+
+  if (String(cargo.originWarehouse ?? "").trim()) {
+    text(`Origin Warehouse: ${cargo.originWarehouse}`, 310, 9);
+  }
+  const rateEndY = y;
+
+  y = Math.min(cargoEndY, rateEndY) - 7;
+
+  // Compact disclaimer
+  rule();
+  text("DISCLAIMER", 52, 9, true, blue);
+
+  for (const line of wrap(
+    "This quotation is based on the cargo information provided. Final charges may change if the actual dimensions, CBM, weight, quantity, cargo category, or other shipment details differ upon warehouse inspection.",
+    112,
+  )) text(line, 52, 6.5);
+
+  y -= 2;
+
+  for (const line of wrap(
+    "Rates and transit times are estimates and are subject to final warehouse confirmation. Additional charges may apply for special handling, restricted or regulated cargo, permits, taxes, or other government requirements.",
+    112,
+  )) text(line, 52, 6.5);
+
+  // Incoterm and coverage below disclaimer
+  y -= 4;
+  text("Incoterm: FCA - KargoDoor Origin Warehouse", 52, 7);
+  text("Service Coverage: Origin Warehouse > Manila Customs Clearance >", 52, 7);
+  text("KargoDoor Metro Manila Warehouse", 52, 7);
+
+  y = 245;
+  lines.push(`${blue} RG 52 268 m 543 268 l S`);
   text("KARGODOOR PH", 52, 8, true, blue);
   text("China to PH, made SIMPLE.", 52, 7, false, blue);
   text("+63 917 157 7370 | +63 908 889 0664", 52, 7, false, blue);
