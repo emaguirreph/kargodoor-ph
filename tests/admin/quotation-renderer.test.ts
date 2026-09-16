@@ -18,7 +18,17 @@ function quotationDatabase() {
   const sql = new DatabaseSync(":memory:");
   sql.exec("PRAGMA foreign_keys=ON");
   sql.exec(readFileSync("migrations/admin/0001_phase1.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0002_freight_cost.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0003_invoices_payments.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0004_public_tracking.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0005_expenses.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0006_admin_viewer_role.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0007_staff_follow_up.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0008_customer_accounts.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0009_customer_account_password_state.sql", "utf8"));
   sql.exec(readFileSync("migrations/admin/0010_quotations.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0011_finance_cash_entries.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0012_staff_quotation_expense_access.sql", "utf8"));
 
   const user = randomUUID();
   sql.prepare("INSERT INTO admin_users VALUES (?,?,?,?,?,?)").run(
@@ -214,7 +224,7 @@ test("rates guide renders authoritative pricing, navigation, and item filtering"
 
   assert.equal(response.status, 200);
   const html = await response.text();
-  assert.match(html, /href="\/admin\/rates-guide"[^>]*>Rates &amp; Pricing Guide/);
+  assert.match(html, /href="\/admin\/rates-guide"[^>]*>Rates &amp; Pricing/);
   assert.match(html, /Mobile \/ computer parts &amp; accessories/);
   assert.match(html, /₱10,500 \/ CBM/);
   assert.match(html, /₱950 \/ piece/);
@@ -241,7 +251,7 @@ test("Ni Hao rates page compares supplier costs with reused KargoDoorPH rates an
   for (const value of ["INTERNAL REFERENCE", "₱7,000 / CBM", "₱7,500 / CBM", "₱8,500 / CBM", "₱1,000 / piece", "₱10,500 / CBM", "₱950 / piece", "Return to Rates &amp; Pricing Guide", "Ni Hao reference rules"]) assert.ok(html.includes(value), value);
   assert.match(html, /nihao-category[^]*width:14%[^]*width:50%[^]*width:16%[^]*width:20%/);
   assert.match(html, /nihao-comparison th:nth-child\(3\),\.nihao-comparison td:nth-child\(3\)\{white-space:nowrap\}/);
-  assert.match(html, /<span class="nav-group"><a href="\/admin\/rates-guide">Rates &amp; Pricing Guide<\/a><a class="nav-sub" href="\/admin\/nihao-rates">↳ Ni Hao Rates<\/a><\/span>/);
+  assert.match(html, /href="\/admin\/rates-guide">Rates &amp; Pricing<\/a>[\s\S]*href="\/admin\/nihao-rates">Ni Hao Rates<\/a>/);
   for (const tier of kargoDoorPackageTiers) {
     assert.ok(html.includes(tier.base), tier.base);
     assert.ok(html.includes(tier.rule.replaceAll(">", "&gt;")), tier.rule);

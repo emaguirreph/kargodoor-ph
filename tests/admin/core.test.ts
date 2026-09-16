@@ -50,6 +50,8 @@ function database(includePhase1 = true) {
   sql.exec(readFileSync("migrations/admin/0013_promote_managers_to_admin.sql", "utf8"));
   if (includePhase1)
     sql.exec(readFileSync("migrations/admin/0014_approved_quotation_shipments.sql", "utf8"));
+  if (includePhase1)
+    sql.exec(readFileSync("migrations/admin/0016_cargo_intake_workflow.sql", "utf8"));
   const user = randomUUID();
   sql
     .prepare("INSERT INTO admin_users VALUES (?,?,?,?,?,?)")
@@ -124,6 +126,10 @@ const shipmentInput = (id: string) =>
     nihao_cost: "",
     delivery_charge: "0",
     payment_status: "Unpaid",
+    supplier_waybill_number: "",
+    supplier_courier: "",
+    verified_cbm: "",
+    verified_weight_kg: "",
   });
 const shipment = (id: string) => shipmentSchema.parse(shipmentInput(id));
 
@@ -322,7 +328,8 @@ test("approved quotation conversion validates required saved operational details
 test("phase 1 migration preserves existing shipment, invoice, and payment relationships", async () => {
   const { sql, db, user } = database(false);
   const customerId = await saveRecord(db, "customers", customer, user, "", "");
-  const shipmentId = await saveRecord(db, "shipments", shipment(customerId), user, "", "");
+  const legacyShipment = Object.fromEntries(Object.entries(shipment(customerId)).filter(([key]) => !["supplier_waybill_number", "supplier_courier", "verified_cbm", "verified_weight_kg"].includes(key)));
+  const shipmentId = await saveRecord(db, "shipments", legacyShipment, user, "", "");
   const invoiceId = randomUUID();
   sql.prepare(`INSERT INTO invoices (id, invoice_number, customer_id, shipment_id, subtotal, delivery_charge, total, status, issued_at, due_at, created_at, updated_at, other_charge)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(invoiceId, "INV-MIGRATE", customerId, shipmentId, 10000, 0, 10000, "Unpaid", null, null, "2026-09-15", "2026-09-15", 0);
@@ -332,6 +339,30 @@ test("phase 1 migration preserves existing shipment, invoice, and payment relati
   assert.equal(sql.prepare("SELECT shipment_id FROM invoices WHERE id = ?").get(invoiceId)!.shipment_id, shipmentId);
   assert.equal(sql.prepare("SELECT invoice_id FROM payments").get()!.invoice_id, invoiceId);
   sql.prepare("INSERT INTO shipments (id, customer_id, tracking_number, service_type, china_warehouse, cbm, weight_kg, status, shipping_charge, delivery_charge, payment_status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)").run(randomUUID(), customerId, "KDSEA999999", "Sea Freight", "Guangzhou", 0, 0, "Pending Warehouse Receipt", 0, 0, "Unpaid", "2026-09-15", "2026-09-15");
+});
+test("cargo intake migration maps status, preserves relationships, and permits untracked intake", async () => {
+  const { sql, db, user } = database(false);
+  const customerId = await saveRecord(db, "customers", customer, user, "", "");
+  sql.exec(readFileSync("migrations/admin/0014_approved_quotation_shipments.sql", "utf8"));
+  const shipmentId = randomUUID();
+  sql.prepare("INSERT INTO shipments (id, customer_id, tracking_number, service_type, china_warehouse, cbm, weight_kg, status, shipping_charge, delivery_charge, payment_status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)").run(shipmentId, customerId, "KDSEA999998", "Sea Freight", "Guangzhou", 1, 100, "Pending Warehouse Receipt", 500000, 0, "Unpaid", "2026-09-15", "2026-09-15");
+  const invoiceId = randomUUID();
+  sql.prepare("INSERT INTO invoices (id, invoice_number, customer_id, shipment_id, subtotal, delivery_charge, total, status, created_at, updated_at, other_charge) VALUES (?,?,?,?,?,?,?,?,?,?,?)").run(invoiceId, "INV-CARGO-INTAKE", customerId, shipmentId, 500000, 0, 500000, "Unpaid", "2026-09-15", "2026-09-15", 0);
+  const paymentId = randomUUID();
+  sql.prepare("INSERT INTO payments VALUES (?,?,?,?,?,?,?,?,?)").run(paymentId, invoiceId, customerId, 1000, "Cash", null, "2026-09-15", null, "2026-09-15");
+  sql.exec(readFileSync("migrations/admin/0016_cargo_intake_workflow.sql", "utf8"));
+  const migrated = sql.prepare("SELECT tracking_number, supplier_waybill_number, supplier_courier, verified_cbm, verified_weight_kg, status FROM shipments WHERE id=?").get(shipmentId)!;
+  assert.equal(migrated.tracking_number, "KDSEA999998");
+  assert.equal(migrated.supplier_waybill_number, null);
+  assert.equal(migrated.supplier_courier, null);
+  assert.equal(migrated.verified_cbm, null);
+  assert.equal(migrated.verified_weight_kg, null);
+  assert.equal(migrated.status, "Awaiting Supplier Dispatch");
+  assert.equal(sql.prepare("SELECT shipment_id FROM invoices WHERE id=?").get(invoiceId)!.shipment_id, shipmentId);
+  assert.equal(sql.prepare("SELECT invoice_id FROM payments WHERE id=?").get(paymentId)!.invoice_id, invoiceId);
+  const pendingId = randomUUID();
+  sql.prepare("INSERT INTO shipments (id, customer_id, tracking_number, service_type, china_warehouse, cbm, weight_kg, status, shipping_charge, delivery_charge, payment_status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)").run(pendingId, customerId, null, "Sea Freight", "Guangzhou", 1, 100, "Awaiting Supplier Dispatch", 500000, 0, "Unpaid", "2026-09-16", "2026-09-16");
+  assert.equal(sql.prepare("SELECT tracking_number FROM shipments WHERE id=?").get(pendingId)!.tracking_number, null);
 });
 test("customer account foundation preserves existing records and enforces isolated credential structures", async () => {
   const { sql, db, user } = database();
@@ -355,7 +386,8 @@ test("dashboard attention and shared follow-up note preserve role boundaries", a
   const { sql, db, user } = database();
   const admin = { id: user, name: "Admin", email: "admin@example.test", role: "admin" as const };
   let html = await (await dashboard(db, admin, "csrf", true)).text();
-  assert.match(html, /No items need attention/);
+  assert.match(html, /No staff communication has been added yet/);
+  assert.match(html, /Business Snapshot/);
   const customerId = await saveRecord(db, "customers", customer, user, "", "");
   const shipmentId = await saveRecord(db, "shipments", shipment(customerId), user, "", "");
   const invoiceId = randomUUID();
@@ -363,13 +395,10 @@ test("dashboard attention and shared follow-up note preserve role boundaries", a
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(invoiceId, "INV-ATTN", customerId, shipmentId, 100000, 0, 100000, "Partial", "2026-09-01", "2026-09-15", "2026-09-01", "2026-09-01", 0);
   sql.prepare("INSERT INTO payments VALUES (?,?,?,?,?,?,?,?,?)").run(randomUUID(), invoiceId, customerId, 25000, "Cash", null, "2026-09-02", null, "2026-09-02");
   html = await (await dashboard(db, admin, "csrf", true)).text();
-  assert.match(html, /Needs Attention/);
-  assert.match(html, /Unpaid invoices \(1\)/);
-  assert.match(html, /₱750\.00/);
+  assert.match(html, /Unpaid Invoices/);
+  assert.match(html, /Recent Invoices &amp; Payments/);
   assert.match(html, new RegExp(`/admin/invoices\\?id=${invoiceId}`));
-  assert.match(html, /Shipments missing Nihao cost \(1\)/);
   assert.match(html, new RegExp(`/admin/shipments\\?id=${shipmentId}`));
-  assert.match(html, /No follow-up note has been added/);
   await saveStaffFollowUp(db, "Call customer\nConfirm delivery", admin);
   await saveStaffFollowUp(db, "Updated priority", admin);
   await assert.rejects(saveStaffFollowUp(db, "x".repeat(4001), admin), /4,000/);

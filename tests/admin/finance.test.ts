@@ -77,7 +77,7 @@ test("finance dashboard empty page, presets and validation perform zero writes",
     assert.equal(response.headers.get("cache-control"), "no-store, private");
     const html = await response.text();
     assert.ok((html.match(/₱0.00/g) ?? []).length >= 9);
-    assert.match(html, /<strong>\s*Shipments\s*<\/strong>[\s\S]*?<strong>\s*0\s*<\/strong>/);
+    assert.match(html, /<span[^>]*>\s*Shipments\s*<\/span>[\s\S]*?<strong>\s*0\s*<\/strong>/);
     for (const label of ["This Month", "Last Month", "This Year", "All Time", "Freight Margin", "Expenses"]) assert.ok(html.includes(label));
   }
   await assert.rejects(financeDashboard(f.db, new URL("https://test/admin/finance?from=2026-09-09&to=2026-09-08"), "Admin", now), /From Date/);
@@ -118,7 +118,7 @@ test("finance overview tables, expense breakdown, actions and formulas use Phase
   const html = await (await financeDashboard(f.db,
     new URL("https://test/admin/finance?from=2026-09-01&to=2026-09-30"), "Admin", now)).text();
   assert.equal(f.sql.prepare("SELECT total_changes() AS n").get()!.n, changes);
-  for (const heading of ["Finance Overview", "Cash &amp; Receivables", "Shipping Performance",
+  for (const heading of ["Finance Overview", "Shipping Performance",
     "Operating Expenses", "How the Numbers Are Calculated"]) {
     const pattern = heading
       .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
@@ -129,7 +129,7 @@ test("finance overview tables, expense breakdown, actions and formulas use Phase
   const expectedMetrics: [string, bigint][] = [["Revenue", before.revenue], ["Payments Received", before.received],
     ["Accounts Receivable", before.receivable], ["Ni Hao Freight Cost", before.costs],
     ["Freight Margin", before.margin], ["Operating Expenses", before.operating],
-    ["Net Profit / (Loss)", before.profit]];
+    ["Net Profit / Loss", before.profit]];
   for (const [label, value] of expectedMetrics) {
     assert.ok(html.includes(label));
     assert.ok(html.includes(financePesos(value)));
