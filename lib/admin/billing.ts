@@ -15,6 +15,8 @@ import {
   csrfToken,
   type AdminEnv,
   canMutateAdmin,
+  canDeleteAdmin,
+  requireAdminDelete,
   requireAdminMutation,
 } from "./security";
 
@@ -857,6 +859,124 @@ export async function recordPayment(
   return String(invoice.id);
 }
 
+export async function deleteInvoice(
+  db: D1Database,
+  id: string,
+  revision: string,
+  adminId: string,
+) {
+  const existing = await db
+    .prepare(
+      `
+      SELECT *
+      FROM invoices
+      WHERE id = ?
+      `,
+    )
+    .bind(id)
+    .first<RecordData>();
+
+  if (!existing) {
+    throw new AdminError(
+      "Invoice not found.",
+      404,
+    );
+  }
+
+  if (existing.updated_at !== revision) {
+    throw new AdminError(
+      "Another admin changed this invoice. Reload it before deleting.",
+      409,
+    );
+  }
+
+  const timestamp = new Date().toISOString();
+
+  try {
+    const result = await db.batch([
+      db
+        .prepare(
+          `
+          INSERT INTO activity_log (
+            id,
+            admin_user_id,
+            action,
+            entity_type,
+            entity_id,
+            old_value,
+            new_value,
+            notes,
+            created_at
+          )
+          SELECT
+            ?,?,
+            'delete',
+            'invoices',
+            ?,
+            ?,
+            NULL,
+            NULL,
+            ?
+          WHERE EXISTS (
+            SELECT 1
+            FROM invoices
+            WHERE
+              id = ?
+              AND updated_at = ?
+          )
+          `,
+        )
+        .bind(
+          randomUUID(),
+          adminId,
+          id,
+          JSON.stringify(existing),
+          timestamp,
+          id,
+          revision,
+        ),
+
+      db
+        .prepare(
+          `
+          DELETE FROM invoices
+          WHERE
+            id = ?
+            AND updated_at = ?
+          `,
+        )
+        .bind(
+          id,
+          revision,
+        ),
+    ]);
+
+    if (!result.at(-1)?.meta.changes) {
+      throw new AdminError(
+        "Another admin changed this invoice. Reload it before deleting.",
+        409,
+      );
+    }
+  } catch (error) {
+    if (error instanceof AdminError) {
+      throw error;
+    }
+
+    if (
+      String(error)
+        .toUpperCase()
+        .includes("FOREIGN KEY")
+    ) {
+      throw new AdminError(
+        "This invoice cannot be deleted because it has related payments or other protected records.",
+        409,
+      );
+    }
+
+    throw error;
+  }
+}
+
 export async function issueInvoice(
   db: D1Database,
   raw: unknown,
@@ -1117,6 +1237,7 @@ async function detail(
   },
   id: string,
   saved: string,
+  deleting: boolean,
 ) {
   if (!/^[\da-f-]{36}$/i.test(id)) {
     throw new AdminError(
@@ -1154,6 +1275,66 @@ async function detail(
     throw new AdminError(
       "Invoice not found.",
       404,
+    );
+  }
+
+  if (deleting) {
+    requireAdminDelete(user);
+
+    return page(
+      `Delete Invoice ${invoice.invoice_number}`,
+      `
+        <section>
+          <h2>Confirm deletion</h2>
+
+          <p>
+            Are you sure you want to permanently delete
+            <strong>${esc(
+              invoice.invoice_number,
+            )}</strong>?
+          </p>
+
+          <p class="muted">
+            This action cannot be undone. An invoice with
+            recorded payments or other protected related
+            records cannot be deleted.
+          </p>
+
+          <div class="actions">
+            <form
+              method="post"
+              action="${route}"
+            >
+              ${hidden(
+                "csrf",
+                csrfToken(env, user.id, route),
+              )}
+              ${hidden("action", "delete")}
+              ${hidden("id", id)}
+              ${hidden(
+                "revision",
+                String(invoice.updated_at ?? ""),
+              )}
+              ${hidden("confirm", "yes")}
+
+              <button type="submit">
+                Delete invoice
+              </button>
+            </form>
+
+            <a
+              class="button"
+              href="${route}?id=${esc(id)}"
+            >
+              Cancel
+            </a>
+          </div>
+        </section>
+      `,
+      user.name,
+      200,
+      {},
+      canMutateAdmin(user),
     );
   }
 
@@ -1353,6 +1534,15 @@ async function detail(
           >
             View invoice activity
           </a>
+
+          ${canDeleteAdmin(user) ? `<a
+            class="button"
+            href="${route}?id=${esc(
+              invoice.id,
+            )}&delete=1"
+          >
+            Delete invoice
+          </a>` : ""}
         </div>
       </section>
 
@@ -1975,6 +2165,69 @@ export async function handleBilling(
 
       const action = form.get("action");
 
+      if (action === "delete") {
+        requireAdminDelete(user);
+
+        const allowed = new Set([
+          "csrf",
+          "action",
+          "id",
+          "revision",
+          "confirm",
+        ]);
+
+        for (const key of form.keys()) {
+          if (
+            !allowed.has(key) ||
+            form.getAll(key).length !== 1
+          ) {
+            throw new AdminError(
+              "Unexpected or repeated form field.",
+            );
+          }
+        }
+
+        const deleteId =
+          form.get("id") ?? "";
+
+        const deleteRevision =
+          form.get("revision") ?? "";
+
+        if (
+          !/^[\da-f-]{36}$/i.test(deleteId) ||
+          !deleteRevision ||
+          deleteRevision.length > 40
+        ) {
+          throw new AdminError(
+            "Invalid invoice revision.",
+          );
+        }
+
+        if (form.get("confirm") !== "yes") {
+          throw new AdminError(
+            "Confirm the invoice deletion.",
+          );
+        }
+
+        await deleteInvoice(
+          db,
+          deleteId,
+          deleteRevision,
+          user.id,
+        );
+
+        return page(
+          "Deleted",
+          "",
+          user.name,
+          303,
+          {
+            Location:
+              `${route}?deleted=1`,
+          },
+        );
+      }
+
       if (action === "invoice") {
         const values = parse(
           form,
@@ -2068,6 +2321,7 @@ export async function handleBilling(
         user,
         id,
         url.searchParams.get("saved") ?? "",
+        url.searchParams.get("delete") === "1",
       );
     }
 

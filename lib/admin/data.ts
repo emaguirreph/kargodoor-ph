@@ -148,3 +148,84 @@ export async function saveRecord(
   }
   return recordId;
 }
+
+export async function deleteRecord(
+  db: D1Database,
+  entity: Entity,
+  id: string,
+  revision: string,
+  user: string,
+) {
+  if (entity !== "customers" && entity !== "shipments") {
+    throw new AdminError("Deletion is not supported for this record.");
+  }
+
+  const existing = await db
+    .prepare(`SELECT * FROM ${entity} WHERE id = ?`)
+    .bind(id)
+    .first<RecordData>();
+
+  if (!existing) {
+    throw new AdminError("Record not found.", 404);
+  }
+
+  if (existing.updated_at !== revision) {
+    throw new AdminError(
+      "Another admin changed this record. Reload it before deleting.",
+      409,
+    );
+  }
+
+  const now = new Date().toISOString();
+
+  try {
+    const results = await db.batch([
+      db
+        .prepare(
+          `INSERT INTO activity_log
+          (id, admin_user_id, action, entity_type, entity_id, old_value, new_value, notes, created_at)
+          SELECT ?, ?, 'delete', ?, ?, ?, NULL, NULL, ?
+          WHERE EXISTS (
+            SELECT 1 FROM ${entity}
+            WHERE id = ? AND updated_at = ?
+          )`,
+        )
+        .bind(
+          randomUUID(),
+          user,
+          entity,
+          id,
+          JSON.stringify(existing),
+          now,
+          id,
+          revision,
+        ),
+      db
+        .prepare(
+          `DELETE FROM ${entity}
+           WHERE id = ? AND updated_at = ?`,
+        )
+        .bind(id, revision),
+    ]);
+
+    if (!results.at(-1)?.meta.changes) {
+      throw new AdminError(
+        "Another admin changed this record. Reload it before deleting.",
+        409,
+      );
+    }
+  } catch (error) {
+    if (error instanceof AdminError) throw error;
+
+    if (String(error).includes("FOREIGN KEY")) {
+      throw new AdminError(
+        entity === "customers"
+          ? "This customer cannot be deleted because it has related records."
+          : "This shipment cannot be deleted because it has related records, such as an invoice.",
+        409,
+      );
+    }
+
+    throw error;
+  }
+}

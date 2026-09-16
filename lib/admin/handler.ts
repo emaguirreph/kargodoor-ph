@@ -10,6 +10,7 @@ import {
   checkCsrf,
   type AdminEnv,
   canMutateAdmin,
+  canDeleteAdmin,
   requireAdminDelete,
   canManageStaffRecords,
   isRestrictedStaff,
@@ -31,7 +32,7 @@ import { financeCsv } from "./finance-report";
 import { expensesPage, mutateExpense } from "./expenses";
 import { messageCenterPage } from "./message-center";
 import { financeCashPage, mutateFinanceCash } from "./finance-cash";
-import { saveRecord } from "./data";
+import { saveRecord, deleteRecord } from "./data";
 import { page, esc, pesos, input, select, hidden } from "./ui";
 import { dashboard, finance, activity, saveStaffFollowUp } from "./reports";
 import { createPortal, disablePortal, portalFor, portalStatus, resetPortal } from "./customer-portal";
@@ -319,6 +320,71 @@ export async function handleAdmin(
       if (view === "finance/cash") {
         const outcome = await mutateFinanceCash(db, form);
         return page("Saved", "", user.name, 303, { Location: `${path}?${outcome}=1` });
+      }
+
+      const action = form.get("action") ?? "";
+
+      if (action === "delete") {
+        requireAdminDelete(user);
+
+        const allowed = new Set([
+          "csrf",
+          "action",
+          "id",
+          "revision",
+          "confirm",
+        ]);
+
+        for (const key of form.keys()) {
+          if (
+            !allowed.has(key) ||
+            form.getAll(key).length !== 1
+          ) {
+            throw new AdminError(
+              "Unexpected or repeated form field.",
+            );
+          }
+        }
+
+        const deleteId =
+          form.get("id") ?? "";
+
+        const deleteRevision =
+          form.get("revision") ?? "";
+
+        if (
+          !/^[\da-f-]{36}$/i.test(deleteId) ||
+          !deleteRevision ||
+          deleteRevision.length > 40
+        ) {
+          throw new AdminError(
+            "Invalid record revision.",
+          );
+        }
+
+        if (form.get("confirm") !== "yes") {
+          throw new AdminError(
+            "Confirm the deletion.",
+          );
+        }
+
+        await deleteRecord(
+          db,
+          entity!,
+          deleteId,
+          deleteRevision,
+          user.id,
+        );
+
+        return page(
+          "Deleted",
+          "",
+          user.name,
+          303,
+          {
+            Location: `${path}?deleted=1`,
+          },
+        );
       }
 
       const values =
@@ -1023,6 +1089,89 @@ export async function handleAdmin(
      * RECORD DETAILS
      */
     if (id) {
+      const deleting =
+        url.searchParams.get("delete") === "1";
+
+      if (deleting) {
+        requireAdminDelete(user);
+
+        const recordName =
+          entity === "customers"
+            ? String(
+                record.full_name ??
+                record.customer_code ??
+                "this customer",
+              )
+            : String(
+                record.tracking_code ??
+                "this shipment",
+              );
+
+        return page(
+          `Delete ${
+            entity === "customers"
+              ? "Customer"
+              : "Shipment"
+          }`,
+          `
+            <section>
+              <h2>
+                Confirm deletion
+              </h2>
+
+              <p>
+                Are you sure you want to permanently delete
+                <strong>${esc(recordName)}</strong>?
+              </p>
+
+              <p class="muted">
+                This action cannot be undone. Records with related
+                shipments, invoices, payments, quotations, or other
+                protected records cannot be deleted.
+              </p>
+
+              <div class="actions">
+                <form
+                  method="post"
+                  action="${path}"
+                >
+                  ${hidden(
+                    "csrf",
+                    csrfToken(env, user.id, path),
+                  )}
+                  ${hidden("action", "delete")}
+                  ${hidden("id", id)}
+                  ${hidden(
+                    "revision",
+                    String(record.updated_at ?? ""),
+                  )}
+                  ${hidden("confirm", "yes")}
+
+                  <button type="submit">
+                    Delete ${
+                      entity === "customers"
+                        ? "customer"
+                        : "shipment"
+                    }
+                  </button>
+                </form>
+
+                <a
+                  class="button"
+                  href="${path}?id=${esc(id)}"
+                >
+                  Cancel
+                </a>
+              </div>
+            </section>
+          `,
+          user.name,
+          200,
+          {},
+          canWrite,
+        );
+      }
+
       let customer =
         "";
 
@@ -1209,6 +1358,19 @@ export async function handleAdmin(
                 Edit ${
                   entity ===
                   "customers"
+                    ? "customer"
+                    : "shipment"
+                }
+              </a>` : ""}
+
+              ${canDeleteAdmin(user) ? `<a
+                class="button"
+                href="${path}?id=${esc(
+                  id,
+                )}&delete=1"
+              >
+                Delete ${
+                  entity === "customers"
                     ? "customer"
                     : "shipment"
                 }
