@@ -198,7 +198,7 @@ stream
 ${stream}
 endstream`, `<< /Type /XObject /Subtype /Image /Width ${quotationLogoWidth} /Height ${quotationLogoHeight} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /ASCIIHexDecode /Length ${logoHex.length + 1} >>
 stream
-${logoHex}
+${logoHex}> 
 endstream`];
   let pdf = "%PDF-1.4\n% KargoDoor quotation\n", offsets = [0];
   for (let i = 0; i < objects.length; i++) {
