@@ -60,6 +60,13 @@ export default function ServicesPage() {
               <p className="kd-services-heading-green">
                 Simple options. Clear rates. Reliable shipping from China to the Philippines.
               </p>
+
+              <Link
+                className="kd-text-link"
+                href="/shipping-from-china-to-philippines"
+              >
+                LEARN MORE ABOUT CHINA TO PHILIPPINES SHIPPING →
+              </Link>
             </header>
 
             <div className="kd-services-cards">

@@ -112,6 +112,13 @@ export default function HomePage() {
               manage your cargo every step of the way.
             </p>
 
+            <Link
+              className="kd-text-link"
+              href="/shipping-from-china-to-philippines"
+            >
+              LEARN ABOUT CHINA TO PHILIPPINES SHIPPING →
+            </Link>
+
             <div className="kd-why-grid">
               {whyCards.map((card) => (
                 <article className="kd-info-card" key={card.title}>

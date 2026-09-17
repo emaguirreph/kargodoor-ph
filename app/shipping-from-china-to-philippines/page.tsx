@@ -4,8 +4,8 @@ import { MessengerLink } from "@/components/messenger-link";
 import { pageMetadata } from "@/lib/seo";
 
 export const metadata = pageMetadata(
-  "Shipping from China to the Philippines | KargoDoor PH",
-  "Ship from China to the Philippines by sea or air with KargoDoor PH. Get all-in shipping, customs clearance, cargo coordination, rate estimates, and delivery options.",
+  "Shipping from China to Philippines | Sea & Air Freight | KargoDoor PH",
+  "Shipping from China to the Philippines by sea or air. KargoDoor PH offers all-in freight, customs clearance, duties and taxes coordination, rate estimates, and delivery options.",
   "/shipping-from-china-to-philippines",
 );
 
