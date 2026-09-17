@@ -65,6 +65,99 @@ Received: [Date]
 We are checking the actual cargo details. Final CBM, weight, and applicable charges may be updated after warehouse verification.
 
 We’ll let you know once the invoice and next steps are ready.`],
+  ["shipment-confirmed", "Shipment Confirmed", `Hi [Customer Name]! Your KargoDoor shipment has been confirmed.
+
+Tracking Number: [Tracking Number]
+Cargo Code: [Account/Cargo Code]
+Service: [Sea/Air Freight]
+Origin Warehouse: [Warehouse]
+
+Your cargo is being prepared for shipment. We’ll keep you updated once it is in transit.`],
+
+  ["shipment-departed", "Shipment Departed China", `Hi [Customer Name]! Good news — your KargoDoor shipment has departed China.
+
+Tracking Number: [Tracking Number]
+Cargo Code: [Account/Cargo Code]
+Service: [Sea/Air Freight]
+Departure Date: [Date]
+
+Your cargo is now on the way to the Philippines. You can track your shipment here:
+https://www.kargodoorph.com/track`],
+
+  ["shipment-in-transit", "Shipment In Transit", `Hi [Customer Name]! Your KargoDoor shipment is currently in transit to the Philippines.
+
+Tracking Number: [Tracking Number]
+Cargo Code: [Account/Cargo Code]
+Service: [Sea/Air Freight]
+
+We’ll send you another update once your cargo arrives in the Philippines.
+
+Track here:
+https://www.kargodoorph.com/track`],
+
+  ["arrived-philippines", "Arrived in Philippines", `Hi [Customer Name]! Your KargoDoor shipment has arrived in the Philippines.
+
+Tracking Number: [Tracking Number]
+Cargo Code: [Account/Cargo Code]
+
+Your cargo will now proceed through the required arrival and clearance processing. We’ll keep you updated on the next step.`],
+
+  ["customs-processing", "Customs Processing", `Hi [Customer Name]! Your KargoDoor shipment is currently undergoing customs processing.
+
+Tracking Number: [Tracking Number]
+Cargo Code: [Account/Cargo Code]
+
+No action is required from you at this time unless we contact you for additional information. We’ll notify you once your cargo is cleared and ready for the next step.`],
+
+  ["cargo-adjustment", "Cargo Discrepancy / Adjustment", `Hi [Customer Name]! We’ve completed a warehouse verification of your cargo.
+
+Tracking Number: [Tracking Number]
+Cargo Code: [Account/Cargo Code]
+
+There is an adjustment to the shipment details based on the actual cargo received.
+
+Quoted CBM: [Quoted CBM]
+Actual CBM: [Actual CBM]
+Quoted Weight: [Quoted Weight]
+Actual Weight: [Actual Weight]
+Updated Amount: [Amount]
+
+Please review the updated details. We’ll be happy to clarify any changes before proceeding.`],
+
+  ["ready-for-pickup", "Ready for Pickup", `Hi [Customer Name]! Your KargoDoor shipment is ready for pickup.
+
+Tracking Number: [Tracking Number]
+Cargo Code: [Account/Cargo Code]
+Pickup Location: [Pickup Location]
+
+Please coordinate with us before pickup so we can have your cargo ready for release.`],
+
+  ["out-for-delivery", "Out for Delivery", `Hi [Customer Name]! Your KargoDoor shipment is now out for delivery.
+
+Tracking Number: [Tracking Number]
+Cargo Code: [Account/Cargo Code]
+Delivery Address: [Delivery Address]
+
+Please make sure someone is available to receive the cargo. We’ll update you once delivery is completed.`],
+
+  ["delivered", "Shipment Delivered", `Hi [Customer Name]! Your KargoDoor shipment has been delivered.
+
+Tracking Number: [Tracking Number]
+Cargo Code: [Account/Cargo Code]
+Delivered: [Date]
+
+Thank you for trusting KargoDoor PH with your shipment.
+
+SOURCE • SHIP • RECEIVE`],
+
+  ["feedback-referral", "Customer Feedback / Referral", `Hi [Customer Name]! Thank you for choosing KargoDoor PH.
+
+We hope you had a smooth shipping experience with us. We’d love to hear your feedback.
+
+If you know a friend, business owner, online seller, or entrepreneur who imports from China, we’d also appreciate your referral.
+
+Thank you for supporting KargoDoor PH!`],
+
   ["payment-reminder", "Payment Reminder", `Hi [Customer Name]! Your KargoDoor invoice is ready.
 
 Invoice No.: [Invoice Number]

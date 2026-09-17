@@ -1397,6 +1397,161 @@ export async function handleAdmin(
           });
       const shippingInstructions = canWrite ? `<section><h2>Shipping Instructions</h2><p class="muted">Review the message, add the warehouse address, then copy it into Messenger, WhatsApp, or another customer chat.</p><textarea id="${instructionId}" readonly aria-label="Shipping instructions">${esc(instructionMessage)}</textarea><div class="actions">${copyButton(instructionId, "Send shipping instructions")}</div>${copyScript()}</section>` : "";
 
+      const customerNotifications = entity === "shipments" && canWrite ? (() => {
+        const customerName = String(linkedCustomer?.full_name || "Customer");
+        const tracking = String(record.tracking_number || "");
+        const cargoCode = String(record.cargo_code || linkedCustomer?.customer_code || "");
+        const service = String(record.service_type || "");
+        const warehouse = String(record.china_warehouse || "");
+        const received = String(record.warehouse_received_date || "");
+        const departure = String(record.departure_date || "");
+        const arrival = String(record.actual_arrival || record.estimated_arrival || "");
+        const paymentStatus = String(record.payment_status || "");
+        const verifiedCbm = String(record.verified_cbm || record.cbm || "");
+        const verifiedWeight = String(record.verified_weight_kg || record.weight_kg || "");
+
+        const common = [
+          tracking ? `Tracking Number: ${tracking}` : "",
+          cargoCode ? `Cargo Code: ${cargoCode}` : "",
+        ].filter(Boolean).join("\n");
+
+        const messages: Array<[string, string, string[]]> = [
+          ["cargo-received", "Cargo Received in China", [
+            `Hi ${customerName}! Your KargoDoor cargo has been received at our ${warehouse || "China"} warehouse.`,
+            "",
+            common,
+            received ? `Received: ${received}` : "",
+            verifiedCbm ? `Verified CBM: ${verifiedCbm}` : "",
+            verifiedWeight ? `Verified Weight: ${verifiedWeight} kg` : "",
+            "",
+            "We are checking the actual cargo details. Final CBM, weight, and applicable charges may be updated after warehouse verification.",
+            "",
+            "We’ll keep you updated on the next step."
+          ]],
+
+          ["shipment-confirmed", "Shipment Confirmed", [
+            `Hi ${customerName}! Your KargoDoor shipment has been confirmed.`,
+            "",
+            common,
+            service ? `Service: ${service}` : "",
+            warehouse ? `Origin Warehouse: ${warehouse}` : "",
+            "",
+            "Your cargo is being prepared for shipment. We’ll keep you updated once it is in transit."
+          ]],
+
+          ["shipment-departed", "Shipment Departed China", [
+            `Hi ${customerName}! Good news — your KargoDoor shipment has departed China.`,
+            "",
+            common,
+            service ? `Service: ${service}` : "",
+            departure ? `Departure Date: ${departure}` : "",
+            "",
+            "Your cargo is now on the way to the Philippines.",
+            "Track here: https://www.kargodoorph.com/track"
+          ]],
+
+          ["shipment-in-transit", "Shipment In Transit", [
+            `Hi ${customerName}! Your KargoDoor shipment is currently in transit to the Philippines.`,
+            "",
+            common,
+            service ? `Service: ${service}` : "",
+            arrival ? `Estimated Arrival: ${arrival}` : "",
+            "",
+            "We’ll send you another update once your cargo arrives in the Philippines.",
+            "Track here: https://www.kargodoorph.com/track"
+          ]],
+
+          ["arrived-philippines", "Arrived in Philippines", [
+            `Hi ${customerName}! Your KargoDoor shipment has arrived in the Philippines.`,
+            "",
+            common,
+            "",
+            "Your cargo will now proceed through the required arrival and clearance processing. We’ll keep you updated on the next step."
+          ]],
+
+          ["customs-processing", "Customs Processing", [
+            `Hi ${customerName}! Your KargoDoor shipment is currently undergoing customs processing.`,
+            "",
+            common,
+            "",
+            "No action is required from you at this time unless we contact you for additional information. We’ll notify you once your cargo is cleared and ready for the next step."
+          ]],
+
+          ["payment-request", "Payment Request", [
+            `Hi ${customerName}! Your KargoDoor shipment is ready for payment processing.`,
+            "",
+            common,
+            paymentStatus ? `Current Payment Status: ${paymentStatus}` : "",
+            "",
+            "Please coordinate with us for your invoice and payment details. Once payment is confirmed, we’ll proceed with the next release or delivery step."
+          ]],
+
+          ["ready-for-pickup", "Ready for Pickup", [
+            `Hi ${customerName}! Your KargoDoor shipment is ready for pickup.`,
+            "",
+            common,
+            "",
+            "Please coordinate with us before pickup so we can have your cargo ready for release."
+          ]],
+
+          ["out-for-delivery", "Out for Delivery", [
+            `Hi ${customerName}! Your KargoDoor shipment is now out for delivery.`,
+            "",
+            common,
+            "",
+            "Please make sure someone is available to receive the cargo. We’ll update you once delivery is completed."
+          ]],
+
+          ["delivered", "Shipment Delivered", [
+            `Hi ${customerName}! Your KargoDoor shipment has been delivered.`,
+            "",
+            common,
+            arrival ? `Delivery / Arrival Date: ${arrival}` : "",
+            "",
+            "Thank you for trusting KargoDoor PH with your shipment.",
+            "",
+            "SOURCE • SHIP • RECEIVE"
+          ]],
+
+          ["feedback", "Feedback / Referral", [
+            `Hi ${customerName}! Thank you for choosing KargoDoor PH.`,
+            "",
+            "We hope you had a smooth shipping experience with us. We’d love to hear your feedback.",
+            "",
+            "If you know a friend, business owner, online seller, or entrepreneur who imports from China, we’d also appreciate your referral.",
+            "",
+            "Thank you for supporting KargoDoor PH!"
+          ]]
+        ];
+
+        const footer = [
+          "",
+          "—",
+          "KargoDoor PH",
+          "China to PH, made SIMPLE.",
+          "",
+          "+63 917 157 7370 | +63 908 889 0664",
+          "support@kargodoorph.com",
+          "www.kargodoorph.com"
+        ];
+
+        return `<section>
+          <h2>Customer Notifications</h2>
+          <p class="muted">Messages are personalized from this shipment. Review before sending. Copying a message does not change the shipment status.</p>
+          ${messages.map(([key,title,lines]) => {
+            const messageId = `customer-notification-${id}-${key}`;
+            const body = [...lines.filter((line,index,all) => line !== "" || index === 0 || all[index-1] !== ""), ...footer].join("\n");
+            return `<details class="customer-notification">
+              <summary>${esc(title)}</summary>
+              <textarea id="${esc(messageId)}" readonly aria-label="${esc(title)} customer message" style="min-height:260px;white-space:pre-wrap">${esc(body)}</textarea>
+              <div class="actions">${copyButton(messageId, `Copy ${title}`)}</div>
+            </details>`;
+          }).join("")}
+          ${copyScript()}
+        </section>`;
+      })() : "";
+
+
       return page(
         title,
         `
@@ -1451,6 +1606,7 @@ export async function handleAdmin(
           </section>
           ${portalSection}
           ${shippingInstructions}
+          ${customerNotifications}
         `,
         user.name,
         200,
