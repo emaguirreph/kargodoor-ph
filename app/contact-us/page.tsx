@@ -2,6 +2,13 @@ import { ArrowRight, Clock3, Mail, MessageCircle } from "lucide-react";
 import { Footer, Header } from "@/components/site-chrome";
 import { TrackedAnchor } from "@/components/tracked-link";
 import { MessengerLink } from "@/components/messenger-link";
+import { pageMetadata } from "@/lib/seo";
+
+export const metadata = pageMetadata(
+  "Contact KargoDoor PH | China to Philippines Shipping",
+  "Contact KargoDoor PH for sea freight, air freight, shipping rates, quotations, and cargo assistance from China to the Philippines.",
+  "/contact-us",
+);
 
 type ContactCard = {
   icon: typeof MessageCircle;

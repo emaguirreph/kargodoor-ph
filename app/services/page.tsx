@@ -2,6 +2,13 @@ import Link from "next/link";
 import { Calculator, FileText } from "lucide-react";
 import { Footer, Header } from "@/components/site-chrome";
 import { MessengerLink } from "@/components/messenger-link";
+import { pageMetadata } from "@/lib/seo";
+
+export const metadata = pageMetadata(
+  "China to Philippines Shipping Services | KargoDoor PH",
+  "Sea freight, air freight, and door-to-door shipping from China to the Philippines with all-in rates, customs clearance, taxes, and shipment coordination.",
+  "/services",
+);
 
 const services = [
   {

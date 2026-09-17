@@ -2,6 +2,13 @@ import Link from "next/link";
 import { Plane, Ship, Truck } from "lucide-react";
 import { Footer, Header } from "@/components/site-chrome";
 import { MessengerLink } from "@/components/messenger-link";
+import { pageMetadata } from "@/lib/seo";
+
+export const metadata = pageMetadata(
+  "Shipping from China to the Philippines | KargoDoor PH",
+  "Ship from China to the Philippines by sea or air with KargoDoor PH. Get all-in shipping, customs clearance, taxes, cargo coordination, and an easy rate calculator.",
+  "/",
+);
 
 const whyCards = [
   {

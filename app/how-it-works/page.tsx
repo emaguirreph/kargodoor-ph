@@ -1,6 +1,13 @@
 import Link from "next/link";
 import { Footer, Header } from "@/components/site-chrome";
 import { MessengerLink } from "@/components/messenger-link";
+import { pageMetadata } from "@/lib/seo";
+
+export const metadata = pageMetadata(
+  "How to Ship from China to the Philippines | KargoDoor PH",
+  "Learn how KargoDoor PH handles shipping from China to the Philippines from supplier pickup to warehouse receiving, customs clearance, and final cargo release.",
+  "/how-it-works",
+);
 
 const processSteps = [
   {

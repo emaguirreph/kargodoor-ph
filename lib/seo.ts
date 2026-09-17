@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-export const siteUrl = "https://www.kargodoorph.com";
+export const siteUrl = "https://kargodoorph.com";
 
 export const socialTitle =
   "KargoDoor PH | China to Philippines Shipping";
