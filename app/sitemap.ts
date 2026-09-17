@@ -17,6 +17,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.9,
     },
     {
+      url: baseUrl + "/shipping-from-china-to-philippines",
+      lastModified: new Date(),
+      changeFrequency: "weekly",
+      priority: 1,
+    },
+    {
       url: baseUrl + "/services",
       lastModified: new Date(),
       changeFrequency: "monthly",
