@@ -1467,7 +1467,7 @@ async function detail(
               invoice.id,
             )}&delete=1"
           >
-            Delete invoice
+            Void invoice
           </a>` : ""}
         </div>
       </section>
