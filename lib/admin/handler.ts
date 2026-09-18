@@ -32,7 +32,7 @@ import { financeCsv } from "./finance-report";
 import { expensesPage, mutateExpense } from "./expenses";
 import { messageLibraryPage, resetMessageTemplate, saveMessageTemplate } from "./message-center";
 import { financeCashPage, mutateFinanceCash } from "./finance-cash";
-import { saveRecord, deleteRecord } from "./data";
+import { saveRecord, archiveOrCancelRecord } from "./data";
 import { page, esc, pesos, input, select, hidden } from "./ui";
 import { dashboard, finance, activity, saveStaffFollowUp } from "./reports";
 import { createPortal, disablePortal, portalFor, portalStatus, resetPortal } from "./customer-portal";
@@ -381,11 +381,11 @@ export async function handleAdmin(
 
         if (form.get("confirm") !== "yes") {
           throw new AdminError(
-            "Confirm the deletion.",
+            "Confirm the archive or cancellation.",
           );
         }
 
-        await deleteRecord(
+        await archiveOrCancelRecord(
           db,
           entity!,
           deleteId,
@@ -394,12 +394,12 @@ export async function handleAdmin(
         );
 
         return page(
-          "Deleted",
+          "Lifecycle updated",
           "",
           user.name,
           303,
           {
-            Location: `${path}?deleted=1`,
+            Location: `${path}?lifecycle=1`,
           },
         );
       }
@@ -1586,11 +1586,7 @@ export async function handleAdmin(
                   id,
                 )}&delete=1"
               >
-                Delete ${
-                  entity === "customers"
-                    ? "customer"
-                    : "shipment"
-                }
+                entity === "customers" ? "Archive customer" : "Cancel shipment"
               </a>` : ""}
 
               ${relatedLinks}
@@ -1687,7 +1683,8 @@ export async function handleAdmin(
                 mobile,
                 email
               FROM customers
-              WHERE
+              WHERE archived_at IS NULL
+                AND (
                 instr(
                   lower(customer_code),
                   lower(?)
@@ -1722,6 +1719,7 @@ export async function handleAdmin(
                   ),
                   lower(?)
                 ) > 0
+                )
 
               ORDER BY
                 created_at DESC,
@@ -1789,10 +1787,7 @@ export async function handleAdmin(
                   ) > 0
                 )
 
-                AND (
-                  ? = ''
-                  OR s.status = ?
-                )
+                AND ((? != '' AND s.status = ?) OR (? = '' AND s.status != 'Cancelled'))
 
                 AND (
                   ? = ''
@@ -1944,7 +1939,9 @@ export async function handleAdmin(
       `
         ${notice}
 
-        <section>
+        <details class="admin-collapsible" open>
+          <summary>${entity === "customers" ? "Customer records" : "Shipment records"}</summary>
+          <section>
           <form
             method="get"
             action="${path}"
@@ -2034,7 +2031,7 @@ export async function handleAdmin(
               }
             </a>
           </div>` : ""}
-        </section>
+          </section>
 
         <section>
           ${table}
@@ -2073,6 +2070,7 @@ export async function handleAdmin(
             }
           </div>
         </section>
+        </details>
       `,
       user.name,
       200,

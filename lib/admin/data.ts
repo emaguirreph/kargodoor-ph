@@ -150,7 +150,7 @@ export async function saveRecord(
   return recordId;
 }
 
-export async function deleteRecord(
+export async function archiveOrCancelRecord(
   db: D1Database,
   entity: Entity,
   id: string,
@@ -158,75 +158,28 @@ export async function deleteRecord(
   user: string,
 ) {
   if (entity !== "customers" && entity !== "shipments") {
-    throw new AdminError("Deletion is not supported for this record.");
+    throw new AdminError("Lifecycle change is not supported for this record.");
   }
-
-  const existing = await db
-    .prepare(`SELECT * FROM ${entity} WHERE id = ?`)
-    .bind(id)
-    .first<RecordData>();
-
-  if (!existing) {
-    throw new AdminError("Record not found.", 404);
-  }
-
+  const existing = await db.prepare(`SELECT * FROM ${entity} WHERE id = ?`).bind(id).first<RecordData>();
+  if (!existing) throw new AdminError("Record not found.", 404);
   if (existing.updated_at !== revision) {
-    throw new AdminError(
-      "Another admin changed this record. Reload it before deleting.",
-      409,
-    );
+    throw new AdminError("Another admin changed this record. Reload it before changing its lifecycle.", 409);
   }
-
-  const now = new Date().toISOString();
-
-  try {
-    const results = await db.batch([
-      db
-        .prepare(
-          `INSERT INTO activity_log
-          (id, admin_user_id, action, entity_type, entity_id, old_value, new_value, notes, created_at)
-          SELECT ?, ?, 'delete', ?, ?, ?, NULL, NULL, ?
-          WHERE EXISTS (
-            SELECT 1 FROM ${entity}
-            WHERE id = ? AND updated_at = ?
-          )`,
-        )
-        .bind(
-          randomUUID(),
-          user,
-          entity,
-          id,
-          JSON.stringify(existing),
-          now,
-          id,
-          revision,
-        ),
-      db
-        .prepare(
-          `DELETE FROM ${entity}
-           WHERE id = ? AND updated_at = ?`,
-        )
-        .bind(id, revision),
-    ]);
-
-    if (!results.at(-1)?.meta.changes) {
-      throw new AdminError(
-        "Another admin changed this record. Reload it before deleting.",
-        409,
-      );
-    }
-  } catch (error) {
-    if (error instanceof AdminError) throw error;
-
-    if (String(error).includes("FOREIGN KEY")) {
-      throw new AdminError(
-        entity === "customers"
-          ? "This customer cannot be deleted because it has related records."
-          : "This shipment cannot be deleted because it has related records, such as an invoice.",
-        409,
-      );
-    }
-
-    throw error;
-  }
+  const timestamp = new Date().toISOString();
+  const action = entity === "customers" ? "archive" : "cancel";
+  const next = entity === "customers"
+    ? { ...existing, archived_at: timestamp, updated_at: timestamp }
+    : { ...existing, status: "Cancelled", updated_at: timestamp };
+  const update = entity === "customers"
+    ? db.prepare("UPDATE customers SET archived_at = ?, updated_at = ? WHERE id = ? AND updated_at = ?").bind(timestamp, timestamp, id, revision)
+    : db.prepare("UPDATE shipments SET status = 'Cancelled', updated_at = ? WHERE id = ? AND updated_at = ?").bind(timestamp, id, revision);
+  const result = await db.batch([
+    db.prepare(`INSERT INTO activity_log (id,admin_user_id,action,entity_type,entity_id,old_value,new_value,notes,created_at) SELECT ?,?,?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM ${entity} WHERE id = ? AND updated_at = ?)`)
+      .bind(randomUUID(), user, action, entity, id, JSON.stringify(existing), JSON.stringify(next), `${entity === "customers" ? "Customer archived" : "Shipment cancelled"}.`, timestamp, id, revision),
+    update,
+  ]);
+  if (!result.at(-1)?.meta.changes) throw new AdminError("Another admin changed this record. Reload it before changing its lifecycle.", 409);
 }
+
+// Compatibility alias for any existing internal callers.
+export const deleteRecord = archiveOrCancelRecord;

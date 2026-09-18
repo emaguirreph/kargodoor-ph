@@ -859,7 +859,7 @@ export async function recordPayment(
   return String(invoice.id);
 }
 
-export async function deleteInvoice(
+export async function voidInvoice(
   db: D1Database,
   id: string,
   revision: string,
@@ -892,89 +892,15 @@ export async function deleteInvoice(
 
   const timestamp = new Date().toISOString();
 
-  try {
-    const result = await db.batch([
-      db
-        .prepare(
-          `
-          INSERT INTO activity_log (
-            id,
-            admin_user_id,
-            action,
-            entity_type,
-            entity_id,
-            old_value,
-            new_value,
-            notes,
-            created_at
-          )
-          SELECT
-            ?,?,
-            'delete',
-            'invoices',
-            ?,
-            ?,
-            NULL,
-            NULL,
-            ?
-          WHERE EXISTS (
-            SELECT 1
-            FROM invoices
-            WHERE
-              id = ?
-              AND updated_at = ?
-          )
-          `,
-        )
-        .bind(
-          randomUUID(),
-          adminId,
-          id,
-          JSON.stringify(existing),
-          timestamp,
-          id,
-          revision,
-        ),
+  const next = { ...existing, status: "Void", updated_at: timestamp };
+  const result = await db.batch([
+    db.prepare(`INSERT INTO activity_log (id,admin_user_id,action,entity_type,entity_id,old_value,new_value,notes,created_at) SELECT ?,?,?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM invoices WHERE id = ? AND updated_at = ?)`)
+      .bind(randomUUID(), adminId, "void", "invoices", id, JSON.stringify(existing), JSON.stringify(next), "Invoice voided; payment history preserved.", timestamp, id, revision),
+    db.prepare("UPDATE invoices SET status = 'Void', updated_at = ? WHERE id = ? AND updated_at = ?")
+      .bind(timestamp, id, revision),
+  ]);
+  if (!result.at(-1)?.meta.changes) throw new AdminError("Another admin changed this invoice. Reload it before voiding.", 409);
 
-      db
-        .prepare(
-          `
-          DELETE FROM invoices
-          WHERE
-            id = ?
-            AND updated_at = ?
-          `,
-        )
-        .bind(
-          id,
-          revision,
-        ),
-    ]);
-
-    if (!result.at(-1)?.meta.changes) {
-      throw new AdminError(
-        "Another admin changed this invoice. Reload it before deleting.",
-        409,
-      );
-    }
-  } catch (error) {
-    if (error instanceof AdminError) {
-      throw error;
-    }
-
-    if (
-      String(error)
-        .toUpperCase()
-        .includes("FOREIGN KEY")
-    ) {
-      throw new AdminError(
-        "This invoice cannot be deleted because it has related payments or other protected records.",
-        409,
-      );
-    }
-
-    throw error;
-  }
 }
 
 export async function issueInvoice(
@@ -1282,13 +1208,13 @@ async function detail(
     requireAdminDelete(user);
 
     return page(
-      `Delete Invoice ${invoice.invoice_number}`,
+      `Void Invoice ${invoice.invoice_number}`,
       `
         <section>
-          <h2>Confirm deletion</h2>
+          <h2>Confirm voiding</h2>
 
           <p>
-            Are you sure you want to permanently delete
+            Are you sure you want to void
             <strong>${esc(
               invoice.invoice_number,
             )}</strong>?
@@ -1309,7 +1235,7 @@ async function detail(
                 "csrf",
                 csrfToken(env, user.id, route),
               )}
-              ${hidden("action", "delete")}
+              ${hidden("action", "void")}
               ${hidden("id", id)}
               ${hidden(
                 "revision",
@@ -1318,7 +1244,7 @@ async function detail(
               ${hidden("confirm", "yes")}
 
               <button type="submit">
-                Delete invoice
+                Void invoice
               </button>
             </form>
 
@@ -2025,7 +1951,9 @@ async function list(
   return page(
     "Invoices",
     `
-      <section>
+      <details class="admin-collapsible" open>
+        <summary>Invoice records</summary>
+        <section>
         <form
           method="get"
           action="${route}"
@@ -2099,6 +2027,7 @@ async function list(
           }
         </div>
       </section>
+      </details>
     `,
     user.name, 200, {}, canMutateAdmin(user),
   );
@@ -2165,7 +2094,7 @@ export async function handleBilling(
 
       const action = form.get("action");
 
-      if (action === "delete") {
+      if (action === "void") {
         requireAdminDelete(user);
 
         const allowed = new Set([
@@ -2205,11 +2134,11 @@ export async function handleBilling(
 
         if (form.get("confirm") !== "yes") {
           throw new AdminError(
-            "Confirm the invoice deletion.",
+            "Confirm the invoice void.",
           );
         }
 
-        await deleteInvoice(
+        await voidInvoice(
           db,
           deleteId,
           deleteRevision,
@@ -2217,13 +2146,13 @@ export async function handleBilling(
         );
 
         return page(
-          "Deleted",
+          "Invoice voided",
           "",
           user.name,
           303,
           {
             Location:
-              `${route}?deleted=1`,
+              `${route}?voided=1`,
           },
         );
       }
