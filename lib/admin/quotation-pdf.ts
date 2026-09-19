@@ -1,6 +1,6 @@
 // lib/admin/quotation-pdf.ts
-var blue = "0.04 0.33 0.68";
-var green = "0.16 0.60 0.20";
+const blue = "0.04 0.33 0.68";
+const green = "0.16 0.60 0.20";
 type CustomerSnapshot = {
   name?: unknown;
   company?: unknown;
@@ -37,9 +37,9 @@ type QuotationPdfData = {
 };
 type PdfText = (value: unknown, x?: number, size?: number, bold?: boolean, color?: string) => void;
 
-var clean = (value: unknown): string => String(value ?? "").replace(/[\\()]/g, "\\$&").replace(/\u00b7/g, "\\267").replace(/\u00d7/g, "\\327").replace(/[^\x20-\x7e]/g, "?");
-var money = (cents: unknown): string => "PHP " + (Number(cents ?? 0) / 100).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-var wrap = (value: unknown, width = 88): string[] => {
+const clean = (value: unknown): string => String(value ?? "").replace(/[\\()]/g, "\\$&").replace(/\u00b7/g, "\\267").replace(/\u00d7/g, "\\327").replace(/[^\x20-\x7e]/g, "?");
+const money = (cents: unknown): string => "PHP " + (Number(cents ?? 0) / 100).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const wrap = (value: unknown, width = 88): string[] => {
   const out = [];
   let line = "";
   for (const word of clean(value).split(/\s+/)) {
@@ -191,7 +191,8 @@ function customerQuotationPdf(q: QuotationPdfData): Uint8Array<ArrayBuffer> {
 stream
 ${stream}
 endstream`];
-  let pdf = "%PDF-1.4\n% KargoDoor quotation\n", offsets = [0];
+  let pdf = "%PDF-1.4\n% KargoDoor quotation\n";
+  const offsets = [0];
   for (let i = 0; i < objects.length; i++) {
     offsets.push(new TextEncoder().encode(pdf).length);
     pdf += `${i + 1} 0 obj

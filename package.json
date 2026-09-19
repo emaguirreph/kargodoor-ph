@@ -10,7 +10,7 @@
     "build": "next build --webpack",
     "start": "next start",
     "test": "npm run build",
-    "lint": "eslint . --ignore-pattern .next --ignore-pattern .open-next --ignore-pattern .codex-snapshots",
+    "lint": "eslint . --ignore-pattern .next --ignore-pattern .open-next --ignore-pattern .codex-snapshots --ignore-pattern .wrangler --ignore-pattern .admin-local",
     "build:cloudflare": "opennextjs-cloudflare build",
     "admin:setup:local": "node scripts/admin-local.mjs",
     "admin:dev": "node scripts/admin-dev.mjs",
