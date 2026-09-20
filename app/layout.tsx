@@ -15,9 +15,9 @@ export const metadata: Metadata = {
 
   icons: {
     icon: [
-      { url: "/kargodoor-app-icon.png", type: "image/png", sizes: "512x512" },
+      { url: "/kargodoor-app-icon-v2.png", type: "image/png", sizes: "512x512" },
     ],
-    apple: "/kargodoor-app-icon.png",
+    apple: "/kargodoor-app-icon-v2.png",
   },
 
   openGraph: {
