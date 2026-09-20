@@ -11,9 +11,9 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: "#0753ad",
     icons: [
       {
-        src: "/kargodoor-app-icon.svg",
-        sizes: "any",
-        type: "image/svg+xml",
+        src: "/kargodoor-app-icon.png",
+        sizes: "512x512",
+        type: "image/png",
         purpose: "maskable",
       },
     ],
