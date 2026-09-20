@@ -52,6 +52,7 @@ const wrap = (value: unknown, width = 88): string[] => {
 };
 function customerQuotationPdf(q: QuotationPdfData): Uint8Array<ArrayBuffer> {
   const customer: CustomerSnapshot = JSON.parse(String(q.customer_snapshot ?? "{}")), cargo: CargoSnapshot = JSON.parse(String(q.cargo_snapshot ?? "{}"));
+  const pricing = JSON.parse(String(q.pricing_snapshot ?? "{}")) as Record<string, unknown>;
   const lines: string[] = [];
   let y = 790;
   const text: PdfText = (value, x = 52, size = 9, bold = false, color = "0.12 0.18 0.25") => {
@@ -149,6 +150,10 @@ function customerQuotationPdf(q: QuotationPdfData): Uint8Array<ArrayBuffer> {
   y = cargoBodyY - 3;
   text(money(q.final_amount), 310, 21, true, green);
   y -= 4;
+  if (String(cargo.category ?? "").trim()) text(`Category: ${cargo.category}`, 310, 8);
+  text("SHIPPING CALCULATION", 310, 8, true, blue);
+  if (pricing.density !== undefined) text(`Density: ${Number(pricing.density).toFixed(2)} kg/CBM`, 310, 7);
+  if (pricing.rateBasis !== undefined) text(`Applicable Rate / Basis: ${pricing.rateBasis}`, 310, 7);
   text(q.freight_type ?? "", 310, 9);
 
   if (String(cargo.originWarehouse ?? "").trim()) {
@@ -180,8 +185,10 @@ function customerQuotationPdf(q: QuotationPdfData): Uint8Array<ArrayBuffer> {
   text("Service Coverage: Origin Warehouse > Manila Customs Clearance >", 52, 7);
   text("KargoDoor Metro Manila Warehouse", 52, 7);
 
-  y = 245;
-  lines.push(`${blue} RG 52 268 m 543 268 l S`);
+  // The body above flows from the top of the page. Keep the footer in its own
+  // reserved bottom margin so long disclaimer text can never be painted over it.
+  y = 110;
+  lines.push(`${blue} RG 52 132 m 543 132 l S`);
   text("KARGODOOR PH", 52, 8, true, blue);
   text("China to PH, made SIMPLE.", 52, 7, false, blue);
   text("+63 917 157 7370 | +63 908 889 0664", 52, 7, false, blue);

@@ -166,16 +166,13 @@ export async function archiveOrCancelRecord(
     throw new AdminError("Another admin changed this record. Reload it before changing its lifecycle.", 409);
   }
   const timestamp = new Date().toISOString();
-  const action = entity === "customers" ? "archive" : "cancel";
-  const next = entity === "customers"
-    ? { ...existing, archived_at: timestamp, updated_at: timestamp }
-    : { ...existing, status: "Cancelled", updated_at: timestamp };
-  const update = entity === "customers"
-    ? db.prepare("UPDATE customers SET archived_at = ?, updated_at = ? WHERE id = ? AND updated_at = ?").bind(timestamp, timestamp, id, revision)
-    : db.prepare("UPDATE shipments SET status = 'Cancelled', updated_at = ? WHERE id = ? AND updated_at = ?").bind(timestamp, id, revision);
+  const action = "archive";
+  const next = { ...existing, archived_at: timestamp, updated_at: timestamp };
+  const update = db.prepare(`UPDATE ${entity} SET archived_at = ?, updated_at = ? WHERE id = ? AND updated_at = ?`)
+    .bind(timestamp, timestamp, id, revision);
   const result = await db.batch([
     db.prepare(`INSERT INTO activity_log (id,admin_user_id,action,entity_type,entity_id,old_value,new_value,notes,created_at) SELECT ?,?,?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM ${entity} WHERE id = ? AND updated_at = ?)`)
-      .bind(randomUUID(), user, action, entity, id, JSON.stringify(existing), JSON.stringify(next), `${entity === "customers" ? "Customer archived" : "Shipment cancelled"}.`, timestamp, id, revision),
+      .bind(randomUUID(), user, action, entity, id, JSON.stringify(existing), JSON.stringify(next), `${entity === "customers" ? "Customer" : "Shipment"} archived.`, timestamp, id, revision),
     update,
   ]);
   if (!result.at(-1)?.meta.changes) throw new AdminError("Another admin changed this record. Reload it before changing its lifecycle.", 409);

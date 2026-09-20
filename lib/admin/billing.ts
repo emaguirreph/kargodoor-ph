@@ -594,7 +594,7 @@ export async function recordPayment(
       FROM invoices i
       LEFT JOIN payments p
         ON p.invoice_id = i.id
-      WHERE i.id = ?
+      WHERE i.id = ? AND i.archived_at IS NULL
       GROUP BY i.id
       `,
     )
@@ -903,6 +903,25 @@ export async function voidInvoice(
 
 }
 
+export async function archiveInvoice(
+  db: D1Database,
+  id: string,
+  revision: string,
+  adminId: string,
+) {
+  const existing = await db.prepare("SELECT * FROM invoices WHERE id = ?").bind(id).first<RecordData>();
+  if (!existing) throw new AdminError("Invoice not found.", 404);
+  if (existing.updated_at !== revision) throw new AdminError("Another admin changed this invoice. Reload and try again.", 409);
+  const timestamp = new Date().toISOString();
+  const next = { ...existing, archived_at: timestamp, updated_at: timestamp };
+  const result = await db.batch([
+    db.prepare("INSERT INTO activity_log (id,admin_user_id,action,entity_type,entity_id,old_value,new_value,notes,created_at) SELECT ?,?,?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM invoices WHERE id = ? AND updated_at = ?)")
+      .bind(randomUUID(), adminId, "archive", "invoices", id, JSON.stringify(existing), JSON.stringify(next), "Invoice archived; payment history preserved.", timestamp, id, revision),
+    db.prepare("UPDATE invoices SET archived_at = ?, updated_at = ? WHERE id = ? AND updated_at = ?").bind(timestamp, timestamp, id, revision),
+  ]);
+  if (!result.at(-1)?.meta.changes) throw new AdminError("Another admin changed this invoice. Reload and try again.", 409);
+}
+
 export async function issueInvoice(
   db: D1Database,
   raw: unknown,
@@ -1208,22 +1227,21 @@ async function detail(
     requireAdminDelete(user);
 
     return page(
-      `Void Invoice ${invoice.invoice_number}`,
+      `Archive Invoice ${invoice.invoice_number}`,
       `
         <section>
-          <h2>Confirm voiding</h2>
+          <h2>Confirm archive</h2>
 
           <p>
-            Are you sure you want to void
+            Are you sure you want to archive
             <strong>${esc(
               invoice.invoice_number,
             )}</strong>?
           </p>
 
           <p class="muted">
-            This action cannot be undone. An invoice with
-            recorded payments or other protected related
-            records cannot be deleted.
+            The invoice will be removed from normal lists but retained
+            for audit history and payment records.
           </p>
 
           <div class="actions">
@@ -1235,7 +1253,7 @@ async function detail(
                 "csrf",
                 csrfToken(env, user.id, route),
               )}
-              ${hidden("action", "void")}
+              ${hidden("action", "archive")}
               ${hidden("id", id)}
               ${hidden(
                 "revision",
@@ -1244,7 +1262,7 @@ async function detail(
               ${hidden("confirm", "yes")}
 
               <button type="submit">
-                Void invoice
+                Archive invoice
               </button>
             </form>
 
@@ -1465,9 +1483,9 @@ async function detail(
             class="button"
             href="${route}?id=${esc(
               invoice.id,
-            )}&delete=1"
+            )}&archive=1"
           >
-            Void invoice
+            Archive invoice
           </a>` : ""}
         </div>
       </section>
@@ -1536,7 +1554,9 @@ async function createView(
         LEFT JOIN invoices i
           ON i.shipment_id = s.id
         WHERE
-          i.id IS NULL
+          s.archived_at IS NULL
+          AND c.archived_at IS NULL
+          AND i.id IS NULL
           AND (
             (
               ? != ''
@@ -1812,7 +1832,8 @@ async function list(
         LEFT JOIN payments p
           ON p.invoice_id = i.id
         WHERE
-          (
+          i.archived_at IS NULL
+          AND (
             instr(
               lower(i.invoice_number),
               lower(?)
@@ -1951,9 +1972,7 @@ async function list(
   return page(
     "Invoices",
     `
-      <details class="admin-collapsible" open>
-        <summary>Invoice records</summary>
-        <section>
+      <section>
         <form
           method="get"
           action="${route}"
@@ -2004,7 +2023,9 @@ async function list(
         </div>` : ""}
       </section>
 
-      <section>
+      <details class="admin-collapsible">
+        <summary>Invoice records</summary>
+        <section>
         ${table}
 
         <div class="actions">
@@ -2094,7 +2115,7 @@ export async function handleBilling(
 
       const action = form.get("action");
 
-      if (action === "void") {
+      if (action === "archive") {
         requireAdminDelete(user);
 
         const allowed = new Set([
@@ -2134,11 +2155,11 @@ export async function handleBilling(
 
         if (form.get("confirm") !== "yes") {
           throw new AdminError(
-            "Confirm the invoice void.",
+            "Confirm the invoice archive.",
           );
         }
 
-        await voidInvoice(
+        await archiveInvoice(
           db,
           deleteId,
           deleteRevision,
@@ -2146,13 +2167,13 @@ export async function handleBilling(
         );
 
         return page(
-          "Invoice voided",
+          "Invoice archived",
           "",
           user.name,
           303,
           {
             Location:
-              `${route}?voided=1`,
+              `${route}?archived=1`,
           },
         );
       }
@@ -2250,7 +2271,7 @@ export async function handleBilling(
         user,
         id,
         url.searchParams.get("saved") ?? "",
-        url.searchParams.get("delete") === "1",
+        url.searchParams.get("archive") === "1",
       );
     }
 

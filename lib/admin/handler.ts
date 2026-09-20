@@ -160,7 +160,7 @@ export async function handleAdmin(
     if (!canWrite && (view === "activity" || view === "finance/export")) {
       requireOperationalAdmin(user);
     }
-    if (url.searchParams.has("delete")) {
+    if (url.searchParams.has("archive")) {
       requireAdminDelete(user);
     }
     if (!canWrite && !staff && ["new", "edit"].some((key) => url.searchParams.has(key))) {
@@ -341,7 +341,7 @@ export async function handleAdmin(
         return page("Saved", "", user.name, 303, { Location: `${path}?saved=1` });
       }
 
-      if (action === "delete") {
+      if (action === "archive") {
         requireAdminDelete(user);
 
         const allowed = new Set([
@@ -1139,7 +1139,7 @@ export async function handleAdmin(
      */
     if (id) {
       const deleting =
-        url.searchParams.get("delete") === "1";
+        url.searchParams.get("archive") === "1";
 
       if (deleting) {
         requireAdminDelete(user);
@@ -1157,7 +1157,7 @@ export async function handleAdmin(
               );
 
         return page(
-          `Delete ${
+          `Archive ${
             entity === "customers"
               ? "Customer"
               : "Shipment"
@@ -1165,18 +1165,17 @@ export async function handleAdmin(
           `
             <section>
               <h2>
-                Confirm deletion
+                Confirm archive
               </h2>
 
               <p>
-                Are you sure you want to permanently delete
+                Are you sure you want to archive
                 <strong>${esc(recordName)}</strong>?
               </p>
 
               <p class="muted">
-                This action cannot be undone. Records with related
-                shipments, invoices, payments, quotations, or other
-                protected records cannot be deleted.
+                Archived records are removed from normal lists but retained
+                for audit history and related records.
               </p>
 
               <div class="actions">
@@ -1188,7 +1187,7 @@ export async function handleAdmin(
                     "csrf",
                     csrfToken(env, user.id, path),
                   )}
-                  ${hidden("action", "delete")}
+                  ${hidden("action", "archive")}
                   ${hidden("id", id)}
                   ${hidden(
                     "revision",
@@ -1197,7 +1196,7 @@ export async function handleAdmin(
                   ${hidden("confirm", "yes")}
 
                   <button type="submit">
-                    Delete ${
+                    Archive ${
                       entity === "customers"
                         ? "customer"
                         : "shipment"
@@ -1584,9 +1583,9 @@ export async function handleAdmin(
                 class="button"
                 href="${path}?id=${esc(
                   id,
-                )}&delete=1"
+                )}&archive=1"
               >
-                entity === "customers" ? "Archive customer" : "Cancel shipment"
+                ${entity === "customers" ? "Archive customer" : "Archive shipment"}
               </a>` : ""}
 
               ${relatedLinks}
@@ -1740,6 +1739,9 @@ export async function handleAdmin(
             .all<RecordData>()
         ).results;
     } else {
+      const shipmentStatusClause = status ? "AND s.status = ?" : "AND s.status != 'Cancelled'";
+      const shipmentCustomerClause = customer ? "AND s.customer_id = ?" : "";
+      const shipmentBindings = [q, q, q, ...(status ? [status] : []), ...(customer ? [customer] : []), offset];
       rows =
         (
           await db
@@ -1757,7 +1759,8 @@ export async function handleAdmin(
                 ON c.id =
                    s.customer_id
               WHERE
-                (
+                s.archived_at IS NULL
+                AND (
                   instr(
                     lower(
                       s.tracking_number
@@ -1787,12 +1790,8 @@ export async function handleAdmin(
                   ) > 0
                 )
 
-                AND ((? != '' AND s.status = ?) OR (? = '' AND s.status != 'Cancelled'))
-
-                AND (
-                  ? = ''
-                  OR s.customer_id = ?
-                )
+                ${shipmentStatusClause}
+                ${shipmentCustomerClause}
 
               ORDER BY
                 s.created_at DESC,
@@ -1802,16 +1801,7 @@ export async function handleAdmin(
               OFFSET ?
               `,
             )
-            .bind(
-              q,
-              q,
-              q,
-              status,
-              status,
-              customer,
-              customer,
-              offset,
-            )
+            .bind(...shipmentBindings)
             .all<RecordData>()
         ).results;
     }
@@ -1939,9 +1929,7 @@ export async function handleAdmin(
       `
         ${notice}
 
-        <details class="admin-collapsible" open>
-          <summary>${entity === "customers" ? "Customer records" : "Shipment records"}</summary>
-          <section>
+        <section>
           <form
             method="get"
             action="${path}"
@@ -2033,7 +2021,9 @@ export async function handleAdmin(
           </div>` : ""}
           </section>
 
-        <section>
+        <details class="admin-collapsible"${entity === "shipments" ? " open" : ""}>
+          <summary>${entity === "customers" ? "Customer records" : "Shipment records"}</summary>
+          <section>
           ${table}
 
           <div class="actions">

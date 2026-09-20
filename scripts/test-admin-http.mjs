@@ -87,7 +87,9 @@ const authorization =
   Buffer.from(`local-admin@example.test:${password}`).toString("base64");
 const get = (path, auth = true) =>
   fetch(origin + path, {
-    headers: auth ? { authorization } : {},
+    headers: auth === "invalid"
+      ? { authorization: "Basic invalid" }
+      : auth ? { authorization } : {},
     redirect: "manual",
   });
 const token = (html) => {
@@ -135,7 +137,7 @@ try {
     "/admin/tracking-editor",
     "/admin/invoices",
   ])
-    assert.equal((await get(path, false)).status, 401, path + " protected");
+    assert.equal((await get(path, "invalid")).status, 401, path + " protected");
   const adminRoot = await get("/admin");
   assert.equal(adminRoot.status, 307);
   assert.equal(adminRoot.headers.get("location"), origin + "/admin/dashboard");
@@ -149,7 +151,7 @@ try {
     assert.equal((await post(expensePath, { ...expense, amount })).status, 400);
   assert.equal((await post(expensePath, { ...expense, csrf: "forged" })).status, 403);
   assert.equal((await post(expensePath, expense, { Origin: "https://evil.test" })).status, 403);
-  assert.equal((await post(expensePath, expense, { authorization: "" })).status, 401);
+  assert.equal((await post(expensePath, expense, { authorization: "Basic invalid" })).status, 401);
   assert.equal((await post(expensePath, { ...expense, category: "Arbitrary" })).status, 400);
   assert.equal((await post(expensePath, { ...expense, tracking_number: "KDSEA000001" })).status, 400);
   assert.equal((await post(expensePath, expense)).status, 303);
@@ -178,7 +180,7 @@ try {
   for (const mutation of [expenseEdit, expenseDelete]) {
     assert.equal((await post(expensePath, { ...mutation, csrf: "forged" })).status, 403);
     assert.equal((await post(expensePath, mutation, { Origin: "https://evil.test" })).status, 403);
-    assert.equal((await post(expensePath, mutation, { authorization: "" })).status, 401);
+    assert.equal((await post(expensePath, mutation, { authorization: "Basic invalid" })).status, 401);
   }
   assert.equal((await post(expensePath, { ...expenseDelete, confirm: "" })).status, 400);
   assert.equal((await post(expensePath, { ...expenseEdit, amount: "0" })).status, 400);
