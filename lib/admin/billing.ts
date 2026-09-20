@@ -1473,7 +1473,7 @@ async function detail(
         ${connectedRecords}
 
         <div class="actions">
-          <button type="button" onclick="window.print()">Print / Save PDF</button>
+          <a class="button" target="_blank" rel="noopener" href="${route}?id=${esc(invoice.id)}&print=1">Print / Save PDF</a>
           <a
             href="/admin/activity?entity_type=invoices&entity_id=${esc(
               invoice.id,
