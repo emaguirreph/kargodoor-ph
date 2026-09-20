@@ -13,6 +13,13 @@ export const metadata: Metadata = {
 
   metadataBase: new URL(siteUrl),
 
+  icons: {
+    icon: [
+      { url: "/kargodoor-app-icon.svg", type: "image/svg+xml" },
+    ],
+    apple: "/kargodoor-app-icon.svg",
+  },
+
   openGraph: {
     title: "KargoDoor PH | China to Philippines Shipping",
     description:

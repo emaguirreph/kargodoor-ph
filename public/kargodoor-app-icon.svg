@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#0753ad"/>
+  <circle cx="130" cy="360" r="42" fill="#70bf44"/>
+  <path d="M118 116h66l86 113 86-113h66L302 271v125h-64V271z" fill="#fff"/>
+  <path d="M126 382h260v32H126z" fill="#70bf44"/>
+  <text x="256" y="474" text-anchor="middle" font-family="Arial,sans-serif" font-size="34" font-weight="700" fill="#fff">KARGODOOR PH</text>
+</svg>
