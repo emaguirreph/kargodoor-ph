@@ -1435,6 +1435,8 @@ async function detail(
     `
       ${notice}
 
+      <p class="notice">Payment must be settled and verified before KargoDoor can release the package or cargo. Thank you for doing business with KargoDoor PH. Contact: +63 917 157 7370 / +63 908 889 0664 · support@kargodoorph.com · kargodoorph.com</p>
+
       <div class="cards">
         <div class="card">
           Invoice total
@@ -1471,6 +1473,7 @@ async function detail(
         ${connectedRecords}
 
         <div class="actions">
+          <button type="button" onclick="window.print()">Print / Save PDF</button>
           <a
             href="/admin/activity?entity_type=invoices&entity_id=${esc(
               invoice.id,
