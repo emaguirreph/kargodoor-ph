@@ -37,6 +37,7 @@ import { page, esc, pesos, input, select, hidden } from "./ui";
 import { dashboard, finance, activity, saveStaffFollowUp } from "./reports";
 import { createPortal, disablePortal, portalFor, portalStatus, resetPortal } from "./customer-portal";
 import { copyButton, copyScript, customerShippingInstructions, shipmentShippingInstructions } from "./shipping-instructions";
+import { leadsPage } from "./leads";
 
 const labels: Record<string, string> = {
   nihao_cost: "Ni Hao freight cost",
@@ -123,7 +124,7 @@ function validateFormOrigin(
 
 export async function handleAdmin(
   request: Request,
-  view?: Entity | "finance" | "finance/expenses" | "finance/cash" | "finance/export" | "message-center" | "activity",
+  view?: Entity | "finance" | "finance/expenses" | "finance/cash" | "finance/export" | "message-center" | "activity" | "leads",
 ) {
   let localChallenge = false;
 
@@ -143,6 +144,8 @@ export async function handleAdmin(
 
     const db = env.ADMIN_DB;
     const url = new URL(request.url);
+
+    if (view === "leads") return await leadsPage(request, env);
 
     const entity =
       view === "customers" ||

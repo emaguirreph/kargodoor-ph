@@ -1597,6 +1597,21 @@ line-height: 1.45;
 margin-top: 4px;
 }
 
+.kd-lead-modal-backdrop { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 20px; background: rgb(7 37 63 / 62%); }
+.kd-lead-modal { position: relative; width: min(100%, 500px); max-height: calc(100vh - 40px); overflow: auto; padding: 32px; border-radius: 20px; background: #fff; box-shadow: 0 24px 60px rgb(0 0 0 / 24%); color: #173d58; }
+.kd-lead-modal h2 { margin: 0; color: var(--kd-blue); font-family: var(--kd-heading-font); font-size: 25px; font-weight: 800; line-height: 1.18; }
+.kd-lead-modal > p { margin: 10px 0 20px; color: #60778a; }
+.kd-lead-modal label { display: block; margin-top: 14px; color: #173d58; font-family: var(--kd-heading-font); font-size: 13px; font-weight: 800; letter-spacing: .035em; }
+.kd-lead-modal label span { color: #60778a; font-family: var(--kd-body-font); font-weight: 500; }
+.kd-lead-modal input:not([type="checkbox"]) { width: 100%; height: 50px; margin-top: 7px; padding: 0 14px; border: 2px solid #d8e2e8; border-radius: 10px; color: #193c56; font: inherit; }
+.kd-lead-modal input:focus { outline: none; border-color: #59cf7f; box-shadow: 0 0 0 5px rgb(89 207 127 / 13%); }
+.kd-lead-modal .kd-lead-consent { display: flex; gap: 10px; align-items: flex-start; font-family: var(--kd-body-font); font-size: 14px; font-weight: 500; line-height: 1.45; letter-spacing: 0; }
+.kd-lead-consent input { width: 18px; height: 18px; margin: 1px 0 0; accent-color: #40c967; flex: 0 0 auto; }
+.kd-lead-modal small { display: block; margin-top: 12px; color: #60778a; font-size: 12px; text-align: center; }
+.kd-lead-close { position: absolute; top: 12px; right: 15px; width: 38px; height: 38px; border: 0; border-radius: 50%; background: #edf4f7; color: #154876; cursor: pointer; font-size: 27px; line-height: 1; }
+.kd-lead-close:focus { outline: 3px solid #59cf7f; }
+@media (max-width: 520px) { .kd-lead-modal { padding: 27px 20px 22px; border-radius: 16px; } .kd-lead-modal h2 { padding-right: 28px; font-size: 21px; } }
+
 .kd-size-guide {
 padding: 14px 0 54px;
 }

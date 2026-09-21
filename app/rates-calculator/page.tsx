@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   ArrowRight,
   Calculator,
@@ -31,7 +31,15 @@ export default function RatesCalculatorPage() {
   const [cbm, setCbm] = useState("");
   const [weight, setWeight] = useState("");
   const [estimate, setEstimate] = useState<Estimate | null>(null);
+  const [pendingEstimate, setPendingEstimate] = useState<Estimate | null>(null);
+  const [leadOpen, setLeadOpen] = useState(false);
+  const [leadError, setLeadError] = useState("");
+  const [submittingLead, setSubmittingLead] = useState(false);
+  const [lead, setLead] = useState({ fullName: "", phone: "", email: "", consent: false });
+  const [leadCaptured, setLeadCaptured] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => setLeadCaptured(sessionStorage.getItem("kd-calculator-lead-captured") === "1"), []);
 
   const density = useMemo(() => {
     const numericCbm = Number(cbm);
@@ -91,24 +99,40 @@ export default function RatesCalculatorPage() {
       return;
     }
 
-    if (service === "sea") {
-      setEstimate(getSeaEstimate(numericCbm, numericWeight));
-      setError("");
-      trackEvent("calculate_shipping");
-      return;
-    }
+    const calculated = service === "sea"
+      ? getSeaEstimate(numericCbm, numericWeight)
+      : getAirEstimate(Math.ceil(Math.max(numericWeight, numericCbm * 167)));
 
     // Air Freight:
     // Billable weight is the higher of Actual Weight or (CBM × 167),
     // rounded up to the next whole kilogram.
-    const volumetricWeight = numericCbm * 167;
-    const billableWeight = Math.ceil(
-      Math.max(numericWeight, volumetricWeight),
-    );
-
-    setEstimate(getAirEstimate(billableWeight));
+    if (leadCaptured) setEstimate(calculated);
+    else {
+      setEstimate(null);
+      setPendingEstimate(calculated);
+      setLeadError("");
+      setLeadOpen(true);
+    }
     setError("");
     trackEvent("calculate_shipping");
+  };
+
+  const submitLead = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setLeadError("");
+    setSubmittingLead(true);
+    try {
+      const response = await fetch("/api/leads", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...lead, service, cbm: Number(cbm), weight: Number(weight) }) });
+      const body = await response.json() as { error?: string; estimate?: Estimate };
+      if (!response.ok || !body.estimate) throw new Error(body.error || "We could not save your inquiry.");
+      sessionStorage.setItem("kd-calculator-lead-captured", "1");
+      setLeadCaptured(true);
+      setEstimate(body.estimate);
+      setPendingEstimate(null);
+      setLeadOpen(false);
+    } catch (cause) {
+      setLeadError(cause instanceof Error ? cause.message : "We could not save your inquiry.");
+    } finally { setSubmittingLead(false); }
   };
 
   return (
@@ -394,6 +418,7 @@ export default function RatesCalculatorPage() {
       </main>
 
       <Footer />
+      {leadOpen && pendingEstimate && <div className="kd-lead-modal-backdrop" role="presentation"><section className="kd-lead-modal" role="dialog" aria-modal="true" aria-labelledby="lead-title"><button className="kd-lead-close" type="button" aria-label="Close" onClick={() => setLeadOpen(false)}>×</button><h2 id="lead-title">YOUR ESTIMATED RATE IS READY</h2><p>Enter your details to view your shipping estimate.</p><form onSubmit={submitLead} noValidate><label>FULL NAME*<input required value={lead.fullName} onChange={(e) => setLead({ ...lead, fullName: e.target.value })} /></label><label>MOBILE / VIBER / WHATSAPP*<input required type="tel" value={lead.phone} onChange={(e) => setLead({ ...lead, phone: e.target.value })} /></label><label>EMAIL <span>(optional)</span><input type="email" value={lead.email} onChange={(e) => setLead({ ...lead, email: e.target.value })} /></label><label className="kd-lead-consent"><input required type="checkbox" checked={lead.consent} onChange={(e) => setLead({ ...lead, consent: e.target.checked })} /> I agree to be contacted by KargoDoor PH regarding my shipping inquiry.</label>{leadError && <p className="kd-calculator-error" role="alert">{leadError}</p>}<button className="kd-calculate-button" disabled={submittingLead}>{submittingLead ? "SAVING…" : "SHOW MY ESTIMATED RATE"}</button><small>Your information will only be used to assist with your shipping inquiry.</small></form></section></div>}
     </div>
   );
 }
