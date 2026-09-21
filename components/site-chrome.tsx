@@ -138,6 +138,7 @@ export function Footer() {
                 {item.label}
               </Link>
             ))}
+            <Link href="/insights">INSIGHTS</Link>
           </nav>
 
           <section className="kd-follow">
