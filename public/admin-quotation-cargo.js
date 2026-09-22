@@ -370,12 +370,21 @@ Service Coverage: Origin Warehouse > Manila Customs Clearance > KargoDoor Metro 
     const item = section.querySelector('select[name="item"]');
     const cbm = section.querySelector('[name="cbm"]');
     const weight = section.querySelector('[name="weight"]');
+    const converter = section.querySelector("[data-cbm-converter]");
     if (!form || !freight || !item) return;
     if (![...freight.options].some((option) => option.value === "Full Container")) freight.add(new Option("Full Container", "Full Container"));
+    const savedFullContainer = form.querySelector("[data-sea-pricing-method]")?.textContent?.trim() === "Manual full-container all-in rate";
+    if (savedFullContainer) freight.value = "Full Container";
     const fields = document.createElement("section");
     fields.className = "wide";
     fields.dataset.fullContainerFields = "";
     fields.innerHTML = '<h3>FULL CONTAINER DETAILS</h3><div class="grid"><label>Container size<select name="container_size"><option>20 ft</option><option>40 ft</option><option>40 ft HQ</option></select></label><label>Number of containers<input name="container_quantity" type="number" min="1" step="1" value="1"></label><label>All-in rate (PHP)<input name="manual_rate" type="number" min="0" step=".01"></label></div><p class="muted">Full-container quotes use a manual all-in rate. CBM and package measurements are not required.</p>';
+    const containerSize = fields.querySelector('[name="container_size"]');
+    const containerQuantity = fields.querySelector('[name="container_quantity"]');
+    const manualRate = fields.querySelector('[name="manual_rate"]');
+    if (containerSize && converter?.dataset.containerSize) containerSize.value = converter.dataset.containerSize;
+    if (containerQuantity && converter?.dataset.containerQuantity) containerQuantity.value = converter.dataset.containerQuantity;
+    if (manualRate && savedFullContainer) manualRate.value = form.querySelector("[data-sea-system]")?.textContent?.trim() || "";
     section.after(fields);
     const sync = () => {
       const full = freight.value === "Full Container";
