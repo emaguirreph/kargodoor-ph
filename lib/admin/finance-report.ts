@@ -83,8 +83,8 @@ async function expenseBreakdown(db: D1Database, range: FinanceRange, total: bigi
 
 async function activityBounds(db: D1Database) {
   return await db.prepare(`SELECT MIN(business_date) AS first_date, MAX(business_date) AS last_date FROM (
-    SELECT issued_at AS business_date FROM invoices WHERE status NOT IN ('Draft', 'Void') AND date(issued_at) = issued_at
-    UNION ALL SELECT payment_date FROM payments WHERE date(payment_date) = payment_date
+    SELECT issued_at AS business_date FROM invoices WHERE status NOT IN ('Draft', 'Void') AND archived_at IS NULL AND date(issued_at) = issued_at
+    UNION ALL SELECT p.payment_date FROM payments p JOIN invoices i ON i.id = p.invoice_id WHERE i.archived_at IS NULL AND date(p.payment_date) = p.payment_date
     UNION ALL SELECT expense_date FROM expenses WHERE date(expense_date) = expense_date
     UNION ALL SELECT ${shipmentBusinessDateSql} FROM shipments
       WHERE status != 'Cancelled' AND date(${shipmentBusinessDateSql}) = ${shipmentBusinessDateSql}

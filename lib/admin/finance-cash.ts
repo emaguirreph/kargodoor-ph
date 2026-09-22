@@ -88,6 +88,7 @@ export async function financeCashPage(db: D1Database, url: URL, user: string, cs
       ON i.id = p.invoice_id
     JOIN customers c
       ON c.id = p.customer_id
+    WHERE i.archived_at IS NULL
     ORDER BY
       p.payment_date DESC,
       p.created_at DESC
