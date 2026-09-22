@@ -26,6 +26,22 @@ import {
 import { measurementUnits } from "./quotation-cbm";
 import { densityThreshold } from "./quotation-density";
 type Row = Record<string, unknown>;
+type Snapshot = Record<string, unknown>;
+
+/** Old quotations can have partial snapshots; never let one prevent the record loading. */
+function snapshot(value: unknown): { data: Snapshot; valid: boolean } {
+  try {
+    const parsed: unknown = typeof value === "string" ? JSON.parse(value) : value;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? { data: parsed as Snapshot, valid: true }
+      : { data: {}, valid: false };
+  } catch {
+    return { data: {}, valid: false };
+  }
+}
+
+const detailValue = (value: unknown) =>
+  String(value ?? "").trim() || "—";
 export const isQuotationNumeric = (raw: string) =>
   /^(?:(?:0|[1-9]\d*)(?:\.\d+)?|\.\d+)$/.test(raw) &&
   Number.isFinite(Number(raw));
@@ -94,11 +110,8 @@ async function number(db: D1Database) {
   return `KD-Q-${y}-${String(max + 1).padStart(3, "0")}`;
 }
 function quotationCustomerMessage(q: Row) {
-  const customer = JSON.parse(String(q.customer_snapshot)) as Record<
-    string,
-    unknown
-  >;
-  const cargo = JSON.parse(String(q.cargo_snapshot)) as Record<string, unknown>;
+  const customer = snapshot(q.customer_snapshot).data;
+  const cargo = snapshot(q.cargo_snapshot).data;
   const name = String(customer.name || "Customer");
   const warehouse = String(cargo.originWarehouse || "");
   const quotationNumber = String(q.quotation_number || "");
@@ -204,9 +217,19 @@ document.querySelectorAll('.copy-quotation-message').forEach((button)=>{
 </script>`;
 
 function customerPreview(q: Row) {
-  const c = JSON.parse(String(q.customer_snapshot)),
-    cargo = JSON.parse(String(q.cargo_snapshot));
-  return `<article class="quotation-print"><h2>KARGODOOR PH</h2><h1>QUOTATION</h1><p><strong>Quotation No.</strong> ${esc(q.quotation_number)}<br><strong>Date</strong> ${esc(q.quotation_date)}${q.valid_until ? `<br><strong>Valid Until</strong> ${esc(q.valid_until)}` : ""}</p><h3>PREPARED FOR</h3><p>${esc(c.name)}<br>${esc(c.company)}<br>${esc(c.mobile)}<br>${esc(c.email)}<br>${esc(c.address)}</p><h3>SHIPMENT DETAILS</h3><p>${esc(cargo.description)}<br>Quantity: ${esc(cargo.quantity)} ${esc(cargo.unitType)}<br>Dimensions: ${esc(cargo.length)} × ${esc(cargo.width)} × ${esc(cargo.height)} ${esc(cargo.measurementUnit)}<br>Total CBM: ${esc(cargo.cbm)}<br>Actual Weight: ${esc(cargo.weight)} kg<br>${esc(q.freight_type)}<br>Origin: ${esc(cargo.origin)}<br>Destination / Receiving Warehouse: MALABON WAREHOUSE</p><h3>ESTIMATED SHIPPING RATE</h3><p class="quotation-total">${pesos(q.final_amount)}</p><p><strong>${q.freight_type === "Sea Freight" ? "SEA FREIGHT — ALL-IN SHIPPING" : "AIR FREIGHT — ALL-IN SHIPPING"}</strong></p><h3>Terms and Conditions</h3><p>This quotation is based on the cargo information provided. Final charges may change if measurements, CBM, weight, quantity, classification, or shipment details differ. Rates are subject to cargo inspection and final warehouse confirmation. Special handling, duties, taxes, permits, restricted-item, or government charges may apply separately. Transit estimates are not guaranteed. A revised quotation may be issued if cargo details change.</p><p>support@kargodoorph.com · www.kargodoorph.com</p></article>`;
+  const customer = snapshot(q.customer_snapshot);
+  const cargo = snapshot(q.cargo_snapshot);
+  const c = customer.data;
+  const shipment = cargo.data;
+  const dimensions = [shipment.length, shipment.width, shipment.height]
+    .map(detailValue)
+    .every((value) => value === "—")
+    ? "Not provided"
+    : `${detailValue(shipment.length)} × ${detailValue(shipment.width)} × ${detailValue(shipment.height)} ${detailValue(shipment.measurementUnit)}`;
+  const warning = customer.valid && cargo.valid
+    ? ""
+    : '<p class="notice">Some legacy quotation details are unavailable. The saved quotation record is still open and can be edited.</p>';
+  return `${warning}<article class="quotation-print"><h2>KARGODOOR PH</h2><h1>QUOTATION</h1><p><strong>Quotation No.</strong> ${esc(detailValue(q.quotation_number))}<br><strong>Date</strong> ${esc(detailValue(q.quotation_date))}${q.valid_until ? `<br><strong>Valid Until</strong> ${esc(q.valid_until)}` : ""}</p><h3>PREPARED FOR</h3><p>${esc(detailValue(c.name))}<br>${esc(detailValue(c.company))}<br>${esc(detailValue(c.mobile))}<br>${esc(detailValue(c.email))}<br>${esc(detailValue(c.address))}</p><h3>SHIPMENT DETAILS</h3><p>${esc(detailValue(shipment.description ?? shipment.item))}<br>Quantity: ${esc(detailValue(shipment.quantity ?? shipment.units))} ${esc(detailValue(shipment.unitType))}<br>Dimensions: ${esc(dimensions)}<br>Total CBM: ${esc(detailValue(shipment.cbm))}<br>Actual Weight: ${esc(detailValue(shipment.weight))}${shipment.weight === undefined || shipment.weight === null || shipment.weight === "" ? "" : " kg"}<br>${esc(detailValue(q.freight_type))}<br>Origin: ${esc(detailValue(shipment.origin))}<br>Destination / Receiving Warehouse: MALABON WAREHOUSE</p><h3>ESTIMATED SHIPPING RATE</h3><p class="quotation-total">${pesos(q.final_amount)}</p><p><strong>${q.freight_type === "Sea Freight" ? "SEA FREIGHT — ALL-IN SHIPPING" : "AIR FREIGHT — ALL-IN SHIPPING"}</strong></p><h3>Terms and Conditions</h3><p>This quotation is based on the cargo information provided. Final charges may change if measurements, CBM, weight, quantity, classification, or shipment details differ. Rates are subject to cargo inspection and final warehouse confirmation. Special handling, duties, taxes, permits, restricted-item, or government charges may apply separately. Transit estimates are not guaranteed. A revised quotation may be issued if cargo details change.</p><p>support@kargodoorph.com · www.kargodoorph.com</p></article>`;
 }
 export async function quotationsPage(
   request: Request,
@@ -674,15 +697,9 @@ export async function quotationsPage(
         .first<Row>();
       if (!q || (staff && String(q.prepared_by_admin_user_id) !== user.id))
         throw new AdminError("Quotation not found.", 404);
-      const customer = JSON.parse(String(q.customer_snapshot)) as Record<
-          string,
-          unknown
-        >,
-        cargo = JSON.parse(String(q.cargo_snapshot)) as Record<string, unknown>,
-        pricing = JSON.parse(String(q.pricing_snapshot)) as Record<
-          string,
-          unknown
-        >;
+      const customer = snapshot(q.customer_snapshot).data,
+        cargo = snapshot(q.cargo_snapshot).data,
+        pricing = snapshot(q.pricing_snapshot).data;
       const savedCategory = String(cargo.category || "");
       const savedSea = {
         ...pricing,
@@ -763,7 +780,7 @@ export async function quotationsPage(
       }
       return page(
         "Quotation",
-        `<div class="actions"><a class="button" href="${path}">Back</a><a class="button" href="${path}?edit=${id}">Edit</a><a class="button" href="/admin/quotations/export?id=${id}">Download PDF</a><a class="button" href="/admin/quotations/image?id=${id}">Download Image</a><form method="post"><input type="hidden" name="csrf" value="${esc(csrfToken(env, user.id, path))}"><input type="hidden" name="action" value="duplicate"><input type="hidden" name="quotation_id" value="${esc(id)}"><button>Duplicate</button></form><button onclick="print()">Print / Save PDF</button>${canDeleteAdmin(user) ? `<a class="button" href="${path}?id=${esc(id)}&archive=1">Archive quotation</a>` : ""}</div><details class="admin-collapsible">
+        `<div class="actions"><a class="button" href="${path}">Back</a><a class="button" href="${path}?edit=${id}">Edit</a><a class="button" href="/admin/quotations/export?id=${id}">Download PDF</a><a class="button" href="/admin/quotations/image?id=${id}">Download Image</a><form method="post"><input type="hidden" name="csrf" value="${esc(csrfToken(env, user.id, path))}"><input type="hidden" name="action" value="duplicate"><input type="hidden" name="quotation_id" value="${esc(id)}"><button>Duplicate</button></form><button onclick="print()">Print / Save PDF</button>${canDeleteAdmin(user) ? `<a class="button" href="${path}?id=${esc(id)}&archive=1">Archive quotation</a>` : ""}</div><details class="admin-collapsible" open>
   <summary>Quotation details</summary>
   ${customerPreview(q)}
   ${quotationCustomerMessage(q)}
@@ -835,8 +852,9 @@ export async function quotationsPage(
       "Quotations",
       `<section><h2>Saved quotations</h2><p><a class="button" href="${path}?new=1">Create New Quotation</a></p><form method="get" class="search"><label>Search<input name="q" value="${esc(q)}" placeholder="Quotation, customer, company, cargo"></label><label>Status<select name="status"><option value="">All</option>${["Draft", "Sent", "Approved", "Revised", "Cancelled"].map((v) => `<option${statusFilter === v ? " selected" : ""}>${v}</option>`).join("")}</select></label><label>Freight type<select name="freight_type"><option value="">All</option>${["Sea Freight", "Air Freight"].map((v) => `<option${freightFilter === v ? " selected" : ""}>${v}</option>`).join("")}</select></label><label>Date<select name="date"><option value="">All Dates</option><option value="today"${dateFilter === "today" ? " selected" : ""}>Today</option><option value="7"${dateFilter === "7" ? " selected" : ""}>Last 7 Days</option><option value="30"${dateFilter === "30" ? " selected" : ""}>Last 30 Days</option></select></label><button>Filter</button><a href="${path}">Clear</a></form><details class="admin-collapsible"><summary>Quotation records</summary><div class="table"><table><thead><tr><th>Quotation</th><th>Date</th><th>Customer</th><th>Freight</th><th>Cargo / item</th><th>Total</th><th>Status</th><th>Updated</th></tr></thead><tbody>${rows
         .map((q) => {
-          const c = JSON.parse(String(q.customer_snapshot));
-          return `<tr><td><a href="${path}?id=${q.id}">${esc(q.quotation_number)}</a></td><td>${esc(q.quotation_date)}</td><td>${esc(c.name)}<br>${esc(c.company)}</td><td>${esc(q.freight_type)}</td><td>${esc(JSON.parse(String(q.cargo_snapshot)).description || JSON.parse(String(q.cargo_snapshot)).item)}</td><td>${pesos(q.final_amount)}</td><td>${esc(q.status)}</td><td>${esc(q.updated_at)}</td></tr>`;
+          const customer = snapshot(q.customer_snapshot).data;
+          const cargo = snapshot(q.cargo_snapshot).data;
+          return `<tr><td><a href="${path}?id=${q.id}">${esc(q.quotation_number)}</a></td><td>${esc(q.quotation_date)}</td><td>${esc(detailValue(customer.name))}<br>${esc(detailValue(customer.company))}</td><td>${esc(q.freight_type)}</td><td>${esc(detailValue(cargo.description ?? cargo.item))}</td><td>${pesos(q.final_amount)}</td><td>${esc(q.status)}</td><td>${esc(q.updated_at)}</td></tr>`;
         })
         .join(
           "",
@@ -853,13 +871,19 @@ export async function quotationsPage(
       staff,
     );
   } catch (e) {
+    const requestedId = new URL(request.url).searchParams.get("id");
     const err =
       e instanceof AdminError
         ? e
-        : new AdminError("Admin is unavailable.", 500);
+        : new AdminError(
+            requestedId
+              ? "Unable to load quotation details. Please try again."
+              : "Admin is unavailable.",
+            500,
+          );
     return page(
       "Admin error",
-      `<p class="notice">${esc(err.message)}</p>`,
+      `<p class="notice">${esc(err.message)}</p>${requestedId && err.status >= 500 ? '<p><a class="button" href="/admin/quotations?id=' + esc(requestedId) + '">Retry</a></p>' : ""}`,
       "",
       err.status,
     );

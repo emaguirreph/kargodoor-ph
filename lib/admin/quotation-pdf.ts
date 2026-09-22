@@ -37,6 +37,17 @@ type QuotationPdfData = {
 };
 type PdfText = (value: unknown, x?: number, size?: number, bold?: boolean, color?: string) => void;
 
+function snapshot<T extends object>(value: unknown): T {
+  try {
+    const parsed: unknown = typeof value === "string" ? JSON.parse(value) : value;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as T
+      : {} as T;
+  } catch {
+    return {} as T;
+  }
+}
+
 const clean = (value: unknown): string => String(value ?? "").replace(/[\\()]/g, "\\$&").replace(/\u00b7/g, "\\267").replace(/\u00d7/g, "\\327").replace(/[^\x20-\x7e]/g, "?");
 const money = (cents: unknown): string => "PHP " + (Number(cents ?? 0) / 100).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const wrap = (value: unknown, width = 88): string[] => {
@@ -51,8 +62,9 @@ const wrap = (value: unknown, width = 88): string[] => {
   return line ? [...out, line] : out;
 };
 function customerQuotationPdf(q: QuotationPdfData): Uint8Array<ArrayBuffer> {
-  const customer: CustomerSnapshot = JSON.parse(String(q.customer_snapshot ?? "{}")), cargo: CargoSnapshot = JSON.parse(String(q.cargo_snapshot ?? "{}"));
-  const pricing = JSON.parse(String(q.pricing_snapshot ?? "{}")) as Record<string, unknown>;
+  const customer = snapshot<CustomerSnapshot>(q.customer_snapshot);
+  const cargo = snapshot<CargoSnapshot>(q.cargo_snapshot);
+  const pricing = snapshot<Record<string, unknown>>(q.pricing_snapshot);
   const lines: string[] = [];
   let y = 790;
   const text: PdfText = (value, x = 52, size = 9, bold = false, color = "0.12 0.18 0.25") => {

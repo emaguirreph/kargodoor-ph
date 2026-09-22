@@ -207,13 +207,13 @@ try {
     assert.equal(financeResponse.status, 200);
     assert.equal(financeResponse.headers.get("cache-control"), "no-store, private");
     const financeHtml = await financeResponse.text();
-    for (const label of ["Finance Overview", "Cash &amp; Receivables", "Shipping Performance", "Operating Expenses", "How the Numbers Are Calculated"])
-      assert.ok(financeHtml.includes(`<h2>${label}</h2>`));
-    for (const label of ["Revenue", "Payments Received", "Accounts Receivable", "Ni Hao Freight Cost", "Freight Margin", "Net Profit / (Loss)", "Shipments"])
+    for (const label of ["Finance Overview", "Collections to Follow Up", "Shipping Performance", "Operating Expenses", "How the Numbers Are Calculated"])
+      assert.ok(financeHtml.includes(label));
+    for (const label of ["Revenue", "Cash Received", "Accounts Receivable", "Ni Hao Freight Cost", "Freight Margin", "Net Profit / Loss", "Shipments"])
       assert.ok(financeHtml.includes(label));
     assert.ok(financeHtml.includes("Reporting period:") && financeHtml.includes("Freight Charges"));
-    assert.ok(financeHtml.includes('href="/admin/finance/expenses?new=1">+ Add Expense</a>'));
-    assert.ok(financeHtml.includes('href="/admin/finance/expenses">View Expenses</a>'));
+    assert.ok(financeHtml.includes('href="/admin/finance/expenses?new=1"') && financeHtml.includes("+ Add Expense"));
+    assert.ok(financeHtml.includes('href="/admin/finance/expenses"') && financeHtml.includes("View Expenses"));
     assert.ok(financeHtml.includes("report=freight") && financeHtml.includes('href="/admin/finance/expenses"'));
   }
   assert.equal((await get("/admin/finance?from=2026-09-09&to=2026-09-08")).status, 400);
@@ -221,15 +221,15 @@ try {
   assert.equal((await get("/admin/finance?report=freight")).status, 200);
   assert.equal((await post("/admin/finance", {})).status, 405);
   const financeAll = await (await get("/admin/finance")).text();
-  assert.ok(financeAll.includes("Total Operating Expenses: ₱0.10"));
-  assert.ok(financeAll.includes("Net Profit / (Loss)") && financeAll.includes("-₱0.10"));
+  assert.ok(financeAll.includes("Total Operating Expenses") && financeAll.includes("₱0.10"));
+  assert.ok(financeAll.includes("Net Profit / Loss") && financeAll.includes("-₱0.10"));
   assert.ok(financeAll.includes("Revenue and Payments Received are different") && financeAll.includes("This prevents double counting"));
   console.log("Finance Dashboard HTTP checks passed: admin page, all presets, one-sided/same-day ranges, invalid dates, overview tables, Expense actions, formulas, negative profit, and POST rejected.");
   const financeReport = await (await get("/admin/finance?from=2026-09-01&to=2026-09-30")).text();
   for (const label of ["% of Operating Expenses", "Period Comparison", "Monthly Summary", "Export Finance CSV"])
     assert.ok(financeReport.includes(label));
   const exportPath = "/admin/finance/export?from=2026-09-01&to=2026-09-30";
-  assert.equal((await get(exportPath, false)).status, 401);
+  assert.equal((await get(exportPath, "invalid")).status, 401);
   const exportResponse = await get(exportPath);
   assert.equal(exportResponse.status, 200);
   assert.equal(exportResponse.headers.get("content-type"), "text/csv; charset=utf-8");

@@ -15,6 +15,7 @@ export function fixture() {
   sql.exec("PRAGMA foreign_keys=ON");
   for (const file of ["0001_phase1.sql", "0002_freight_cost.sql", "0003_invoices_payments.sql", "0004_public_tracking.sql", "0005_expenses.sql", "0006_admin_viewer_role.sql", "0007_staff_follow_up.sql", "0008_customer_accounts.sql"])
     sql.exec(readFileSync(`migrations/admin/${file}`, "utf8"));
+  sql.exec("ALTER TABLE invoices ADD COLUMN archived_at TEXT");
   sql.exec("INSERT INTO customers VALUES ('c','KDOOR0001','Test customer',NULL,'12345',NULL,NULL,NULL,'2026-01-01','2026-01-01')");
   const queries: string[] = [];
   const db = { prepare(query: string) {
@@ -126,6 +127,7 @@ test("finance overview tables, expense breakdown, actions and formulas use Phase
     assert.match(html, new RegExp(`<h2>\\s*${pattern}\\s*<\\/h2>`));
   }
   assert.ok(html.includes("Reporting period:") && html.includes("September 1, 2026–September 30, 2026"));
+  assert.ok(html.includes("Collections to Follow Up"));
   const expectedMetrics: [string, bigint][] = [["Revenue", before.revenue], ["Payments Received", before.received],
     ["Accounts Receivable", before.receivable], ["Ni Hao Freight Cost", before.costs],
     ["Freight Margin", before.margin], ["Operating Expenses", before.operating],
@@ -162,6 +164,20 @@ test("finance dashboard scenarios D E: marketing included; Draft and Void exclud
   assert.equal(s.profit, BigInt(-200000));
   const html = await (await financeDashboard(f.db, new URL("https://test/admin/finance"), "Admin", now)).text();
   assert.ok(html.includes("-₱2,000.00"));
+});
+
+test("archived invoices and their payments are excluded from finance totals", async () => {
+  const f = fixture();
+  const archived = f.invoice(BigInt(500000), "2026-09-08", "Paid");
+  const active = f.invoice(BigInt(200000), "2026-09-08", "Partial");
+  f.payment(archived, BigInt(500000));
+  f.payment(active, BigInt(100000));
+  f.sql.prepare("UPDATE invoices SET archived_at='2026-09-09T00:00:00.000Z' WHERE id=?").run(archived);
+
+  const summary = await readFinanceSummary(f.db, all, now);
+  assert.equal(summary.revenue, BigInt(200000));
+  assert.equal(summary.received, BigInt(100000));
+  assert.equal(summary.receivable, BigInt(100000));
 });
 
 test("finance dashboard invoice grand total includes delivery and other charge exactly once", async () => {

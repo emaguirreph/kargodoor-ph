@@ -30,7 +30,6 @@ import {
 import { financeDashboard } from "./finance-summary";
 import { financeCsv } from "./finance-report";
 import { expensesPage, mutateExpense } from "./expenses";
-import { messageLibraryPage, resetMessageTemplate, saveMessageTemplate } from "./message-center";
 import { financeCashPage, mutateFinanceCash } from "./finance-cash";
 import { saveRecord, archiveOrCancelRecord } from "./data";
 import { page, esc, pesos, input, select, hidden } from "./ui";
@@ -124,7 +123,7 @@ function validateFormOrigin(
 
 export async function handleAdmin(
   request: Request,
-  view?: Entity | "finance" | "finance/expenses" | "finance/cash" | "finance/export" | "message-center" | "activity" | "leads",
+  view?: Entity | "finance" | "finance/expenses" | "finance/cash" | "finance/export" | "activity" | "leads",
 ) {
   let localChallenge = false;
 
@@ -195,7 +194,7 @@ export async function handleAdmin(
      */
     if (request.method === "POST") {
       requireAdminMutation(user);
-      if (!entity && view !== "finance/expenses" && view !== "finance/cash" && view !== "message-center" && view !== undefined) {
+      if (!entity && view !== "finance/expenses" && view !== "finance/cash" && view !== undefined) {
         throw new AdminError(
           "Use the customer or shipment form.",
           405,
@@ -332,18 +331,6 @@ export async function handleAdmin(
 
       const action = form.get("action") ?? "";
 
-      if (view === "message-center" && (action === "message_save" || action === "message_reset")) {
-        const allowed = action === "message_save"
-          ? new Set(["csrf", "action", "template_key", "title", "body"])
-          : new Set(["csrf", "action", "template_key"]);
-        for (const key of form.keys()) {
-          if (!allowed.has(key) || form.getAll(key).length !== 1) throw new AdminError("Unexpected or repeated form field.");
-        }
-        if (action === "message_save") await saveMessageTemplate(db, user, form);
-        else await resetMessageTemplate(db, user, form.get("template_key") ?? "");
-        return page("Saved", "", user.name, 303, { Location: `${path}?saved=1` });
-      }
-
       if (action === "archive") {
         requireAdminDelete(user);
 
@@ -466,10 +453,6 @@ export async function handleAdmin(
     if (view === "finance/export") {
       return await financeCsv(db, url);
     }
-    if (view === "message-center") {
-      return await messageLibraryPage(db, user, path, env, canWrite);
-    }
-
     /*
      * REPORT PAGES
      */

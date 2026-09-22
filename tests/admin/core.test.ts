@@ -34,7 +34,6 @@ import {
 } from "../../lib/admin/security";
 import { expensesPage, saveExpense, mutateExpense } from "../../lib/admin/expenses";
 import { customerShippingInstructions, shipmentShippingInstructions } from "../../lib/admin/shipping-instructions";
-import { saveMessageTemplate, resetMessageTemplate } from "../../lib/admin/message-center";
 function database(includePhase1 = true) {
   const sql = new DatabaseSync(":memory:");
   sql.exec("PRAGMA foreign_keys=ON");
@@ -142,19 +141,6 @@ const shipmentInput = (id: string) =>
     verified_weight_kg: "",
   });
 const shipment = (id: string) => shipmentSchema.parse(shipmentInput(id));
-
-test("Message Library edits are owner-only and can be reset", async () => {
-  const { db, user, sql } = database();
-  const owner = { id: user, name: "Owner", email: "owner@example.test", role: "owner" as const };
-  const admin = { id: user, name: "Admin", email: "admin@example.test", role: "admin" as const };
-  await db.prepare("INSERT INTO message_templates (template_key,title,body,updated_by_admin_user_id,created_at,updated_at) VALUES (?,?,?,?,?,?)")
-    .bind("welcome", "Welcome", "Default body", user, "2026-01-01", "2026-01-01").run();
-  await assert.rejects(saveMessageTemplate(db, admin, new URLSearchParams("template_key=welcome&title=Changed&body=Changed")), /Only the owner/);
-  await saveMessageTemplate(db, owner, new URLSearchParams("template_key=welcome&title=Changed&body=Changed"));
-  assert.equal(sql.prepare("SELECT body FROM message_templates WHERE template_key='welcome'").get()!.body, "Changed");
-  await resetMessageTemplate(db, owner, "welcome");
-  assert.match(String(sql.prepare("SELECT body FROM message_templates WHERE template_key='welcome'").get()!.body), /KargoDoor PH/);
-});
 
 test("shipping instructions include the customer account code and supplier details", () => {
   const customerMessage = customerShippingInstructions({ name: "Maria", customerCode: "KD-10025" });

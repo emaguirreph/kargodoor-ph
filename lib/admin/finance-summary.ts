@@ -169,7 +169,8 @@ export async function readFinanceSummary(
             CAST(total AS TEXT) AS total,
             CAST(other_charge AS TEXT) AS other_charge
           FROM invoices
-          WHERE status NOT IN ('Draft', 'Void')`,
+          WHERE status NOT IN ('Draft', 'Void')
+            AND archived_at IS NULL`,
         )
         .all<Invoice>(),
 
@@ -179,7 +180,9 @@ export async function readFinanceSummary(
             invoice_id,
             payment_date,
             CAST(amount AS TEXT) AS amount
-          FROM payments`,
+          FROM payments p
+          JOIN invoices i ON i.id = p.invoice_id
+          WHERE i.archived_at IS NULL`,
         )
         .all<Payment>(),
 
@@ -339,6 +342,31 @@ export async function financeDashboard(
       now,
       summary,
     );
+  const collectionWatch = await db
+    .prepare(
+      `SELECT
+        i.invoice_number,
+        i.due_at,
+        c.full_name,
+        CAST(i.total + i.other_charge AS TEXT) AS total,
+        CAST(COALESCE(SUM(p.amount), 0) AS TEXT) AS paid
+      FROM invoices i
+      JOIN customers c ON c.id = i.customer_id
+      LEFT JOIN payments p ON p.invoice_id = i.id
+      WHERE i.status IN ('Unpaid', 'Partial')
+        AND i.archived_at IS NULL
+      GROUP BY i.id
+      HAVING i.total + i.other_charge > COALESCE(SUM(p.amount), 0)
+      ORDER BY CASE WHEN i.due_at IS NULL OR i.due_at = '' THEN 1 ELSE 0 END, i.due_at ASC, i.issued_at ASC
+      LIMIT 5`,
+    )
+    .all<{
+      invoice_number: string;
+      due_at: string | null;
+      full_name: string;
+      total: string;
+      paid: string;
+    }>();
 
   const notices = [
     summary.uncosted > zero
@@ -711,6 +739,14 @@ export async function financeDashboard(
         .join("")}
 
       ${summaryCards}
+
+      <section>
+        <div class="actions">
+          <h2>Collections to Follow Up</h2>
+          <a href="/admin/invoices">View Invoices</a>
+        </div>
+        ${collectionWatch.results.length ? `<div class="table"><table><thead><tr><th>Invoice</th><th>Customer</th><th>Due Date</th><th>Balance</th></tr></thead><tbody>${collectionWatch.results.map((invoice) => `<tr><td>${esc(invoice.invoice_number)}</td><td>${esc(invoice.full_name)}</td><td>${esc(invoice.due_at || "No due date")}</td><td><strong>${esc(financePesos(BigInt(invoice.total) - BigInt(invoice.paid)))}</strong></td></tr>`).join("")}</tbody></table></div>` : '<p class="muted">No unpaid invoice balances need follow-up.</p>'}
+      </section>
 
       ${shippingCards}
 

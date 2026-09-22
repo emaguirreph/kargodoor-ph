@@ -44,7 +44,7 @@ function quotationDatabase() {
     user,
     "Quotation Admin",
     email,
-    "admin",
+    "owner",
     "2026-01-01",
     "2026-01-01",
   );
@@ -429,4 +429,56 @@ test("Air Freight Create renderer uses the new Cargo Details structure", async (
   assertCargoDetailsMarkup(html, false);
   assert.ok(html.includes('data-sea-pricing'), "Sea panel must be available after a freight switch");
   assert.ok(html.includes('data-air-pricing'), "Air panel must be available after a freight switch");
+});
+
+test("quotation details are open by default and tolerate legacy optional cargo fields", async () => {
+  const { sql, env, user } = quotationDatabase();
+  const id = randomUUID();
+  sql.prepare(`INSERT INTO quotations (
+    id, quotation_number, customer_id, status, freight_type, quotation_date,
+    valid_until, prepared_by, customer_snapshot, cargo_snapshot, pricing_snapshot,
+    calculated_amount, override_amount, override_reason, final_amount, backend_cost,
+    additional_cost, delivery_cost, notes, prepared_by_admin_user_id, created_at, updated_at
+  ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+    id, "KD-Q-LEGACY", null, "Sent", "Sea Freight", "2024-02-03", null, "Admin",
+    JSON.stringify({ name: "Legacy Customer" }), JSON.stringify({ item: "Bags", weight: 12 }),
+    JSON.stringify({}), 120000, null, null, 120000, null, null, null, null, null,
+    "2024-02-03T00:00:00.000Z", "2024-02-03T00:00:00.000Z",
+  );
+
+  const response = await quotationsPage(
+    new Request(`http://localhost:3000/admin/quotations?id=${id}`, { headers: authHeaders() }),
+    env,
+  );
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /<details class="admin-collapsible" open>/);
+  assert.match(html, /Quotation details/);
+  assert.match(html, /Legacy Customer/);
+  assert.match(html, /Dimensions: Not provided/);
+  assert.match(html, /Total CBM: —/);
+  for (const action of ["Edit", "Download PDF", "Download Image", "Duplicate", "Print / Save PDF", "Archive quotation"])
+    assert.ok(html.includes(action), `${action} must remain available from quotation details`);
+
+  const archive = await quotationsPage(
+    new Request("http://localhost:3000/admin/quotations", {
+      method: "POST",
+      headers: { ...authHeaders(), "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        csrf: csrfToken(env, user, "/admin/quotations"),
+        action: "archive",
+        quotation_id: id,
+        revision: "2024-02-03T00:00:00.000Z",
+        confirm: "yes",
+      }),
+    }),
+    env,
+  );
+  assert.equal(archive.status, 303);
+  assert.ok(sql.prepare("SELECT archived_at FROM quotations WHERE id=?").get(id)!.archived_at);
+  const archivedDetail = await quotationsPage(
+    new Request(`http://localhost:3000/admin/quotations?id=${id}`, { headers: authHeaders() }),
+    env,
+  );
+  assert.equal(archivedDetail.status, 200, "archived quotations remain available by direct detail link");
 });

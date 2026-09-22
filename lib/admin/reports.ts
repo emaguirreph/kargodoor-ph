@@ -136,8 +136,8 @@ export async function dashboard(
       `SELECT
       (SELECT COUNT(*) FROM customers) AS customers,
       (SELECT COUNT(*) FROM shipments WHERE status NOT IN ('Delivered','Cancelled')) AS active,
-      (SELECT COUNT(*) FROM invoices WHERE status IN ('Unpaid','Partial')) AS unpaid,
-      (SELECT COALESCE(SUM(amount),0) FROM payments) AS payments`,
+      (SELECT COUNT(*) FROM invoices WHERE status IN ('Unpaid','Partial') AND archived_at IS NULL) AS unpaid,
+      (SELECT COALESCE(SUM(p.amount),0) FROM payments p JOIN invoices i ON i.id=p.invoice_id WHERE i.archived_at IS NULL) AS payments`,
     )
     .first<RecordData>();
 
@@ -182,6 +182,7 @@ export async function dashboard(
           ) AS paid_amount
         FROM invoices i
         JOIN customers c ON c.id=i.customer_id
+        WHERE i.archived_at IS NULL
         ORDER BY i.created_at DESC,i.id
         LIMIT 6`,
       )
