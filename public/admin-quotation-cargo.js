@@ -419,12 +419,12 @@ Service Coverage: Origin Warehouse > Manila Customs Clearance > KargoDoor Metro 
       wrapper.hidden = !visible;
       // The regular Sea/Air synchronizer may also touch these labels. Keep
       // the FCL-only fields decisively out of the layout in this mode.
-      wrapper.style.display = visible ? "" : "none";
+      wrapper.style.setProperty("display", visible ? "" : "none", visible ? "" : "important");
     };
     const setNodeVisibility = (node, visible) => {
       if (!node) return;
       node.hidden = !visible;
-      node.style.display = visible ? "" : "none";
+      node.style.setProperty("display", visible ? "" : "none", visible ? "" : "important");
     };
     const sync = () => {
       const full = freight.value === "Full Container";
