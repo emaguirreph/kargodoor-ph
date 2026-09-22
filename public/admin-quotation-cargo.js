@@ -413,6 +413,14 @@ Service Coverage: Origin Warehouse > Manila Customs Clearance > KargoDoor Metro 
     if (containerQuantity && converter?.dataset.containerQuantity) containerQuantity.value = converter.dataset.containerQuantity;
     if (manualRate && savedFullContainer) manualRate.value = form.querySelector("[data-sea-system]")?.textContent?.trim() || "";
     section.after(fields);
+    const setFieldVisibility = (field, visible) => {
+      const wrapper = field?.closest("label");
+      if (!wrapper) return;
+      wrapper.hidden = !visible;
+      // The regular Sea/Air synchronizer may also touch these labels. Keep
+      // the FCL-only fields decisively out of the layout in this mode.
+      wrapper.style.display = visible ? "" : "none";
+    };
     const sync = () => {
       const full = freight.value === "Full Container";
       fields.hidden = !full;
@@ -423,15 +431,15 @@ Service Coverage: Origin Warehouse > Manila Customs Clearance > KargoDoor Metro 
         item.value = "Full Container Shipment";
         if (cbm) { cbm.value = "0"; cbm.required = false; }
         if (weight) { weight.value = "0"; weight.required = false; }
-        cbm?.closest("label")?.toggleAttribute("hidden", true);
-        weight?.closest("label")?.toggleAttribute("hidden", true);
-        section.querySelectorAll(".cbm-converter, [data-units-field]").forEach((node) => { node.hidden = true; });
+        setFieldVisibility(cbm, false);
+        setFieldVisibility(weight, false);
+        section.querySelectorAll(".cbm-converter, [data-units-field]").forEach((node) => { node.hidden = true; node.style.display = "none"; });
       } else {
         if (cbm) cbm.required = true;
         if (weight) weight.required = true;
-        cbm?.closest("label")?.removeAttribute("hidden");
-        weight?.closest("label")?.removeAttribute("hidden");
-        section.querySelectorAll(".cbm-converter, [data-units-field]").forEach((node) => { node.hidden = false; });
+        setFieldVisibility(cbm, true);
+        setFieldVisibility(weight, true);
+        section.querySelectorAll(".cbm-converter, [data-units-field]").forEach((node) => { node.hidden = false; node.style.display = ""; });
       }
     };
     freight.addEventListener("change", sync);
