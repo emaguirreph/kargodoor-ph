@@ -429,6 +429,9 @@ Service Coverage: Origin Warehouse > Manila Customs Clearance > KargoDoor Metro 
     const sync = () => {
       const full = freight.value === "Full Container";
       fields.hidden = !full;
+      [containerSize, containerQuantity, manualRate].forEach((field) => {
+        if (field) field.disabled = !full;
+      });
       const calculateButton = form.querySelector("[data-quotation-calculate]");
       setNodeVisibility(calculateButton, !full);
       setNodeVisibility(form.querySelector("p.wide.muted"), !full);
