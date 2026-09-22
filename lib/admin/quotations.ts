@@ -411,11 +411,17 @@ export async function quotationsPage(
           supplierName: String(form.get("supplier_name") || "").trim(),
           origin: String(form.get("origin") || ""),
           originWarehouse: String(form.get("origin_warehouse") || ""),
+          containerSize: String(savedCargo.containerSize ?? ""),
+          containerQuantity: String(savedCargo.containerQuantity ?? ""),
         };
         const freight = String(form.get("freight_type") || "");
-        if (!["Sea Freight", "Air Freight"].includes(freight))
+        if (!["Sea Freight", "Air Freight", "Full Container"].includes(freight))
           throw new AdminError("Choose a valid freight type.");
-        if (freight === "Sea Freight") {
+        if (freight === "Full Container") {
+          cargo.category = "Full Container";
+          cargo.cbm = "0";
+          cargo.weight = "0";
+        } else if (freight === "Sea Freight") {
           if (!(cargo.item in itemCategories))
             throw new AdminError("Choose a valid Sea Freight item.");
           cargo.category = itemCategories[cargo.item];
@@ -424,7 +430,7 @@ export async function quotationsPage(
             throw new AdminError("Choose a valid Air Freight item.");
           cargo.category = cargo.item;
         }
-        cargo.cbm = decimal("cbm", true);
+        if (freight !== "Full Container") cargo.cbm = decimal("cbm", true);
         const quotationDate = String(form.get("quotation_date") || "");
         if (!/^\d{4}-\d{2}-\d{2}$/.test(quotationDate))
           throw new AdminError("Enter a valid quotation date.");
@@ -433,6 +439,7 @@ export async function quotationsPage(
           throw new AdminError("Enter a valid valid-until date.");
         const pricingChanged =
           freight !== String(existing.freight_type) ||
+          freight === "Full Container" ||
           ["item", "category", "cbm", "weight", "units"].some(
             (key) =>
               String(cargo[key as keyof typeof cargo] ?? "") !==
@@ -445,9 +452,13 @@ export async function quotationsPage(
           finalAmount = existing.final_amount,
           activity = "update";
         if (pricingChanged) {
-          let calc: ReturnType<typeof seaQuote> | ReturnType<typeof airQuote>;
+          let calc: ReturnType<typeof seaQuote> | ReturnType<typeof airQuote> | { final: number; pricingMethod: string; rateBasis: string };
           try {
-            if (freight === "Sea Freight") {
+            if (freight === "Full Container") {
+              const manualRate = String(form.get("manual_rate") || "").trim();
+              calc = { final: manualRate ? Number(manualRate) : Number(existing.final_amount) / 100, pricingMethod: "Manual full-container all-in rate", rateBasis: "Per container" };
+              if (!Number.isFinite(calc.final) || calc.final < 0) throw new AdminError("Enter a valid full-container all-in rate.");
+            } else if (freight === "Sea Freight") {
               if (
                 !(cargo.item in itemCategories) &&
                 cargo.item !== "OTHER / NOT LISTED"
@@ -499,6 +510,10 @@ export async function quotationsPage(
                 : "Invalid pricing inputs.",
             );
           }
+          if (freight === "Full Container") {
+            cargo.containerSize = String(form.get("container_size") || "");
+            cargo.containerQuantity = String(form.get("container_quantity") || savedCargo.containerQuantity || "1");
+          }
           pricingSnapshot = JSON.stringify(calc);
           calculatedAmount = Math.round(calc.final * 100);
           finalAmount = calculatedAmount;
@@ -523,7 +538,7 @@ export async function quotationsPage(
             overrideAmount,
             overrideReason,
             finalAmount,
-            String(form.get("notes") || "") || null,
+            String(form.get("notes") ?? ""),
             now,
             id,
           )
@@ -550,7 +565,7 @@ export async function quotationsPage(
         });
       }
       const freight = String(form.get("freight_type") || "");
-      if (!["Sea Freight", "Air Freight"].includes(freight))
+      if (!["Sea Freight", "Air Freight", "Full Container"].includes(freight))
         throw new AdminError("Choose a valid freight type.");
       const item = String(form.get("item") || "");
       const numeric = (key: string, required = true) => {
@@ -563,10 +578,12 @@ export async function quotationsPage(
           throw new AdminError(`Enter a valid non-negative ${key}.`);
         return Number(raw);
       };
-      const weight = numeric("weight"),
+      const weight = freight === "Full Container" ? 0 : numeric("weight"),
         units = numeric("units", false);
       let category: SeaCategory | string = "";
-      if (freight === "Sea Freight") {
+      if (freight === "Full Container") {
+        category = "Full Container";
+      } else if (freight === "Sea Freight") {
         if (!(item in itemCategories))
           throw new AdminError("Choose a valid Sea Freight item.");
         category = itemCategories[item];
@@ -575,9 +592,12 @@ export async function quotationsPage(
           throw new AdminError("Choose a valid Air Freight item.");
         category = item;
       }
-      const cbm = numeric("cbm");
-      let calc: ReturnType<typeof seaQuote> | ReturnType<typeof airQuote>;
-      if (freight === "Sea Freight") {
+      const cbm = freight === "Full Container" ? 0 : numeric("cbm");
+      let calc: ReturnType<typeof seaQuote> | ReturnType<typeof airQuote> | { final: number; pricingMethod: string; rateBasis: string };
+      if (freight === "Full Container") {
+        calc = { final: Number(form.get("manual_rate") || 0), pricingMethod: "Manual full-container all-in rate", rateBasis: "Per container" };
+        if (!Number.isFinite(calc.final) || calc.final < 0 || !String(form.get("manual_rate") || "").trim()) throw new AdminError("Enter the full-container all-in rate.");
+      } else if (freight === "Sea Freight") {
         calc = seaQuote(category as SeaCategory, cbm, weight, units);
       } else {
         const airItem = item as AirItem;
@@ -632,6 +652,8 @@ export async function quotationsPage(
         supplierName: String(form.get("supplier_name") || "").trim(),
         origin: String(form.get("origin") || ""),
         originWarehouse: String(form.get("origin_warehouse") || ""),
+        containerSize: freight === "Full Container" ? String(form.get("container_size") || "") : "",
+        containerQuantity: freight === "Full Container" ? numeric("container_quantity") : 0,
       };
       await db
         .prepare(
@@ -659,7 +681,7 @@ export async function quotationsPage(
           null,
           null,
           null,
-          String(form.get("notes") || null),
+          String(form.get("notes") ?? ""),
           user.id,
           now,
           now,

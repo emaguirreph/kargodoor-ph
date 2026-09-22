@@ -38,7 +38,9 @@
     const updateCategory = () => {
       if (!item || !freight || !category) return;
 
-      if (freight.value === "Sea Freight") {
+      if (freight.value === "Full Container") {
+        category.value = "Full Container";
+      } else if (freight.value === "Sea Freight") {
         category.value = seaCategories[item.value] || "";
       } else {
         category.value = airItems.includes(item.value) ? item.value : "";
@@ -61,10 +63,9 @@
       if (!item || !freight) return;
 
       const previous = item.value;
-      const allowed =
-        freight.value === "Sea Freight"
-          ? Object.keys(seaCategories)
-          : airItems;
+      const allowed = freight.value === "Full Container"
+        ? ["Full Container Shipment"]
+        : freight.value === "Sea Freight" ? Object.keys(seaCategories) : airItems;
 
       item.replaceChildren();
 
@@ -240,6 +241,8 @@
     const calculate = () => {
       updateCategory();
 
+      if (freight?.value === "Full Container") return;
+
       if (
         !item ||
         !freight ||
@@ -343,6 +346,60 @@
 
     updateItems();
     calculate();
+  });
+})();
+
+(() => {
+  const defaultTerms = `This quotation is based on the cargo information provided. Final charges may change if the actual dimensions, CBM, weight, quantity, cargo category, or other shipment details differ upon warehouse inspection.
+
+Rates and transit times are estimates and are subject to final warehouse confirmation. Additional charges may apply for special handling, restricted or regulated cargo, permits, taxes, or other government requirements.
+
+Incoterm: FCA - KargoDoor Origin Warehouse
+Service Coverage: Origin Warehouse > Manila Customs Clearance > KargoDoor Metro Manila Warehouse`;
+  document.querySelectorAll('textarea[name="notes"]').forEach((notes) => {
+    const label = notes.closest("label");
+    if (label?.firstChild?.nodeType === Node.TEXT_NODE) label.firstChild.textContent = "Terms and Conditions";
+    if (notes.form?.querySelector('input[name="action"]')?.value === "save" && !notes.value.trim()) notes.value = defaultTerms;
+  });
+})();
+
+(() => {
+  document.querySelectorAll("[data-cargo-details]").forEach((section) => {
+    const form = section.closest("form");
+    const freight = section.querySelector('select[name="freight_type"]');
+    const item = section.querySelector('select[name="item"]');
+    const cbm = section.querySelector('[name="cbm"]');
+    const weight = section.querySelector('[name="weight"]');
+    if (!form || !freight || !item) return;
+    if (![...freight.options].some((option) => option.value === "Full Container")) freight.add(new Option("Full Container", "Full Container"));
+    const fields = document.createElement("section");
+    fields.className = "wide";
+    fields.dataset.fullContainerFields = "";
+    fields.innerHTML = '<h3>FULL CONTAINER DETAILS</h3><div class="grid"><label>Container size<select name="container_size"><option>20 ft</option><option>40 ft</option><option>40 ft HQ</option></select></label><label>Number of containers<input name="container_quantity" type="number" min="1" step="1" value="1"></label><label>All-in rate (PHP)<input name="manual_rate" type="number" min="0" step=".01"></label></div><p class="muted">Full-container quotes use a manual all-in rate. CBM and package measurements are not required.</p>';
+    section.after(fields);
+    const sync = () => {
+      const full = freight.value === "Full Container";
+      fields.hidden = !full;
+      const calculateButton = form.querySelector("[data-quotation-calculate]");
+      if (calculateButton) calculateButton.hidden = full;
+      if (full) {
+        if (![...item.options].some((option) => option.value === "Full Container Shipment")) item.add(new Option("Full Container Shipment", "Full Container Shipment"));
+        item.value = "Full Container Shipment";
+        if (cbm) { cbm.value = "0"; cbm.required = false; }
+        if (weight) { weight.value = "0"; weight.required = false; }
+        cbm?.closest("label")?.toggleAttribute("hidden", true);
+        weight?.closest("label")?.toggleAttribute("hidden", true);
+        section.querySelectorAll(".cbm-converter, [data-units-field]").forEach((node) => { node.hidden = true; });
+      } else {
+        if (cbm) cbm.required = true;
+        if (weight) weight.required = true;
+        cbm?.closest("label")?.removeAttribute("hidden");
+        weight?.closest("label")?.removeAttribute("hidden");
+        section.querySelectorAll(".cbm-converter, [data-units-field]").forEach((node) => { node.hidden = false; });
+      }
+    };
+    freight.addEventListener("change", sync);
+    sync();
   });
 })();
 

@@ -9,6 +9,7 @@ import {
 
 export type AdminEnv = {
   ADMIN_DB: D1Database;
+  ASSETS: { fetch(input: Request): Promise<Response> };
   ADMIN_ORIGIN?: string;
   ACCESS_TEAM_DOMAIN?: string;
   ACCESS_AUD?: string;

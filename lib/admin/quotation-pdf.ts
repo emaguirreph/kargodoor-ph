@@ -1,6 +1,12 @@
 // lib/admin/quotation-pdf.ts
 const blue = "0.04 0.33 0.68";
 const green = "0.16 0.60 0.20";
+export const defaultQuotationTerms = `This quotation is based on the cargo information provided. Final charges may change if the actual dimensions, CBM, weight, quantity, cargo category, or other shipment details differ upon warehouse inspection.
+
+Rates and transit times are estimates and are subject to final warehouse confirmation. Additional charges may apply for special handling, restricted or regulated cargo, permits, taxes, or other government requirements.
+
+Incoterm: FCA - KargoDoor Origin Warehouse
+Service Coverage: Origin Warehouse > Manila Customs Clearance > KargoDoor Metro Manila Warehouse`;
 type CustomerSnapshot = {
   name?: unknown;
   company?: unknown;
@@ -24,6 +30,8 @@ type CargoSnapshot = {
   supplierName?: unknown;
   origin?: unknown;
   originWarehouse?: unknown;
+  containerSize?: unknown;
+  containerQuantity?: unknown;
 };
 type QuotationPdfData = {
   customer_snapshot?: unknown;
@@ -34,6 +42,7 @@ type QuotationPdfData = {
   valid_until?: unknown;
   freight_type?: unknown;
   final_amount?: unknown;
+  notes?: unknown;
 };
 type PdfText = (value: unknown, x?: number, size?: number, bold?: boolean, color?: string) => void;
 
@@ -61,7 +70,7 @@ const wrap = (value: unknown, width = 88): string[] => {
   }
   return line ? [...out, line] : out;
 };
-function customerQuotationPdf(q: QuotationPdfData): Uint8Array<ArrayBuffer> {
+function customerQuotationPdf(q: QuotationPdfData, logoJpeg?: Uint8Array): Uint8Array<ArrayBuffer> {
   const customer = snapshot<CustomerSnapshot>(q.customer_snapshot);
   const cargo = snapshot<CargoSnapshot>(q.cargo_snapshot);
   const pricing = snapshot<Record<string, unknown>>(q.pricing_snapshot);
@@ -83,12 +92,15 @@ function customerQuotationPdf(q: QuotationPdfData): Uint8Array<ArrayBuffer> {
   const pair = (label: string, value: unknown): void => {
     if (String(value ?? "").trim()) text(`${label}: ${value}`);
   };
-  lines.push(`${blue} rg 52 756 491 54 re f`);
+  if (logoJpeg) lines.push("q 210 0 0 78 52 744 cm /Im1 Do Q");
+  else lines.push(`${blue} rg 52 756 491 54 re f`);
   y = 790;
-  text("KargoDoorPH", 68, 20, true, "1 1 1");
-  text("China to PH, made SIMPLE.", 68, 10, false, "0.88 0.96 1");
+  if (!logoJpeg) {
+    text("KargoDoorPH", 68, 20, true, "1 1 1");
+    text("China to PH, made SIMPLE.", 68, 10, false, "0.88 0.96 1");
+  }
   y = 788;
-  text("QUOTATION", 412, 16, true, "1 1 1");
+  text("QUOTATION", 412, 16, true, logoJpeg ? blue : "1 1 1");
   // Header metadata
   y = 730;
   text(`Date: ${q.quotation_date ?? ""}`, 52, 9, false, blue);
@@ -142,7 +154,8 @@ function customerQuotationPdf(q: QuotationPdfData): Uint8Array<ArrayBuffer> {
   // Left column: cargo only
   y = cargoBodyY;
   pair("Item", cargo.description || cargo.item);
-  text("Quantity / Packages: 1 package");
+  if (q.freight_type === "Full Container") pair("Container", `${cargo.containerQuantity ?? 1} × ${cargo.containerSize ?? ""}`);
+  else text("Quantity / Packages: 1 package");
 
   const dimensions = [cargo.length, cargo.width, cargo.height]
     .map((value) => Number(value ?? 0));
@@ -175,27 +188,15 @@ function customerQuotationPdf(q: QuotationPdfData): Uint8Array<ArrayBuffer> {
 
   y = Math.min(cargoEndY, rateEndY) - 7;
 
-  // Compact disclaimer
+  // One customer-editable terms section. Legacy quotations with no saved terms
+  // retain the approved standard wording.
   rule();
-  text("DISCLAIMER", 52, 9, true, blue);
-
-  for (const line of wrap(
-    "This quotation is based on the cargo information provided. Final charges may change if the actual dimensions, CBM, weight, quantity, cargo category, or other shipment details differ upon warehouse inspection.",
-    112,
-  )) text(line, 52, 6.5);
-
-  y -= 2;
-
-  for (const line of wrap(
-    "Rates and transit times are estimates and are subject to final warehouse confirmation. Additional charges may apply for special handling, restricted or regulated cargo, permits, taxes, or other government requirements.",
-    112,
-  )) text(line, 52, 6.5);
-
-  // Incoterm and coverage below disclaimer
-  y -= 4;
-  text("Incoterm: FCA - KargoDoor Origin Warehouse", 52, 7);
-  text("Service Coverage: Origin Warehouse > Manila Customs Clearance >", 52, 7);
-  text("KargoDoor Metro Manila Warehouse", 52, 7);
+  text("TERMS AND CONDITIONS", 52, 9, true, blue);
+  const terms = q.notes === null || q.notes === undefined ? defaultQuotationTerms : String(q.notes);
+  for (const paragraph of terms.split(/\n\s*\n/)) {
+    for (const line of wrap(paragraph, 112)) text(line, 52, 6.5);
+    y -= 2;
+  }
 
   // The body above flows from the top of the page. Keep the footer in its own
   // reserved bottom margin so long disclaimer text can never be painted over it.
@@ -206,10 +207,12 @@ function customerQuotationPdf(q: QuotationPdfData): Uint8Array<ArrayBuffer> {
   text("+63 917 157 7370 | +63 908 889 0664", 52, 7, false, blue);
   text("support@kargodoorph.com | www.kargodoorph.com | facebook.com/KargoDoorPH", 52, 7, false, blue);
   text("Instagram: @kargodoorph | SOURCE · SHIP · RECEIVE", 52, 7, false, blue);
-  const stream = lines.join("\n"), objects = ["<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [3 0 R] /Count 1 >>", "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>", "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>", "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>", `<< /Length ${new TextEncoder().encode(stream).length} >>
+  const stream = lines.join("\n");
+  const imageHex = logoJpeg ? Array.from(logoJpeg, (byte) => byte.toString(16).padStart(2, "0")).join("") + ">" : "";
+  const objects = ["<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [3 0 R] /Count 1 >>", `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R /F2 5 0 R >>${logoJpeg ? " /XObject << /Im1 7 0 R >>" : ""} >> /Contents 6 0 R >>`, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>", "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>", `<< /Length ${new TextEncoder().encode(stream).length} >>
 stream
 ${stream}
-endstream`];
+endstream`, ...(logoJpeg ? [`<< /Type /XObject /Subtype /Image /Width 851 /Height 315 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter [/ASCIIHexDecode /DCTDecode] /Length ${imageHex.length} >>\nstream\n${imageHex}\nendstream`] : [])];
   let pdf = "%PDF-1.4\n% KargoDoor quotation\n";
   const offsets = [0];
   for (let i = 0; i < objects.length; i++) {
