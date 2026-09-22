@@ -421,11 +421,17 @@ Service Coverage: Origin Warehouse > Manila Customs Clearance > KargoDoor Metro 
       // the FCL-only fields decisively out of the layout in this mode.
       wrapper.style.display = visible ? "" : "none";
     };
+    const setNodeVisibility = (node, visible) => {
+      if (!node) return;
+      node.hidden = !visible;
+      node.style.display = visible ? "" : "none";
+    };
     const sync = () => {
       const full = freight.value === "Full Container";
       fields.hidden = !full;
       const calculateButton = form.querySelector("[data-quotation-calculate]");
-      if (calculateButton) calculateButton.hidden = full;
+      setNodeVisibility(calculateButton, !full);
+      ["override_amount", "override_reason"].forEach((name) => setFieldVisibility(form.querySelector(`[name="${name}"]`), !full));
       if (full) {
         if (![...item.options].some((option) => option.value === "Full Container Shipment")) item.add(new Option("Full Container Shipment", "Full Container Shipment"));
         item.value = "Full Container Shipment";
