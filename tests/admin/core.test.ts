@@ -60,6 +60,8 @@ function database(includePhase1 = true) {
     sql.exec(readFileSync("migrations/admin/0019_archive_shipments_quotations_invoices.sql", "utf8"));
     sql.exec(readFileSync("migrations/admin/0020_leads.sql", "utf8"));
     sql.exec(readFileSync("migrations/admin/0021_lead_contact_and_lifecycle.sql", "utf8"));
+    sql.exec(readFileSync("migrations/admin/0022_full_container_quotations.sql", "utf8"));
+    sql.exec(readFileSync("migrations/admin/0023_fcl_shipments.sql", "utf8"));
   }
   const user = randomUUID();
   sql
@@ -164,6 +166,7 @@ function insertQuotation(sql: DatabaseSync, values: {
   id?: string;
   number?: string;
   status?: string;
+  freightType?: string;
   customerId?: string | null;
   customer?: Record<string, unknown>;
   cargo?: Record<string, unknown>;
@@ -180,7 +183,7 @@ function insertQuotation(sql: DatabaseSync, values: {
     values.number ?? `KD-Q-2026-${id.slice(0, 3)}`,
     values.customerId ?? null,
     values.status ?? "Approved",
-    "Sea Freight",
+    values.freightType ?? "Sea Freight",
     "2026-09-15",
     null,
     "Admin",
@@ -330,6 +333,21 @@ test("approved quotations create one pending, unpaid shipment with a safe custom
   assert.equal(log.admin_user_id, user);
   assert.equal(JSON.parse(String(log.new_value)).source_quotation_id, quotationId);
   await assert.rejects(createShipmentFromApprovedQuotation(db, user, quotationId), /already exists/);
+});
+test("approved FCL quotations create an FCL shipment and invoice-ready manual rate", async () => {
+  const { sql, db, user } = database();
+  const quotationId = insertQuotation(sql, {
+    freightType: "Full Container",
+    cargo: { item: "Full Container Shipment", description: "FCL test", cbm: "0", weight: "0", originWarehouse: "Ningbo Port", containerSize: "40 ft HQ", containerQuantity: "1" },
+  });
+  const result = await createShipmentFromApprovedQuotation(db, user, quotationId);
+  const shipment = sql.prepare("SELECT service_type,china_warehouse,shipping_charge FROM shipments WHERE id=?").get(result.shipmentId)!;
+  assert.equal(result.trackingNumber.startsWith("KDFCL"), true);
+  assert.equal(shipment.service_type, "FCL");
+  assert.equal(shipment.china_warehouse, "Ningbo Port");
+  assert.equal(shipment.shipping_charge, 500000);
+  const invoiceId = await createInvoice(db, { shipment_id: result.shipmentId, delivery_charge: "0", other_charge: "0", status: "Draft", issued_at: "", due_at: "" }, user);
+  assert.equal(sql.prepare("SELECT shipment_id FROM invoices WHERE id=?").get(invoiceId)!.shipment_id, result.shipmentId);
 });
 test("quotation shipment conversion rejects non-approved quotes and creates a customer for ambiguous or absent matches", async () => {
   const { sql, db, user } = database();

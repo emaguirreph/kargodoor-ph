@@ -106,11 +106,12 @@ export async function createShipmentFromApprovedQuotation(
 
   const customerSnapshot = savedSnapshot<CustomerSnapshot>(quote.customer_snapshot, "customer");
   const cargoSnapshot = savedSnapshot<CargoSnapshot>(quote.cargo_snapshot, "cargo");
-  const serviceType = requiredText(quote.freight_type, "freight type");
-  if (serviceType !== "Sea Freight" && serviceType !== "Air Freight")
+  const quotationFreightType = requiredText(quote.freight_type, "freight type");
+  const serviceType = quotationFreightType === "Full Container" ? "FCL" : quotationFreightType;
+  if (!["Sea Freight", "Air Freight", "FCL"].includes(serviceType))
     throw new AdminError("This approved quotation has an invalid freight type.", 422);
   const chinaWarehouse = requiredText(cargoSnapshot.originWarehouse, "China warehouse");
-  if (!warehouses.includes(chinaWarehouse as (typeof warehouses)[number]))
+  if (chinaWarehouse.length > 160)
     throw new AdminError("This approved quotation has an invalid China warehouse.", 422);
   const cbm = requiredNumber(cargoSnapshot.cbm, "total CBM", 1000000);
   const weight = requiredNumber(cargoSnapshot.weight, "actual weight", 100000000);

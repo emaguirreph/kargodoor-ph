@@ -184,6 +184,7 @@ const shipmentObjectSchema = z
     service_type: z.enum([
       "Sea Freight",
       "Air Freight",
+      "FCL",
     ]),
 
     china_warehouse:

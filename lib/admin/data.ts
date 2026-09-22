@@ -10,11 +10,13 @@ export async function generatedIdentifier(db: D1Database, entity: Entity, values
   const field = entity === "customers" ? "customer_code" : "tracking_number";
   if (entity === "shipments" && values.status === "Awaiting Supplier Dispatch") return undefined;
   if (values[field]) return undefined;
-  const prefix = entity === "customers" ? "KDOOR" : values.service_type === "Air Freight" ? "KDAIR" : "KDSEA";
+  const prefix = entity === "customers" ? "KDOOR" : values.service_type === "Air Freight" ? "KDAIR" : values.service_type === "FCL" ? "KDFCL" : "KDSEA";
   const pattern = entity === "customers"
     ? /^KDOOR-?(\d+)$/i
     : values.service_type === "Air Freight"
       ? /^KD-?AIR-?(\d+)$/i
+      : values.service_type === "FCL"
+        ? /^KD-?FCL-?(\d+)$/i
       : /^KD-?SEA-?(\d+)$/i;
   const rows = (await db.prepare(`SELECT ${field} FROM ${entity}`).all<RecordData>()).results;
   const highest = rows.reduce((max, row) => {

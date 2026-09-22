@@ -42,7 +42,7 @@ const statuses = [
   "Delivered",
 ] as const;
 
-const codePattern = /^(?:AIR-)?KDOOR-\d{4,}$/;
+const codePattern = /^(?:(?:AIR-)?KDOOR-|KDFCL)\d{4,}$/;
 
 const headers = {
   "Cache-Control": "no-store, private",
@@ -612,21 +612,19 @@ async function getShipmentOptions(
 function validate(values: Values) {
 
   if (!codePattern.test(values.cargo_code ?? "")) {
-    return "Use a valid cargo code, such as KDOOR-0001 or AIR-KDOOR-0001.";
+    return "Use a valid cargo code, such as KDOOR-0001, AIR-KDOOR-0001, or KDFCL000001.";
   }
 
   if (
-    !["Sea Freight", "Air Freight"].includes(
+    !["Sea Freight", "Air Freight", "FCL"].includes(
       values.freight_type ?? "",
     )
   ) {
-    return "Choose Sea Freight or Air Freight.";
+    return "Choose Sea Freight, Air Freight, or FCL.";
   }
 
   if (
-    (values.cargo_code!.startsWith("AIR-")
-      ? "Air Freight"
-      : "Sea Freight") !== values.freight_type
+    (values.cargo_code!.startsWith("AIR-") ? "Air Freight" : values.cargo_code!.startsWith("KDFCL") ? "FCL" : "Sea Freight") !== values.freight_type
   ) {
     return "Cargo code and freight type must match.";
   }

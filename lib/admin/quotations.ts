@@ -420,7 +420,7 @@ export async function quotationsPage(
           units: decimal("units"),
           supplierName: String(form.get("supplier_name") || "").trim(),
           origin: String(form.get("origin") || ""),
-          originWarehouse: String(form.get("origin_warehouse") || ""),
+          originWarehouse: String(form.get("origin_warehouse") || "") === "Other / enter manually" ? String(form.get("origin_warehouse_manual") || "").trim() : String(form.get("origin_warehouse") || ""),
           containerSize: String(savedCargo.containerSize ?? ""),
           containerQuantity: String(savedCargo.containerQuantity ?? ""),
         };
@@ -661,7 +661,7 @@ export async function quotationsPage(
         units,
         supplierName: String(form.get("supplier_name") || "").trim(),
         origin: String(form.get("origin") || ""),
-        originWarehouse: String(form.get("origin_warehouse") || ""),
+        originWarehouse: String(form.get("origin_warehouse") || "") === "Other / enter manually" ? String(form.get("origin_warehouse_manual") || "").trim() : String(form.get("origin_warehouse") || ""),
         containerSize: freight === "Full Container" ? String(form.get("container_size") || "") : "",
         containerQuantity: freight === "Full Container" ? numeric("container_quantity") : 0,
       };

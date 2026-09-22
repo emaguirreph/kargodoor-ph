@@ -55,8 +55,14 @@ cli([
   "ADMIN_DB",
   "--local",
   "--command",
-  `INSERT INTO admin_users VALUES ('${uid}','Local admin','local-admin@example.test','owner','2026-01-01','2026-01-01')`,
+    `INSERT INTO admin_users VALUES ('${uid}','Local admin','local-admin@example.test','owner','2026-01-01','2026-01-01')`,
 ]);
+cli(["d1", "execute", "ADMIN_DB", "--local", "--command", `
+ INSERT INTO customers (id,customer_code,full_name,company_name,mobile,email,address,notes,created_at,updated_at)
+ VALUES ('00000000-0000-4000-8000-000000000001','KDOOR-TEST','Tracking Test',NULL,'09170000000',NULL,NULL,NULL,'2026-01-01','2026-01-01');
+ INSERT INTO shipments (id,customer_id,tracking_number,service_type,china_warehouse,cbm,weight_kg,status,shipping_charge,delivery_charge,payment_status,tracking_remarks,created_at,updated_at)
+ VALUES ('00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000001','KDSEA000001','Sea Freight','Guangzhou',0,0,'In Transit',0,0,'Unpaid','Tracking sentinel','2026-09-01','2026-09-01');
+`]);
 // A separate local tracking database proves admin writes do not touch tracking.
 cli(["d1", "execute", "TRACKING_DB", "--local", "--command", `
  CREATE TABLE shipments (cargo_code TEXT PRIMARY KEY, freight_type TEXT, origin_warehouse TEXT, warehouse_received_date TEXT, departure_date TEXT, current_status TEXT, eta TEXT, remarks TEXT, last_updated TEXT);
@@ -282,7 +288,7 @@ try {
     "UPDATE admin_users SET role='owner' WHERE email='local-admin@example.test'"]);
   assert.equal((await get("/admin/tracking-editor")).status, 200);
   console.log("Viewer HTTP checks passed: read pages, hidden controls, protected tools, typed write URLs, and POST mutations.");
-  const trackingBefore = await (await get("/api/track?code=KDOOR-0001", false)).json();
+  const trackingBefore = await (await get("/api/track?code=KDSEA000001", false)).json();
   assert.equal(trackingBefore.remarks, "Tracking sentinel");
   for (const path of ["/", "/how-it-works", "/services", "/rates-calculator", "/faq", "/contact-us", "/track"])
     assert.equal((await get(path, false)).status, 200, path + " public route works");
@@ -498,7 +504,7 @@ try {
     "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('customers','shipments','invoices','payments','expenses','admin_users','activity_log')",
   ]);
   assert.equal(JSON.parse(tables)[0].results.length, 7);
-  assert.deepEqual(await (await get("/api/track?code=KDOOR-0001", false)).json(), trackingBefore);
+  assert.deepEqual(await (await get("/api/track?code=KDSEA000001", false)).json(), trackingBefore);
   console.log(
     "HTTP integration passed: /admin dashboard redirect and legacy editor preserved; tracking sentinel unchanged; customer/shipment/invoice/payment workflows; partial and multiple payments; balances and automatic statuses; search and activity; validation; CSRF; duplicates; stale edits; 14 audit records; 7 tables. All operations were local.",
   );

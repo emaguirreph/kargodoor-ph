@@ -350,6 +350,22 @@
 })();
 
 (() => {
+  document.querySelectorAll('select[name="origin_warehouse"]').forEach((warehouse) => {
+    const current = warehouse.value;
+    const known = [...warehouse.options].some((option) => option.value === current);
+    if (!warehouse.querySelector('option[value="Other / enter manually"]')) warehouse.add(new Option("Other / enter manually", "Other / enter manually"));
+    const manual = document.createElement("label");
+    manual.textContent = "Manual warehouse / location";
+    manual.hidden = known;
+    manual.innerHTML += '<input name="origin_warehouse_manual" maxlength="160">';
+    warehouse.closest("label")?.after(manual);
+    const input = manual.querySelector("input");
+    if (!known && input) { warehouse.value = "Other / enter manually"; input.value = current; }
+    warehouse.addEventListener("change", () => { manual.hidden = warehouse.value !== "Other / enter manually"; if (!manual.hidden) input?.focus(); });
+  });
+})();
+
+(() => {
   const defaultTerms = `This quotation is based on the cargo information provided. Final charges may change if the actual dimensions, CBM, weight, quantity, cargo category, or other shipment details differ upon warehouse inspection.
 
 Rates and transit times are estimates and are subject to final warehouse confirmation. Additional charges may apply for special handling, restricted or regulated cargo, permits, taxes, or other government requirements.
@@ -372,9 +388,20 @@ Service Coverage: Origin Warehouse > Manila Customs Clearance > KargoDoor Metro 
     const weight = section.querySelector('[name="weight"]');
     const converter = section.querySelector("[data-cbm-converter]");
     if (!form || !freight || !item) return;
-    if (![...freight.options].some((option) => option.value === "Full Container")) freight.add(new Option("Full Container", "Full Container"));
+    const fclMode = new URLSearchParams(location.search).get("fcl") === "1";
     const savedFullContainer = form.querySelector("[data-sea-pricing-method]")?.textContent?.trim() === "Manual full-container all-in rate";
+    if ((fclMode || savedFullContainer) && ![...freight.options].some((option) => option.value === "Full Container")) freight.add(new Option("Full Container", "Full Container"));
+    if (fclMode) freight.value = "Full Container";
     if (savedFullContainer) freight.value = "Full Container";
+    if (fclMode) {
+      document.title = "FCL Quotation | KargoDoor Admin";
+      const heading = form.closest("section")?.querySelector("h2");
+      if (heading) heading.textContent = "Create FCL quotation";
+      ["item", "cbm", "weight", "units", "override_amount", "override_reason"].forEach((name) => form.querySelector(`[name="${name}"]`)?.closest("label")?.toggleAttribute("hidden", true));
+      form.querySelector("[data-sea-pricing]")?.toggleAttribute("hidden", true);
+      form.querySelector("[data-air-pricing]")?.toggleAttribute("hidden", true);
+      form.querySelector("[data-cbm-converter]")?.toggleAttribute("hidden", true);
+    }
     const fields = document.createElement("section");
     fields.className = "wide";
     fields.dataset.fullContainerFields = "";
