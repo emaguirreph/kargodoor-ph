@@ -765,7 +765,7 @@ export async function quotationsPage(
         v: unknown,
         options: string[],
       ) =>
-        `<label>${label}<select name="${name}">${options.map((option) => `<option value="${value(option)}"${String(v) === option ? " selected" : ""}>${value(option)}</option>`).join("")}</select></label>`;
+        `<label>${label}<select name="${name}">${(name === "freight_type" ? [...new Set([...options, "Full Container"])] : options).map((option) => `<option value="${value(option)}"${String(v) === option ? " selected" : ""}>${value(option)}</option>`).join("")}</select></label>`;
       const itemOptions = Array.from(
         new Set(
           [
