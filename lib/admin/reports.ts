@@ -11,7 +11,7 @@ export const marginSummarySql = `SELECT
  COALESCE(SUM(CASE WHEN nihao_cost IS NOT NULL THEN shipping_charge ELSE 0 END),0) AS charges,
  COALESCE(SUM(nihao_cost),0) AS costs,
  COALESCE(SUM(CASE WHEN nihao_cost IS NOT NULL THEN shipping_charge-nihao_cost ELSE 0 END),0) AS margin
- FROM shipments WHERE status != 'Cancelled'`;
+FROM shipments WHERE status != 'Cancelled' AND archived_at IS NULL`;
 
 // Reuse the original aggregate unchanged; add only a bound business-date restriction.
 export async function freightSummary(db: D1Database, range: FinanceRange) {
@@ -135,9 +135,10 @@ export async function dashboard(
     .prepare(
       `SELECT
       (SELECT COUNT(*) FROM customers) AS customers,
-      (SELECT COUNT(*) FROM shipments WHERE status NOT IN ('Delivered','Cancelled')) AS active,
+      (SELECT COUNT(*) FROM shipments WHERE status NOT IN ('Delivered','Cancelled') AND archived_at IS NULL) AS active,
       (SELECT COUNT(*) FROM invoices WHERE status IN ('Unpaid','Partial') AND archived_at IS NULL) AS unpaid,
-      (SELECT COALESCE(SUM(p.amount),0) FROM payments p JOIN invoices i ON i.id=p.invoice_id WHERE i.archived_at IS NULL) AS payments`,
+      (SELECT COALESCE(SUM(p.amount),0) FROM payments p JOIN invoices i ON i.id=p.invoice_id WHERE i.archived_at IS NULL) AS payments,
+      (SELECT COALESCE(SUM(amount),0) FROM expenses WHERE category != 'Freight / Ni Hao Cost') AS operating_expenses`,
     )
     .first<RecordData>();
 
@@ -151,6 +152,7 @@ export async function dashboard(
         `SELECT s.id,s.tracking_number,c.full_name,s.status,s.updated_at
         FROM shipments s
         JOIN customers c ON c.id=s.customer_id
+        WHERE s.archived_at IS NULL
         ORDER BY s.updated_at DESC,s.id
         LIMIT 6`,
       )
@@ -527,6 +529,26 @@ export async function dashboard(
                   </a>
                 </div>
               </section>
+
+              <section class="dashboard-panel">
+                <div class="dashboard-panel-header">
+                  <h2>Expenses</h2>
+                </div>
+
+                <div class="freight-grid">
+                  <div class="freight-row">
+                    <span>Operating Expenses</span>
+                    <strong>${esc(pesos(summary?.operating_expenses))}</strong>
+                  </div>
+                </div>
+
+                <p class="muted">All-time operating expenses. Freight / Ni Hao Cost is shown separately under Freight Performance.</p>
+
+                <div class="actions" style="margin-top:18px;">
+                  <a class="button" href="/admin/finance/expenses?new=1">+ Add Expense</a>
+                  <a class="panel-link" href="/admin/finance/expenses">View Expenses →</a>
+                </div>
+              </section>
             `
             : ""
         }
@@ -669,6 +691,7 @@ export async function finance(
         FROM shipments s
         JOIN customers c ON c.id=s.customer_id
         WHERE s.status != 'Cancelled'
+          AND s.archived_at IS NULL
         AND (
           instr(lower(s.tracking_number),lower(?))>0
           OR instr(lower(c.full_name),lower(?))>0

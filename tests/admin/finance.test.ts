@@ -15,6 +15,7 @@ export function fixture() {
   sql.exec("PRAGMA foreign_keys=ON");
   for (const file of ["0001_phase1.sql", "0002_freight_cost.sql", "0003_invoices_payments.sql", "0004_public_tracking.sql", "0005_expenses.sql", "0006_admin_viewer_role.sql", "0007_staff_follow_up.sql", "0008_customer_accounts.sql"])
     sql.exec(readFileSync(`migrations/admin/${file}`, "utf8"));
+  sql.exec("ALTER TABLE shipments ADD COLUMN archived_at TEXT");
   sql.exec("ALTER TABLE invoices ADD COLUMN archived_at TEXT");
   sql.exec("INSERT INTO customers VALUES ('c','KDOOR0001','Test customer',NULL,'12345',NULL,NULL,NULL,'2026-01-01','2026-01-01')");
   const queries: string[] = [];
@@ -178,6 +179,22 @@ test("archived invoices and their payments are excluded from finance totals", as
   assert.equal(summary.revenue, BigInt(200000));
   assert.equal(summary.received, BigInt(100000));
   assert.equal(summary.receivable, BigInt(100000));
+});
+
+test("archived shipments are excluded from every freight finance calculation", async () => {
+  const f = fixture();
+  const archived = f.shipment(BigInt(5199500), BigInt(4100000));
+  f.shipment(BigInt(100000), BigInt(70000));
+  f.sql.prepare("UPDATE shipments SET archived_at='2026-09-09T00:00:00.000Z' WHERE id=?").run(archived);
+
+  const summary = await readFinanceSummary(f.db, all, now);
+  assert.equal(summary.charges, BigInt(100000));
+  assert.equal(summary.costs, BigInt(70000));
+  assert.equal(summary.margin, BigInt(30000));
+  assert.equal(summary.shipments, BigInt(1));
+
+  const detail = await (await finance(f.db, new URL("https://test/admin/finance?report=freight"), "Admin")).text();
+  assert.ok(!detail.includes(archived));
 });
 
 test("finance dashboard invoice grand total includes delivery and other charge exactly once", async () => {

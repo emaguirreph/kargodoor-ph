@@ -87,7 +87,8 @@ async function activityBounds(db: D1Database) {
     UNION ALL SELECT p.payment_date FROM payments p JOIN invoices i ON i.id = p.invoice_id WHERE i.archived_at IS NULL AND date(p.payment_date) = p.payment_date
     UNION ALL SELECT expense_date FROM expenses WHERE date(expense_date) = expense_date
     UNION ALL SELECT ${shipmentBusinessDateSql} FROM shipments
-      WHERE status != 'Cancelled' AND date(${shipmentBusinessDateSql}) = ${shipmentBusinessDateSql}
+      WHERE status != 'Cancelled' AND archived_at IS NULL
+        AND date(${shipmentBusinessDateSql}) = ${shipmentBusinessDateSql}
   )`).first<BoundsRow>();
 }
 

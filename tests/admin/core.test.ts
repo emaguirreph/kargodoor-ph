@@ -425,8 +425,14 @@ test("dashboard attention and shared follow-up note preserve role boundaries", a
   html = await (await dashboard(db, admin, "csrf", true)).text();
   assert.match(html, /Unpaid Invoices/);
   assert.match(html, /Recent Invoices &amp; Payments/);
+  assert.match(html, /<h2>Expenses<\/h2>/);
+  assert.match(html, /href="\/admin\/finance\/expenses\?new=1"/);
   assert.match(html, new RegExp(`/admin/invoices\\?id=${invoiceId}`));
   assert.match(html, new RegExp(`/admin/shipments\\?id=${shipmentId}`));
+  sql.prepare("UPDATE shipments SET archived_at='2026-09-09T00:00:00.000Z' WHERE id=?").run(shipmentId);
+  html = await (await dashboard(db, admin, "csrf", true)).text();
+  assert.match(html, /<span>Active Shipments<\/span>\s*<strong>0<\/strong>/);
+  assert.ok(!html.includes(`/admin/shipments?id=${shipmentId}`));
   await saveStaffFollowUp(db, "Call customer\nConfirm delivery", admin);
   await saveStaffFollowUp(db, "Updated priority", admin);
   await assert.rejects(saveStaffFollowUp(db, "x".repeat(4001), admin), /4,000/);
