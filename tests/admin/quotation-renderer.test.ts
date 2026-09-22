@@ -29,6 +29,15 @@ function quotationDatabase() {
   sql.exec(readFileSync("migrations/admin/0010_quotations.sql", "utf8"));
   sql.exec(readFileSync("migrations/admin/0011_finance_cash_entries.sql", "utf8"));
   sql.exec(readFileSync("migrations/admin/0012_staff_quotation_expense_access.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0013_promote_managers_to_admin.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0014_approved_quotation_shipments.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0015_owner_quotation_delete.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0016_cargo_intake_workflow.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0017_message_library.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0018_record_lifecycle_states.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0019_archive_shipments_quotations_invoices.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0020_leads.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0021_lead_contact_and_lifecycle.sql", "utf8"));
 
   const user = randomUUID();
   sql.prepare("INSERT INTO admin_users VALUES (?,?,?,?,?,?)").run(

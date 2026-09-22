@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     const input = parsed.data;
     const estimate = input.service === "sea"
       ? getSeaEstimate(input.cbm, input.weight)
-      : getAirEstimate(Math.ceil(Math.max(input.weight, input.cbm * 167)));
+      : getAirEstimate(Math.max(input.weight, input.cbm * 167));
     const { env: cf } = await getCloudflareContext();
     const db = (cf as unknown as AdminEnv).ADMIN_DB;
     const codes = (await db.prepare("SELECT lead_code FROM leads WHERE lead_code LIKE 'KD-LEAD-%'").all<{ lead_code: string }>()).results;

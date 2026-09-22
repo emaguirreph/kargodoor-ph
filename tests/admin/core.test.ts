@@ -56,6 +56,12 @@ function database(includePhase1 = true) {
     sql.exec(readFileSync("migrations/admin/0016_cargo_intake_workflow.sql", "utf8"));
   if (includePhase1)
     sql.exec(readFileSync("migrations/admin/0017_message_library.sql", "utf8"));
+  if (includePhase1) {
+    sql.exec(readFileSync("migrations/admin/0018_record_lifecycle_states.sql", "utf8"));
+    sql.exec(readFileSync("migrations/admin/0019_archive_shipments_quotations_invoices.sql", "utf8"));
+    sql.exec(readFileSync("migrations/admin/0020_leads.sql", "utf8"));
+    sql.exec(readFileSync("migrations/admin/0021_lead_contact_and_lifecycle.sql", "utf8"));
+  }
   const user = randomUUID();
   sql
     .prepare("INSERT INTO admin_users VALUES (?,?,?,?,?,?)")
@@ -302,8 +308,9 @@ test("quotation category mapping and origin warehouses stay controlled", () => {
   assert.equal(itemCategories.Tablets, "MOBILE / COMPUTERS / TABLETS");
   assert.equal(itemCategories["Mobile / computer parts & accessories"], "MOBILE / COMPUTERS / TABLETS");
   const quotationSource = readFileSync("lib/admin/quotations.ts", "utf8");
+  assert.match(quotationSource, /const originWarehouses = \[/);
   for (const warehouse of ["Guangzhou", "Yiwu", "Shishi", "Hong Kong", "Taiwan"])
-    assert.match(quotationSource, new RegExp('originWarehouses = \\[.*"' + warehouse + '"'));
+    assert.ok(quotationSource.includes(`"${warehouse}"`));
   assert.doesNotMatch(quotationSource.match(/const originWarehouses[^;]+;/)![0], /Malabon/i);
 });
 test("quotation numeric validator accepts valid decimals and rejects malformed values", () => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import {
   ArrowRight,
   Calculator,
@@ -36,10 +36,10 @@ export default function RatesCalculatorPage() {
   const [leadError, setLeadError] = useState("");
   const [submittingLead, setSubmittingLead] = useState(false);
   const [lead, setLead] = useState({ fullName: "", phone: "", email: "", consent: false });
-  const [leadCaptured, setLeadCaptured] = useState(false);
+  const [leadCaptured, setLeadCaptured] = useState(
+    () => typeof window !== "undefined" && sessionStorage.getItem("kd-calculator-lead-captured") === "1",
+  );
   const [error, setError] = useState("");
-
-  useEffect(() => setLeadCaptured(sessionStorage.getItem("kd-calculator-lead-captured") === "1"), []);
 
   const density = useMemo(() => {
     const numericCbm = Number(cbm);
@@ -101,11 +101,10 @@ export default function RatesCalculatorPage() {
 
     const calculated = service === "sea"
       ? getSeaEstimate(numericCbm, numericWeight)
-      : getAirEstimate(Math.ceil(Math.max(numericWeight, numericCbm * 167)));
+      : getAirEstimate(Math.max(numericWeight, numericCbm * 167));
 
-    // Air Freight:
-    // Billable weight is the higher of Actual Weight or (CBM × 167),
-    // rounded up to the next whole kilogram.
+    // Air Freight billable weight is the higher of Actual Weight or
+    // Volumetric Weight (CBM × 167). It is not rounded.
     if (leadCaptured) setEstimate(calculated);
     else {
       setEstimate(null);
