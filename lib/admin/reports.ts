@@ -136,15 +136,16 @@ export async function dashboard(
       `SELECT
       (SELECT COUNT(*) FROM customers) AS customers,
       (SELECT COUNT(*) FROM shipments WHERE status NOT IN ('Delivered','Cancelled') AND archived_at IS NULL) AS active,
-      (SELECT COUNT(*) FROM invoices WHERE status IN ('Unpaid','Partial') AND archived_at IS NULL) AS unpaid,
-      (SELECT COALESCE(SUM(p.amount),0) FROM payments p JOIN invoices i ON i.id=p.invoice_id WHERE i.archived_at IS NULL) AS payments,
-      (SELECT COALESCE(SUM(amount),0) FROM expenses WHERE category != 'Freight / Ni Hao Cost') AS operating_expenses`,
+      (SELECT COUNT(*) FROM leads WHERE archived_at IS NULL AND contacted_status='No') AS new_leads`,
     )
     .first<RecordData>();
 
-  const margin = await db
-    .prepare(marginSummarySql)
-    .first<RecordData>();
+  const { readFinanceSummary, financePesos } = await import("./finance-summary");
+  const financeSummary = await readFinanceSummary(
+    db,
+    financeRange(new URL("https://dashboard.local/admin/finance")),
+    new Date(),
+  );
 
   const recent = (
     await db
@@ -232,7 +233,13 @@ export async function dashboard(
         }
         .dashboard-snapshot{
           display:grid;
-          grid-template-columns:repeat(4,minmax(0,1fr));
+          grid-template-columns:repeat(3,minmax(0,1fr));
+          gap:14px;
+          margin-bottom:22px
+        }
+        .dashboard-finance{
+          display:grid;
+          grid-template-columns:repeat(5,minmax(0,1fr));
           gap:14px;
           margin-bottom:22px
         }
@@ -257,6 +264,14 @@ export async function dashboard(
           white-space:nowrap;
           overflow:hidden;
           text-overflow:ellipsis
+        }
+        .dashboard-stat-new-leads{
+          background:#fff7f7;
+          border-color:#fecaca
+        }
+        .dashboard-stat-new-leads span,
+        .dashboard-stat-new-leads strong{
+          color:#b91c1c
         }
         .dashboard-middle{
           display:grid;
@@ -371,6 +386,9 @@ export async function dashboard(
           .dashboard-snapshot{
             grid-template-columns:repeat(2,minmax(0,1fr))
           }
+          .dashboard-finance{
+            grid-template-columns:repeat(2,minmax(0,1fr))
+          }
           .dashboard-middle,
           .dashboard-bottom{
             grid-template-columns:1fr
@@ -388,7 +406,8 @@ export async function dashboard(
           }
         }
         @media(max-width:480px){
-          .dashboard-snapshot{
+          .dashboard-snapshot,
+          .dashboard-finance{
             grid-template-columns:1fr
           }
         }
@@ -471,6 +490,11 @@ export async function dashboard(
       <h2 class="dashboard-heading">Business Snapshot</h2>
 
       <div class="dashboard-snapshot">
+        <div class="dashboard-stat dashboard-stat-new-leads">
+          <span>New Leads</span>
+          <strong>${esc(summary?.new_leads ?? 0)}</strong>
+        </div>
+
         <div class="dashboard-stat">
           <span>Customers</span>
           <strong>${esc(summary?.customers ?? 0)}</strong>
@@ -480,79 +504,24 @@ export async function dashboard(
           <span>Active Shipments</span>
           <strong>${esc(summary?.active ?? 0)}</strong>
         </div>
-
-        <div class="dashboard-stat">
-          <span>Unpaid Invoices</span>
-          <strong>${esc(summary?.unpaid ?? 0)}</strong>
-        </div>
-
-        <div class="dashboard-stat">
-          <span>Payments Received</span>
-          <strong>${esc(pesos(summary?.payments))}</strong>
-        </div>
       </div>
 
-      <div class="dashboard-middle">
-        ${
-          canWrite
-            ? `
-              <section class="dashboard-panel">
-                <div class="dashboard-panel-header">
-                  <h2>Freight Performance</h2>
-                </div>
+      <section class="dashboard-panel">
+        <div class="dashboard-panel-header">
+          <h2>Finance Overview</h2>
+          <a class="panel-link" href="/admin/finance">View Finance →</a>
+        </div>
 
-                <div class="freight-grid">
-                  <div class="freight-row">
-                    <span>Freight Revenue</span>
-                    <strong>${esc(pesos(margin?.charges))}</strong>
-                  </div>
+        <div class="dashboard-finance">
+          <div class="dashboard-stat"><span>Revenue</span><strong>${esc(financePesos(financeSummary.revenue))}</strong></div>
+          <div class="dashboard-stat"><span>Expenses</span><strong>${esc(financePesos(financeSummary.costs + financeSummary.operating))}</strong></div>
+          <div class="dashboard-stat"><span>Net Profit / Loss</span><strong>${esc(financePesos(financeSummary.profit))}</strong></div>
+          <div class="dashboard-stat"><span>Cash Received</span><strong>${esc(financePesos(financeSummary.received))}</strong></div>
+          <div class="dashboard-stat"><span>Accounts Receivable</span><strong>${esc(financePesos(financeSummary.receivable))}</strong></div>
+        </div>
 
-                  <div class="freight-row">
-                    <span>Ni Hao Cost</span>
-                    <strong>${esc(pesos(margin?.costs))}</strong>
-                  </div>
-
-                  <div class="freight-row">
-                    <span>Freight Margin</span>
-                    <strong>${esc(pesos(margin?.margin))}</strong>
-                  </div>
-
-                  <div class="freight-row">
-                    <span>Total Shipments</span>
-                    <strong>${esc(margin?.shipments ?? 0)}</strong>
-                  </div>
-                </div>
-
-                <div class="actions" style="margin-top:18px;">
-                  <a class="panel-link" href="/admin/finance">
-                    View Finance →
-                  </a>
-                </div>
-              </section>
-
-              <section class="dashboard-panel">
-                <div class="dashboard-panel-header">
-                  <h2>Expenses</h2>
-                </div>
-
-                <div class="freight-grid">
-                  <div class="freight-row">
-                    <span>Operating Expenses</span>
-                    <strong>${esc(pesos(summary?.operating_expenses))}</strong>
-                  </div>
-                </div>
-
-                <p class="muted">All-time operating expenses. Freight / Ni Hao Cost is shown separately under Freight Performance.</p>
-
-                <div class="actions" style="margin-top:18px;">
-                  <a class="button" href="/admin/finance/expenses?new=1">+ Add Expense</a>
-                  <a class="panel-link" href="/admin/finance/expenses">View Expenses →</a>
-                </div>
-              </section>
-            `
-            : ""
-        }
-      </div>
+        <p class="muted">Expenses include Ni Hao Freight Cost and Operating Expenses.</p>
+      </section>
 
       <div class="dashboard-bottom">
         <section class="dashboard-panel">
