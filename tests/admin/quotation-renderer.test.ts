@@ -351,6 +351,8 @@ test("Sea Freight Solar Panels persists exact pricing and Edit renderer stays cl
 
   assert.ok(html.includes("Edit quotation"));
   assertCargoDetailsMarkup(html);
+  assert.ok(html.includes('name="override_amount"'));
+  assert.ok(html.includes('name="override_reason"'));
 
   const updateForm = new URLSearchParams({
     csrf: csrfToken(env, user, "/admin/quotations"),
@@ -368,6 +370,8 @@ test("Sea Freight Solar Panels persists exact pricing and Edit renderer stays cl
     cbm: "8.4",
     weight: "3400",
     units: "0",
+    override_amount: "81000.00",
+    override_reason: "Approved customer adjustment",
   });
 
   const update = await quotationsPage(
@@ -386,12 +390,14 @@ test("Sea Freight Solar Panels persists exact pricing and Edit renderer stays cl
 
   const updated = sql
     .prepare(
-      "SELECT cargo_snapshot, pricing_snapshot, calculated_amount, final_amount FROM quotations WHERE id=?",
+      "SELECT cargo_snapshot, pricing_snapshot, calculated_amount, override_amount, override_reason, final_amount FROM quotations WHERE id=?",
     )
     .get(row.id) as {
       cargo_snapshot: string;
       pricing_snapshot: string;
       calculated_amount: number;
+      override_amount: number | null;
+      override_reason: string | null;
       final_amount: number;
     };
 
@@ -412,7 +418,9 @@ test("Sea Freight Solar Panels persists exact pricing and Edit renderer stays cl
   assert.equal(updatedPricing.final, 79800);
 
   assert.equal(updated.calculated_amount, 7_980_000);
-  assert.equal(updated.final_amount, 7_980_000);
+  assert.equal(updated.override_amount, 8_100_000);
+  assert.equal(updated.override_reason, "Approved customer adjustment");
+  assert.equal(updated.final_amount, 8_100_000);
 });
 
 test("Air Freight Create renderer uses the new Cargo Details structure", async () => {

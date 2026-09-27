@@ -234,6 +234,8 @@ background: linear-gradient(145deg, #e7f4ff, #d4e9fa);
 color: #06498a;
 overflow: hidden;
 }
+.kd-insight-cover { width: 210px; height: 170px; object-fit: cover; justify-self: end; border-radius: 22px; }
+.kd-article-cover { display: block; width: 100%; max-height: 480px; object-fit: cover; margin-top: 32px; border-radius: 18px; }
 
 .kd-insight-art svg { width: 76px; height: 76px; stroke-width: 1.35; }
 .kd-insight-art-ship { background: linear-gradient(145deg, #e8f7e2, #d9f0cc); color: #408c1c; }
@@ -262,6 +264,7 @@ overflow: hidden;
 .kd-insights-list { padding: 18px 0 58px; }
 .kd-insight-card { grid-template-columns: 1fr; gap: 22px; min-height: auto; padding: 31px 4px; }
 .kd-insight-art { justify-self: start; width: 136px; height: 102px; border-radius: 16px; }
+.kd-insight-cover { justify-self: start; width: 136px; height: 102px; border-radius: 16px; }
 .kd-insight-art svg { width: 51px; height: 51px; }
 .kd-article-header { padding-top: 36px; }
 .kd-article-back { margin-bottom: 30px; }

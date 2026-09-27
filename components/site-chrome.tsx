@@ -13,6 +13,7 @@ const navigation = [
   { label: "TRACK YOUR SHIPMENT", href: "/track" },
   { label: "FAQ", href: "/faq" },
   { label: "CONTACT US", href: "/contact-us" },
+  { label: "ADMIN", href: "/admin" },
 ];
 
 function Brand({ variant = "header" }: { variant?: "header" | "footer" }) {

@@ -2,6 +2,9 @@ import Link from "next/link";
 import { ClipboardList, Clock3, PackageOpen, Ship } from "lucide-react";
 import { Footer, Header } from "@/components/site-chrome";
 import { insights } from "@/lib/insights";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
+import type { AdminEnv } from "@/lib/admin/security";
+import { excerpt, publishedInsights } from "@/lib/published-insights";
 import { pageMetadata } from "@/lib/seo";
 
 export const metadata = pageMetadata(
@@ -17,7 +20,11 @@ const icons = {
   clipboard: ClipboardList,
 };
 
-export default function InsightsPage() {
+export const dynamic = "force-dynamic";
+
+export default async function InsightsPage() {
+  const { env: cf } = await getCloudflareContext();
+  const managed = await publishedInsights((cf as unknown as AdminEnv).ADMIN_DB);
   return (
     <div className="kd-site-shell">
       <Header />
@@ -55,6 +62,17 @@ export default function InsightsPage() {
                 </article>
               );
             })}
+            {managed.map((insight) => (
+              <article className="kd-insight-card" key={insight.slug}>
+                <div className="kd-insight-card-copy">
+                  <p className="kd-insight-card-label">INSIGHTS GUIDE</p>
+                  <h2><Link href={`/insights/${insight.slug}`}>{insight.title}</Link></h2>
+                  <p>{excerpt(insight.body)}</p>
+                  <Link className="kd-text-link kd-insight-read-more" href={`/insights/${insight.slug}`}>READ THE GUIDE →</Link>
+                </div>
+                {insight.coverImageKey ? <img className="kd-insight-cover" src={`/api/insights/images/${insight.coverImageKey}`} alt="" /> : <div className="kd-insight-art" aria-hidden="true">KARGO<br />DOOR</div>}
+              </article>
+            ))}
           </div>
         </section>
       </main>
