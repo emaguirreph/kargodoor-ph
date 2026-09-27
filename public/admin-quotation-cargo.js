@@ -39,6 +39,20 @@
 
     const converterQuantityLabel = converterQuantity?.closest("label");
     const cargoGrid = section.querySelector(":scope > .grid");
+    const addressLabel = form.querySelector('[name="address"]')?.closest("label");
+    const reflowQuotationHeader = () => {
+      form.style.gridTemplateColumns = window.innerWidth <= 760
+        ? "1fr"
+        : window.innerWidth <= 1080
+          ? "repeat(2, minmax(0, 1fr))"
+          : "repeat(3, minmax(0, 1fr))";
+      if (addressLabel instanceof HTMLElement) {
+        addressLabel.classList.remove("wide");
+        addressLabel.style.gridColumn = window.innerWidth <= 760 ? "auto" : "span 2";
+      }
+    };
+    window.addEventListener("resize", reflowQuotationHeader);
+    reflowQuotationHeader();
     if (cargoGrid) {
       const reflowCargoGrid = () => {
         cargoGrid.style.gridTemplateColumns = window.innerWidth <= 760
@@ -55,24 +69,15 @@
       const freightSection = document.createElement("section");
       freightSection.className = "wide freight-and-cbm";
       freightSection.dataset.freightSection = "";
-      freightSection.innerHTML = "<h2>FREIGHT TYPE &amp; CBM CALCULATOR</h2>";
+      freightSection.innerHTML = "<h2>FREIGHT TYPE</h2>";
       freightSection.appendChild(freightLabel);
+      freightLabel.style.maxWidth = "320px";
+      freightLabel.style.marginBottom = "16px";
       const converter = section.querySelector("[data-cbm-converter]");
       if (converter) {
         converter.classList.remove("wide");
         freightSection.appendChild(converter);
       }
-      const reflowFreightSection = () => {
-        freightSection.style.display = "grid";
-        freightSection.style.gap = "14px 20px";
-        freightSection.style.gridTemplateColumns = window.innerWidth <= 760
-          ? "1fr"
-          : "minmax(220px, .7fr) minmax(0, 1.3fr)";
-        const heading = freightSection.querySelector("h2");
-        if (heading) heading.style.gridColumn = "1 / -1";
-      };
-      window.addEventListener("resize", reflowFreightSection);
-      reflowFreightSection();
       section.before(freightSection);
     }
     if (converterQuantityLabel && cargoGrid && cbm?.closest("label")) {
@@ -482,24 +487,26 @@
 (() => {
   document.querySelectorAll("[data-sea-system], [data-air-system]").forEach((total) => {
     const label = total.previousElementSibling;
-    [label, total].forEach((node) => {
-      if (!(node instanceof HTMLElement)) return;
-      node.style.background = "#dff5e6";
-      node.style.borderTop = "1px solid #8fc8a2";
-      node.style.borderBottom = "1px solid #8fc8a2";
-      node.style.padding = "9px 12px";
-    });
-    if (label instanceof HTMLElement) {
-      label.style.borderLeft = "1px solid #8fc8a2";
-      label.style.borderRadius = "7px 0 0 7px";
-    }
-    if (total instanceof HTMLElement) {
-      total.style.borderRight = "1px solid #8fc8a2";
-      total.style.borderRadius = "0 7px 7px 0";
-      total.style.color = "#0b6638";
-      total.style.fontSize = "1.4rem";
-      total.style.fontWeight = "700";
-    }
+    if (!(label instanceof HTMLElement) || !(total instanceof HTMLElement)) return;
+    const parent = total.parentElement;
+    if (!parent) return;
+    const card = document.createElement("div");
+    card.style.display = "flex";
+    card.style.alignItems = "center";
+    card.style.justifyContent = "space-between";
+    card.style.gap = "12px";
+    card.style.gridColumn = "1 / -1";
+    card.style.background = "#dff5e6";
+    card.style.border = "1px solid #8fc8a2";
+    card.style.borderRadius = "7px";
+    card.style.padding = "10px 12px";
+    card.append(label, total);
+    parent.appendChild(card);
+    label.style.margin = "0";
+    total.style.margin = "0";
+    total.style.color = "#0b6638";
+    total.style.fontSize = "1.4rem";
+    total.style.fontWeight = "700";
   });
 })();
 
