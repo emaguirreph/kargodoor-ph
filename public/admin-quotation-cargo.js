@@ -39,9 +39,22 @@
 
     const converterQuantityLabel = converterQuantity?.closest("label");
     const cargoGrid = section.querySelector(":scope > .grid");
+    const freightLabel = freight?.closest("label");
+    if (freightLabel && !form.querySelector("[data-freight-section]")) {
+      const freightSection = document.createElement("section");
+      freightSection.className = "wide";
+      freightSection.dataset.freightSection = "";
+      freightSection.innerHTML = "<h2>FREIGHT TYPE</h2>";
+      freightSection.appendChild(freightLabel);
+      section.before(freightSection);
+    }
     if (converterQuantityLabel && cargoGrid && cbm?.closest("label")) {
       converterQuantityLabel.firstChild.textContent = "Quantity of Packages *";
       cargoGrid.insertBefore(converterQuantityLabel, cbm.closest("label").nextSibling);
+    }
+    const weightLabel = weight?.closest("label");
+    if (weightLabel && converterQuantityLabel) {
+      cargoGrid?.insertBefore(weightLabel, converterQuantityLabel);
     }
     const descriptionLabel = form.querySelector('[name="description"]')?.closest("label");
     if (descriptionLabel && cargoGrid) cargoGrid.prepend(descriptionLabel);
@@ -397,6 +410,37 @@
 })();
 
 (() => {
+  document.querySelectorAll("[data-cbm-converter]").forEach((converter) => {
+    converter.style.background = "#edf9f1";
+    converter.style.borderColor = "#8fc8a2";
+    converter.style.padding = "16px";
+    const description = converter.querySelector("p.muted");
+    if (description) {
+      description.textContent = "Optional calculator — L × W × H × package quantity.";
+      description.style.margin = "0 0 12px";
+    }
+    const grid = converter.querySelector(".grid");
+    if (grid) {
+      grid.style.gap = "10px";
+      const reflow = () => { grid.style.gridTemplateColumns = window.innerWidth <= 760 ? "1fr" : "repeat(4, minmax(0, 1fr))"; };
+      window.addEventListener("resize", reflow);
+      reflow();
+    }
+    const results = converter.querySelector("dl");
+    if (results) {
+      results.style.display = "flex";
+      results.style.flexWrap = "wrap";
+      results.style.gap = "6px 18px";
+      results.style.margin = "12px 0 0";
+      results.querySelector("dt").textContent = "Single CBM";
+      results.querySelector("dt + dd").style.margin = "0";
+      results.querySelector("dt + dd + dt").textContent = "Total CBM";
+      results.querySelector("dt + dd + dt + dd").style.margin = "0";
+    }
+  });
+})();
+
+(() => {
   document.querySelectorAll('select[name="origin_warehouse"]').forEach((warehouse) => {
     const current = warehouse.value;
     const known = [...warehouse.options].some((option) => option.value === current);
@@ -491,13 +535,13 @@ Service Coverage: Origin Warehouse > Manila Customs Clearance > KargoDoor Metro 
         if (weight) { weight.value = "0"; weight.required = false; }
         setFieldVisibility(cbm, false);
         setFieldVisibility(weight, false);
-        section.querySelectorAll(".cbm-converter, [data-units-field]").forEach((node) => { node.hidden = true; node.style.display = "none"; });
+        section.querySelectorAll(".cbm-converter").forEach((node) => { node.hidden = true; node.style.display = "none"; });
       } else {
         if (cbm) cbm.required = true;
         if (weight) weight.required = true;
         setFieldVisibility(cbm, true);
         setFieldVisibility(weight, true);
-        section.querySelectorAll(".cbm-converter, [data-units-field]").forEach((node) => { node.hidden = false; node.style.display = ""; });
+        section.querySelectorAll(".cbm-converter").forEach((node) => { node.hidden = false; node.style.display = ""; });
       }
     };
     freight.addEventListener("change", sync);

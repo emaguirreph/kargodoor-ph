@@ -193,6 +193,14 @@ function quotationCustomerMessage(q: Row) {
       ],
     ],
   ];
+  const warehouseInstructions: Record<string, [string, string[]]> = {
+    Shishi: ["Shishi Warehouse Receiving Instructions", ["Sea Cargo 海运", "", "Shishi Branch Address 通达国际物流（石狮）", "地址：福建省晋江市龙湖镇梧坑村逸海工业园4栋A1通达仓库（+客户唛头）", "邮编：362200", "联系人: 张先生 13600719368; 0595-85293217", "高德导航搜索“泉海通达物流”", "Receiving Time: Monday to Sunday 8am to 6pm (except for holidays)"]],
+    Guangzhou: ["Guangzhou Warehouse Receiving Instructions", ["Sea Cargo 海运", "", "Guangzhou Branch Address 通达国际物流（广州）", "地址: 广州市白云区大朗北路72号十三社工业区A2 通达仓库（+客户唛头）", "邮编：510450", "联系人：伍先生 13924091288；13560372000; 020-81997500", "高德导航搜索“广州通达仓库”", "Receiving Time: Monday to Sunday 8am to 6pm (except for holidays)"]],
+    Yiwu: ["Yiwu Warehouse Receiving Instructions", ["Sea Cargo 海运", "", "Yiwu Branch Address 通达国际物流（义乌）", "地址: 浙江省义乌市苏溪镇苏福路117号通达仓库（+客户唛头）", "邮编：322009", "联系人：施先生 13867932099；18069956177；0579-85201593", "百度地图导航“义乌通达仓库”", "Receiving Time: Monday to Sunday 8am to 5pm (except for holidays)"]],
+  };
+  const selectedWarehouse = warehouseInstructions[warehouse];
+  if (selectedWarehouse) messages.push(["warehouse-instructions", selectedWarehouse[0], selectedWarehouse[1]]);
+  messages.push(["formal-export", "Formal Export Request", ["Formal Export Request 出口报关", "", "For suppliers needing formal export through the supplier’s name, please contact via WeChat:", "出口报关请联系:", "Guangzhou 广州报关联系微信/电话：18122161535", "Yiwu 义乌报关联系微信/电话：18050882066"]]);
 
   return `<section>
     <h2>Quotation Notifications</h2>
@@ -209,7 +217,7 @@ function quotationCustomerMessage(q: Row) {
         ].join("\n");
         return `<details class="customer-notification">
         <summary>${esc(title)}</summary>
-        <textarea id="${esc(id)}" readonly aria-label="${esc(title)} customer message" style="min-height:260px;white-space:pre-wrap">${esc(body)}</textarea>
+        <textarea id="${esc(id)}" aria-label="${esc(title)} customer message" style="min-height:260px;white-space:pre-wrap">${esc(body)}</textarea>
         <div class="actions">
           <button type="button" class="copy-quotation-message" data-copy-source="${esc(id)}">Copy Message</button>
         </div>
@@ -219,23 +227,7 @@ function quotationCustomerMessage(q: Row) {
   </section>`;
 }
 
-const quotationMessageCopyScript = () => `<script>
-document.querySelectorAll('.copy-quotation-message').forEach((button)=>{
-  button.addEventListener('click',async()=>{
-    const source=document.getElementById(button.dataset.copySource);
-    if(!source)return;
-    try{
-      await navigator.clipboard.writeText(source.value);
-      button.textContent='Copied!';
-    }catch{
-      source.select();
-      document.execCommand('copy');
-      button.textContent='Copied!';
-    }
-    setTimeout(()=>button.textContent='Copy Message',1600);
-  });
-});
-</script>`;
+const quotationMessageCopyScript = () => `<script src="/admin-copy.js" defer></script>`;
 
 function customerPreview(q: Row) {
   const customer = snapshot(q.customer_snapshot);

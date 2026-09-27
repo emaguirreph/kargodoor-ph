@@ -54,5 +54,5 @@ export function copyButton(id: string, label = "Copy shipping instructions"): st
 }
 
 export function copyScript(): string {
-  return `<script>document.querySelectorAll('.copy-shipping-instructions').forEach((button)=>button.addEventListener('click',async()=>{const source=document.getElementById(button.dataset.copySource);if(!source)return;try{await navigator.clipboard.writeText(source.value);button.textContent='Copied!'}catch{source.select();document.execCommand('copy');button.textContent='Copied!'}setTimeout(()=>button.textContent='Copy shipping instructions',1600)}))</script>`;
+  return `<script src="/admin-copy.js" defer></script>`;
 }
