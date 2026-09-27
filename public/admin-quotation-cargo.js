@@ -20,6 +20,8 @@
     const measurement = section.querySelector('select[name="measurement_unit"]');
     const weight = section.querySelector('input[name="weight"]');
     const units = section.querySelector('input[name="units"]');
+    const packageQuantity = section.querySelector('input[name="package_quantity"]');
+    const converterQuantity = section.querySelector('[data-converter-quantity]');
     const unitsField = section.querySelector("[data-units-field]");
     const seaPricing = form.querySelector("[data-sea-pricing]");
     const airPricing = form.querySelector("[data-air-pricing]");
@@ -33,6 +35,13 @@
       airItems = JSON.parse(section.dataset.airItems || "[]");
     } catch {
       return;
+    }
+
+    const converterQuantityLabel = converterQuantity?.closest("label");
+    const cargoGrid = section.querySelector(":scope > .grid");
+    if (converterQuantityLabel && cargoGrid && cbm?.closest("label")) {
+      converterQuantityLabel.firstChild.textContent = "Quantity of Packages *";
+      cargoGrid.insertBefore(converterQuantityLabel, cbm.closest("label").nextSibling);
     }
 
     const updateCategory = () => {
@@ -118,6 +127,8 @@
 
     const renderSea = (result) => {
       setSea("category", result.category || "—");
+      const packages = packageQuantity?.value || section.querySelector("[data-converter-quantity]")?.value || "";
+      setSea("package-quantity", packages ? `${packages} package${Number(packages) === 1 ? "" : "s"}` : "—");
       setSea("tier", result.packageTier || "—");
       setSea(
         "density",
@@ -340,6 +351,7 @@
     measurement?.addEventListener("change", calculate);
     weight?.addEventListener("input", calculate);
     units?.addEventListener("input", calculate);
+    packageQuantity?.addEventListener("input", calculate);
 
     const calculateButton = form.querySelector("[data-quotation-calculate]");
     calculateButton?.addEventListener("click", calculate);
@@ -475,33 +487,22 @@ Service Coverage: Origin Warehouse > Manila Customs Clearance > KargoDoor Metro 
     );
     const single = converter.querySelector("[data-converter-single]");
     const total = converter.querySelector("[data-converter-total]");
-    const use = converter.querySelector("[data-use-converted-cbm]");
-    let convertedTotal = null;
     const update = () => {
       const [length, width, height, unit, quantity] = fields.map((field) => field?.value.trim() || "");
       const values = [length, width, height, quantity].map(Number);
-      if (!length || !width || !height || !quantity || !["cm", "mm"].includes(unit) || values.some((value) => !validPositive(value)) || !Number.isInteger(values[3])) {
-        convertedTotal = null;
+      if (!length || !width || !height || !quantity || !["cm", "mm", "m"].includes(unit) || values.some((value) => !validPositive(value)) || !Number.isInteger(values[3])) {
         if (single) single.textContent = "—";
         if (total) total.textContent = "—";
-        if (use) use.disabled = true;
         return;
       }
-      const divisor = unit === "mm" ? 1e9 : 1e6;
+      const divisor = unit === "mm" ? 1e9 : unit === "cm" ? 1e6 : 1;
       const singleCbm = (values[0] * values[1] * values[2]) / divisor;
       const totalCbm = singleCbm * values[3];
       if (!Number.isFinite(singleCbm) || !Number.isFinite(totalCbm)) return;
-      convertedTotal = totalCbm;
       if (single) single.textContent = formatCbm(singleCbm);
       if (total) total.textContent = formatCbm(totalCbm);
-      if (use) use.disabled = false;
     };
     fields.forEach((field) => field?.addEventListener(field.tagName === "SELECT" ? "change" : "input", update));
-    use?.addEventListener("click", () => {
-      if (convertedTotal === null) return;
-      cbm.value = formatCbm(convertedTotal);
-      cbm.dispatchEvent(new Event("input", { bubbles: true }));
-    });
     update();
   });
 })();

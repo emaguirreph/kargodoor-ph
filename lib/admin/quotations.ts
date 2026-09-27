@@ -65,13 +65,18 @@ const validUntilDate = (quotationDate: string = date()) => {
   d.setUTCDate(d.getUTCDate() + 3);
   return d.toISOString().slice(0, 10);
 };
+const baseCbmConverter = (values: Record<string, unknown> = {}) =>
+  `<section class="wide cbm-converter" data-cbm-converter data-container-size="${esc(values.containerSize ?? "")}" data-container-quantity="${esc(values.containerQuantity ?? "")}"><h3>CBM CONVERTER</h3><p class="muted">Calculator only — use when package measurements are provided. It does not change the Total CBM used for pricing.</p><div class="grid"><label>Length (L)<input name="length" data-converter-length type="number" min="0" step="any" value="${esc(values.length ?? "")}"></label><label>Width (W)<input name="width" data-converter-width type="number" min="0" step="any" value="${esc(values.width ?? "")}"></label><label>Height (H)<input name="height" data-converter-height type="number" min="0" step="any" value="${esc(values.height ?? "")}"></label><label>Measurement<select name="measurement_unit" data-converter-unit>${["cm", "mm", "m"].map((unit) => `<option value="${unit}"${String(values.measurementUnit ?? "cm") === unit ? " selected" : ""}>${unit}</option>`).join("")}</select></label><label>Packages<input data-converter-quantity type="number" min="1" step="1" value="${esc(values.packageQuantity ?? 1)}"></label></div><dl><dt>Single Package CBM</dt><dd data-converter-single>—</dd><dt>Total Converted CBM</dt><dd data-converter-total>—</dd></dl><label class="checkbox"><input name="show_package_dimensions" type="checkbox" value="1"${values.showPackageDimensions ? " checked" : ""}> Show package measurements and converted CBM on the customer quotation.</label></section>`;
 const cbmConverter = (values: Record<string, unknown> = {}) =>
-  `<section class="wide cbm-converter" data-cbm-converter data-container-size="${esc(values.containerSize ?? "")}" data-container-quantity="${esc(values.containerQuantity ?? "")}"><h3>CBM CONVERTER</h3><p class="muted">Optional helper — calculate CBM from package dimensions.</p><div class="grid"><label>Length (L)<input name="length" data-converter-length type="number" min="0" step="any" value="${esc(values.length ?? "")}"></label><label>Width (W)<input name="width" data-converter-width type="number" min="0" step="any" value="${esc(values.width ?? "")}"></label><label>Height (H)<input name="height" data-converter-height type="number" min="0" step="any" value="${esc(values.height ?? "")}"></label><label>Measurement<select name="measurement_unit" data-converter-unit>${["cm", "mm", "m"].map((unit) => `<option value="${unit}"${String(values.measurementUnit ?? "cm") === unit ? " selected" : ""}>${unit}</option>`).join("")}</select></label><label>Quantity<input data-converter-quantity type="number" min="1" step="1" value="1"></label></div><dl><dt>Single Package CBM</dt><dd data-converter-single>—</dd><dt>Total Converted CBM</dt><dd data-converter-total>—</dd></dl><button type="button" data-use-converted-cbm disabled>Use this CBM</button><p class="muted">Total CBM will only change when you click ‘Use this CBM.’</p></section>`;
+  baseCbmConverter(values).replace(
+    'data-converter-quantity type="number" min="1" step="1" value="1"',
+    `name="package_quantity" data-converter-quantity type="number" min="1" step="1" required value="${esc(values.packageQuantity ?? 1)}"`,
+  );
 const seaPricingSection = (
   inputs: string,
   values: Record<string, unknown> = {},
 ) =>
-  `<section class="wide" data-sea-pricing><h3>Sea Freight pricing</h3>${inputs}<dl><dt>Category</dt><dd data-sea-category>${esc(values.category ?? "—")}</dd><dt>Package Tier</dt><dd data-sea-tier>${esc(values.packageTier ?? "—")}</dd><dt>Actual Density (kg/CBM)</dt><dd data-sea-density>${esc(values.density ?? "—")}</dd><dt>CBM Price</dt><dd data-sea-cbm-rate>${esc(values.cbmRate ?? "—")}</dd><dt>Density Rate / kg</dt><dd data-sea-density-rate>${esc(values.densityRate ?? "—")}</dd><dt>Fixed / Base Charge</dt><dd data-sea-base>${esc(values.base ?? "—")}</dd><dt>Density-Based Charge</dt><dd data-sea-density-charge>${esc(values.densityCharge ?? "—")}</dd><dt>Density Rule Applies?</dt><dd data-sea-density-applies>${esc(values.densityApplies === undefined ? "—" : values.densityApplies ? "YES" : "NO")}</dd><dt>Pricing Method</dt><dd data-sea-pricing-method>${esc(values.pricingMethod ?? "—")}</dd><dt>Total Unit Amount</dt><dd data-sea-system>${esc(values.final ?? "—")}</dd></dl></section>`;
+  `<section class="wide" data-sea-pricing><h3>Sea Freight pricing</h3>${inputs}<dl><dt>Category</dt><dd data-sea-category>${esc(values.category ?? "—")}</dd><dt>Quantity of Packages</dt><dd data-sea-package-quantity>${esc(values.packageQuantity ?? "—")}</dd><dt>Package Tier</dt><dd data-sea-tier>${esc(values.packageTier ?? "—")}</dd><dt>Actual Density (kg/CBM)</dt><dd data-sea-density>${esc(values.density ?? "—")}</dd><dt>CBM Price</dt><dd data-sea-cbm-rate>${esc(values.cbmRate ?? "—")}</dd><dt>Density Rate / kg</dt><dd data-sea-density-rate>${esc(values.densityRate ?? "—")}</dd><dt>Fixed / Base Charge</dt><dd data-sea-base>${esc(values.base ?? "—")}</dd><dt>Density-Based Charge</dt><dd data-sea-density-charge>${esc(values.densityCharge ?? "—")}</dd><dt>Density Rule Applies?</dt><dd data-sea-density-applies>${esc(values.densityApplies === undefined ? "—" : values.densityApplies ? "YES" : "NO")}</dd><dt>Pricing Method</dt><dd data-sea-pricing-method>${esc(values.pricingMethod ?? "—")}</dd><dt>Total Unit Amount</dt><dd data-sea-system>${esc(values.final ?? "—")}</dd></dl></section>`;
 const airPricingSection = (inputs: string) =>
   `<section class="wide" data-air-pricing><h3>Air Freight pricing</h3>${inputs}</section>`;
 
@@ -130,6 +135,21 @@ function quotationCustomerMessage(q: Row) {
   ];
 
   const messages: Array<[string, string, string[]]> = [
+    [
+      "nihao-quote-request",
+      "Nihao Quote Request",
+      [
+        "Hello po! Pa-Quote po.",
+        "",
+        "Sea or Air:",
+        "Item:",
+        "Item Picture:",
+        "Dimensions:",
+        "Weight.",
+        "",
+        "Thank you po. :)",
+      ],
+    ],
     [
       "sent",
       "Quotation Sent",
@@ -411,6 +431,8 @@ export async function quotationsPage(
           description: String(form.get("description") || ""),
           quantity: "",
           unitType: "",
+          packageQuantity: decimal("package_quantity") || "1",
+          showPackageDimensions: form.get("show_package_dimensions") === "1",
           length: decimal("length"),
           width: decimal("width"),
           height: decimal("height"),
@@ -441,6 +463,8 @@ export async function quotationsPage(
           cargo.category = cargo.item;
         }
         if (freight !== "Full Container") cargo.cbm = decimal("cbm", true);
+        if (!Number.isInteger(Number(cargo.packageQuantity)) || Number(cargo.packageQuantity) < 1)
+          throw new AdminError("Quantity of packages must be a whole number of at least 1.");
         const quotationDate = String(form.get("quotation_date") || "");
         if (!/^\d{4}-\d{2}-\d{2}$/.test(quotationDate))
           throw new AdminError("Enter a valid quotation date.");
@@ -589,7 +613,10 @@ export async function quotationsPage(
         return Number(raw);
       };
       const weight = freight === "Full Container" ? 0 : numeric("weight"),
-        units = numeric("units", false);
+        units = numeric("units", false),
+        packageQuantity = numeric("package_quantity", false) || 1;
+      if (!Number.isInteger(packageQuantity) || packageQuantity < 1)
+        throw new AdminError("Quantity of packages must be a whole number of at least 1.");
       let category: SeaCategory | string = "";
       if (freight === "Full Container") {
         category = "Full Container";
@@ -652,6 +679,8 @@ export async function quotationsPage(
         description: String(form.get("description") || item),
         quantity: "",
         unitType: "",
+        packageQuantity,
+        showPackageDimensions: form.get("show_package_dimensions") === "1",
         length: String(form.get("length") || ""),
         width: String(form.get("width") || ""),
         height: String(form.get("height") || ""),

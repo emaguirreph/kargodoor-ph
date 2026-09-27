@@ -155,8 +155,8 @@ function assertCargoDetailsMarkup(html: string, includeSeaOutputs = true) {
   assert.match(html, /name="cbm"[^>]*data-cbm-output/, "Total CBM must be editable");
   assert.ok(html.includes("Editable — use confirmed total package CBM when provided by supplier."));
   assert.ok(html.includes("CBM CONVERTER"));
-  assert.ok(html.includes("Use this CBM"));
-  assert.ok(html.includes("Optional helper — calculate CBM from package dimensions."));
+  assert.ok(html.includes("Calculator only — use when package measurements are provided."));
+  assert.ok(html.includes("Quantity of Packages"));
   assert.ok(html.includes("Total Converted CBM"));
   assert.equal((html.match(/data-cbm-converter/g) ?? []).length, 1, "Converter must render once");
   for (const name of ["length", "width", "height", "measurement_unit"]) {
@@ -173,7 +173,7 @@ function assertCargoDetailsMarkup(html: string, includeSeaOutputs = true) {
     );
   }
 
-  assert.ok(!html.includes("Package Quantity"), "Package Quantity must not be rendered");
+  assert.match(html, /name="package_quantity"[^>]*required/, "Package quantity must be required");
 
   if (includeSeaOutputs) {
     for (const label of requiredSeaOutputs) {
@@ -215,12 +215,12 @@ test("cargo category auto-population accepts item input and selection changes", 
   assert.match(script, /airPricing\.hidden = freight\.value !== "Air Freight"/);
 });
 
-test("CBM converter only copies its total after the explicit use action", () => {
+test("CBM converter calculates without changing the pricing CBM", () => {
   const script = readFileSync("public/admin-quotation-cargo.js", "utf8");
-  assert.match(script, /const divisor = unit === "mm" \? 1e9 : 1e6/);
+  assert.match(script, /const divisor = unit === "mm" \? 1e9 : unit === "cm" \? 1e6 : 1/);
   assert.match(script, /const totalCbm = singleCbm \* values\[3\]/);
-  assert.match(script, /data-use-converted-cbm/);
-  assert.match(script, /cbm\.value = formatCbm\(convertedTotal\)/);
+  assert.doesNotMatch(script, /data-use-converted-cbm/);
+  assert.doesNotMatch(script, /cbm\.value = formatCbm\(convertedTotal\)/);
   assert.doesNotMatch(script.match(/const calculate = \(\) => \{[\s\S]*?\n    \};/)![0], /updateCbm\(\)/);
 });
 

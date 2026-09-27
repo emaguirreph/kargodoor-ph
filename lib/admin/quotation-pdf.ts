@@ -19,12 +19,14 @@ type CargoSnapshot = {
   item?: unknown;
   category?: unknown;
   quantity?: unknown;
+  packageQuantity?: unknown;
   units?: unknown;
   unitType?: unknown;
   length?: unknown;
   width?: unknown;
   height?: unknown;
   measurementUnit?: unknown;
+  showPackageDimensions?: unknown;
   cbm?: unknown;
   weight?: unknown;
   supplierName?: unknown;
@@ -155,12 +157,15 @@ function customerQuotationPdf(q: QuotationPdfData, logoJpeg?: Uint8Array): Uint8
   y = cargoBodyY;
   pair("Item", cargo.description || cargo.item);
   if (q.freight_type === "Full Container") pair("Container", `${cargo.containerQuantity ?? 1} × ${cargo.containerSize ?? ""}`);
-  else text("Quantity / Packages: 1 package");
+  else {
+    const packageQuantity = Number(cargo.packageQuantity ?? 1);
+    text(`Quantity / Packages: ${Number.isInteger(packageQuantity) && packageQuantity > 0 ? packageQuantity : 1} package${packageQuantity === 1 ? "" : "s"}`);
+  }
 
   const dimensions = [cargo.length, cargo.width, cargo.height]
     .map((value) => Number(value ?? 0));
 
-  if (dimensions.some((value) => value > 0)) {
+  if (cargo.showPackageDimensions !== false && dimensions.some((value) => value > 0)) {
     pair(
       "Dimensions (L × W × H)",
       `${cargo.length ?? ""} × ${cargo.width ?? ""} × ${cargo.height ?? ""} ${cargo.measurementUnit ?? "cm"}`,
