@@ -75,7 +75,6 @@ const wrap = (value: unknown, width = 88): string[] => {
 function customerQuotationPdf(q: QuotationPdfData, logoJpeg?: Uint8Array): Uint8Array<ArrayBuffer> {
   const customer = snapshot<CustomerSnapshot>(q.customer_snapshot);
   const cargo = snapshot<CargoSnapshot>(q.cargo_snapshot);
-  const pricing = snapshot<Record<string, unknown>>(q.pricing_snapshot);
   const lines: string[] = [];
   let y = 790;
   const text: PdfText = (value, x = 52, size = 9, bold = false, color = "0.12 0.18 0.25") => {
@@ -176,14 +175,10 @@ function customerQuotationPdf(q: QuotationPdfData, logoJpeg?: Uint8Array): Uint8
   if (cargo.weight !== void 0) pair("Actual Weight", `${cargo.weight} kg`);
   const cargoEndY = y;
 
-  // Right column: rate + freight + origin warehouse
+  // Right column: customer-facing rate, freight type, and origin warehouse.
   y = cargoBodyY - 3;
   text(money(q.final_amount), 310, 21, true, green);
   y -= 4;
-  if (String(cargo.category ?? "").trim()) text(`Category: ${cargo.category}`, 310, 8);
-  text("SHIPPING CALCULATION", 310, 8, true, blue);
-  if (pricing.density !== undefined) text(`Density: ${Number(pricing.density).toFixed(2)} kg/CBM`, 310, 7);
-  if (pricing.rateBasis !== undefined) text(`Applicable Rate / Basis: ${pricing.rateBasis}`, 310, 7);
   text(q.freight_type ?? "", 310, 9);
 
   if (String(cargo.originWarehouse ?? "").trim()) {

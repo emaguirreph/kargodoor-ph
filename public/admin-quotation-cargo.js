@@ -228,19 +228,47 @@
       const pricingSection = form.querySelector("[data-air-pricing]");
       if (!pricingSection) return null;
 
-      panel = document.createElement("dl");
+      panel = document.createElement("div");
       panel.dataset.airLiveResults = "";
       panel.innerHTML = `
-        <dt>Air Category</dt><dd data-air-category>—</dd>
-        <dt>Total CBM</dt><dd data-air-cbm>—</dd>
-        <dt>Actual Weight</dt><dd data-air-weight>—</dd>
-        <dt>Volumetric Weight (CBM × 167)</dt><dd data-air-volumetric>—</dd>
-        <dt>Billable Weight</dt><dd data-air-billable>—</dd>
-        <dt>Units / Pieces</dt><dd data-air-units>—</dd>
-        <dt>Rate</dt><dd data-air-rate>—</dd>
-        <dt>Pricing Method</dt><dd data-air-method>—</dd>
-        <dt>Total Amount</dt><dd data-air-system>—</dd>
+        <div data-air-pricing-layout>
+          <dl><dt>Air Category</dt><dd data-air-category>—</dd><dt>Total CBM</dt><dd data-air-cbm>—</dd><dt>Actual Weight</dt><dd data-air-weight>—</dd></dl>
+          <dl><dt>Volumetric Weight (CBM × 167)</dt><dd data-air-volumetric>—</dd><dt>Billable Weight</dt><dd data-air-billable>—</dd><dt>Units / Pieces</dt><dd data-air-units>—</dd><dt>Rate</dt><dd data-air-rate>—</dd></dl>
+          <dl><dt>Pricing Method</dt><dd data-air-method>—</dd><div data-air-total-card><strong>Total Amount</strong><span data-air-system>—</span></div></dl>
+        </div>
+        <p class="notice" data-air-formula hidden></p>
       `;
+      const layout = panel.querySelector("[data-air-pricing-layout]");
+      if (layout instanceof HTMLElement) {
+        const reflow = () => {
+          layout.style.display = "grid";
+          layout.style.gap = "18px";
+          layout.style.gridTemplateColumns = window.innerWidth <= 760 ? "1fr" : "repeat(3, minmax(0, 1fr))";
+        };
+        window.addEventListener("resize", reflow);
+        reflow();
+        layout.querySelectorAll("dl").forEach((list) => {
+          list.style.gridTemplateColumns = "1fr";
+          list.style.margin = "0";
+        });
+      }
+      const totalCard = panel.querySelector("[data-air-total-card]");
+      if (totalCard instanceof HTMLElement) {
+        totalCard.style.display = "flex";
+        totalCard.style.justifyContent = "space-between";
+        totalCard.style.alignItems = "center";
+        totalCard.style.gap = "12px";
+        totalCard.style.background = "#dff5e6";
+        totalCard.style.border = "1px solid #8fc8a2";
+        totalCard.style.borderRadius = "7px";
+        totalCard.style.padding = "10px 12px";
+        const amount = totalCard.querySelector("[data-air-system]");
+        if (amount instanceof HTMLElement) {
+          amount.style.color = "#0b6638";
+          amount.style.fontSize = "1.4rem";
+          amount.style.fontWeight = "700";
+        }
+      }
       pricingSection.appendChild(panel);
       return panel;
     };
@@ -279,6 +307,16 @@
       );
       setAir("method", result.rateBasis || "—");
       setAir("system", money(result.final));
+      const formula = ensureAirResults()?.querySelector("[data-air-formula]");
+      if (formula instanceof HTMLElement) {
+        if (pieces) {
+          formula.textContent = `Calculation: Total Amount = Quantity × Rate = ${result.quantity} pieces × ${money(result.rate)} per piece = ${money(result.final)}.`;
+        } else {
+          const volumetric = Number(result.volumetricWeight).toFixed(2);
+          formula.textContent = `Calculation: Volumetric Weight = Total CBM × 167 = ${result.cbm} CBM × 167 = ${volumetric} kg. Billable Weight = higher of Actual Weight (${result.weight} kg) and Volumetric Weight (${volumetric} kg) = ${result.billableWeight} kg. Total Amount = Billable Weight × Rate = ${result.billableWeight} kg × ${money(result.rate)} per kg = ${money(result.final)}.`;
+        }
+        formula.hidden = false;
+      }
     };
 
     const showAirMessage = (message = "") => {
