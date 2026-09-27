@@ -43,6 +43,8 @@
       converterQuantityLabel.firstChild.textContent = "Quantity of Packages *";
       cargoGrid.insertBefore(converterQuantityLabel, cbm.closest("label").nextSibling);
     }
+    const descriptionLabel = form.querySelector('[name="description"]')?.closest("label");
+    if (descriptionLabel && cargoGrid) cargoGrid.prepend(descriptionLabel);
 
     const updateCategory = () => {
       if (!item || !freight || !category) return;
@@ -60,6 +62,7 @@
       if (!unitsField || !item || !freight) return;
       const itemUsesUnits = ["Mobile phones", "Computers", "Tablets", "Mobile Phones", "Tablets", "Laptop Computers"].includes(item.value);
       unitsField.hidden = !itemUsesUnits;
+      unitsField.style.display = itemUsesUnits ? "" : "none";
     };
 
     const syncPricingPanel = () => {
@@ -186,7 +189,7 @@
         <dt>Air Category</dt><dd data-air-category>—</dd>
         <dt>Total CBM</dt><dd data-air-cbm>—</dd>
         <dt>Actual Weight</dt><dd data-air-weight>—</dd>
-        <dt>Volumetric Weight</dt><dd data-air-volumetric>—</dd>
+        <dt>Volumetric Weight (CBM × 167)</dt><dd data-air-volumetric>—</dd>
         <dt>Billable Weight</dt><dd data-air-billable>—</dd>
         <dt>Units / Pieces</dt><dd data-air-units>—</dd>
         <dt>Rate</dt><dd data-air-rate>—</dd>
@@ -349,15 +352,47 @@
     width?.addEventListener("input", calculate);
     height?.addEventListener("input", calculate);
     measurement?.addEventListener("change", calculate);
+    cbm?.addEventListener("input", calculate);
     weight?.addEventListener("input", calculate);
     units?.addEventListener("input", calculate);
     packageQuantity?.addEventListener("input", calculate);
 
     const calculateButton = form.querySelector("[data-quotation-calculate]");
     calculateButton?.addEventListener("click", calculate);
+    calculateButton?.remove();
 
     updateItems();
     calculate();
+  });
+})();
+
+(() => {
+  const groups = [
+    ["Category", "Quantity of Packages", "Package Tier", "CBM Price", "Fixed / Base Charge"],
+    ["Actual Density (kg/CBM)", "Density Rate / kg", "Density-Based Charge", "Density Rule Applies?"],
+    ["Pricing Method", "Total Unit Amount"],
+  ];
+  document.querySelectorAll("[data-sea-pricing]").forEach((panel) => {
+    const list = panel.querySelector("dl");
+    if (!list) return;
+    const pairs = new Map();
+    for (const dt of list.querySelectorAll("dt")) pairs.set(dt.textContent?.trim(), [dt, dt.nextElementSibling]);
+    const layout = document.createElement("div");
+    layout.style.display = "grid";
+    layout.style.gridTemplateColumns = "repeat(3, minmax(0, 1fr))";
+    layout.style.gap = "18px";
+    groups.forEach((labels, index) => {
+      const group = document.createElement("dl");
+      group.style.gridTemplateColumns = "1fr";
+      group.style.margin = "0";
+      labels.forEach((label) => pairs.get(label)?.forEach((node) => node && group.appendChild(node)));
+      if (index === 0) group.dataset.seaPricingGroup = "cargo";
+      layout.appendChild(group);
+    });
+    list.replaceWith(layout);
+    const stack = () => { layout.style.gridTemplateColumns = window.innerWidth <= 760 ? "1fr" : "repeat(3, minmax(0, 1fr))"; };
+    window.addEventListener("resize", stack);
+    stack();
   });
 })();
 
@@ -369,11 +404,12 @@
     const manual = document.createElement("label");
     manual.textContent = "Manual warehouse / location";
     manual.hidden = known;
+    manual.style.display = known ? "none" : "";
     manual.innerHTML += '<input name="origin_warehouse_manual" maxlength="160">';
     warehouse.closest("label")?.after(manual);
     const input = manual.querySelector("input");
     if (!known && input) { warehouse.value = "Other / enter manually"; input.value = current; }
-    warehouse.addEventListener("change", () => { manual.hidden = warehouse.value !== "Other / enter manually"; if (!manual.hidden) input?.focus(); });
+    warehouse.addEventListener("change", () => { const visible = warehouse.value === "Other / enter manually"; manual.hidden = !visible; manual.style.display = visible ? "" : "none"; if (visible) input?.focus(); });
   });
 })();
 
