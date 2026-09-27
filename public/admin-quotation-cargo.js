@@ -39,13 +39,40 @@
 
     const converterQuantityLabel = converterQuantity?.closest("label");
     const cargoGrid = section.querySelector(":scope > .grid");
+    if (cargoGrid) {
+      const reflowCargoGrid = () => {
+        cargoGrid.style.gridTemplateColumns = window.innerWidth <= 760
+          ? "1fr"
+          : window.innerWidth <= 1080
+            ? "repeat(2, minmax(0, 1fr))"
+            : "repeat(3, minmax(0, 1fr))";
+      };
+      window.addEventListener("resize", reflowCargoGrid);
+      reflowCargoGrid();
+    }
     const freightLabel = freight?.closest("label");
     if (freightLabel && !form.querySelector("[data-freight-section]")) {
       const freightSection = document.createElement("section");
-      freightSection.className = "wide";
+      freightSection.className = "wide freight-and-cbm";
       freightSection.dataset.freightSection = "";
-      freightSection.innerHTML = "<h2>FREIGHT TYPE</h2>";
+      freightSection.innerHTML = "<h2>FREIGHT TYPE &amp; CBM CALCULATOR</h2>";
       freightSection.appendChild(freightLabel);
+      const converter = section.querySelector("[data-cbm-converter]");
+      if (converter) {
+        converter.classList.remove("wide");
+        freightSection.appendChild(converter);
+      }
+      const reflowFreightSection = () => {
+        freightSection.style.display = "grid";
+        freightSection.style.gap = "14px 20px";
+        freightSection.style.gridTemplateColumns = window.innerWidth <= 760
+          ? "1fr"
+          : "minmax(220px, .7fr) minmax(0, 1.3fr)";
+        const heading = freightSection.querySelector("h2");
+        if (heading) heading.style.gridColumn = "1 / -1";
+      };
+      window.addEventListener("resize", reflowFreightSection);
+      reflowFreightSection();
       section.before(freightSection);
     }
     if (converterQuantityLabel && cargoGrid && cbm?.closest("label")) {
@@ -413,15 +440,22 @@
   document.querySelectorAll("[data-cbm-converter]").forEach((converter) => {
     converter.style.background = "#edf9f1";
     converter.style.borderColor = "#8fc8a2";
-    converter.style.padding = "16px";
+    converter.style.padding = "12px";
+    converter.style.margin = "0";
     const description = converter.querySelector("p.muted");
     if (description) {
-      description.textContent = "Optional calculator — L × W × H × package quantity.";
-      description.style.margin = "0 0 12px";
+      description.textContent = "Optional — L × W × H × package quantity.";
+      description.style.margin = "0 0 8px";
+    }
+    const heading = converter.querySelector("h3");
+    if (heading) {
+      heading.textContent = "CBM CALCULATOR";
+      heading.style.margin = "0 0 4px";
+      heading.style.fontSize = "1rem";
     }
     const grid = converter.querySelector(".grid");
     if (grid) {
-      grid.style.gap = "10px";
+      grid.style.gap = "8px";
       const reflow = () => { grid.style.gridTemplateColumns = window.innerWidth <= 760 ? "1fr" : "repeat(4, minmax(0, 1fr))"; };
       window.addEventListener("resize", reflow);
       reflow();
@@ -436,6 +470,35 @@
       results.querySelector("dt + dd").style.margin = "0";
       results.querySelector("dt + dd + dt").textContent = "Total CBM";
       results.querySelector("dt + dd + dt + dd").style.margin = "0";
+    }
+    const checkbox = converter.querySelector(".checkbox");
+    if (checkbox) {
+      checkbox.style.marginTop = "8px";
+      checkbox.style.fontSize = ".9rem";
+    }
+  });
+})();
+
+(() => {
+  document.querySelectorAll("[data-sea-system], [data-air-system]").forEach((total) => {
+    const label = total.previousElementSibling;
+    [label, total].forEach((node) => {
+      if (!(node instanceof HTMLElement)) return;
+      node.style.background = "#dff5e6";
+      node.style.borderTop = "1px solid #8fc8a2";
+      node.style.borderBottom = "1px solid #8fc8a2";
+      node.style.padding = "9px 12px";
+    });
+    if (label instanceof HTMLElement) {
+      label.style.borderLeft = "1px solid #8fc8a2";
+      label.style.borderRadius = "7px 0 0 7px";
+    }
+    if (total instanceof HTMLElement) {
+      total.style.borderRight = "1px solid #8fc8a2";
+      total.style.borderRadius = "0 7px 7px 0";
+      total.style.color = "#0b6638";
+      total.style.fontSize = "1.4rem";
+      total.style.fontWeight = "700";
     }
   });
 })();
