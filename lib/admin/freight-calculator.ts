@@ -17,7 +17,8 @@ export async function freightCalculatorPage(request: Request, envOverride?: Admi
     .freight-calculator-results dt{font-size:.8rem;color:#466177}.freight-calculator-results dd{margin:4px 0 0;font-weight:700}
     .freight-calculator-results [data-total]{color:#0753ad;font-size:1.3rem}
     .cbm-result{font-size:1.3rem;font-weight:700;color:#0753ad}
-    [data-nihao-summary]{margin:0;border:1px solid #c6dde9;border-radius:8px;padding:12px;background:#fbfdff}[data-nihao-summary] h2{font-size:1rem;margin:0 0 4px}[data-nihao-summary] .muted{font-size:.82rem;margin:0 0 8px}[data-nihao-summary] .grid{gap:8px}[data-nihao-summary] .freight-calculator-results{grid-template-columns:1fr}
+    .freight-calculator-results[hidden]{display:none}[data-package-review],[data-cbm-converter],[data-sea-rules],[data-air-rules]{display:none!important}.freight-calculator-results[data-sea-results] div:not(:has([data-sea-total]),:has([data-sea-tier]),:has([data-sea-method])),.freight-calculator-results[data-air-results] div:not(:has([data-air-total]),:has([data-air-basis])){display:none}
+    [data-nihao-summary]{margin:0;border:1px solid #c6dde9;border-radius:8px;padding:12px;background:#fbfdff}[data-nihao-summary] h2{font-size:1rem;margin:0 0 4px}[data-nihao-summary] .muted{font-size:.82rem;margin:0 0 8px}[data-nihao-summary] .grid{display:none}[data-nihao-summary] .freight-calculator-results{grid-template-columns:1fr}[data-create-quotation]{margin-top:12px}
     @media(max-width:800px){.freight-calculator-output{grid-template-columns:1fr}}@media(max-width:600px){.freight-calculator-results{grid-template-columns:1fr}}
   </style>
   <section data-freight-calculator data-sea-items="${esc(JSON.stringify(itemCategories))}" data-air-items="${esc(JSON.stringify(airItems))}" data-nihao-sea="${esc(JSON.stringify(niHaoSeaCategories.map(([category, , rate]) => [category, rate])))}" data-nihao-air="${esc(JSON.stringify(niHaoAirRates.map(([item, rate]) => [item, Number(rate.replace(/[^\\d]/g, ""))])))}">
@@ -75,6 +76,8 @@ export async function freightCalculatorPage(request: Request, envOverride?: Admi
         <div><dt>Ni Hao cost</dt><dd data-profit-nihao>—</dd></div><div><dt>Gross profit</dt><dd data-profit-gross>—</dd></div>
         <div><dt>Gross margin</dt><dd data-profit-margin>—</dd></div><div data-profit-cbm-field><dt>Profit per CBM</dt><dd data-profit-per-cbm>—</dd></div>
       </dl>
+      <p class="muted" data-extracted-contact hidden></p>
+      <p class="actions" data-create-quotation hidden><button type="button" data-create-quotation-button>Create draft quotation</button></p>
     </section></div>
   </section>
   <section data-sea-rules>
