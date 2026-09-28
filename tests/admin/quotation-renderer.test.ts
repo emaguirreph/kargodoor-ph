@@ -216,16 +216,6 @@ test("cargo category auto-population accepts item input and selection changes", 
   assert.match(script, /airPricing\.hidden = freight\.value !== "Air Freight"/);
 });
 
-test("quick quotation input fills reviewed fields without replacing quotation pricing", () => {
-  const script = readFileSync("public/admin-quotation-cargo.js", "utf8");
-  assert.match(script, /data-quick-quotation/);
-  assert.match(script, /Fill details & calculate/);
-  assert.match(script, /const totalCbm = Number\(dimensionMatch\[1\]\).*quantity \/ 1e6/);
-  assert.match(script, /Review required:/);
-  assert.match(script, /updateCategory\(\);[\s\S]*calculate\(\);/);
-  assert.match(script, /quick\.before\(converter\)/, "CBM converter must appear above Quick Quotation");
-});
-
 test("CBM converter calculates without changing the pricing CBM", () => {
   const script = readFileSync("public/admin-quotation-cargo.js", "utf8");
   assert.match(script, /const divisor = unit === "mm" \? 1e9 : unit === "cm" \? 1e6 : 1/);

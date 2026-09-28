@@ -25,61 +25,6 @@
     const seaPricing = form.querySelector("[data-sea-pricing]");
     const airPricing = form.querySelector("[data-air-pricing]");
     const csrf = form.querySelector('input[name="csrf"]');
-    const isNewQuotation = form.querySelector('[name="action"][value="save"]');
-
-    if (isNewQuotation && !form.querySelector("[data-quick-quotation]")) {
-      const quotationList = form.closest("section")?.previousElementSibling;
-      if (quotationList instanceof HTMLElement && quotationList.textContent?.includes("Saved quotations")) {
-        quotationList.hidden = true;
-      }
-      const quick = document.createElement("section");
-      quick.className = "wide quick-quotation";
-      quick.dataset.quickQuotation = "";
-      quick.innerHTML = `
-        <div>
-          <h2>QUICK QUOTATION</h2>
-          <p class="muted">Paste the client or supplier message. The quotation fills what it can, then uses the existing KargoDoor formula.</p>
-          <label>Shipment and customer details<textarea data-quick-quotation-input rows="6" placeholder="Maria Santos, air, 1 package, 0.5 CBM, sling bags, 7.5 kg"></textarea></label>
-          <p class="actions"><button type="button" data-quick-quotation-extract>Fill details & calculate</button></p>
-          <p class="notice" data-quick-quotation-status hidden></p>
-        </div>`;
-      quick.style.display = "grid";
-      quick.style.gridTemplateColumns = "1fr";
-      quick.style.gap = "16px";
-      quick.style.alignItems = "start";
-      quick.style.margin = "0";
-      const quickText = quick.querySelector("textarea");
-      if (quickText instanceof HTMLElement) {
-        quickText.style.minHeight = "130px";
-        quickText.style.marginTop = "5px";
-      }
-      section.before(quick);
-      const converter = section.querySelector("[data-cbm-converter]");
-      if (converter) quick.before(converter);
-      const summary = document.createElement("section");
-      summary.className = "wide";
-      summary.dataset.quickQuotationSummary = "";
-      summary.hidden = true;
-      summary.innerHTML = '<strong>Estimated KargoDoor rate</strong><span data-quick-quotation-total>—</span><small data-quick-quotation-details>—</small>';
-      summary.style.display = "grid";
-      summary.style.gridTemplateColumns = window.innerWidth <= 760 ? "1fr" : "1.2fr 1fr 2fr";
-      summary.style.gap = "10px";
-      summary.style.alignItems = "center";
-      summary.style.background = "#dff5e6";
-      summary.style.border = "1px solid #8fc8a2";
-      summary.style.borderRadius = "8px";
-      summary.style.padding = "12px";
-      const total = summary.querySelector("[data-quick-quotation-total]");
-      if (total instanceof HTMLElement) {
-        total.style.color = "#0b6638";
-        total.style.fontSize = "1.4rem";
-        total.style.fontWeight = "700";
-      }
-      window.addEventListener("resize", () => {
-        summary.style.gridTemplateColumns = window.innerWidth <= 760 ? "1fr" : "1.2fr 1fr 2fr";
-      });
-      quick.after(summary);
-    }
 
     let seaCategories = {};
     let airItems = [];
@@ -126,8 +71,8 @@
       freightSection.appendChild(freightLabel);
       freightLabel.style.maxWidth = "320px";
       freightLabel.style.marginBottom = "16px";
-      const converter = form.querySelector("[data-cbm-converter]");
-      if (converter && !form.querySelector("[data-quick-quotation]")) {
+      const converter = section.querySelector("[data-cbm-converter]");
+      if (converter) {
         converter.classList.remove("wide");
         freightSection.appendChild(converter);
       }
@@ -146,31 +91,6 @@
     if (weightLabel && packageQuantity) cargoGrid?.insertBefore(weightLabel, packageQuantity.closest("label"));
     const descriptionLabel = form.querySelector('[name="description"]')?.closest("label");
     if (descriptionLabel && cargoGrid) cargoGrid.prepend(descriptionLabel);
-
-    const quickSummary = form.querySelector("[data-quick-quotation-summary]");
-    if (isNewQuotation && quickSummary && !form.querySelector("[data-quotation-review]")) {
-      const review = document.createElement("details");
-      review.className = "wide";
-      review.dataset.quotationReview = "";
-      review.innerHTML = "<summary>Review or edit quotation details</summary>";
-      review.style.margin = "0";
-      review.style.padding = "12px";
-      review.style.border = "1px solid #c6dde9";
-      review.style.borderRadius = "8px";
-      review.style.background = "#fbfdff";
-      quickSummary.after(review);
-      const freightSection = form.querySelector("[data-freight-section]");
-      [...form.children].forEach((child) => {
-        if (
-          child.tagName === "LABEL" ||
-          child === freightSection ||
-          child === section ||
-          child === seaPricing ||
-          child === airPricing ||
-          (child.tagName === "P" && child.classList.contains("muted"))
-        ) review.appendChild(child);
-      });
-    }
 
     const updateCategory = () => {
       if (!item || !freight || !category) return;
@@ -255,14 +175,6 @@
     };
 
     const renderSea = (result) => {
-      const quickSummary = form.querySelector("[data-quick-quotation-summary]");
-      if (quickSummary instanceof HTMLElement) {
-        quickSummary.hidden = false;
-        const total = quickSummary.querySelector("[data-quick-quotation-total]");
-        const details = quickSummary.querySelector("[data-quick-quotation-details]");
-        if (total) total.textContent = money(result.final);
-        if (details) details.textContent = `${result.cbm} CBM · ${result.weight} kg · ${result.pricingMethod}`;
-      }
       setSea("category", result.category || "—");
       const packages = packageQuantity?.value || "";
       setSea("package-quantity", packages ? `${packages} package${Number(packages) === 1 ? "" : "s"}` : "—");
@@ -370,16 +282,6 @@
 
     const renderAir = (result) => {
       const pieces = result.rateBasis === "Per piece";
-      const quickSummary = form.querySelector("[data-quick-quotation-summary]");
-      if (quickSummary instanceof HTMLElement) {
-        quickSummary.hidden = false;
-        const total = quickSummary.querySelector("[data-quick-quotation-total]");
-        const details = quickSummary.querySelector("[data-quick-quotation-details]");
-        if (total) total.textContent = money(result.final);
-        if (details) details.textContent = pieces
-          ? `${result.quantity} pieces · ${result.rateBasis}`
-          : `${result.cbm} CBM · ${result.billableWeight} billable kg · ${result.rateBasis}`;
-      }
 
       setAir("category", result.airCategory || result.item || "—");
       setAir("cbm", pieces ? "Not applicable" : String(result.cbm ?? "—"));
@@ -524,94 +426,6 @@
       }, 150);
     };
 
-    const quick = form.querySelector("[data-quick-quotation]");
-    const quickInput = quick?.querySelector("[data-quick-quotation-input]");
-    const quickStatus = quick?.querySelector("[data-quick-quotation-status]");
-    const setQuickField = (name, value) => {
-      const field = form.querySelector(`[name="${name}"]`);
-      if (field && value) field.value = value;
-    };
-    const quickValue = (text, labels) => {
-      for (const label of labels) {
-        const match = text.match(new RegExp(`(?:^|\\n)\\s*${label}\\s*[:\\-]\\s*([^\\n]+)`, "im"));
-        if (match?.[1]) return match[1].trim();
-      }
-      return "";
-    };
-    const extractQuickQuotation = () => {
-      const source = quickInput?.value.trim() || "";
-      if (!source) return;
-      const normalized = source.toLowerCase();
-      const notices = [];
-      const freightValue = /\bair\b/.test(normalized) ? "Air Freight" : /\bsea\b/.test(normalized) ? "Sea Freight" : "";
-      if (freight && freightValue) freight.value = freightValue;
-      else notices.push("freight type");
-      updateItems();
-      const pastedName = quickValue(source, ["name", "customer"])
-        || source.split(/[\n,]/)[0].trim().replace(/^(?:name|customer)\s*[:\-]?\s*/i, "");
-      if (/^[a-z][a-z .'-]{2,}$/i.test(pastedName)) setQuickField("customer_name", pastedName);
-      setQuickField("mobile", quickValue(source, ["mobile", "phone", "contact"]));
-      setQuickField("email", quickValue(source, ["email"]));
-      setQuickField("company", quickValue(source, ["company"]));
-      setQuickField("supplier_name", quickValue(source, ["supplier"]));
-      const warehouse = quickValue(source, ["warehouse"]);
-      const warehouseField = form.querySelector('[name="origin_warehouse"]');
-      if (warehouse && warehouseField) {
-        const option = [...warehouseField.options].find((candidate) => candidate.value.toLowerCase() === warehouse.toLowerCase());
-        if (option) warehouseField.value = option.value;
-        else notices.push("warehouse");
-      }
-      const directCbm = source.match(/(?:^|[^\d])(\d*\.?\d+)\s*cbm\b/i);
-      let description = quickValue(source, ["item", "product", "commodity"]);
-      if (!description && /\bbags?\b/i.test(source)) description = "bags";
-      if (description) setQuickField("description", description);
-      let knownItem = description && [...(item?.options || [])].find((option) => {
-        const candidate = option.value.toLowerCase();
-        const text = description.toLowerCase();
-        return text === candidate || text.includes(candidate) || candidate.includes(text);
-      });
-      if (!knownItem && freight?.value === "Air Freight" && description) {
-        knownItem = [...(item?.options || [])].find((option) => option.value === "Ordinary Items");
-      }
-      if (item && knownItem) item.value = knownItem.value;
-      else notices.push("item / commodity");
-      const packages = quickValue(source, ["packages", "package", "qty", "quantity"]);
-      const quantityMatch = packages.match(/\d+/) || source.match(/(\d+)\s*(?:packages?|cartons?|boxes?)/i) || source.match(/(?:packages?|cartons?|boxes?)\s*[:x×-]?\s*(\d+)/i);
-      const quantity = quantityMatch ? Number(quantityMatch[1] || quantityMatch[0]) : 0;
-      if (packageQuantity && Number.isInteger(quantity) && quantity > 0) packageQuantity.value = String(quantity);
-      else notices.push("package quantity");
-      const dimensions = quickValue(source, ["dimensions", "dimension", "size"]) || source;
-      const dimensionMatch = dimensions.match(/(\d+(?:\.\d+)?)\s*(?:cm)?\s*[x×*]\s*(\d+(?:\.\d+)?)\s*(?:cm)?\s*[x×*]\s*(\d+(?:\.\d+)?)\s*(?:cm)?/i);
-      const weightText = quickValue(source, ["weight"]) || source;
-      const weightMatch = weightText.match(/(\d+(?:\.\d+)?)\s*kgs?\b/i);
-      if (dimensionMatch) {
-        length.value = dimensionMatch[1];
-        width.value = dimensionMatch[2];
-        height.value = dimensionMatch[3];
-        if (measurement) measurement.value = "cm";
-      } else if (!directCbm) notices.push("dimensions or total CBM");
-      if (weightMatch) {
-        const each = /\\b(each|per package|per carton|each carton)\\b/i.test(weightText);
-        const totalWeight = Number(weightMatch[1]) * (each && quantity > 0 ? quantity : 1);
-        weight.value = String(totalWeight);
-      } else notices.push("weight");
-      if (dimensionMatch && quantity > 0) {
-        const totalCbm = Number(dimensionMatch[1]) * Number(dimensionMatch[2]) * Number(dimensionMatch[3]) * quantity / 1e6;
-        if (cbm) cbm.value = String(Number(totalCbm.toFixed(6)));
-      } else if (directCbm && cbm) {
-        cbm.value = String(Number(directCbm[1]));
-      }
-      updateCategory();
-      if (quickStatus) {
-        quickStatus.hidden = false;
-        quickStatus.textContent = notices.length
-          ? `Review required: ${notices.join(", ")} could not be confidently filled.`
-          : "Details filled. Review the quotation fields and calculation before saving.";
-      }
-      calculate();
-    };
-    quick?.querySelector("[data-quick-quotation-extract]")?.addEventListener("click", extractQuickQuotation);
-
     item?.addEventListener("input", calculate);
     item?.addEventListener("change", calculate);
     freight?.addEventListener("change", () => {
@@ -686,38 +500,7 @@
     const grid = converter.querySelector(".grid");
     if (grid) {
       grid.style.gap = "8px";
-      const form = converter.closest("form");
-      const cargo = form?.querySelector("[data-cargo-details]");
-      const itemLabel = cargo?.querySelector('[name="item"]')?.closest("label");
-      const categoryLabel = cargo?.querySelector("[data-category-output]")?.closest("label");
-      const workspace = document.createElement("div");
-      workspace.dataset.cbmWorkspace = "";
-      workspace.style.display = "grid";
-      workspace.style.gap = "12px";
-      grid.before(workspace);
-      workspace.appendChild(grid);
-      if (itemLabel && categoryLabel) {
-        const picker = document.createElement("div");
-        picker.dataset.cargoPicker = "";
-        picker.innerHTML = "<strong>Item & category</strong>";
-        picker.style.display = "grid";
-        picker.style.gap = "8px";
-        picker.style.alignContent = "start";
-        picker.style.paddingLeft = "12px";
-        picker.style.borderLeft = "1px solid #a6d5b5";
-        picker.append(itemLabel, categoryLabel);
-        workspace.appendChild(picker);
-      }
-      const reflow = () => {
-        const narrow = window.innerWidth <= 760;
-        workspace.style.gridTemplateColumns = narrow ? "1fr" : "minmax(0, 1.45fr) minmax(260px, .8fr)";
-        grid.style.gridTemplateColumns = narrow ? "repeat(2, minmax(0, 1fr))" : "repeat(5, minmax(0, 1fr))";
-        const picker = workspace.querySelector("[data-cargo-picker]");
-        if (picker instanceof HTMLElement) {
-          picker.style.paddingLeft = narrow ? "0" : "12px";
-          picker.style.borderLeft = narrow ? "0" : "1px solid #a6d5b5";
-        }
-      };
+      const reflow = () => { grid.style.gridTemplateColumns = window.innerWidth <= 760 ? "1fr" : "repeat(5, minmax(0, 1fr))"; };
       window.addEventListener("resize", reflow);
       reflow();
     }
@@ -736,7 +519,6 @@
     if (checkbox) {
       checkbox.style.marginTop = "8px";
       checkbox.style.fontSize = ".9rem";
-      checkbox.lastChild.textContent = " Include measurements on the customer quotation.";
     }
   });
 })();
