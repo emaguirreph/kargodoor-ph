@@ -147,7 +147,7 @@ function assertCargoDetailsMarkup(html: string, includeSeaOutputs = true) {
     assert.match(html, new RegExp(`name="${name}"`), `Cargo Details input ${name} should be present`);
   }
 
-  for (const warehouse of ["Guangzhou", "Yiwu", "Shishi", "Hong Kong", "Taiwan"]) {
+  for (const warehouse of ["Guangzhou", "Yiwu", "Shishi", "Tongda Air Cargo", "Hong Kong", "Taiwan"]) {
     assert.ok(html.includes(`>${warehouse}</option>`), `Missing warehouse option: ${warehouse}`);
   }
 
@@ -472,6 +472,10 @@ test("quotation details are open by default and tolerate legacy optional cargo f
   assert.match(html, /<details class="admin-collapsible" open>/);
   assert.match(html, /Quotation details/);
   assert.match(html, /Legacy Customer/);
+  assert.match(html, /Quotation Sent/);
+  assert.match(html, /Instructions to Suppliers/);
+  assert.match(html, /Attach a cargo-mark label to every package/);
+  assert.match(html, /发货前注意重要事项/);
   assert.match(html, /Dimensions: Not provided/);
   assert.match(html, /Total CBM: —/);
   for (const action of ["Edit", "Download PDF", "Download Image", "Duplicate", "Print / Save PDF", "Archive quotation"])

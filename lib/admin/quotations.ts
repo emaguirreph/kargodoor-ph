@@ -50,6 +50,7 @@ const originWarehouses = [
   "Guangzhou",
   "Yiwu",
   "Shishi",
+  "Tongda Air Cargo",
   "Hong Kong",
   "Taiwan",
 ] as const;
@@ -137,6 +138,18 @@ function quotationCustomerMessage(q: Row) {
     "support@kargodoorph.com",
     "www.kargodoorph.com",
   ];
+  const supplierInstructions = [
+    "Instructions to Suppliers",
+    "Important reminders before shipping:",
+    "1. Attach a cargo-mark label to every package. It must include the customer code, Philippine recipient’s phone number, and China sender’s phone number; otherwise, the warehouse cannot receive the cargo.",
+    "2. Include one packing list with every shipment. It must state the detailed Chinese product name, material, quantity, weight, and shipper’s phone number.",
+    "3. Before delivery, ensure the packaging is complete and undamaged. Reinforce fragile cargo. The warehouse will not accept cargo with damaged packaging.",
+    "",
+    "发货前注意重要事项：",
+    "1. 请务必每件货物贴好唛头标签（包括客户代号，菲律宾收货人电话，中国寄件人电话），否则仓库无法收货入仓；",
+    "2. 请每票货随货附一张装箱单，包含详细中文品名，材质，件数，重量，发货人电话等；",
+    "3. 送货前请确保货物包装完整无破损，易碎货物加固包装，否则仓库不接收包装破损货物。",
+  ];
 
   const messages: Array<[string, string, string[]]> = [
     [
@@ -169,6 +182,8 @@ function quotationCustomerMessage(q: Row) {
         "Please review the cargo details and estimated all-in rate. If you have any questions or would like to proceed, just reply to this message and we’ll be happy to assist.",
         "",
         "Final charges may change if the actual dimensions, CBM, weight, quantity, cargo category, or warehouse inspection results differ from the quoted information.",
+        "",
+        ...supplierInstructions,
       ],
     ],
     [
@@ -198,13 +213,14 @@ function quotationCustomerMessage(q: Row) {
     ],
   ];
   const warehouseInstructions: Record<string, [string, string[]]> = {
-    Shishi: ["Shishi Warehouse Receiving Instructions", ["Sea Cargo 海运", "", "Shishi Branch Address 通达国际物流（石狮）", "地址：福建省晋江市龙湖镇梧坑村逸海工业园4栋A1通达仓库（+客户唛头）", "邮编：362200", "联系人: 张先生 13600719368; 0595-85293217", "高德导航搜索“泉海通达物流”", "Receiving Time: Monday to Sunday 8am to 6pm (except for holidays)"]],
-    Guangzhou: ["Guangzhou Warehouse Receiving Instructions", ["Sea Cargo 海运", "", "Guangzhou Branch Address 通达国际物流（广州）", "地址: 广州市白云区大朗北路72号十三社工业区A2 通达仓库（+客户唛头）", "邮编：510450", "联系人：伍先生 13924091288；13560372000; 020-81997500", "高德导航搜索“广州通达仓库”", "Receiving Time: Monday to Sunday 8am to 6pm (except for holidays)"]],
-    Yiwu: ["Yiwu Warehouse Receiving Instructions", ["Sea Cargo 海运", "", "Yiwu Branch Address 通达国际物流（义乌）", "地址: 浙江省义乌市苏溪镇苏福路117号通达仓库（+客户唛头）", "邮编：322009", "联系人：施先生 13867932099；18069956177；0579-85201593", "百度地图导航“义乌通达仓库”", "Receiving Time: Monday to Sunday 8am to 5pm (except for holidays)"]],
+    Shishi: ["Shishi Warehouse Receiving Instructions", ["Sea Cargo 海运", "", "Shishi Branch Address 通达国际物流（石狮）", "地址：福建省晋江市龙湖镇梧坑村逸海产业园4栋A1通达仓库（+客户唛头）", "邮编：362200", "联系人：张先生 13600719368; 0595-85293217", "高德导航搜索“泉海通达物流”", "Receiving Time: Monday to Sunday 8am to 6pm (except for holidays)"]],
+    Guangzhou: ["Guangzhou Warehouse Receiving Instructions", ["Sea Cargo 海运", "", "Guangzhou Branch Address 通达国际物流（广州）", "地址：广州市白云区江高镇沙溪东路18号166通达仓库（+客户唛头）", "邮编：510450", "联系人：伍先生 13924091288 / 13560372000", "固定电话：020-81997500", "高德导航搜索“广州通达仓库”", "Receiving Time: Monday to Sunday 8am to 6pm (except for holidays)"]],
+    Yiwu: ["Yiwu Warehouse Receiving Instructions", ["Sea Cargo 海运", "", "Yiwu Branch Address 通达国际物流（义乌）", "地址：浙江省义乌市苏溪镇好派路121号飞天制衣1楼通达仓库（+客户唛头）", "邮编：322009", "联系人：施先生 13867932099 / 18069956177", "固定电话：0579-85201593", "Receiving Time: Monday to Sunday 8am to 5pm (except for holidays)"]],
+    "Tongda Air Cargo": ["Tongda Air Cargo Receiving Instructions", ["TONGDA AIR CARGO 通达空运", "", "Label: AIR + customer cargo mark", "Recipient: 通达空运", "地址：福建泉州市晋江市龙湖梧坑逸海产业园4栋空运部（+客户唛头）", "Mobile: 13533392699", "Email: 1104931438@qq.com"]],
   };
   const selectedWarehouse = warehouseInstructions[warehouse];
-  if (selectedWarehouse) messages.push(["warehouse-instructions", selectedWarehouse[0], selectedWarehouse[1]]);
-  messages.push(["formal-export", "Formal Export Request", ["Formal Export Request 出口报关", "", "For suppliers needing formal export through the supplier’s name, please contact via WeChat:", "出口报关请联系:", "Guangzhou 广州报关联系微信/电话：18122161535", "Yiwu 义乌报关联系微信/电话：18050882066"]]);
+  if (selectedWarehouse) messages.push(["warehouse-instructions", selectedWarehouse[0], [...selectedWarehouse[1], "", ...supplierInstructions]]);
+  messages.push(["formal-export", "Formal Export Request", ["Formal Export Request 出口报关", "", "For suppliers needing formal export through the supplier’s name, please contact via WeChat:", "出口报关请联系:", "Guangzhou 广州报关联系微信/电话：18150099580", "Yiwu 义乌报关联系微信/电话：18050882066"]]);
 
   return `<section>
     <h2>Quotation Notifications</h2>
