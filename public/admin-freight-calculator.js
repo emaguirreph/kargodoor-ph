@@ -56,6 +56,18 @@
   fields.forEach((field) => field.addEventListener(field.tagName === "SELECT" ? "change" : "input", convert)); use.addEventListener("click", () => { if (converted !== null) { cbm.value = Number(converted.toFixed(6)); cbm.focus(); } }); convert();
 })();
 
+/* Runs after all extractors so a flexible message cannot be overwritten by an older parser. */
+(() => {
+  const quick=document.querySelector("[data-quick-input]"),rows=document.querySelector("[data-package-rows]"),form=document.querySelector("form[data-freight-calculator]"),item=document.querySelector("[data-item]");if(!quick||!rows||!form||!item)return;
+  quick.querySelector("[data-extract-details]").addEventListener("click",()=>setTimeout(()=>{const source=quick.querySelector("[data-quick-text]").value,dim=source.match(/(\d+(?:\.\d+)?)\s*(?:x|×|\*)\s*(\d+(?:\.\d+)?)\s*(?:x|×|\*)\s*(\d+(?:\.\d+)?)(?:\s*(cm|mm|m))?/i),kg=(source.match(/(?:weight|wt\.?|,)?\s*(\d+(?:\.\d+)?)\s*kg/i)||[])[1];if(!dim||!kg)return;const factor=(dim[4]||"cm").toLowerCase()==="m"?100:(dim[4]||"cm").toLowerCase()==="mm"?.1:1,q=(source.match(/(\d+)\s*(?:cartons?|boxes?|pcs?|pieces?|packages?)/i)||[])[1]||"1",tr=document.createElement("tr");tr.innerHTML=[["quantity",q],["length",Number(dim[1])*factor],["width",Number(dim[2])*factor],["height",Number(dim[3])*factor],["weight",kg]].map(([key,value])=>`<td><input data-package-${key} value="${value}"></td>`).join("");rows.replaceChildren(tr);if(/medical|syringe/i.test(source)){item.value="Medical supplies / tools";item.dispatchEvent(new Event("change"));}const cbm=form.querySelector("[data-cbm]"),weight=form.querySelector("[data-weight]");cbm.value=(Number(q)*Number(dim[1])*factor*Number(dim[2])*factor*Number(dim[3])*factor/1e6).toFixed(6);weight.value=(Number(q)*Number(kg)).toFixed(2);cbm.dispatchEvent(new Event("input",{bubbles:true}));weight.dispatchEvent(new Event("input",{bubbles:true}));},250));
+})();
+
+/* Final fallback runs after the older extractor and accepts free text between dimensions and weight. */
+(() => {
+  const quick=document.querySelector("[data-quick-input]"),rows=document.querySelector("[data-package-rows]"),item=document.querySelector("[data-item]");if(!quick||!rows||!item)return;
+  quick.querySelector("[data-extract-details]").addEventListener("click",()=>setTimeout(()=>{const source=quick.querySelector("[data-quick-text]").value,match=source.match(/(\d+(?:\.\d+)?)\s*(?:x|×|\*)\s*(\d+(?:\.\d+)?)\s*(?:x|×|\*)\s*(\d+(?:\.\d+)?)(?:\s*(cm|mm|m))?/i);if(!match)return;const after=source.slice((match.index||0)+match[0].length,(match.index||0)+match[0].length+160),kg=(after.match(/(?:weight|wt\.?|,)?\s*(\d+(?:\.\d+)?)\s*kg/i)||[])[1];if(!kg)return;const factor=(match[4]||"cm").toLowerCase()==="m"?100:(match[4]||"cm").toLowerCase()==="mm"?.1:1,q=Number((source.match(/(\d+)\s*(?:cartons?|boxes?|pcs?|pieces?|packages?)/i)||[])[1]||1),tr=document.createElement("tr");tr.innerHTML=[["product","Medical supplies"],["quantity",q],["length",Number(match[1])*factor],["width",Number(match[2])*factor],["height",Number(match[3])*factor],["weight",kg]].map(([key,value])=>`<td><input data-package-${key} value="${value}"></td>`).join("");rows.replaceChildren(tr);if(source.toLowerCase().includes("medical")){item.value="Medical supplies / tools";item.dispatchEvent(new Event("change"));}},0));
+})();
+
 /* Supplier messages often put the item description between dimensions and weight. */
 (() => {
   const quick=document.querySelector("[data-quick-input]"),rows=document.querySelector("[data-package-rows]");if(!quick||!rows)return;
