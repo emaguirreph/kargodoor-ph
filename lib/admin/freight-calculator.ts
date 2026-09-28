@@ -48,6 +48,7 @@ export async function freightCalculatorPage(request: Request, envOverride?: Admi
       <p class="actions"><button type="submit">Calculate Freight</button></p>
       <p class="notice" data-calculator-error hidden></p>
     </form>
+    <section data-auto-summary hidden><h2>Calculation summary</h2><dl class="freight-calculator-results"><div><dt>Shipment</dt><dd data-summary-shipment>—</dd></div><div><dt>Total CBM</dt><dd data-summary-cbm>—</dd></div><div><dt>Total weight</dt><dd data-summary-weight>—</dd></div><div><dt>Density / billable weight</dt><dd data-summary-basis>—</dd></div><div><dt>KargoDoor formula</dt><dd data-summary-formula>—</dd></div><div><dt>Ni Hao formula</dt><dd data-summary-nihao>—</dd></div></dl></section>
     <div class="freight-calculator-output"><dl class="freight-calculator-results" data-sea-results>
       <div><dt>Category</dt><dd data-sea-category>—</dd></div><div><dt>Package tier</dt><dd data-sea-tier>—</dd></div>
       <div><dt>Total CBM</dt><dd data-sea-cbm>—</dd></div><div><dt>Actual weight</dt><dd data-sea-weight>—</dd></div>

@@ -56,6 +56,13 @@
   fields.forEach((field) => field.addEventListener(field.tagName === "SELECT" ? "change" : "input", convert)); use.addEventListener("click", () => { if (converted !== null) { cbm.value = Number(converted.toFixed(6)); cbm.focus(); } }); convert();
 })();
 
+(() => {
+  const form=document.querySelector("form[data-freight-calculator]"),summary=document.querySelector("[data-auto-summary]");if(!form||!summary)return;
+  const type=form.querySelector("[data-freight-type]"),cbm=form.querySelector("[data-cbm]"),weight=form.querySelector("[data-weight]"),rows=document.querySelector("[data-package-rows]"),read=key=>document.querySelector(`[data-${key}]`)?.textContent||"—",set=(key,value)=>{const node=document.querySelector(`[data-summary-${key}]`);if(node)node.textContent=value;};
+  const update=()=>{if(!Number(cbm.value)||!Number(weight.value))return;const first=rows.querySelector("tr"),field=key=>first?.querySelector(`[data-package-${key}]`)?.value||"—",quantity=field("quantity");summary.hidden=false;set("shipment",`${quantity} package${Number(quantity)===1?"":"s"} · ${field("length")} × ${field("width")} × ${field("height")} cm`);set("cbm",`${cbm.value} CBM`);set("weight",`${weight.value} kg`);if(type.value==="Sea Freight"){set("basis",read("sea-density"));set("formula",`${read("sea-tier")} · ${read("sea-method")} · ${read("sea-cbm-rate")}`);}else{set("basis",`${read("air-volumetric")} volumetric · ${read("air-billable")} billable`);set("formula",`${read("air-basis")} · ${read("air-rate")}`);}set("nihao",read("profit-basis"));};
+  new MutationObserver(update).observe(document.querySelector("[data-sea-results]"),{subtree:true,childList:true,characterData:true});new MutationObserver(update).observe(document.querySelector("[data-air-results]"),{subtree:true,childList:true,characterData:true});
+})();
+
 /* Compact one-step mode: the package review remains available in the markup, but normal pasted details calculate immediately. */
 (() => {
   const quick=document.querySelector("[data-quick-input]"),form=document.querySelector("form[data-freight-calculator]");if(!quick||!form)return;
