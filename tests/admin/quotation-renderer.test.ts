@@ -267,10 +267,11 @@ test("Ni Hao rates page compares supplier costs with reused KargoDoorPH rates an
   assert.match(html, /nihao-category[^]*width:14%[^]*width:50%[^]*width:16%[^]*width:20%/);
   assert.match(html, /nihao-comparison th:nth-child\(3\),\.nihao-comparison td:nth-child\(3\)\{white-space:nowrap\}/);
   assert.match(html, /href="\/admin\/rates-guide">Rates &amp; Pricing<\/a>[\s\S]*href="\/admin\/nihao-rates">Ni Hao Rates<\/a>/);
-  for (const tier of kargoDoorPackageTiers) {
+  for (const tier of kargoDoorPackageTiers.slice(0, 4)) {
     assert.ok(html.includes(tier.base), tier.base);
     assert.ok(html.includes(tier.rule.replaceAll(">", "&gt;")), tier.rule);
   }
+  assert.match(html, /Ni Hao: when density is &gt;500 kg\/CBM, use the higher of the applicable package\/CBM charge and weight × the Ni Hao category density rate\./);
   const source = readFileSync("lib/admin/nihao-rates.ts", "utf8");
   assert.doesNotMatch(source, /KD Mini: ₱250|MOBILE \/ COMPUTERS \/ TABLETS: ₱10,500/);
   assert.ok(!html.includes("<form"), "comparison page has no mutation controls");

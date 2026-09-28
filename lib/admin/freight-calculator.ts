@@ -1,7 +1,8 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { authenticate, csrfToken, type AdminEnv } from "./security";
 import { airItems, itemCategories } from "./quotation-pricing";
-import { niHaoAirRates, niHaoSeaCategories } from "./nihao-rates";
+import { niHaoAirRates } from "./nihao-rates";
+import { niHaoDensityThreshold, niHaoPackagePricing, niHaoSeaRates } from "./nihao-pricing";
 import { esc, page } from "./ui";
 
 export async function freightCalculatorPage(request: Request, envOverride?: AdminEnv) {
@@ -22,7 +23,7 @@ export async function freightCalculatorPage(request: Request, envOverride?: Admi
     [data-nihao-summary]{margin:0;border:1px solid #c6dde9;border-radius:8px;padding:12px;background:#fbfdff}[data-nihao-summary] h2{font-size:1rem;margin:0 0 4px}[data-nihao-summary] .muted{font-size:.82rem;margin:0 0 8px}[data-nihao-summary] .grid{display:none}[data-nihao-summary] .freight-calculator-results{grid-template-columns:1fr}[data-create-quotation]{margin-top:12px}
     @media(max-width:800px){.freight-calculator-output{grid-template-columns:1fr}}@media(max-width:600px){.freight-calculator-results{grid-template-columns:1fr}}
   </style>
-  <section data-freight-calculator data-sea-items="${esc(JSON.stringify(itemCategories))}" data-air-items="${esc(JSON.stringify(airItems))}" data-nihao-sea="${esc(JSON.stringify(niHaoSeaCategories.map(([category, , rate]) => [category, rate])))}" data-nihao-air="${esc(JSON.stringify(niHaoAirRates.map(([item, rate]) => [item, Number(rate.replace(/[^\\d]/g, ""))])))}">
+  <section data-freight-calculator data-sea-items="${esc(JSON.stringify(itemCategories))}" data-air-items="${esc(JSON.stringify(airItems))}" data-nihao-sea="${esc(JSON.stringify(niHaoSeaRates))}" data-nihao-air="${esc(JSON.stringify(niHaoAirRates.map(([item, rate]) => [item, Number(rate.replace(/[^\\d]/g, ""))])))}" data-nihao-package="${esc(JSON.stringify(niHaoPackagePricing))}" data-nihao-density-threshold="${niHaoDensityThreshold}">
     <h2>Freight Calculator</h2>
     <p class="muted">Internal estimate only. This uses the same live KargoDoor pricing rules as quotations and does not save any data.</p>
   </section>
@@ -67,11 +68,11 @@ export async function freightCalculatorPage(request: Request, envOverride?: Admi
     </dl>
     <section data-nihao-summary>
       <h2>Internal cost &amp; profit — Ni Hao</h2>
-      <p class="muted">Internal only. Defaults come from the existing Ni Hao rates reference and remain editable. A blank density rate means no density cost is assumed.</p>
+      <p class="muted">Internal only. Supplier cost automatically uses Ni Hao’s category and package-tier rates, including its separate &gt;500 kg/CBM density rule.</p>
       <div class="grid">
         <label>Ni Hao base rate<input data-nihao-rate type="number" min="0" step="any" placeholder="Required"></label>
         <label data-nihao-minimum-field>Ni Hao minimum charge<input data-nihao-minimum type="number" min="0" step="any" value="1700"></label>
-        <label data-nihao-density-field>Ni Hao density rate / kg<input data-nihao-density-rate type="number" min="0" step="any" placeholder="No default available"></label>
+        <label data-nihao-density-field>Ni Hao density rate / kg<input data-nihao-density-rate type="number" min="0" step="any"></label>
       </div>
       <dl class="freight-calculator-results">
         <div><dt>KargoDoor client price</dt><dd data-profit-client>—</dd></div><div><dt>Ni Hao pricing basis</dt><dd data-profit-basis>—</dd></div>

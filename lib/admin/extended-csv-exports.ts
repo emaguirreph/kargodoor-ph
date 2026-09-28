@@ -12,6 +12,7 @@ import {
   niHaoPackageRates,
   niHaoSeaCategories,
 } from "./nihao-rates";
+import { niHaoDensityThreshold, niHaoSeaRates } from "./nihao-pricing";
 
 const csv = (value: unknown) => {
   const text = String(value ?? "").replace(/^([=+\-@])/, "'$1");
@@ -155,13 +156,13 @@ function ratesCsv(date: string) {
 function niHaoRatesCsv(date: string) {
   const columns = ["Section", "Item / Category", "Range / Items", "Ni Hao Rate", "KargoDoorPH Rate", "Notes"];
   const rows: Record<string, unknown>[] = [
-    ...niHaoSeaCategories.map(([category, items, niHaoRate, kargoCategory]) => ({
+    ...niHaoSeaCategories.map(([category, items, kargoCategory]) => ({
       Section: "Sea Freight Category Rates",
       "Item / Category": category,
       "Range / Items": items,
-      "Ni Hao Rate": `${niHaoRate} per CBM`,
+      "Ni Hao Rate": `${niHaoSeaRates[category].cbmRate} per CBM${niHaoSeaRates[category].densityRate === null ? "; density exempt" : `; ${niHaoSeaRates[category].densityRate} per kg density`}`,
       "KargoDoorPH Rate": `${seaRates[kargoCategory].cbmRate} per CBM${seaRates[kargoCategory].densityRate === null ? "; density exempt" : `; ${seaRates[kargoCategory].densityRate} per kg density`}`,
-      Notes: category === "HIGH VALUE" ? "Mobile / computer parts use KargoDoorPH Mobile / Computers / Tablets rates." : "",
+      Notes: `${category === "HIGH VALUE" ? "Mobile / computer parts use KargoDoorPH Mobile / Computers / Tablets rates. " : ""}Ni Hao density comparison applies only above ${niHaoDensityThreshold} kg/CBM.`,
     })),
     ...niHaoPackageRates.map(([tier, range, niHaoRate], index) => ({
       Section: "Sea Freight Package Rates",
