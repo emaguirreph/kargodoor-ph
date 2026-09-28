@@ -220,6 +220,7 @@ test("CBM converter calculates without changing the pricing CBM", () => {
   const script = readFileSync("public/admin-quotation-cargo.js", "utf8");
   assert.match(script, /const divisor = unit === "mm" \? 1e9 : unit === "cm" \? 1e6 : 1/);
   assert.match(script, /const totalCbm = singleCbm \* values\[3\]/);
+  assert.match(script, /const converter = form\?\.querySelector\("\[data-cbm-converter\]"\)/, "Calculator must still be found after it moves under Freight Type");
   assert.match(script, /data-quotation-quantity/, "Quotation quantity must remain separate from calculator quantity");
   assert.match(script, /Calculator Quantity \(\$\{calculatorCount\}\) differs/, "Quantity mismatch must be clearly warned");
   assert.doesNotMatch(script, /data-use-converted-cbm/);

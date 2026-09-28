@@ -587,7 +587,7 @@ Service Coverage: Origin Warehouse > Manila Customs Clearance > KargoDoor Metro 
     const item = section.querySelector('select[name="item"]');
     const cbm = section.querySelector('[name="cbm"]');
     const weight = section.querySelector('[name="weight"]');
-    const converter = section.querySelector("[data-cbm-converter]");
+    const converter = form?.querySelector("[data-cbm-converter]");
     if (!form || !freight || !item) return;
     const fclMode = new URLSearchParams(location.search).get("fcl") === "1";
     const savedFullContainer = form.querySelector("[data-sea-pricing-method]")?.textContent?.trim() === "Manual full-container all-in rate";
@@ -665,7 +665,7 @@ Service Coverage: Origin Warehouse > Manila Customs Clearance > KargoDoor Metro 
   document.querySelectorAll("[data-cargo-details]").forEach((section) => {
     const form = section.closest("form");
     const cbm = section.querySelector("[data-cbm-output]");
-    const converter = section.querySelector("[data-cbm-converter]");
+    const converter = form?.querySelector("[data-cbm-converter]");
     if (!form || !cbm || !converter) return;
 
     const calculateButton = form.querySelector("[data-quotation-calculate]");
