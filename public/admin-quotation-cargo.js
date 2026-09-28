@@ -25,6 +25,50 @@
     const seaPricing = form.querySelector("[data-sea-pricing]");
     const airPricing = form.querySelector("[data-air-pricing]");
     const csrf = form.querySelector('input[name="csrf"]');
+    const isNewQuotation = form.querySelector('[name="action"][value="save"]');
+
+    if (isNewQuotation && !form.querySelector("[data-quick-quotation]")) {
+      const quick = document.createElement("section");
+      quick.className = "wide quick-quotation";
+      quick.dataset.quickQuotation = "";
+      quick.innerHTML = `
+        <div>
+          <h2>QUICK QUOTATION</h2>
+          <p class="muted">Paste one structured client or supplier message. The fields below fill for review, then the existing KargoDoor formula calculates the estimate.</p>
+          <label>Shipment and customer details<textarea data-quick-quotation-input rows="7" placeholder="Name: Maria Santos\nMobile: 0917 123 4567\nSupplier: ABC Trading\nWarehouse: Guangzhou\nFreight: Sea\nItem: LED lights\nPackages: 3 cartons\nDimensions: 60 × 50 × 40 cm\nWeight: 35 kg each"></textarea></label>
+          <p class="actions"><button type="button" data-quick-quotation-extract>Fill details & calculate</button></p>
+          <p class="notice" data-quick-quotation-status hidden></p>
+        </div>
+        <aside><strong>Format guide</strong><small>Name, Mobile, Email, Company, Supplier, Warehouse, Freight, Item, Packages, Dimensions, Weight</small><small>Use <strong>Weight: 35 kg each</strong> for identical packages. Missing or unclear details stay blank for review.</small></aside>`;
+      quick.style.display = "grid";
+      quick.style.gridTemplateColumns = window.innerWidth <= 760 ? "1fr" : "minmax(0, 1fr) 260px";
+      quick.style.gap = "16px";
+      quick.style.alignItems = "start";
+      quick.style.margin = "0";
+      const quickAside = quick.querySelector("aside");
+      if (quickAside instanceof HTMLElement) {
+        quickAside.style.background = "#f5fbff";
+        quickAside.style.border = "1px solid #d5e4ed";
+        quickAside.style.borderRadius = "7px";
+        quickAside.style.padding = "10px";
+        quickAside.style.fontSize = ".85rem";
+        quickAside.querySelectorAll("small").forEach((note) => {
+          note.style.display = "block";
+          note.style.marginTop = "7px";
+        });
+      }
+      const quickText = quick.querySelector("textarea");
+      if (quickText instanceof HTMLElement) {
+        quickText.style.minHeight = "130px";
+        quickText.style.marginTop = "5px";
+      }
+      window.addEventListener("resize", () => {
+        quick.style.gridTemplateColumns = window.innerWidth <= 760 ? "1fr" : "minmax(0, 1fr) 260px";
+      });
+      section.before(quick);
+      const converter = section.querySelector("[data-cbm-converter]");
+      if (converter) quick.before(converter);
+    }
 
     let seaCategories = {};
     let airItems = [];
@@ -71,8 +115,8 @@
       freightSection.appendChild(freightLabel);
       freightLabel.style.maxWidth = "320px";
       freightLabel.style.marginBottom = "16px";
-      const converter = section.querySelector("[data-cbm-converter]");
-      if (converter) {
+      const converter = form.querySelector("[data-cbm-converter]");
+      if (converter && !form.querySelector("[data-quick-quotation]")) {
         converter.classList.remove("wide");
         freightSection.appendChild(converter);
       }
@@ -425,6 +469,85 @@
         }
       }, 150);
     };
+
+    const quick = form.querySelector("[data-quick-quotation]");
+    const quickInput = quick?.querySelector("[data-quick-quotation-input]");
+    const quickStatus = quick?.querySelector("[data-quick-quotation-status]");
+    const setQuickField = (name, value) => {
+      const field = form.querySelector(`[name="${name}"]`);
+      if (field && value) field.value = value;
+    };
+    const quickValue = (text, labels) => {
+      for (const label of labels) {
+        const match = text.match(new RegExp(`(?:^|\\n)\\s*${label}\\s*[:\\-]\\s*([^\\n]+)`, "im"));
+        if (match?.[1]) return match[1].trim();
+      }
+      return "";
+    };
+    const extractQuickQuotation = () => {
+      const source = quickInput?.value.trim() || "";
+      if (!source) return;
+      const normalized = source.toLowerCase();
+      const notices = [];
+      const freightValue = /\\bair\\b/.test(normalized) ? "Air Freight" : /\\bsea\\b/.test(normalized) ? "Sea Freight" : "";
+      if (freight && freightValue) freight.value = freightValue;
+      else notices.push("freight type");
+      updateItems();
+      setQuickField("customer_name", quickValue(source, ["name", "customer"]));
+      setQuickField("mobile", quickValue(source, ["mobile", "phone", "contact"]));
+      setQuickField("email", quickValue(source, ["email"]));
+      setQuickField("company", quickValue(source, ["company"]));
+      setQuickField("supplier_name", quickValue(source, ["supplier"]));
+      const warehouse = quickValue(source, ["warehouse"]);
+      const warehouseField = form.querySelector('[name="origin_warehouse"]');
+      if (warehouse && warehouseField) {
+        const option = [...warehouseField.options].find((candidate) => candidate.value.toLowerCase() === warehouse.toLowerCase());
+        if (option) warehouseField.value = option.value;
+        else notices.push("warehouse");
+      }
+      const description = quickValue(source, ["item", "product", "commodity"]);
+      if (description) setQuickField("description", description);
+      const knownItem = description && [...(item?.options || [])].find((option) => {
+        const candidate = option.value.toLowerCase();
+        const text = description.toLowerCase();
+        return text === candidate || text.includes(candidate) || candidate.includes(text);
+      });
+      if (item && knownItem) item.value = knownItem.value;
+      else notices.push("item / commodity");
+      const packages = quickValue(source, ["packages", "package", "qty", "quantity"]);
+      const quantityMatch = packages.match(/\\d+/) || source.match(/(?:packages?|cartons?|boxes?)\\s*[:x×-]?\\s*(\\d+)/i) || source.match(/(\\d+)\\s*(?:packages?|cartons?|boxes?)/i);
+      const quantity = quantityMatch ? Number(quantityMatch[1] || quantityMatch[0]) : 0;
+      if (packageQuantity && Number.isInteger(quantity) && quantity > 0) packageQuantity.value = String(quantity);
+      else notices.push("package quantity");
+      const dimensions = quickValue(source, ["dimensions", "dimension", "size"]) || source;
+      const dimensionMatch = dimensions.match(/(\\d+(?:\\.\\d+)?)\\s*(?:cm)?\\s*[x×*]\\s*(\\d+(?:\\.\\d+)?)\\s*(?:cm)?\\s*[x×*]\\s*(\\d+(?:\\.\\d+)?)\\s*(?:cm)?/i);
+      const weightText = quickValue(source, ["weight"]) || source;
+      const weightMatch = weightText.match(/(\\d+(?:\\.\\d+)?)\\s*kg\\b/i);
+      if (dimensionMatch) {
+        length.value = dimensionMatch[1];
+        width.value = dimensionMatch[2];
+        height.value = dimensionMatch[3];
+        if (measurement) measurement.value = "cm";
+      } else notices.push("dimensions");
+      if (weightMatch) {
+        const each = /\\b(each|per package|per carton|each carton)\\b/i.test(weightText);
+        const totalWeight = Number(weightMatch[1]) * (each && quantity > 0 ? quantity : 1);
+        weight.value = String(totalWeight);
+      } else notices.push("weight");
+      if (dimensionMatch && quantity > 0) {
+        const totalCbm = Number(dimensionMatch[1]) * Number(dimensionMatch[2]) * Number(dimensionMatch[3]) * quantity / 1e6;
+        if (cbm) cbm.value = String(Number(totalCbm.toFixed(6)));
+      }
+      updateCategory();
+      if (quickStatus) {
+        quickStatus.hidden = false;
+        quickStatus.textContent = notices.length
+          ? `Review required: ${notices.join(", ")} could not be confidently filled.`
+          : "Details filled. Review the quotation fields and calculation before saving.";
+      }
+      calculate();
+    };
+    quick?.querySelector("[data-quick-quotation-extract]")?.addEventListener("click", extractQuickQuotation);
 
     item?.addEventListener("input", calculate);
     item?.addEventListener("change", calculate);
