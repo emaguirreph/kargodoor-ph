@@ -66,11 +66,11 @@ const validUntilDate = (quotationDate: string = date()) => {
   return d.toISOString().slice(0, 10);
 };
 const baseCbmConverter = (values: Record<string, unknown> = {}) =>
-  `<section class="wide cbm-converter" data-cbm-converter data-container-size="${esc(values.containerSize ?? "")}" data-container-quantity="${esc(values.containerQuantity ?? "")}"><h3>CBM CONVERTER</h3><p class="muted">Calculator only — use when package measurements are provided. It does not change the Total CBM used for pricing.</p><div class="grid"><label>Length (L)<input name="length" data-converter-length type="number" min="0" step="any" value="${esc(values.length ?? "")}"></label><label>Width (W)<input name="width" data-converter-width type="number" min="0" step="any" value="${esc(values.width ?? "")}"></label><label>Height (H)<input name="height" data-converter-height type="number" min="0" step="any" value="${esc(values.height ?? "")}"></label><label>Measurement<select name="measurement_unit" data-converter-unit>${["cm", "mm", "m"].map((unit) => `<option value="${unit}"${String(values.measurementUnit ?? "cm") === unit ? " selected" : ""}>${unit}</option>`).join("")}</select></label><label>Packages<input data-converter-quantity type="number" min="1" step="1" value="${esc(values.packageQuantity ?? 1)}"></label></div><dl><dt>Single Package CBM</dt><dd data-converter-single>—</dd><dt>Total Converted CBM</dt><dd data-converter-total>—</dd></dl><label class="checkbox"><input name="show_package_dimensions" type="checkbox" value="1"${values.showPackageDimensions ? " checked" : ""}> Show package measurements and converted CBM on the customer quotation.</label></section>`;
+  `<section class="wide cbm-converter" data-cbm-converter data-container-size="${esc(values.containerSize ?? "")}" data-container-quantity="${esc(values.containerQuantity ?? "")}"><h3>CBM CONVERTER</h3><p class="muted">Calculator only — L × W × H × Calculator Quantity. It does not change the Total CBM used for pricing.</p><div class="grid"><label>Length (L)<input name="length" data-converter-length type="number" min="0" step="any" value="${esc(values.length ?? "")}"></label><label>Width (W)<input name="width" data-converter-width type="number" min="0" step="any" value="${esc(values.width ?? "")}"></label><label>Height (H)<input name="height" data-converter-height type="number" min="0" step="any" value="${esc(values.height ?? "")}"></label><label>Measurement<select name="measurement_unit" data-converter-unit>${["cm", "mm", "m"].map((unit) => `<option value="${unit}"${String(values.measurementUnit ?? "cm") === unit ? " selected" : ""}>${unit}</option>`).join("")}</select></label><label>Calculator Quantity<input name="calculator_quantity" data-converter-quantity type="number" min="1" step="1" value="${esc(values.calculatorQuantity ?? values.packageQuantity ?? 1)}"></label></div><dl><dt>Single Package CBM</dt><dd data-converter-single>—</dd><dt>Total Converted CBM</dt><dd data-converter-total>—</dd></dl><p class="notice" data-converter-quantity-warning hidden></p><label class="checkbox"><input name="show_package_dimensions" type="checkbox" value="1"${values.showPackageDimensions ? " checked" : ""}> Show package measurements and converted CBM on the customer quotation.</label></section>`;
 const cbmConverter = (values: Record<string, unknown> = {}) =>
   baseCbmConverter(values).replace(
-    'data-converter-quantity type="number" min="1" step="1" value="1"',
-    `name="package_quantity" data-converter-quantity type="number" min="1" step="1" required value="${esc(values.packageQuantity ?? 1)}"`,
+    "</div><dl>",
+    `<label>Quantity of Packages *<input name="package_quantity" data-quotation-quantity type="number" min="1" step="1" required value="${esc(values.packageQuantity ?? 1)}"><small>Used for quotation pricing.</small></label></div><dl>`,
   );
 const seaPricingSection = (
   inputs: string,
@@ -428,6 +428,7 @@ export async function quotationsPage(
           quantity: "",
           unitType: "",
           packageQuantity: decimal("package_quantity") || "1",
+          calculatorQuantity: decimal("calculator_quantity") || String(savedCargo.calculatorQuantity ?? savedCargo.packageQuantity ?? "1"),
           showPackageDimensions: form.get("show_package_dimensions") === "1",
           length: decimal("length"),
           width: decimal("width"),
@@ -693,6 +694,7 @@ export async function quotationsPage(
         quantity: "",
         unitType: "",
         packageQuantity,
+        calculatorQuantity: String(form.get("calculator_quantity") || packageQuantity),
         showPackageDimensions: form.get("show_package_dimensions") === "1",
         length: String(form.get("length") || ""),
         width: String(form.get("width") || ""),

@@ -20,8 +20,7 @@
     const measurement = section.querySelector('select[name="measurement_unit"]');
     const weight = section.querySelector('input[name="weight"]');
     const units = section.querySelector('input[name="units"]');
-    const packageQuantity = section.querySelector('input[name="package_quantity"]');
-    const converterQuantity = section.querySelector('[data-converter-quantity]');
+    let packageQuantity = section.querySelector('input[name="package_quantity"]');
     const unitsField = section.querySelector("[data-units-field]");
     const seaPricing = form.querySelector("[data-sea-pricing]");
     const airPricing = form.querySelector("[data-air-pricing]");
@@ -37,7 +36,6 @@
       return;
     }
 
-    const converterQuantityLabel = converterQuantity?.closest("label");
     const cargoGrid = section.querySelector(":scope > .grid");
     const addressLabel = form.querySelector('[name="address"]')?.closest("label");
     const reflowQuotationHeader = () => {
@@ -80,14 +78,17 @@
       }
       section.before(freightSection);
     }
-    if (converterQuantityLabel && cargoGrid && cbm?.closest("label")) {
-      converterQuantityLabel.firstChild.textContent = "Quantity of Packages *";
-      cargoGrid.insertBefore(converterQuantityLabel, cbm.closest("label").nextSibling);
+    const quotationQuantityLabel = packageQuantity?.closest("label");
+    if (quotationQuantityLabel && cargoGrid && cbm?.closest("label")) {
+      cargoGrid.insertBefore(quotationQuantityLabel, cbm.closest("label").nextSibling);
+    } else if (!packageQuantity && cargoGrid && cbm?.closest("label")) {
+      const quotationQuantityLabel = document.createElement("label");
+      quotationQuantityLabel.innerHTML = 'Quantity of Packages *<input name="package_quantity" data-quotation-quantity type="number" min="1" step="1" required value="1"><small>Used for quotation pricing.</small>';
+      cargoGrid.insertBefore(quotationQuantityLabel, cbm.closest("label").nextSibling);
+      packageQuantity = quotationQuantityLabel.querySelector('input[name="package_quantity"]');
     }
     const weightLabel = weight?.closest("label");
-    if (weightLabel && converterQuantityLabel) {
-      cargoGrid?.insertBefore(weightLabel, converterQuantityLabel);
-    }
+    if (weightLabel && packageQuantity) cargoGrid?.insertBefore(weightLabel, packageQuantity.closest("label"));
     const descriptionLabel = form.querySelector('[name="description"]')?.closest("label");
     if (descriptionLabel && cargoGrid) cargoGrid.prepend(descriptionLabel);
 
@@ -175,7 +176,7 @@
 
     const renderSea = (result) => {
       setSea("category", result.category || "—");
-      const packages = packageQuantity?.value || section.querySelector("[data-converter-quantity]")?.value || "";
+      const packages = packageQuantity?.value || "";
       setSea("package-quantity", packages ? `${packages} package${Number(packages) === 1 ? "" : "s"}` : "—");
       setSea("tier", result.packageTier || "—");
       setSea(
@@ -499,7 +500,7 @@
     const grid = converter.querySelector(".grid");
     if (grid) {
       grid.style.gap = "8px";
-      const reflow = () => { grid.style.gridTemplateColumns = window.innerWidth <= 760 ? "1fr" : "repeat(4, minmax(0, 1fr))"; };
+      const reflow = () => { grid.style.gridTemplateColumns = window.innerWidth <= 760 ? "1fr" : "repeat(5, minmax(0, 1fr))"; };
       window.addEventListener("resize", reflow);
       reflow();
     }
@@ -673,8 +674,12 @@ Service Coverage: Origin Warehouse > Manila Customs Clearance > KargoDoor Metro 
     const fields = ["length", "width", "height", "unit", "quantity"].map((key) =>
       converter.querySelector(`[data-converter-${key}]`),
     );
+    const quotationQuantity = section.querySelector("[data-quotation-quantity]");
+    const calculatorQuantity = converter.querySelector("[data-converter-quantity]");
     const single = converter.querySelector("[data-converter-single]");
     const total = converter.querySelector("[data-converter-total]");
+    const quantityWarning = converter.querySelector("[data-converter-quantity-warning]");
+    let calculatorQuantityEdited = false;
     const update = () => {
       const [length, width, height, unit, quantity] = fields.map((field) => field?.value.trim() || "");
       const values = [length, width, height, quantity].map(Number);
@@ -689,8 +694,22 @@ Service Coverage: Origin Warehouse > Manila Customs Clearance > KargoDoor Metro 
       if (!Number.isFinite(singleCbm) || !Number.isFinite(totalCbm)) return;
       if (single) single.textContent = formatCbm(singleCbm);
       if (total) total.textContent = formatCbm(totalCbm);
+      const quotationCount = Number(quotationQuantity?.value);
+      const calculatorCount = Number(calculatorQuantity?.value);
+      if (quantityWarning) {
+        const mismatch = Number.isInteger(quotationCount) && quotationCount > 0 && quotationCount !== calculatorCount;
+        quantityWarning.hidden = !mismatch;
+        quantityWarning.textContent = mismatch ? `Calculator Quantity (${calculatorCount}) differs from the quotation Quantity of Packages (${quotationCount}). The calculator total does not change quotation pricing.` : "";
+      }
     };
-    fields.forEach((field) => field?.addEventListener(field.tagName === "SELECT" ? "change" : "input", update));
+    fields.forEach((field) => field?.addEventListener(field.tagName === "SELECT" ? "change" : "input", () => {
+      if (field === calculatorQuantity) calculatorQuantityEdited = true;
+      update();
+    }));
+    quotationQuantity?.addEventListener("input", () => {
+      if (!calculatorQuantityEdited && calculatorQuantity && quotationQuantity instanceof HTMLInputElement) calculatorQuantity.value = quotationQuantity.value;
+      update();
+    });
     update();
   });
 })();
