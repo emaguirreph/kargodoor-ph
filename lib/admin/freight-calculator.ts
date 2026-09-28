@@ -11,12 +11,12 @@ export async function freightCalculatorPage(request: Request, envOverride?: Admi
   const csrf = csrfToken(env, user.id, "/admin/quotations");
 
   const body = `<style>
-    body{background:#e7f6eb!important}
     [data-quick-input] textarea{min-height:96px}.freight-calculator-output{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(300px,.85fr);gap:16px;align-items:start;margin-top:14px}.freight-calculator-output>dl{margin:0}
     .freight-calculator-results{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}
     .freight-calculator-results div{border:1px solid #d5e4ed;border-radius:6px;padding:8px;background:#f8fbfd}
     .freight-calculator-results dt{font-size:.8rem;color:#466177}.freight-calculator-results dd{margin:4px 0 0;font-weight:700}
     .freight-calculator-results [data-total]{color:#0753ad;font-size:1.3rem}
+    [data-auto-summary]{background:#e7f6eb;border-color:#8fc9a0}[data-auto-summary] h2{color:#17633a}
     .cbm-result{font-size:1.3rem;font-weight:700;color:#0753ad}
     .freight-calculator-results[hidden]{display:none}[data-package-review],[data-cbm-converter],[data-sea-rules],[data-air-rules],[data-calculator-fields]{display:none!important}.freight-calculator-results[data-sea-results] div:not(:has([data-sea-total]),:has([data-sea-tier]),:has([data-sea-method])),.freight-calculator-results[data-air-results] div:not(:has([data-air-total]),:has([data-air-basis])){display:none}
     [data-nihao-summary]{margin:0;border:1px solid #c6dde9;border-radius:8px;padding:12px;background:#fbfdff}[data-nihao-summary] h2{font-size:1rem;margin:0 0 4px}[data-nihao-summary] .muted{font-size:.82rem;margin:0 0 8px}[data-nihao-summary] .grid{display:none}[data-nihao-summary] .freight-calculator-results{grid-template-columns:1fr}[data-create-quotation]{margin-top:12px}
