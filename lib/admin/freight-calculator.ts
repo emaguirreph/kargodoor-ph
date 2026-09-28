@@ -11,6 +11,7 @@ export async function freightCalculatorPage(request: Request, envOverride?: Admi
   const csrf = csrfToken(env, user.id, "/admin/quotations");
 
   const body = `<style>
+    body{background:#e7f6eb!important}
     [data-quick-input] textarea{min-height:96px}.freight-calculator-output{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(300px,.85fr);gap:16px;align-items:start;margin-top:14px}.freight-calculator-output>dl{margin:0}
     .freight-calculator-results{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}
     .freight-calculator-results div{border:1px solid #d5e4ed;border-radius:6px;padding:8px;background:#f8fbfd}
