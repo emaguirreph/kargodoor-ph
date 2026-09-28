@@ -1,6 +1,7 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { authenticate, csrfToken, type AdminEnv } from "./security";
 import { airItems, itemCategories } from "./quotation-pricing";
+import { niHaoAirRates, niHaoSeaCategories } from "./nihao-rates";
 import { esc, page } from "./ui";
 
 export async function freightCalculatorPage(request: Request, envOverride?: AdminEnv) {
@@ -10,16 +11,27 @@ export async function freightCalculatorPage(request: Request, envOverride?: Admi
   const csrf = csrfToken(env, user.id, "/admin/quotations");
 
   const body = `<style>
-    .freight-calculator-results{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:18px}
-    .freight-calculator-results div{border:1px solid #d5e4ed;border-radius:8px;padding:12px;background:#f8fbfd}
+    [data-quick-input] textarea{min-height:96px}.freight-calculator-output{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(300px,.85fr);gap:16px;align-items:start;margin-top:14px}.freight-calculator-output>dl{margin:0}
+    .freight-calculator-results{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}
+    .freight-calculator-results div{border:1px solid #d5e4ed;border-radius:6px;padding:8px;background:#f8fbfd}
     .freight-calculator-results dt{font-size:.8rem;color:#466177}.freight-calculator-results dd{margin:4px 0 0;font-weight:700}
     .freight-calculator-results [data-total]{color:#0753ad;font-size:1.3rem}
     .cbm-result{font-size:1.3rem;font-weight:700;color:#0753ad}
-    @media(max-width:600px){.freight-calculator-results{grid-template-columns:1fr}}
+    [data-nihao-summary]{margin:0;border:1px solid #c6dde9;border-radius:8px;padding:12px;background:#fbfdff}[data-nihao-summary] h2{font-size:1rem;margin:0 0 4px}[data-nihao-summary] .muted{font-size:.82rem;margin:0 0 8px}[data-nihao-summary] .grid{gap:8px}[data-nihao-summary] .freight-calculator-results{grid-template-columns:1fr}
+    @media(max-width:800px){.freight-calculator-output{grid-template-columns:1fr}}@media(max-width:600px){.freight-calculator-results{grid-template-columns:1fr}}
   </style>
-  <section data-freight-calculator data-sea-items="${esc(JSON.stringify(itemCategories))}" data-air-items="${esc(JSON.stringify(airItems))}">
+  <section data-freight-calculator data-sea-items="${esc(JSON.stringify(itemCategories))}" data-air-items="${esc(JSON.stringify(airItems))}" data-nihao-sea="${esc(JSON.stringify(niHaoSeaCategories.map(([category, , rate]) => [category, rate])))}" data-nihao-air="${esc(JSON.stringify(niHaoAirRates.map(([item, rate]) => [item, Number(rate.replace(/[^\\d]/g, ""))])))}">
     <h2>Freight Calculator</h2>
     <p class="muted">Internal estimate only. This uses the same live KargoDoor pricing rules as quotations and does not save any data.</p>
+  </section>
+  <section data-quick-input>
+    <h2>Quick shipment input</h2>
+    <p class="muted">Paste client or supplier details from Viber, Messenger, or Alibaba. Extraction is a local structured parser: it never creates a quotation or sends the pasted message anywhere. Review every field before calculating.</p>
+    <label class="wide">Shipment details to extract<textarea data-quick-text rows="4" placeholder="Example: Sea freight, LED lights. 4 cartons, 60 x 50 x 40 cm, 35 kg each."></textarea></label>
+    <p class="actions"><button type="button" data-extract-details>Extract details for review</button></p>
+    <p class="notice" data-extraction-notice hidden></p>
+    <div class="table" data-package-review hidden><table><thead><tr><th>Product / package group</th><th>Quantity</th><th>Length (cm)</th><th>Width (cm)</th><th>Height (cm)</th><th>Weight each (kg)</th><th></th></tr></thead><tbody data-package-rows></tbody></table></div>
+    <p class="actions" data-package-review hidden><button type="button" data-add-package>Add package group</button><button type="button" data-apply-packages>Use reviewed package totals</button></p>
   </section>
   <section>
     <form data-freight-calculator>
@@ -35,7 +47,7 @@ export async function freightCalculatorPage(request: Request, envOverride?: Admi
       <p class="actions"><button type="submit">Calculate Freight</button></p>
       <p class="notice" data-calculator-error hidden></p>
     </form>
-    <dl class="freight-calculator-results" data-sea-results>
+    <div class="freight-calculator-output"><dl class="freight-calculator-results" data-sea-results>
       <div><dt>Category</dt><dd data-sea-category>—</dd></div><div><dt>Package tier</dt><dd data-sea-tier>—</dd></div>
       <div><dt>Total CBM</dt><dd data-sea-cbm>—</dd></div><div><dt>Actual weight</dt><dd data-sea-weight>—</dd></div>
       <div><dt>Density</dt><dd data-sea-density>—</dd></div><div><dt>Density rule</dt><dd data-sea-density-rule>—</dd></div>
@@ -50,6 +62,20 @@ export async function freightCalculatorPage(request: Request, envOverride?: Admi
       <div><dt>Charging basis</dt><dd data-air-basis>—</dd></div><div><dt>Units / pieces</dt><dd data-air-units>—</dd></div>
       <div><dt>Total estimated freight</dt><dd data-air-total data-total>—</dd></div>
     </dl>
+    <section data-nihao-summary>
+      <h2>Internal cost &amp; profit — Ni Hao</h2>
+      <p class="muted">Internal only. Defaults come from the existing Ni Hao rates reference and remain editable. A blank density rate means no density cost is assumed.</p>
+      <div class="grid">
+        <label>Ni Hao base rate<input data-nihao-rate type="number" min="0" step="any" placeholder="Required"></label>
+        <label data-nihao-minimum-field>Ni Hao minimum charge<input data-nihao-minimum type="number" min="0" step="any" value="1700"></label>
+        <label data-nihao-density-field>Ni Hao density rate / kg<input data-nihao-density-rate type="number" min="0" step="any" placeholder="No default available"></label>
+      </div>
+      <dl class="freight-calculator-results">
+        <div><dt>KargoDoor client price</dt><dd data-profit-client>—</dd></div><div><dt>Ni Hao pricing basis</dt><dd data-profit-basis>—</dd></div>
+        <div><dt>Ni Hao cost</dt><dd data-profit-nihao>—</dd></div><div><dt>Gross profit</dt><dd data-profit-gross>—</dd></div>
+        <div><dt>Gross margin</dt><dd data-profit-margin>—</dd></div><div data-profit-cbm-field><dt>Profit per CBM</dt><dd data-profit-per-cbm>—</dd></div>
+      </dl>
+    </section></div>
   </section>
   <section data-sea-rules>
     <h2>Sea Freight rules</h2>
