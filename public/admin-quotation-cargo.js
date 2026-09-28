@@ -28,6 +28,10 @@
     const isNewQuotation = form.querySelector('[name="action"][value="save"]');
 
     if (isNewQuotation && !form.querySelector("[data-quick-quotation]")) {
+      const quotationList = form.closest("section")?.previousElementSibling;
+      if (quotationList instanceof HTMLElement && quotationList.textContent?.includes("Saved quotations")) {
+        quotationList.hidden = true;
+      }
       const quick = document.createElement("section");
       quick.className = "wide quick-quotation";
       quick.dataset.quickQuotation = "";
@@ -68,6 +72,29 @@
       section.before(quick);
       const converter = section.querySelector("[data-cbm-converter]");
       if (converter) quick.before(converter);
+      const summary = document.createElement("section");
+      summary.className = "wide";
+      summary.dataset.quickQuotationSummary = "";
+      summary.hidden = true;
+      summary.innerHTML = '<strong>Estimated KargoDoor rate</strong><span data-quick-quotation-total>—</span><small data-quick-quotation-details>—</small>';
+      summary.style.display = "grid";
+      summary.style.gridTemplateColumns = window.innerWidth <= 760 ? "1fr" : "1.2fr 1fr 2fr";
+      summary.style.gap = "10px";
+      summary.style.alignItems = "center";
+      summary.style.background = "#dff5e6";
+      summary.style.border = "1px solid #8fc8a2";
+      summary.style.borderRadius = "8px";
+      summary.style.padding = "12px";
+      const total = summary.querySelector("[data-quick-quotation-total]");
+      if (total instanceof HTMLElement) {
+        total.style.color = "#0b6638";
+        total.style.fontSize = "1.4rem";
+        total.style.fontWeight = "700";
+      }
+      window.addEventListener("resize", () => {
+        summary.style.gridTemplateColumns = window.innerWidth <= 760 ? "1fr" : "1.2fr 1fr 2fr";
+      });
+      quick.after(summary);
     }
 
     let seaCategories = {};
@@ -135,6 +162,31 @@
     if (weightLabel && packageQuantity) cargoGrid?.insertBefore(weightLabel, packageQuantity.closest("label"));
     const descriptionLabel = form.querySelector('[name="description"]')?.closest("label");
     if (descriptionLabel && cargoGrid) cargoGrid.prepend(descriptionLabel);
+
+    const quickSummary = form.querySelector("[data-quick-quotation-summary]");
+    if (isNewQuotation && quickSummary && !form.querySelector("[data-quotation-review]")) {
+      const review = document.createElement("details");
+      review.className = "wide";
+      review.dataset.quotationReview = "";
+      review.innerHTML = "<summary>Review or edit quotation details</summary>";
+      review.style.margin = "0";
+      review.style.padding = "12px";
+      review.style.border = "1px solid #c6dde9";
+      review.style.borderRadius = "8px";
+      review.style.background = "#fbfdff";
+      quickSummary.after(review);
+      const freightSection = form.querySelector("[data-freight-section]");
+      [...form.children].forEach((child) => {
+        if (
+          child.tagName === "LABEL" ||
+          child === freightSection ||
+          child === section ||
+          child === seaPricing ||
+          child === airPricing ||
+          (child.tagName === "P" && child.classList.contains("muted"))
+        ) review.appendChild(child);
+      });
+    }
 
     const updateCategory = () => {
       if (!item || !freight || !category) return;
@@ -219,6 +271,14 @@
     };
 
     const renderSea = (result) => {
+      const quickSummary = form.querySelector("[data-quick-quotation-summary]");
+      if (quickSummary instanceof HTMLElement) {
+        quickSummary.hidden = false;
+        const total = quickSummary.querySelector("[data-quick-quotation-total]");
+        const details = quickSummary.querySelector("[data-quick-quotation-details]");
+        if (total) total.textContent = money(result.final);
+        if (details) details.textContent = `${result.cbm} CBM · ${result.weight} kg · ${result.pricingMethod}`;
+      }
       setSea("category", result.category || "—");
       const packages = packageQuantity?.value || "";
       setSea("package-quantity", packages ? `${packages} package${Number(packages) === 1 ? "" : "s"}` : "—");
@@ -326,6 +386,16 @@
 
     const renderAir = (result) => {
       const pieces = result.rateBasis === "Per piece";
+      const quickSummary = form.querySelector("[data-quick-quotation-summary]");
+      if (quickSummary instanceof HTMLElement) {
+        quickSummary.hidden = false;
+        const total = quickSummary.querySelector("[data-quick-quotation-total]");
+        const details = quickSummary.querySelector("[data-quick-quotation-details]");
+        if (total) total.textContent = money(result.final);
+        if (details) details.textContent = pieces
+          ? `${result.quantity} pieces · ${result.rateBasis}`
+          : `${result.cbm} CBM · ${result.billableWeight} billable kg · ${result.rateBasis}`;
+      }
 
       setAir("category", result.airCategory || result.item || "—");
       setAir("cbm", pieces ? "Not applicable" : String(result.cbm ?? "—"));
