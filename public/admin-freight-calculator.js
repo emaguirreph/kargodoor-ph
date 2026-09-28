@@ -56,6 +56,12 @@
   fields.forEach((field) => field.addEventListener(field.tagName === "SELECT" ? "change" : "input", convert)); use.addEventListener("click", () => { if (converted !== null) { cbm.value = Number(converted.toFixed(6)); cbm.focus(); } }); convert();
 })();
 
+/* Supplier messages often put the item description between dimensions and weight. */
+(() => {
+  const quick=document.querySelector("[data-quick-input]"),rows=document.querySelector("[data-package-rows]");if(!quick||!rows)return;
+  quick.querySelector("[data-extract-details]").addEventListener("click",()=>{const source=quick.querySelector("[data-quick-text]").value,match=source.match(/(\d+(?:\.\d+)?)\s*(?:x|×|\*)\s*(\d+(?:\.\d+)?)\s*(?:x|×|\*)\s*(\d+(?:\.\d+)?)(?:\s*(cm|mm|m))?/i);if(!match)return;const after=source.slice((match.index||0)+match[0].length,(match.index||0)+match[0].length+160),weight=(after.match(/(?:weight|wt\.?|,)?\s*(\d+(?:\.\d+)?)\s*kg/i)||[])[1];if(!weight)return;const quantity=Number((source.match(/(\d+)\s*(?:cartons?|boxes?|pcs?|pieces?|packages?)/i)||[])[1]||1),factor=(match[4]||"cm").toLowerCase()==="m"?100:(match[4]||"cm").toLowerCase()==="mm"?.1:1;rows.replaceChildren();const row=document.createElement("tr");row.innerHTML=[["product","text","Syringe"],["quantity","number",quantity],["length","number",Number(match[1])*factor],["width","number",Number(match[2])*factor],["height","number",Number(match[3])*factor],["weight","number",weight]].map(([key,kind,value])=>`<td><input data-package-${key} type="${kind}" value="${value}"></td>`).join("");rows.append(row);});
+})();
+
 (() => {
   const form=document.querySelector("form[data-freight-calculator]"),summary=document.querySelector("[data-auto-summary]");if(!form||!summary)return;
   const type=form.querySelector("[data-freight-type]"),cbm=form.querySelector("[data-cbm]"),weight=form.querySelector("[data-weight]"),rows=document.querySelector("[data-package-rows]"),read=key=>document.querySelector(`[data-${key}]`)?.textContent||"—",set=(key,value)=>{const node=document.querySelector(`[data-summary-${key}]`);if(node)node.textContent=value;};
