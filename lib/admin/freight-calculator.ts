@@ -17,7 +17,7 @@ export async function freightCalculatorPage(request: Request, envOverride?: Admi
     .freight-calculator-results dt{font-size:.8rem;color:#466177}.freight-calculator-results dd{margin:4px 0 0;font-weight:700}
     .freight-calculator-results [data-total]{color:#0753ad;font-size:1.3rem}
     .cbm-result{font-size:1.3rem;font-weight:700;color:#0753ad}
-    .freight-calculator-results[hidden]{display:none}[data-package-review],[data-cbm-converter],[data-sea-rules],[data-air-rules]{display:none!important}.freight-calculator-results[data-sea-results] div:not(:has([data-sea-total]),:has([data-sea-tier]),:has([data-sea-method])),.freight-calculator-results[data-air-results] div:not(:has([data-air-total]),:has([data-air-basis])){display:none}
+    .freight-calculator-results[hidden]{display:none}[data-package-review],[data-cbm-converter],[data-sea-rules],[data-air-rules],[data-calculator-fields]{display:none!important}.freight-calculator-results[data-sea-results] div:not(:has([data-sea-total]),:has([data-sea-tier]),:has([data-sea-method])),.freight-calculator-results[data-air-results] div:not(:has([data-air-total]),:has([data-air-basis])){display:none}
     [data-nihao-summary]{margin:0;border:1px solid #c6dde9;border-radius:8px;padding:12px;background:#fbfdff}[data-nihao-summary] h2{font-size:1rem;margin:0 0 4px}[data-nihao-summary] .muted{font-size:.82rem;margin:0 0 8px}[data-nihao-summary] .grid{display:none}[data-nihao-summary] .freight-calculator-results{grid-template-columns:1fr}[data-create-quotation]{margin-top:12px}
     @media(max-width:800px){.freight-calculator-output{grid-template-columns:1fr}}@media(max-width:600px){.freight-calculator-results{grid-template-columns:1fr}}
   </style>
@@ -35,7 +35,7 @@ export async function freightCalculatorPage(request: Request, envOverride?: Admi
     <p class="actions" data-package-review hidden><button type="button" data-add-package>Add package group</button><button type="button" data-apply-packages>Use reviewed package totals</button></p>
   </section>
   <section>
-    <form data-freight-calculator>
+    <form data-freight-calculator data-calculator-fields>
       <input type="hidden" data-csrf value="${esc(csrf)}">
       <div class="grid">
         <label>Freight type<select data-freight-type><option>Sea Freight</option><option>Air Freight</option></select></label>
