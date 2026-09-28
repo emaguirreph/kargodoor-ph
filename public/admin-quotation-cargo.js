@@ -38,37 +38,21 @@
       quick.innerHTML = `
         <div>
           <h2>QUICK QUOTATION</h2>
-          <p class="muted">Paste one structured client or supplier message. The fields below fill for review, then the existing KargoDoor formula calculates the estimate.</p>
-          <label>Shipment and customer details<textarea data-quick-quotation-input rows="7" placeholder="Name: Maria Santos\nMobile: 0917 123 4567\nSupplier: ABC Trading\nWarehouse: Guangzhou\nFreight: Sea\nItem: LED lights\nPackages: 3 cartons\nDimensions: 60 × 50 × 40 cm\nWeight: 35 kg each"></textarea></label>
+          <p class="muted">Paste the client or supplier message. The quotation fills what it can, then uses the existing KargoDoor formula.</p>
+          <label>Shipment and customer details<textarea data-quick-quotation-input rows="6" placeholder="Maria Santos, air, 1 package, 0.5 CBM, sling bags, 7.5 kg"></textarea></label>
           <p class="actions"><button type="button" data-quick-quotation-extract>Fill details & calculate</button></p>
           <p class="notice" data-quick-quotation-status hidden></p>
-        </div>
-        <aside><strong>Format guide</strong><small>Name, Mobile, Email, Company, Supplier, Warehouse, Freight, Item, Packages, Dimensions, Weight</small><small>Use <strong>Weight: 35 kg each</strong> for identical packages. Missing or unclear details stay blank for review.</small></aside>`;
+        </div>`;
       quick.style.display = "grid";
-      quick.style.gridTemplateColumns = window.innerWidth <= 760 ? "1fr" : "minmax(0, 1fr) 260px";
+      quick.style.gridTemplateColumns = "1fr";
       quick.style.gap = "16px";
       quick.style.alignItems = "start";
       quick.style.margin = "0";
-      const quickAside = quick.querySelector("aside");
-      if (quickAside instanceof HTMLElement) {
-        quickAside.style.background = "#f5fbff";
-        quickAside.style.border = "1px solid #d5e4ed";
-        quickAside.style.borderRadius = "7px";
-        quickAside.style.padding = "10px";
-        quickAside.style.fontSize = ".85rem";
-        quickAside.querySelectorAll("small").forEach((note) => {
-          note.style.display = "block";
-          note.style.marginTop = "7px";
-        });
-      }
       const quickText = quick.querySelector("textarea");
       if (quickText instanceof HTMLElement) {
         quickText.style.minHeight = "130px";
         quickText.style.marginTop = "5px";
       }
-      window.addEventListener("resize", () => {
-        quick.style.gridTemplateColumns = window.innerWidth <= 760 ? "1fr" : "minmax(0, 1fr) 260px";
-      });
       section.before(quick);
       const converter = section.querySelector("[data-cbm-converter]");
       if (converter) quick.before(converter);
@@ -559,11 +543,13 @@
       if (!source) return;
       const normalized = source.toLowerCase();
       const notices = [];
-      const freightValue = /\\bair\\b/.test(normalized) ? "Air Freight" : /\\bsea\\b/.test(normalized) ? "Sea Freight" : "";
+      const freightValue = /\bair\b/.test(normalized) ? "Air Freight" : /\bsea\b/.test(normalized) ? "Sea Freight" : "";
       if (freight && freightValue) freight.value = freightValue;
       else notices.push("freight type");
       updateItems();
-      setQuickField("customer_name", quickValue(source, ["name", "customer"]));
+      const pastedName = quickValue(source, ["name", "customer"])
+        || source.split(/[\n,]/)[0].trim().replace(/^(?:name|customer)\s*[:\-]?\s*/i, "");
+      if (/^[a-z][a-z .'-]{2,}$/i.test(pastedName)) setQuickField("customer_name", pastedName);
       setQuickField("mobile", quickValue(source, ["mobile", "phone", "contact"]));
       setQuickField("email", quickValue(source, ["email"]));
       setQuickField("company", quickValue(source, ["company"]));
@@ -575,30 +561,35 @@
         if (option) warehouseField.value = option.value;
         else notices.push("warehouse");
       }
-      const description = quickValue(source, ["item", "product", "commodity"]);
+      const directCbm = source.match(/(?:^|[^\d])(\d*\.?\d+)\s*cbm\b/i);
+      let description = quickValue(source, ["item", "product", "commodity"]);
+      if (!description && /\bbags?\b/i.test(source)) description = "bags";
       if (description) setQuickField("description", description);
-      const knownItem = description && [...(item?.options || [])].find((option) => {
+      let knownItem = description && [...(item?.options || [])].find((option) => {
         const candidate = option.value.toLowerCase();
         const text = description.toLowerCase();
         return text === candidate || text.includes(candidate) || candidate.includes(text);
       });
+      if (!knownItem && freight?.value === "Air Freight" && description) {
+        knownItem = [...(item?.options || [])].find((option) => option.value === "Ordinary Items");
+      }
       if (item && knownItem) item.value = knownItem.value;
       else notices.push("item / commodity");
       const packages = quickValue(source, ["packages", "package", "qty", "quantity"]);
-      const quantityMatch = packages.match(/\\d+/) || source.match(/(?:packages?|cartons?|boxes?)\\s*[:x×-]?\\s*(\\d+)/i) || source.match(/(\\d+)\\s*(?:packages?|cartons?|boxes?)/i);
+      const quantityMatch = packages.match(/\d+/) || source.match(/(\d+)\s*(?:packages?|cartons?|boxes?)/i) || source.match(/(?:packages?|cartons?|boxes?)\s*[:x×-]?\s*(\d+)/i);
       const quantity = quantityMatch ? Number(quantityMatch[1] || quantityMatch[0]) : 0;
       if (packageQuantity && Number.isInteger(quantity) && quantity > 0) packageQuantity.value = String(quantity);
       else notices.push("package quantity");
       const dimensions = quickValue(source, ["dimensions", "dimension", "size"]) || source;
-      const dimensionMatch = dimensions.match(/(\\d+(?:\\.\\d+)?)\\s*(?:cm)?\\s*[x×*]\\s*(\\d+(?:\\.\\d+)?)\\s*(?:cm)?\\s*[x×*]\\s*(\\d+(?:\\.\\d+)?)\\s*(?:cm)?/i);
+      const dimensionMatch = dimensions.match(/(\d+(?:\.\d+)?)\s*(?:cm)?\s*[x×*]\s*(\d+(?:\.\d+)?)\s*(?:cm)?\s*[x×*]\s*(\d+(?:\.\d+)?)\s*(?:cm)?/i);
       const weightText = quickValue(source, ["weight"]) || source;
-      const weightMatch = weightText.match(/(\\d+(?:\\.\\d+)?)\\s*kg\\b/i);
+      const weightMatch = weightText.match(/(\d+(?:\.\d+)?)\s*kgs?\b/i);
       if (dimensionMatch) {
         length.value = dimensionMatch[1];
         width.value = dimensionMatch[2];
         height.value = dimensionMatch[3];
         if (measurement) measurement.value = "cm";
-      } else notices.push("dimensions");
+      } else if (!directCbm) notices.push("dimensions or total CBM");
       if (weightMatch) {
         const each = /\\b(each|per package|per carton|each carton)\\b/i.test(weightText);
         const totalWeight = Number(weightMatch[1]) * (each && quantity > 0 ? quantity : 1);
@@ -607,6 +598,8 @@
       if (dimensionMatch && quantity > 0) {
         const totalCbm = Number(dimensionMatch[1]) * Number(dimensionMatch[2]) * Number(dimensionMatch[3]) * quantity / 1e6;
         if (cbm) cbm.value = String(Number(totalCbm.toFixed(6)));
+      } else if (directCbm && cbm) {
+        cbm.value = String(Number(directCbm[1]));
       }
       updateCategory();
       if (quickStatus) {
@@ -693,7 +686,38 @@
     const grid = converter.querySelector(".grid");
     if (grid) {
       grid.style.gap = "8px";
-      const reflow = () => { grid.style.gridTemplateColumns = window.innerWidth <= 760 ? "1fr" : "repeat(5, minmax(0, 1fr))"; };
+      const form = converter.closest("form");
+      const cargo = form?.querySelector("[data-cargo-details]");
+      const itemLabel = cargo?.querySelector('[name="item"]')?.closest("label");
+      const categoryLabel = cargo?.querySelector("[data-category-output]")?.closest("label");
+      const workspace = document.createElement("div");
+      workspace.dataset.cbmWorkspace = "";
+      workspace.style.display = "grid";
+      workspace.style.gap = "12px";
+      grid.before(workspace);
+      workspace.appendChild(grid);
+      if (itemLabel && categoryLabel) {
+        const picker = document.createElement("div");
+        picker.dataset.cargoPicker = "";
+        picker.innerHTML = "<strong>Item & category</strong>";
+        picker.style.display = "grid";
+        picker.style.gap = "8px";
+        picker.style.alignContent = "start";
+        picker.style.paddingLeft = "12px";
+        picker.style.borderLeft = "1px solid #a6d5b5";
+        picker.append(itemLabel, categoryLabel);
+        workspace.appendChild(picker);
+      }
+      const reflow = () => {
+        const narrow = window.innerWidth <= 760;
+        workspace.style.gridTemplateColumns = narrow ? "1fr" : "minmax(0, 1.45fr) minmax(260px, .8fr)";
+        grid.style.gridTemplateColumns = narrow ? "repeat(2, minmax(0, 1fr))" : "repeat(5, minmax(0, 1fr))";
+        const picker = workspace.querySelector("[data-cargo-picker]");
+        if (picker instanceof HTMLElement) {
+          picker.style.paddingLeft = narrow ? "0" : "12px";
+          picker.style.borderLeft = narrow ? "0" : "1px solid #a6d5b5";
+        }
+      };
       window.addEventListener("resize", reflow);
       reflow();
     }
@@ -712,6 +736,7 @@
     if (checkbox) {
       checkbox.style.marginTop = "8px";
       checkbox.style.fontSize = ".9rem";
+      checkbox.lastChild.textContent = " Include measurements on the customer quotation.";
     }
   });
 })();
