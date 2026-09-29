@@ -1834,6 +1834,10 @@ export async function handleAdmin(
                   <th>
                     Details
                   </th>
+
+                  ${entity === "customers" && canWrite ? `<th>
+                    Shipment
+                  </th>` : ""}
                 </tr>
               </thead>
 
@@ -1879,6 +1883,15 @@ export async function handleAdmin(
                             </span>
                           </a>
                         </td>
+
+                        ${entity === "customers" && canWrite ? `<td>
+                          <a
+                            class="button"
+                            href="/admin/shipments?new=1&customer_id=${esc(row.id)}"
+                          >
+                            Add shipment
+                          </a>
+                        </td>` : ""}
                       </tr>`,
                   )
                   .join("")}
