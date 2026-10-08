@@ -1,15 +1,38 @@
 (() => {
   const form = document.querySelector("[data-freight-calculator]");
-  const converter = document.querySelector("[data-cbm-converter]");
-  if (!form || !converter) return;
+  const quick = document.querySelector("[data-quick-input]");
+  if (!form || !quick) return;
+
   let seaItems, airItems;
   try {
     seaItems = JSON.parse(form.dataset.seaItems || "{}");
     airItems = JSON.parse(form.dataset.airItems || "[]");
   } catch { return; }
+
+  const type = form.querySelector("[data-freight-type]");
+  const item = form.querySelector("[data-item]");
+  const category = form.querySelector("[data-category]");
+  const cbm = form.querySelector("[data-cbm]");
+  const weight = form.querySelector("[data-weight]");
+  const units = form.querySelector("[data-units]");
+  const unitsField = form.querySelector("[data-units-field]");
+  const csrf = form.querySelector("[data-csrf]");
+  const error = form.querySelector("[data-calculator-error]");
+  const sea = document.querySelector("[data-sea-results]");
+  const air = document.querySelector("[data-air-results]");
+  const seaRules = document.querySelector("[data-sea-rules]");
+  const airRules = document.querySelector("[data-air-rules]");
+  const source = quick.querySelector("[data-quick-text]");
+  const notice = quick.querySelector("[data-extraction-notice]");
+  const rows = quick.querySelector("[data-package-rows]");
+  const review = quick.querySelectorAll("[data-package-review]");
+  const createQuotation = document.querySelector("[data-create-quotation]");
+  const createQuotationButton = document.querySelector("[data-create-quotation-button]");
+  const extractedContact = document.querySelector("[data-extracted-contact]");
+
   const money = (value) => new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" }).format(Number(value || 0));
-  const type = document.querySelector("[data-freight-type]"), item = document.querySelector("[data-item]"), category = document.querySelector("[data-category]"), cbm = document.querySelector("[data-cbm]"), weight = document.querySelector("[data-weight]"), units = document.querySelector("[data-units]"), unitsField = document.querySelector("[data-units-field]"), csrf = document.querySelector("[data-csrf]"), error = document.querySelector("[data-calculator-error]"), sea = document.querySelector("[data-sea-results]"), air = document.querySelector("[data-air-results]"), seaRules = document.querySelector("[data-sea-rules]"), airRules = document.querySelector("[data-air-rules]");
   const put = (group, key, value) => { const node = document.querySelector(`[data-${group}-${key}]`); if (node) node.textContent = value; };
+  const showError = (message = "") => { error.textContent = message; error.hidden = !message; };
   const pieceItem = () => ["Mobile Phones", "Tablets", "Laptop Computers"].includes(item.value);
   const seaPieceItem = () => type.value === "Sea Freight" && seaItems[item.value] === "MOBILE / COMPUTERS / TABLETS";
   const sync = () => {
@@ -26,88 +49,179 @@
     seaRules.hidden = type.value !== "Sea Freight";
     airRules.hidden = type.value !== "Air Freight";
   };
-  const showError = (message = "") => { error.textContent = message; error.hidden = !message; };
+
   let timer;
-  const calculate = async () => {
+  const calculate = () => {
     const isPiece = type.value === "Air Freight" && pieceItem();
     if ((!isPiece && (!cbm.value || !weight.value)) || (isPiece && Number(units.value) < 1)) return showError(isPiece ? "Enter at least one piece." : "Enter both Total CBM and Actual Weight.");
-    const payload = type.value === "Sea Freight" ? { freightType: type.value, item: item.value, category: category.value, cbm: cbm.value, weight: weight.value, units: units.value || "0" } : { freightType: type.value, item: item.value, cbm: cbm.value || "0", weight: weight.value || "0", quantity: isPiece ? units.value : "1" };
+    const payload = type.value === "Sea Freight"
+      ? { freightType: type.value, item: item.value, category: category.value, cbm: cbm.value, weight: weight.value, units: units.value || "0" }
+      : { freightType: type.value, item: item.value, cbm: cbm.value || "0", weight: weight.value || "0", quantity: isPiece ? units.value : "1" };
     clearTimeout(timer);
-    timer = setTimeout(async () => { try {
-      const response = await fetch("/admin/quotations/calculate", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf.value }, body: JSON.stringify(payload) });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "Unable to calculate freight.");
-      showError();
-      if (type.value === "Sea Freight") {
-        put("sea", "category", result.category); put("sea", "tier", result.packageTier); put("sea", "cbm", result.cbm); put("sea", "weight", `${result.weight} kg`); put("sea", "density", `${Number(result.density).toFixed(2)} kg/CBM`); put("sea", "density-rule", result.densityApplies ? "Above 425 kg/CBM — comparison applies" : "Within threshold"); put("sea", "cbm-rate", `${money(result.cbmRate)} / CBM`); put("sea", "density-rate", result.densityRate === null ? "Exempt" : `${money(result.densityRate)} / kg`); put("sea", "base", money(result.base)); put("sea", "density-charge", result.densityRate === null ? "Not applicable" : money(result.densityCharge)); put("sea", "method", result.pricingMethod); put("sea", "total", money(result.final));
-      } else {
-        const pieces = result.rateBasis === "Per piece"; put("air", "category", result.airCategory); put("air", "rate", `${money(result.rate)} / ${pieces ? "piece" : "kg"}`); put("air", "cbm", pieces ? "Not applicable" : result.cbm); put("air", "weight", pieces ? "Not applicable" : `${result.weight} kg`); put("air", "volumetric", pieces ? "Not applicable" : `${Number(result.volumetricWeight).toFixed(2)} kg`); put("air", "billable", pieces ? "Not applicable" : `${Number(result.billableWeight).toFixed(2)} kg`); put("air", "basis", result.rateBasis); put("air", "units", pieces ? result.quantity : "Not applicable"); put("air", "total", money(result.final));
-      }
-    } catch (cause) { showError(cause instanceof Error ? cause.message : "Unable to calculate freight."); } }, 180);
+    timer = setTimeout(async () => {
+      try {
+        const response = await fetch("/admin/quotations/calculate", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf.value }, body: JSON.stringify(payload) });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Unable to calculate freight.");
+        showError();
+        if (type.value === "Sea Freight") {
+          put("sea", "category", result.category); put("sea", "tier", result.packageTier); put("sea", "cbm", result.cbm); put("sea", "weight", `${result.weight} kg`);
+          put("sea", "density", `${Number(result.density).toFixed(2)} kg/CBM`); put("sea", "density-rule", result.densityApplies ? "Above 425 kg/CBM — comparison applies" : "Within threshold");
+          put("sea", "cbm-rate", `${money(result.cbmRate)} / CBM`); put("sea", "density-rate", result.densityRate === null ? "Exempt" : `${money(result.densityRate)} / kg`);
+          put("sea", "base", money(result.base)); put("sea", "density-charge", result.densityRate === null ? "Not applicable" : money(result.densityCharge)); put("sea", "method", result.pricingMethod); put("sea", "total", money(result.final));
+        } else {
+          const pieces = result.rateBasis === "Per piece";
+          put("air", "category", result.airCategory); put("air", "rate", `${money(result.rate)} / ${pieces ? "piece" : "kg"}`); put("air", "cbm", pieces ? "Not applicable" : result.cbm); put("air", "weight", pieces ? "Not applicable" : `${result.weight} kg`);
+          put("air", "volumetric", pieces ? "Not applicable" : `${Number(result.volumetricWeight).toFixed(2)} kg`); put("air", "billable", pieces ? "Not applicable" : `${Number(result.billableWeight).toFixed(2)} kg`); put("air", "basis", result.rateBasis); put("air", "units", pieces ? result.quantity : "Not applicable"); put("air", "total", money(result.final));
+        }
+      } catch (cause) { showError(cause instanceof Error ? cause.message : "Unable to calculate freight."); }
+    }, 180);
   };
+
+  const createRow = (group = {}) => {
+    const tr = document.createElement("tr");
+    const fields = [["product", "text"], ["quantity", "number"], ["length", "number"], ["width", "number"], ["height", "number"], ["weight", "number"]];
+    tr.innerHTML = fields.map(([key, inputType]) => `<td><input data-package-${key} type="${inputType}" min="0" step="any" value="${group[key] || ""}"></td>`).join("") + '<td><button type="button" data-remove-package>Remove</button></td>';
+    return tr;
+  };
+  const flag = (message) => { notice.textContent = message; notice.hidden = !message; };
+  const unitFactor = (unit) => unit.toLowerCase() === "m" ? 100 : unit.toLowerCase() === "mm" ? 0.1 : 1;
+  const packageQuantity = (text) => Number((text.match(/(\d+(?:\.\d+)?)\s*(?:cartons?|ctns?|boxes?|packages?|p(?:cs|ieces)?)/i) || [])[1] || 1);
+  const productFor = (text) => ([...item.options].find((option) => text.toLowerCase().includes(option.value.toLowerCase())) || {}).value || "";
+  const contactFor = (text) => {
+    const labelled = (label) => ((text.match(new RegExp(`(?:^|[\\n,;])\\s*${label}\\s*[:\\-]\\s*([^\\n,;]+`, "i")) || [])[1] || "").trim();
+    return { name: labelled("(?:customer\\s*)?name"), company: labelled("company"), email: (text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/i) || [])[0] || "", mobile: (text.match(/(?:\\+63|0)9\\d{9}/) || [])[0] || "" };
+  };
+
+  quick.querySelector("[data-extract-details]").addEventListener("click", () => {
+    const text = source.value.trim();
+    if (!text) return flag("Paste shipment details first.");
+    const groups = [];
+    const dimensions = /(\d+(?:\.\d+)?)\s*(?:x|×|\*)\s*(\d+(?:\.\d+)?)\s*(?:x|×|\*)\s*(\d+(?:\.\d+)?)(?:\s*(cm|mm|m))?/gi;
+    for (const match of text.replace(/\r/g, "\n").matchAll(dimensions)) {
+      const start = match.index || 0;
+      const nearby = text.slice(Math.max(0, start - 100), start + match[0].length + 180);
+      const foundWeight = nearby.match(/(?:gross\s*)?(?:weight|wt\.?|gw)?\s*[:=-]?\s*(\d+(?:\.\d+)?)\s*(?:kgs?|kilograms?)/i);
+      if (!foundWeight) continue;
+      const factor = unitFactor(match[4] || "cm");
+      groups.push({ product: productFor(nearby), quantity: packageQuantity(nearby), length: Number(match[1]) * factor, width: Number(match[2]) * factor, height: Number(match[3]) * factor, weight: Number(foundWeight[1]) });
+    }
+    rows.replaceChildren(...groups.map(createRow));
+    review.forEach((node) => { node.hidden = !groups.length; });
+    if (!groups.length) return flag("No complete package details found. Include dimensions such as “60 × 50 × 40 cm” and a weight such as “35 kg”.");
+    const lower = text.toLowerCase();
+    if (/\bair(?:\s+freight|\s+cargo)?\b/.test(lower)) type.value = "Air Freight";
+    else if (/\bsea(?:\s+freight)?\b|\bocean\b/.test(lower)) type.value = "Sea Freight";
+    sync();
+    const selectedProduct = productFor(text);
+    if (selectedProduct) { item.value = selectedProduct; sync(); }
+    const totals = groups.reduce((sum, group) => ({ cbm: sum.cbm + group.quantity * group.length * group.width * group.height / 1e6, weight: sum.weight + group.quantity * group.weight }), { cbm: 0, weight: 0 });
+    cbm.value = totals.cbm.toFixed(6).replace(/\.?0+$/, "");
+    weight.value = totals.weight.toFixed(2).replace(/\.?0+$/, "");
+    const contact = contactFor(text);
+    extractedContact.hidden = false;
+    extractedContact.textContent = contact.name ? `Customer: ${contact.name}${contact.mobile ? ` · ${contact.mobile}` : ""}${contact.email ? ` · ${contact.email}` : ""}` : "Customer name was not found. Add “Name: …” to create a draft quotation.";
+    createQuotation.hidden = false;
+    createQuotationButton.disabled = !contact.name;
+    flag(`Extracted ${groups.length} package group${groups.length === 1 ? "" : "s"}: ${cbm.value} CBM and ${weight.value} kg. Review or edit the package details, then calculate.`);
+    calculate();
+  });
+  quick.querySelector("[data-add-package]").addEventListener("click", () => rows.append(createRow()));
+  rows.addEventListener("click", (event) => { const button = event.target.closest("[data-remove-package]"); if (button) button.closest("tr").remove(); });
+  quick.querySelector("[data-apply-packages]").addEventListener("click", () => {
+    let totalCbm = 0, totalWeight = 0, valid = rows.children.length > 0;
+    rows.querySelectorAll("tr").forEach((tr) => {
+      const value = (key) => Number(tr.querySelector(`[data-package-${key}]`).value);
+      const [quantity, length, width, height, eachWeight] = ["quantity", "length", "width", "height", "weight"].map(value);
+      if (![quantity, length, width, height, eachWeight].every((number) => Number.isFinite(number) && number > 0)) valid = false;
+      else { totalCbm += quantity * length * width * height / 1e6; totalWeight += quantity * eachWeight; }
+    });
+    if (!valid) return flag("Every package group needs quantity, dimensions, and weight before totals can be used.");
+    cbm.value = totalCbm.toFixed(6).replace(/\.?0+$/, ""); weight.value = totalWeight.toFixed(2).replace(/\.?0+$/, "");
+    flag(`Reviewed totals applied: ${cbm.value} CBM and ${weight.value} kg.`); calculate();
+  });
+  createQuotationButton.addEventListener("click", () => {
+    const contact = contactFor(source.value);
+    if (!contact.name) return;
+    const first = rows.querySelector("tr");
+    const value = (key) => first?.querySelector(`[data-package-${key}]`)?.value || "";
+    const fields = { action: "save", csrf: csrf.value, status: "Draft", quotation_date: new Date().toISOString().slice(0, 10), customer_name: contact.name, company: contact.company, mobile: contact.mobile, email: contact.email, address: "", description: source.value.trim(), item: item.value, freight_type: type.value, cbm: cbm.value, weight: weight.value, units: units.value || "0", package_quantity: value("quantity") || "1", calculator_quantity: value("quantity") || "1", length: value("length"), width: value("width"), height: value("height"), measurement_unit: "cm", show_package_dimensions: "1", notes: "Created from Freight Calculator" };
+    const draft = document.createElement("form");
+    draft.method = "post"; draft.action = "/admin/quotations";
+    Object.entries(fields).forEach(([name, fieldValue]) => { const input = document.createElement("input"); input.type = "hidden"; input.name = name; input.value = String(fieldValue); draft.append(input); });
+    document.body.append(draft); draft.submit();
+  });
+
   form.addEventListener("submit", (event) => { event.preventDefault(); calculate(); });
   type.addEventListener("change", () => { sync(); calculate(); });
   item.addEventListener("change", () => { sync(); calculate(); });
   [cbm, weight, units].forEach((field) => field.addEventListener("input", calculate));
   sync();
-  const fields = ["length", "width", "height", "unit", "quantity"].map((key) => converter.querySelector(`[data-${key}]`));
-  const single = converter.querySelector("[data-single]"), total = converter.querySelector("[data-total]"), use = converter.querySelector("[data-use-cbm]"); let converted = null;
-  const convert = () => { const [length, width, height, unit, quantity] = fields.map((field) => field.value); const divisor = { mm: 1e9, cm: 1e6, m: 1 }[unit]; const values = [length, width, height, quantity].map(Number); if (!divisor || values.some((value) => !Number.isFinite(value) || value <= 0) || !Number.isInteger(values[3])) { converted = null; single.textContent = total.textContent = "—"; use.disabled = true; return; } const one = values[0] * values[1] * values[2] / divisor; converted = one * values[3]; single.textContent = Number(one.toFixed(6)); total.textContent = Number(converted.toFixed(6)); use.disabled = false; };
-  fields.forEach((field) => field.addEventListener(field.tagName === "SELECT" ? "change" : "input", convert)); use.addEventListener("click", () => { if (converted !== null) { cbm.value = Number(converted.toFixed(6)); cbm.focus(); } }); convert();
-})();
-
-/* Runs after all extractors so a flexible message cannot be overwritten by an older parser. */
-(() => {
-  const quick=document.querySelector("[data-quick-input]"),rows=document.querySelector("[data-package-rows]"),form=document.querySelector("form[data-freight-calculator]"),item=document.querySelector("[data-item]");if(!quick||!rows||!form||!item)return;
-  quick.querySelector("[data-extract-details]").addEventListener("click",()=>setTimeout(()=>{const source=quick.querySelector("[data-quick-text]").value,dim=source.match(/(\d+(?:\.\d+)?)\s*(?:x|×|\*)\s*(\d+(?:\.\d+)?)\s*(?:x|×|\*)\s*(\d+(?:\.\d+)?)(?:\s*(cm|mm|m))?/i),kg=(source.match(/(?:weight|wt\.?|,)?\s*(\d+(?:\.\d+)?)\s*kg/i)||[])[1];if(!dim||!kg)return;const factor=(dim[4]||"cm").toLowerCase()==="m"?100:(dim[4]||"cm").toLowerCase()==="mm"?.1:1,q=(source.match(/(\d+)\s*(?:cartons?|boxes?|pcs?|pieces?|packages?)/i)||[])[1]||"1",tr=document.createElement("tr");tr.innerHTML=[["quantity",q],["length",Number(dim[1])*factor],["width",Number(dim[2])*factor],["height",Number(dim[3])*factor],["weight",kg]].map(([key,value])=>`<td><input data-package-${key} value="${value}"></td>`).join("");rows.replaceChildren(tr);if(/medical|syringe/i.test(source)){item.value="Medical supplies / tools";item.dispatchEvent(new Event("change"));}const cbm=form.querySelector("[data-cbm]"),weight=form.querySelector("[data-weight]");cbm.value=(Number(q)*Number(dim[1])*factor*Number(dim[2])*factor*Number(dim[3])*factor/1e6).toFixed(6);weight.value=(Number(q)*Number(kg)).toFixed(2);cbm.dispatchEvent(new Event("input",{bubbles:true}));weight.dispatchEvent(new Event("input",{bubbles:true}));},250));
-})();
-
-/* Final fallback runs after the older extractor and accepts free text between dimensions and weight. */
-(() => {
-  const quick=document.querySelector("[data-quick-input]"),rows=document.querySelector("[data-package-rows]"),item=document.querySelector("[data-item]");if(!quick||!rows||!item)return;
-  quick.querySelector("[data-extract-details]").addEventListener("click",()=>setTimeout(()=>{const source=quick.querySelector("[data-quick-text]").value,match=source.match(/(\d+(?:\.\d+)?)\s*(?:x|×|\*)\s*(\d+(?:\.\d+)?)\s*(?:x|×|\*)\s*(\d+(?:\.\d+)?)(?:\s*(cm|mm|m))?/i);if(!match)return;const after=source.slice((match.index||0)+match[0].length,(match.index||0)+match[0].length+160),kg=(after.match(/(?:weight|wt\.?|,)?\s*(\d+(?:\.\d+)?)\s*kg/i)||[])[1];if(!kg)return;const factor=(match[4]||"cm").toLowerCase()==="m"?100:(match[4]||"cm").toLowerCase()==="mm"?.1:1,q=Number((source.match(/(\d+)\s*(?:cartons?|boxes?|pcs?|pieces?|packages?)/i)||[])[1]||1),tr=document.createElement("tr");tr.innerHTML=[["product","Medical supplies"],["quantity",q],["length",Number(match[1])*factor],["width",Number(match[2])*factor],["height",Number(match[3])*factor],["weight",kg]].map(([key,value])=>`<td><input data-package-${key} value="${value}"></td>`).join("");rows.replaceChildren(tr);if(source.toLowerCase().includes("medical")){item.value="Medical supplies / tools";item.dispatchEvent(new Event("change"));}},0));
-})();
-
-/* Supplier messages often put the item description between dimensions and weight. */
-(() => {
-  const quick=document.querySelector("[data-quick-input]"),rows=document.querySelector("[data-package-rows]");if(!quick||!rows)return;
-  quick.querySelector("[data-extract-details]").addEventListener("click",()=>{const source=quick.querySelector("[data-quick-text]").value,match=source.match(/(\d+(?:\.\d+)?)\s*(?:x|×|\*)\s*(\d+(?:\.\d+)?)\s*(?:x|×|\*)\s*(\d+(?:\.\d+)?)(?:\s*(cm|mm|m))?/i);if(!match)return;const after=source.slice((match.index||0)+match[0].length,(match.index||0)+match[0].length+160),weight=(after.match(/(?:weight|wt\.?|,)?\s*(\d+(?:\.\d+)?)\s*kg/i)||[])[1];if(!weight)return;const quantity=Number((source.match(/(\d+)\s*(?:cartons?|boxes?|pcs?|pieces?|packages?)/i)||[])[1]||1),factor=(match[4]||"cm").toLowerCase()==="m"?100:(match[4]||"cm").toLowerCase()==="mm"?.1:1;rows.replaceChildren();const row=document.createElement("tr");row.innerHTML=[["product","text","Syringe"],["quantity","number",quantity],["length","number",Number(match[1])*factor],["width","number",Number(match[2])*factor],["height","number",Number(match[3])*factor],["weight","number",weight]].map(([key,kind,value])=>`<td><input data-package-${key} type="${kind}" value="${value}"></td>`).join("");rows.append(row);});
 })();
 
 (() => {
-  const form=document.querySelector("form[data-freight-calculator]"),summary=document.querySelector("[data-auto-summary]");if(!form||!summary)return;
-  const type=form.querySelector("[data-freight-type]"),cbm=form.querySelector("[data-cbm]"),weight=form.querySelector("[data-weight]"),rows=document.querySelector("[data-package-rows]"),read=key=>document.querySelector(`[data-${key}]`)?.textContent||"—",set=(key,value)=>{const node=document.querySelector(`[data-summary-${key}]`);if(node)node.textContent=value;};
-  const update=()=>{if(!Number(cbm.value)||!Number(weight.value))return;const first=rows.querySelector("tr"),field=key=>first?.querySelector(`[data-package-${key}]`)?.value||"—",quantity=field("quantity");summary.hidden=false;set("shipment",`${quantity} package${Number(quantity)===1?"":"s"} · ${field("length")} × ${field("width")} × ${field("height")} cm`);set("cbm",`${cbm.value} CBM`);set("weight",`${weight.value} kg`);if(type.value==="Sea Freight"){set("basis",read("sea-density"));set("formula",`${read("sea-tier")} · ${read("sea-method")} · ${read("sea-cbm-rate")}`);}else{set("basis",`${read("air-volumetric")} volumetric · ${read("air-billable")} billable`);set("formula",`${read("air-basis")} · ${read("air-rate")}`);}set("nihao",read("profit-basis"));};
-  new MutationObserver(update).observe(document.querySelector("[data-sea-results]"),{subtree:true,childList:true,characterData:true});new MutationObserver(update).observe(document.querySelector("[data-air-results]"),{subtree:true,childList:true,characterData:true});
-})();
-
-/* Compact one-step mode: the package review remains available in the markup, but normal pasted details calculate immediately. */
-(() => {
-  const quick=document.querySelector("[data-quick-input]"),form=document.querySelector("form[data-freight-calculator]");if(!quick||!form)return;
-  const text=quick.querySelector("[data-quick-text]"),rows=quick.querySelector("[data-package-rows]"),type=form.querySelector("[data-freight-type]"),item=form.querySelector("[data-item]"),cbm=form.querySelector("[data-cbm]"),weight=form.querySelector("[data-weight]"),units=form.querySelector("[data-units]"),csrf=form.querySelector("[data-csrf]"),create=document.querySelector("[data-create-quotation]"),button=document.querySelector("[data-create-quotation-button]"),contactLine=document.querySelector("[data-extracted-contact]");let extracted={name:"",company:"",email:"",mobile:"",description:"",quantity:"1",length:"",width:"",height:""};
-  const contact=source=>{const labelled=label=>((source.match(new RegExp(`(?:^|[\\n,;])\\s*${label}\\s*[:\\-]\\s*([^\\n,;]+)`,"i"))||[])[1]||"").trim(),email=(source.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/i)||[])[0]||"",mobile=(source.match(/(?:\\+63|0)9\\d{9}/)||[])[0]||"";return{name:labelled("(?:customer\\s*)?name"),company:labelled("company"),email,mobile};};
-  quick.querySelector("[data-extract-details]").addEventListener("click",()=>setTimeout(()=>{let totalCbm=0,totalWeight=0,valid=rows.children.length>0,first={};rows.querySelectorAll("tr").forEach((tr,index)=>{const get=key=>String(tr.querySelector(`[data-package-${key}]`)?.value||""),q=Number(get("quantity")),l=Number(get("length")),w=Number(get("width")),h=Number(get("height")),kg=Number(get("weight"));if(index===0)first={quantity:get("quantity"),length:get("length"),width:get("width"),height:get("height")};if(![q,l,w,h,kg].every(value=>Number.isFinite(value)&&value>0))valid=false;else{totalCbm+=q*l*w*h/1e6;totalWeight+=q*kg;}});if(!valid)return;cbm.value=totalCbm.toFixed(6).replace(/\\.?0+$/,"");weight.value=totalWeight.toFixed(2).replace(/\\.?0+$/,"");Object.assign(extracted,first,contact(text.value),{description:text.value.trim()});cbm.dispatchEvent(new Event("input",{bubbles:true}));weight.dispatchEvent(new Event("input",{bubbles:true}));},80));
-  const showCreate=()=>{if(!Number(cbm.value)||!Number(weight.value))return;const details=contact(text.value);Object.assign(extracted,details);contactLine.hidden=false;contactLine.textContent=details.name?`Customer: ${details.name}${details.mobile?` · ${details.mobile}`:""}${details.email?` · ${details.email}`:""}`:"Customer name was not found in the pasted details. Add “Name: …” to create a quotation.";create.hidden=false;button.disabled=!details.name;};new MutationObserver(showCreate).observe(document.querySelector("[data-sea-results]"),{subtree:true,childList:true,characterData:true});new MutationObserver(showCreate).observe(document.querySelector("[data-air-results]"),{subtree:true,childList:true,characterData:true});
-  button.addEventListener("click",()=>{if(!extracted.name)return;const date=new Date().toISOString().slice(0,10),values={action:"save",csrf:csrf.value,status:"Draft",quotation_date:date,customer_name:extracted.name,company:extracted.company,mobile:extracted.mobile,email:extracted.email,address:"",description:extracted.description,item:item.value,freight_type:type.value,cbm:cbm.value,weight:weight.value,units:units.value||"0",package_quantity:extracted.quantity||"1",calculator_quantity:extracted.quantity||"1",length:extracted.length,width:extracted.width,height:extracted.height,measurement_unit:"cm",show_package_dimensions:"1",notes:"Created from Freight Calculator"};const draft=document.createElement("form");draft.method="post";draft.action="/admin/quotations";Object.entries(values).forEach(([name,value])=>{const input=document.createElement("input");input.type="hidden";input.name=name;input.value=String(value);draft.append(input);});document.body.append(draft);draft.submit();});
-})();
-
-/* Internal quick-input and Ni Hao estimate. It only fills the calculator form; pricing remains the existing server calculation. */
-(() => {
-  const root=document.querySelector("section[data-freight-calculator]"),form=document.querySelector("form[data-freight-calculator]"),quick=document.querySelector("[data-quick-input]");
-  if(!root||!form||!quick)return;
-  let sea,air,packagePricing;try{sea=JSON.parse(root.dataset.nihaoSea||"{}");air=Object.fromEntries(JSON.parse(root.dataset.nihaoAir||"[]"));packagePricing=JSON.parse(root.dataset.nihaoPackage||"{}");}catch{return;}
-  const type=form.querySelector("[data-freight-type]"),item=form.querySelector("[data-item]"),category=form.querySelector("[data-category]"),cbm=form.querySelector("[data-cbm]"),weight=form.querySelector("[data-weight]"),units=form.querySelector("[data-units]");
-  const rate=document.querySelector("[data-nihao-rate]"),minimum=document.querySelector("[data-nihao-minimum]"),density=document.querySelector("[data-nihao-density-rate]"),minimumField=document.querySelector("[data-nihao-minimum-field]"),densityField=document.querySelector("[data-nihao-density-field]");
-  const money=value=>new Intl.NumberFormat("en-PH",{style:"currency",currency:"PHP"}).format(Number(value||0)), put=(key,value)=>{const node=document.querySelector(`[data-profit-${key}]`);if(node)node.textContent=value;};
-  const defaultRate=()=>{const supplierRate=sea[category.value],value=type.value==="Air Freight"?air[item.value]:supplierRate?.cbmRate;if(value!==undefined)rate.value=value;if(type.value==="Sea Freight")density.value=supplierRate?.densityRate??"";minimumField.hidden=true;densityField.hidden=true;};
-  const numberFrom=node=>Number((node?.textContent||"").replace(/[^0-9.-]/g,""));
-  const packageCount=()=>{const rows=[...quick.querySelectorAll("[data-package-rows] tr")],count=rows.reduce((total,row)=>total+Number(row.querySelector("[data-package-quantity]")?.value||0),0);return count>0?count:Math.max(1,Number(units.value)||1);};
-  const seaSupplierCost=baseRate=>{const volume=Number(cbm.value),actualWeight=Number(weight.value),count=packageCount(),supplierRate=sea[category.value],threshold=Number(root.dataset.nihaoDensityThreshold||500);if(!supplierRate||!Number.isFinite(volume)||volume<=0||!Number.isFinite(actualWeight)||actualWeight<0)return null;let base,tier,basis;if(volume<=packagePricing.mini.maximumCbm){base=count*packagePricing.mini.rate;tier="Mini";basis=`Ni Hao Mini · ${count} package${count===1?"":"s"} × ${money(packagePricing.mini.rate)}`;}else if(volume<=packagePricing.lite.maximumCbm){base=count*packagePricing.lite.rate;tier="Lite";basis=`Ni Hao Lite · ${count} package${count===1?"":"s"} × ${money(packagePricing.lite.rate)}`;}else if(volume<=packagePricing.plus.maximumCbm){base=volume*packagePricing.plus.rate;tier="Plus";basis=`Ni Hao Plus · ${money(packagePricing.plus.rate)} / CBM`;}else{base=volume*baseRate;tier="Standard";basis=`Ni Hao Standard · ${money(baseRate)} / CBM`;}const density=actualWeight/volume,densityCharge=supplierRate.densityRate===null?0:actualWeight*supplierRate.densityRate;if(supplierRate.densityRate!==null&&density>threshold&&densityCharge>base)return{cost:densityCharge,basis:`Ni Hao ${tier} · density ${density.toFixed(2)} kg/CBM > ${threshold} · ${money(supplierRate.densityRate)} / kg`};return{cost:base,basis:`${basis}${supplierRate.densityRate===null?" · density exempt":density>threshold?` · base exceeds ${money(densityCharge)} density charge`:""}`};};
-  const profit=()=>{const client=numberFrom(document.querySelector(type.value==="Sea Freight"?"[data-sea-total]":"[data-air-total]")),baseRate=Number(rate.value);if(!Number.isFinite(client)||!Number.isFinite(baseRate)||baseRate<0)return;let cost,basis;if(type.value==="Air Freight"){const pieces=["Mobile Phones","Tablets","Laptop Computers"].includes(item.value),amount=pieces?Number(units.value):Math.max(Number(weight.value),Number(cbm.value)*167);cost=baseRate*amount;basis=`${money(baseRate)} / ${pieces?"piece":"billable kg"}`;}else{const supplier=seaSupplierCost(baseRate);if(!supplier)return;({cost,basis}=supplier);}const gross=client-cost;put("client",money(client));put("basis",basis);put("nihao",money(cost));put("gross",money(gross));put("margin",`${(client?gross/client*100:0).toFixed(2)}%`);const per=document.querySelector("[data-profit-cbm-field]"),hasCbm=type.value==="Sea Freight"&&Number(cbm.value)>0;if(per)per.hidden=!hasCbm;if(hasCbm)put("per-cbm",money(gross/Number(cbm.value)));};
-  type.addEventListener("change",()=>setTimeout(defaultRate));item.addEventListener("change",()=>setTimeout(defaultRate));[rate,minimum,density].forEach(field=>field.addEventListener("input",profit));new MutationObserver(profit).observe(document.querySelector("[data-sea-results]"),{subtree:true,childList:true,characterData:true});new MutationObserver(profit).observe(document.querySelector("[data-air-results]"),{subtree:true,childList:true,characterData:true});defaultRate();
-  const text=quick.querySelector("[data-quick-text]"),notice=quick.querySelector("[data-extraction-notice]"),rows=quick.querySelector("[data-package-rows]"),review=quick.querySelectorAll("[data-package-review]");
-  const row=(group={})=>{const tr=document.createElement("tr"),fields=[["product","text"],["quantity","number"],["length","number"],["width","number"],["height","number"],["weight","number"]];tr.innerHTML=fields.map(([key,kind])=>`<td><input data-package-${key} type="${kind}" min="0" step="any" value="${group[key]||""}"></td>`).join("")+"<td><button type=\"button\" data-remove-package>Remove</button></td>";return tr;};
-  const flag=message=>{notice.textContent=message;notice.hidden=false;};
-  quick.querySelector("[data-extract-details]").addEventListener("click",()=>{const source=text.value.trim(),lower=source.toLowerCase(),flags=[];if(!source)return flag("Paste shipment details first.");const method=/\bair\b|air freight|air cargo/.test(lower)?"Air Freight":/\bsea\b|ocean|sea freight/.test(lower)?"Sea Freight":null;if(method){type.value=method;type.dispatchEvent(new Event("change"));}else flags.push("Freight method was not stated; confirm Sea or Air.");const inferredProduct=((source.match(/(?:\d+\s*)?(?:packages?|cartons?|boxes?)\s+([a-z][a-z -]{2,})/i)||[])[1]||"").trim(),groups=[];for(const match of source.matchAll(/(\d+(?:\.\d+)?)\s*(?:x|×|\*)\s*(\d+(?:\.\d+)?)\s*(?:x|×|\*)\s*(\d+(?:\.\d+)?)(?:\s*(cm|mm|m))?\s*,?\s*(?:gross\s+)?(?:weight|wt\.?)?\s*(\d+(?:\.\d+)?)\s*kg/gi)){const nearby=source.slice(Math.max(0,(match.index||0)-45),(match.index||0)+match[0].length+70),quantity=Number((nearby.match(/(\d+)\s*(?:cartons?|boxes?|pcs?|pieces?|packages?)/i)||[])[1]||1),factor=(match[4]||"cm").toLowerCase()==="m"?100:(match[4]||"cm").toLowerCase()==="mm"?.1:1;groups.push({product:inferredProduct,quantity,length:Number(match[1])*factor,width:Number(match[2])*factor,height:Number(match[3])*factor,weight:Number(match[5])});}if(!groups.length)flags.push("No complete dimensions and weight were found; add package groups manually.");rows.replaceChildren(...(groups.length?groups:[{}]).map(row));review.forEach(node=>node.hidden=false);const normalized=value=>value.toLowerCase().replace(/[^a-z0-9]+/g," ").trim(),suggested=lower.includes("syringe")?"Medical supplies / tools":"",match=[...item.options].find(option=>lower.includes(normalized(option.value)))||[...item.options].find(option=>option.value===suggested);if(match){item.value=match.value;item.dispatchEvent(new Event("change"));}else flags.push("Product was not confidently matched to a pricing item; choose it manually.");flag(flags.length?`Review required: ${flags.join(" ")}`:"Details extracted. Review package groups and calculator fields before calculating.");});
-  quick.querySelector("[data-add-package]").addEventListener("click",()=>rows.append(row()));rows.addEventListener("click",event=>{if(event.target.closest("[data-remove-package]"))event.target.closest("tr").remove();});quick.querySelector("[data-apply-packages]").addEventListener("click",()=>{let totalCbm=0,totalWeight=0,valid=rows.children.length>0;rows.querySelectorAll("tr").forEach(tr=>{const get=key=>Number(tr.querySelector(`[data-package-${key}]`).value),[q,l,w,h,kg]=["quantity","length","width","height","weight"].map(get);if(![q,l,w,h,kg].every(value=>Number.isFinite(value)&&value>0))valid=false;else{totalCbm+=q*l*w*h/1e6;totalWeight+=q*kg;}});if(!valid)return flag("Every package group needs quantity, dimensions, and weight before totals can be used.");cbm.value=totalCbm.toFixed(6).replace(/\\.?0+$/,"");weight.value=totalWeight.toFixed(2).replace(/\\.?0+$/,"");flag(`Reviewed totals applied: ${cbm.value} CBM and ${weight.value} kg. Confirm the calculator fields before calculating.`);form.dispatchEvent(new Event("submit",{cancelable:true}));});
+  const root = document.querySelector("section[data-freight-calculator]");
+  const form = document.querySelector("form[data-freight-calculator]");
+  const quick = document.querySelector("[data-quick-input]");
+  if (!root || !form || !quick) return;
+  let seaRates, airRates, packageRates;
+  try {
+    seaRates = JSON.parse(root.dataset.nihaoSea || "{}");
+    airRates = Object.fromEntries(JSON.parse(root.dataset.nihaoAir || "[]"));
+    packageRates = JSON.parse(root.dataset.nihaoPackage || "{}");
+  } catch { return; }
+  const type = form.querySelector("[data-freight-type]");
+  const item = form.querySelector("[data-item]");
+  const category = form.querySelector("[data-category]");
+  const cbm = form.querySelector("[data-cbm]");
+  const weight = form.querySelector("[data-weight]");
+  const units = form.querySelector("[data-units]");
+  const rate = document.querySelector("[data-nihao-rate]");
+  const rows = quick.querySelector("[data-package-rows]");
+  const put = (key, value) => { const node = document.querySelector(`[data-profit-${key}]`); if (node) node.textContent = value; };
+  const money = (value) => new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" }).format(Number(value || 0));
+  const clientAmount = () => Number((document.querySelector(type.value === "Sea Freight" ? "[data-sea-total]" : "[data-air-total]")?.textContent || "").replace(/[^0-9.-]/g, ""));
+  const packageCount = () => [...rows.querySelectorAll("tr")].reduce((sum, row) => sum + Number(row.querySelector("[data-package-quantity]")?.value || 0), 0) || Math.max(1, Number(units.value) || 1);
+  const setRate = () => {
+    const categoryRate = seaRates[category.value];
+    const next = type.value === "Air Freight" ? airRates[item.value] : categoryRate?.cbmRate;
+    if (next !== undefined) rate.value = next;
+  };
+  const update = () => {
+    const client = clientAmount();
+    const baseRate = Number(rate.value);
+    if (!Number.isFinite(client) || !Number.isFinite(baseRate) || baseRate < 0) return;
+    let cost, basis;
+    if (type.value === "Air Freight") {
+      const pieces = ["Mobile Phones", "Tablets", "Laptop Computers"].includes(item.value);
+      const amount = pieces ? Number(units.value) : Math.max(Number(weight.value), Number(cbm.value) * 167);
+      if (!Number.isFinite(amount) || amount <= 0) return;
+      cost = baseRate * amount;
+      basis = `${money(baseRate)} / ${pieces ? "piece" : "billable kg"}`;
+    } else {
+      const volume = Number(cbm.value), actualWeight = Number(weight.value), supplier = seaRates[category.value];
+      if (!supplier || !Number.isFinite(volume) || volume <= 0 || !Number.isFinite(actualWeight) || actualWeight < 0) return;
+      const count = packageCount();
+      if (volume <= packageRates.mini.maximumCbm) { cost = count * packageRates.mini.rate; basis = `Ni Hao Mini · ${count} package${count === 1 ? "" : "s"}`; }
+      else if (volume <= packageRates.lite.maximumCbm) { cost = count * packageRates.lite.rate; basis = `Ni Hao Lite · ${count} package${count === 1 ? "" : "s"}`; }
+      else if (volume <= packageRates.plus.maximumCbm) { cost = volume * packageRates.plus.rate; basis = `Ni Hao Plus · ${money(packageRates.plus.rate)} / CBM`; }
+      else { cost = volume * baseRate; basis = `Ni Hao Standard · ${money(baseRate)} / CBM`; }
+      const densityCharge = supplier.densityRate === null ? 0 : actualWeight * supplier.densityRate;
+      if (supplier.densityRate !== null && actualWeight / volume > Number(root.dataset.nihaoDensityThreshold || 500) && densityCharge > cost) {
+        cost = densityCharge;
+        basis = `Ni Hao density · ${money(supplier.densityRate)} / kg`;
+      }
+    }
+    const gross = client - cost;
+    put("client", money(client)); put("basis", basis); put("nihao", money(cost)); put("gross", money(gross)); put("margin", `${(client ? gross / client * 100 : 0).toFixed(2)}%`);
+    const perCbm = document.querySelector("[data-profit-cbm-field]");
+    if (perCbm) perCbm.hidden = type.value !== "Sea Freight" || !Number(cbm.value);
+    if (type.value === "Sea Freight" && Number(cbm.value)) put("per-cbm", money(gross / Number(cbm.value)));
+  };
+  type.addEventListener("change", () => { setRate(); setTimeout(update); });
+  item.addEventListener("change", () => { setRate(); setTimeout(update); });
+  [rate, cbm, weight, units].forEach((field) => field.addEventListener("input", update));
+  new MutationObserver(update).observe(document.querySelector("[data-sea-results]"), { subtree: true, childList: true, characterData: true });
+  new MutationObserver(update).observe(document.querySelector("[data-air-results]"), { subtree: true, childList: true, characterData: true });
+  setRate();
 })();

@@ -19,11 +19,12 @@ export async function GET(request: Request) {
     const user = await authenticate(request, env);
     if (!canMutateAdmin(user)) return response;
     const quote = await env.ADMIN_DB.prepare("SELECT status FROM quotations WHERE id = ?").bind(quotationId).first<Row>();
-    if (quote?.status !== "Approved") return response;
     const shipment = await env.ADMIN_DB.prepare("SELECT id, tracking_number FROM shipments WHERE source_quotation_id = ?").bind(quotationId).first<Row>();
     const action = shipment
-      ? `<section><p class="notice">Shipment started: <a href="/admin/shipments?id=${esc(shipment.id)}">${esc(shipment.tracking_number)}</a></p></section>`
-      : `<section><h2>Start shipment</h2><p>Create an operational shipment from this approved quotation. It will begin as <strong>Pending Warehouse Receipt</strong>; no invoice will be created.</p><form method="post" class="actions"><input type="hidden" name="action" value="start_shipment"><input type="hidden" name="quotation_id" value="${esc(quotationId)}"><input type="hidden" name="csrf" value="${esc(csrfToken(env, user.id, "/admin/quotations"))}"><button>Start Shipment</button></form></section>`;
+      ? `<section><h2>Shipment</h2><p class="notice">Added shipment: <a href="/admin/shipments?id=${esc(shipment.id)}">${esc(shipment.tracking_number)}</a></p></section>`
+      : quote?.status === "Approved"
+        ? `<section><h2>Add shipment</h2><p>Create an operational shipment from this approved quotation. It will begin as <strong>Pending Warehouse Receipt</strong>; no invoice will be created.</p><form method="post" class="actions"><input type="hidden" name="action" value="start_shipment"><input type="hidden" name="quotation_id" value="${esc(quotationId)}"><input type="hidden" name="csrf" value="${esc(csrfToken(env, user.id, "/admin/quotations"))}"><button>Add Shipment</button></form></section>`
+        : `<section><h2>Add shipment</h2><p class="muted">Approve this quotation in Edit before adding a shipment.</p></section>`;
     const html = (await response.text()).replace('<article class="quotation-print">', `${action}<article class="quotation-print">`);
     return new Response(html, { status: response.status, headers: response.headers });
   } catch {
