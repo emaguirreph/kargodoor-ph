@@ -26,8 +26,6 @@ const legacyShipmentStatuses = [
   "In Transit",
   "Arrived in Philippines",
   "Ready for Release",
-  "Delivered",
-  "Cancelled",
 ] as const;
 
 export const statuses = [...seaFreightStatuses, ...legacyShipmentStatuses] as const;

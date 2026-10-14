@@ -20,6 +20,7 @@ import {
 
 import {
   statuses,
+  seaFreightStatuses,
   warehouses,
   schemaKeys,
   parseForm,
@@ -853,7 +854,7 @@ export async function handleAdmin(
             "status",
             "Status",
             record,
-            statuses,
+            record.service_type === "Sea Freight" ? seaFreightStatuses : statuses,
           ) +
           input(
             "estimated_arrival",
