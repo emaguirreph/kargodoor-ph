@@ -18,6 +18,7 @@ type CargoSnapshot = {
   cbm?: unknown;
   weight?: unknown;
   originWarehouse?: unknown;
+  bulkPackages?: unknown;
 };
 
 export type ShipmentFromQuotation = {
@@ -106,6 +107,30 @@ export async function createShipmentFromApprovedQuotation(
 
   const customerSnapshot = savedSnapshot<CustomerSnapshot>(quote.customer_snapshot, "customer");
   const cargoSnapshot = savedSnapshot<CargoSnapshot>(quote.cargo_snapshot, "cargo");
+  const bulkPackages = Array.isArray(cargoSnapshot.bulkPackages) ? cargoSnapshot.bulkPackages : null;
+  if (bulkPackages) {
+    if (!bulkPackages.length || bulkPackages.length > 100) throw new AdminError("This bulk quotation has invalid package data.", 422);
+    const customer = await customerForQuotation(db, quote, customerSnapshot);
+    const warehouse = requiredText(cargoSnapshot.originWarehouse, "China warehouse");
+    const now = new Date().toISOString(), statements: D1PreparedStatement[] = [], created: ShipmentFromQuotation[] = [];
+    if (customer.create) {
+      const customerCode = await generatedIdentifier(db, "customers", {});
+      statements.push(db.prepare("INSERT INTO customers (id, customer_code, full_name, company_name, mobile, email, address, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)").bind(customer.customerId, customerCode, customer.create.fullName, customer.create.companyName, customer.create.mobile, customer.create.email, customer.create.address, now, now));
+    }
+    for (const raw of bulkPackages) {
+      if (!raw || typeof raw !== "object") throw new AdminError("This bulk quotation has invalid package data.", 422);
+      const pkg = raw as Record<string, unknown>, cbm = requiredNumber(pkg.cbm, "package CBM", 1000000), weight = requiredNumber(pkg.weight, "package weight", 100000000), charge = Number(pkg.charge), cost = Number(pkg.nihaoCost), status = requiredText(pkg.status, "package status");
+      if (!Number.isSafeInteger(charge) || charge < 0 || !Number.isSafeInteger(cost) || cost < 0) throw new AdminError("This bulk quotation has invalid package costs.", 422);
+      const tracking = await generatedIdentifier(db, "shipments", { service_type: "Sea Freight" });
+      if (!tracking) throw new AdminError("Unable to reserve a tracking number. Please try again.", 409);
+      const shipmentId = randomUUID(); created.push({ shipmentId, trackingNumber: tracking, customerId: customer.customerId, customerCreated: Boolean(customer.create) });
+      const details = `Item: ${text(pkg.item)}\nCategory: ${text(pkg.category)}\nDimensions (cm): ${text(pkg.length)} × ${text(pkg.width)} × ${text(pkg.height)}`;
+      statements.push(db.prepare("INSERT INTO shipments (id, customer_id, source_quotation_id, tracking_number, service_type, china_warehouse, cbm, weight_kg, status, estimated_arrival, actual_arrival, shipping_charge, delivery_charge, payment_status, nihao_cost, cargo_code, warehouse_received_date, departure_date, tracking_remarks, created_at, updated_at) VALUES (?, ?, ?, ?, 'Sea Freight', ?, ?, ?, ?, NULL, NULL, ?, 0, 'Unpaid', ?, NULL, NULL, NULL, ?, ?, ?)").bind(shipmentId, customer.customerId, quotationId, tracking, warehouse, cbm, weight, status, charge, cost, details, now, now));
+    }
+    statements.push(db.prepare("INSERT INTO activity_log (id, admin_user_id, action, entity_type, entity_id, new_value, created_at) VALUES (?, ?, 'create_bulk_shipments_from_approved_quotation', 'quotations', ?, ?, ?)").bind(randomUUID(), adminUserId, quotationId, JSON.stringify({ shipments: created.map(x => x.trackingNumber) }), now));
+    await db.batch(statements);
+    return created[0];
+  }
   const quotationFreightType = requiredText(quote.freight_type, "freight type");
   const serviceType = quotationFreightType === "Full Container" ? "FCL" : quotationFreightType;
   if (!["Sea Freight", "Air Freight", "FCL"].includes(serviceType))

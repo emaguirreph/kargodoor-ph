@@ -29,6 +29,10 @@ export function page(
     '<a class="admin-nav-link" href="/admin/dashboard">Dashboard</a>',
     '<a class="admin-nav-link" href="/admin/dashboard">Dashboard</a><a class="admin-nav-link" href="/admin/freight-calculator" style="color:#80e6a5">Freight Calculator</a>',
   );
+  if (!staff) navigation = navigation.replace(
+    '<a class="admin-nav-link" href="/admin/quotations">Quotations</a>',
+    '<a class="admin-nav-link" href="/admin/quotations">Quotations</a><a class="admin-nav-sub" href="/admin/bulk-intake">Bulk Quotation</a>',
+  );
   body = '<script src="/admin-list-tables.js" defer></script>' + body;
   body = `<style>@media(min-width:761px){.admin-shell{grid-template-columns:180px minmax(0,1fr);gap:16px}.admin-sidebar{padding:14px}.admin-brand{font-size:1.1rem;margin-bottom:16px}.admin-nav{gap:5px}.admin-nav-group{gap:3px}.admin-nav-heading{font-size:.72rem;margin:14px 0 3px}.admin-nav-link{padding:8px 9px;font-size:.95rem}.admin-nav-sub{padding:6px 9px 6px 18px;font-size:.9rem}}</style>${body}`;
   return new Response(
