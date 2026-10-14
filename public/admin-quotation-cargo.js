@@ -458,8 +458,8 @@
     const saved = form.querySelector("[data-existing-nihao-cost]")?.value || "";
     const section = document.createElement("section");
     section.className = "wide";
-    section.style.background = "#fff9df";
-    section.style.borderColor = "#e8d58a";
+    section.style.background = "#fff0f4";
+    section.style.borderColor = "#efb6c8";
     section.dataset.quotationProfit = "";
     section.innerHTML = `<h3>Internal cost & profit — Admin use only</h3><p class="muted">Enter the Ni Hao quotation once received. These figures never appear in the customer quotation or PDF.</p><div class="grid"><label>Ni Hao cost<input name="nihao_cost" type="number" min="0" step=".01" value="${saved}" placeholder="Enter supplier cost"></label><dl><dt>KargoDoor charge</dt><dd data-profit-charge>—</dd><dt>Gross profit</dt><dd data-profit-gross>—</dd><dt>Gross margin</dt><dd data-profit-margin>—</dd></dl></div>`;
     const seaPricing = form.querySelector("[data-sea-pricing]");
@@ -483,7 +483,15 @@
       put("margin", customerCharge ? `${((gross / customerCharge) * 100).toFixed(2)}%` : "—");
     };
     form.addEventListener("input", update);
-    new MutationObserver(update).observe(form, { subtree: true, childList: true, characterData: true });
+    // Do not observe the whole form: update() changes the profit display,
+    // which otherwise triggers the observer again and freezes the page.
+    [form.querySelector("[data-sea-pricing]"), form.querySelector("[data-air-pricing]")]
+      .filter(Boolean)
+      .forEach((panel) => new MutationObserver(update).observe(panel, {
+        subtree: true,
+        childList: true,
+        characterData: true,
+      }));
     update();
   });
 })();
