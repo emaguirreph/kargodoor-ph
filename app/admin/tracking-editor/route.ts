@@ -34,7 +34,18 @@ const warehouses = [
   "Taiwan",
 ] as const;
 
-const statuses = [
+const seaFreightStatuses = [
+  "Awaiting Supplier Dispatch",
+  "China Warehouse",
+  "China Port",
+  "Sea Transit",
+  "Manila Port",
+  "Gatepass",
+  "Malabon Warehouse",
+  "Delivered",
+] as const;
+
+const otherFreightStatuses = [
   "Received at Warehouse",
   "In Transit",
   "Arrived in Philippines",
@@ -88,6 +99,9 @@ function page(
   message = "",
   status = 200,
 ) {
+  const statusOptions = values.freight_type === "Sea Freight"
+    ? seaFreightStatuses
+    : otherFreightStatuses;
   const input = (
     key: (typeof fields)[number],
     label: string,
@@ -506,13 +520,13 @@ Current Status *
   list="statuses"
   value="${escape(
     values.current_status ??
-      "Received at Warehouse",
+      (values.freight_type === "Sea Freight" ? "China Warehouse" : "Received at Warehouse"),
   )}"
 >
 
 <datalist id="statuses">
 
-${statuses
+${statusOptions
   .map(
     (status) =>
       `<option value="${escape(status)}"></option>`,

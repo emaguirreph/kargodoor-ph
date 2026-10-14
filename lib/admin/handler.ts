@@ -1401,8 +1401,8 @@ export async function handleAdmin(
         ].filter(Boolean).join("\n");
 
         const messages: Array<[string, string, string[]]> = [
-          ["cargo-received", "Cargo Received in China", [
-            `Hi ${customerName}! Your KargoDoor cargo has been received at our ${warehouse || "China"} warehouse.`,
+          ["china-warehouse", "China Warehouse", [
+            `Hi ${customerName}! Your items have safely arrived at our main consolidation hub in ${warehouse || "China"}.`,
             "",
             common,
             received ? `Received: ${received}` : "",
@@ -1414,24 +1414,24 @@ export async function handleAdmin(
             "We’ll keep you updated on the next step."
           ]],
 
-          ["shipment-confirmed", "Shipment Confirmed", [
-            `Hi ${customerName}! Your KargoDoor shipment has been confirmed.`,
+          ["china-port", "China Port", [
+            `Hi ${customerName}! Your shipment has cleared Chinese customs and is waiting to board the vessel.`,
             "",
             common,
             service ? `Service: ${service}` : "",
             warehouse ? `Origin Warehouse: ${warehouse}` : "",
             "",
-            "Your cargo is being prepared for shipment. We’ll keep you updated once it is in transit."
+            "We’ll keep you updated once the vessel departs China."
           ]],
 
-          ["shipment-departed", "Shipment Departed China", [
-            `Hi ${customerName}! Good news — your KargoDoor shipment has departed China.`,
+          ["sea-transit", "Sea Transit", [
+            `Hi ${customerName}! Your package is currently on the ocean, sailing toward the Philippines.`,
             "",
             common,
             service ? `Service: ${service}` : "",
             departure ? `Departure Date: ${departure}` : "",
             "",
-            "Your cargo is now on the way to the Philippines.",
+            "We’ll send another update once the ship docks in Manila.",
             "Track here: https://www.kargodoorph.com/track"
           ]],
 
@@ -1446,20 +1446,20 @@ export async function handleAdmin(
             "Track here: https://www.kargodoorph.com/track"
           ]],
 
-          ["arrived-philippines", "Arrived in Philippines", [
-            `Hi ${customerName}! Your KargoDoor shipment has arrived in the Philippines.`,
+          ["manila-port", "Manila Port", [
+            `Hi ${customerName}! The ship has docked, and your cargo is undergoing customs clearance in Manila.`,
             "",
             common,
             "",
-            "Your cargo will now proceed through the required arrival and clearance processing. We’ll keep you updated on the next step."
+            "We’ll notify you once clearance is complete and the truck has approval to leave the port."
           ]],
 
-          ["customs-processing", "Customs Processing", [
-            `Hi ${customerName}! Your KargoDoor shipment is currently undergoing customs processing.`,
+          ["gatepass", "Gatepass", [
+            `Hi ${customerName}! Customs clearance is complete, and the delivery truck has approval to leave the port.`,
             "",
             common,
             "",
-            "No action is required from you at this time unless we contact you for additional information. We’ll notify you once your cargo is cleared and ready for the next step."
+            "Your cargo is now moving to our Malabon warehouse for final delivery or pickup."
           ]],
 
           ["payment-request", "Payment Request", [
@@ -1471,12 +1471,12 @@ export async function handleAdmin(
             "Please coordinate with us for your invoice and payment details. Once payment is confirmed, we’ll proceed with the next release or delivery step."
           ]],
 
-          ["ready-for-pickup", "Ready for Pickup", [
-            `Hi ${customerName}! Your KargoDoor shipment is ready for pickup.`,
+          ["malabon-warehouse", "Malabon Warehouse", [
+            `Hi ${customerName}! Your items have arrived at our Malabon warehouse and are ready for final delivery or pickup.`,
             "",
             common,
             "",
-            "Please coordinate with us before pickup so we can have your cargo ready for release."
+            "Please coordinate with us before pickup, or wait for our delivery update."
           ]],
 
           ["out-for-delivery", "Out for Delivery", [

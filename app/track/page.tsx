@@ -17,6 +17,7 @@ type Shipment = {
   warehouse_received_date: string | null;
   departure_date: string | null;
   current_status: string;
+  status_message: string | null;
   eta: string | null;
   remarks: string | null;
   last_updated: string;
@@ -175,6 +176,13 @@ function TrackContent() {
               <strong>{shipment.standard_transit}</strong>
             </div>
           </div>
+
+          {shipment.status_message && (
+            <div className="kd-track-remarks">
+              <span>STATUS UPDATE</span>
+              <p>{shipment.status_message}</p>
+            </div>
+          )}
 
           {shipment.remarks && (
             <div className="kd-track-remarks">

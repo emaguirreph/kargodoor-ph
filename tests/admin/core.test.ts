@@ -62,6 +62,7 @@ function database(includePhase1 = true) {
     sql.exec(readFileSync("migrations/admin/0021_lead_contact_and_lifecycle.sql", "utf8"));
     sql.exec(readFileSync("migrations/admin/0022_full_container_quotations.sql", "utf8"));
     sql.exec(readFileSync("migrations/admin/0023_fcl_shipments.sql", "utf8"));
+    sql.exec(readFileSync("migrations/admin/0025_sea_freight_tracking_statuses.sql", "utf8"));
   }
   const user = randomUUID();
   sql
@@ -129,7 +130,7 @@ const shipmentInput = (id: string) =>
     departure_date: "",
     cbm: "1.250",
     weight_kg: "425",
-    status: "Received at Warehouse",
+    status: "China Warehouse",
     estimated_arrival: "2026-10-01",
     actual_arrival: "",
     tracking_remarks: "",
@@ -323,7 +324,7 @@ test("approved quotations create one pending, unpaid shipment with a safe custom
   assert.equal(result.customerCreated, false);
   assert.match(result.trackingNumber, /^KDSEA\d{6}$/);
   assert.equal(created.source_quotation_id, quotationId);
-  assert.equal(created.status, "Pending Warehouse Receipt");
+  assert.equal(created.status, "Awaiting Supplier Dispatch");
   assert.equal(created.payment_status, "Unpaid");
   assert.equal(created.warehouse_received_date, null);
   assert.equal(created.departure_date, null);
@@ -374,7 +375,10 @@ test("approved quotation conversion validates required saved operational details
 test("phase 1 migration preserves existing shipment, invoice, and payment relationships", async () => {
   const { sql, db, user } = database(false);
   const customerId = await saveRecord(db, "customers", customer, user, "", "");
-  const legacyShipment = Object.fromEntries(Object.entries(shipment(customerId)).filter(([key]) => !["supplier_waybill_number", "supplier_courier", "verified_cbm", "verified_weight_kg"].includes(key)));
+  const legacyShipment = {
+    ...Object.fromEntries(Object.entries(shipment(customerId)).filter(([key]) => !["supplier_waybill_number", "supplier_courier", "verified_cbm", "verified_weight_kg"].includes(key))),
+    status: "Received at Warehouse",
+  };
   const shipmentId = await saveRecord(db, "shipments", legacyShipment, user, "", "");
   const invoiceId = randomUUID();
   sql.prepare(`INSERT INTO invoices (id, invoice_number, customer_id, shipment_id, subtotal, delivery_charge, total, status, issued_at, due_at, created_at, updated_at, other_charge)
@@ -509,7 +513,7 @@ test("customer and shipment writes create correct atomic immutable audit logs", 
     "shipments",
     {
       ...shipment(id),
-      status: "In Transit",
+      status: "Sea Transit",
       cbm: 2,
       weight_kg: 500,
       shipping_charge: 700000,
@@ -538,9 +542,9 @@ test("customer and shipment writes create correct atomic immutable audit logs", 
   assert.equal(logs[0].old_value, null);
   assert.equal(
     JSON.parse(String(logs.find(x=>x.action === "update" && x.entity_type === "shipments")!.old_value)).status,
-    "Received at Warehouse",
+    "China Warehouse",
   );
-  assert.equal(JSON.parse(String(logs.find(x=>x.action === "update" && x.entity_type === "shipments")!.new_value)).status, "In Transit");
+  assert.equal(JSON.parse(String(logs.find(x=>x.action === "update" && x.entity_type === "shipments")!.new_value)).status, "Sea Transit");
   assert.throws(() => sql.exec("DELETE FROM activity_log"), /immutable/);
   assert.throws(
     () => sql.exec("UPDATE activity_log SET action='tamper'"),

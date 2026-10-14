@@ -15,6 +15,17 @@ type Shipment = {
   updated_at: string;
 };
 
+const seaStatusMessages: Record<string, string> = {
+  "Awaiting Supplier Dispatch": "Your supplier has not yet sent the cargo to our China warehouse.",
+  "China Warehouse": "Your items have safely arrived at our main consolidation hub in China.",
+  "China Port": "Your shipment has cleared Chinese customs and is waiting to board the vessel.",
+  "Sea Transit": "Your package is currently on the ocean, sailing toward the Philippines.",
+  "Manila Port": "The ship has docked, and your cargo is undergoing customs clearance in Manila.",
+  Gatepass: "Customs clearance is complete, and the delivery truck has approval to leave the port.",
+  "Malabon Warehouse": "Your items have arrived at our Malabon warehouse and are ready for final delivery or pickup.",
+  Delivered: "Your shipment has been delivered. Thank you for choosing KargoDoor PH.",
+};
+
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
@@ -108,6 +119,11 @@ export async function GET(request: Request) {
 
       current_status:
         shipment.status,
+
+      status_message:
+        shipment.service_type === "Sea Freight"
+          ? seaStatusMessages[shipment.status] ?? null
+          : null,
 
       eta:
         shipment.estimated_arrival,

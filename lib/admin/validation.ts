@@ -8,8 +8,19 @@ export const warehouses = [
   "Taiwan",
 ] as const;
 
-export const statuses = [
+export const seaFreightStatuses = [
   "Awaiting Supplier Dispatch",
+  "China Warehouse",
+  "China Port",
+  "Sea Transit",
+  "Manila Port",
+  "Gatepass",
+  "Malabon Warehouse",
+  "Delivered",
+  "Cancelled",
+] as const;
+
+const legacyShipmentStatuses = [
   "Pending Warehouse Receipt",
   "Received at Warehouse",
   "In Transit",
@@ -18,6 +29,8 @@ export const statuses = [
   "Delivered",
   "Cancelled",
 ] as const;
+
+export const statuses = [...seaFreightStatuses, ...legacyShipmentStatuses] as const;
 
 const required = (max: number) =>
   z
@@ -201,8 +214,7 @@ const shipmentObjectSchema = z
     weight_kg:
       decimal(100000000),
 
-    status:
-      z.enum(statuses),
+    status: z.enum(statuses),
 
     estimated_arrival:
       date,
@@ -275,6 +287,17 @@ export const shipmentSchema =
           code: "custom",
           path: ["tracking_number"],
           message: "Tracking number is required after supplier dispatch",
+        });
+      }
+
+      if (
+        values.service_type === "Sea Freight" &&
+        !seaFreightStatuses.includes(values.status as (typeof seaFreightStatuses)[number])
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["status"],
+          message: "Choose a Sea Freight tracking status.",
         });
       }
     },

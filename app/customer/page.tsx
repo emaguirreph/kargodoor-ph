@@ -13,16 +13,10 @@ export const dynamic = "force-dynamic";
 type CustomerShipment = {
   id: string;
   tracking_number: string;
-  service_type: "Sea Freight" | "Air Freight";
+  service_type: "Sea Freight" | "Air Freight" | "FCL";
   cbm: number;
   weight_kg: number;
-  status:
-    | "Received at Warehouse"
-    | "In Transit"
-    | "Arrived in Philippines"
-    | "Ready for Release"
-    | "Delivered"
-    | "Cancelled";
+  status: string;
   shipping_charge: number;
   shipment_delivery_charge: number;
   invoice_delivery_charge: number | null;
@@ -228,11 +222,7 @@ export default async function CustomerPage() {
   const shipments = result.results ?? [];
 
   const activeShipments = shipments.filter(
-    (shipment) =>
-      shipment.status === "Received at Warehouse" ||
-      shipment.status === "In Transit" ||
-      shipment.status === "Arrived in Philippines" ||
-      shipment.status === "Ready for Release",
+    (shipment) => shipment.status !== "Delivered" && shipment.status !== "Cancelled",
   );
 
   const shipmentHistory = shipments.filter(
