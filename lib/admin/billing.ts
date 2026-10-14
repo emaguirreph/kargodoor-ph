@@ -2026,9 +2026,8 @@ async function list(
         </div>` : ""}
       </section>
 
-      <details class="admin-collapsible">
-        <summary>Invoice records</summary>
-        <section>
+      <section>
+        <h2>Invoices</h2>
         ${table}
 
         <div class="actions">
@@ -2051,7 +2050,6 @@ async function list(
           }
         </div>
       </section>
-      </details>
     `,
     user.name, 200, {}, canMutateAdmin(user),
   );

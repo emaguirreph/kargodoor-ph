@@ -451,6 +451,66 @@
 })();
 
 (() => {
+  const money = (value) => new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" }).format(value);
+  const number = (value) => Number(String(value || "").replace(/[^0-9.-]/g, ""));
+  document.querySelectorAll("form.grid").forEach((form) => {
+    if (form.querySelector("[data-quotation-profit]")) return;
+    const saved = form.querySelector("[data-existing-nihao-cost]")?.value || "";
+    const section = document.createElement("section");
+    section.className = "wide";
+    section.style.background = "#fff9df";
+    section.style.borderColor = "#e8d58a";
+    section.dataset.quotationProfit = "";
+    section.innerHTML = `<h3>Internal cost & profit — Admin use only</h3><p class="muted">Enter the Ni Hao quotation once received. These figures never appear in the customer quotation or PDF.</p><div class="grid"><label>Ni Hao cost<input name="nihao_cost" type="number" min="0" step=".01" value="${saved}" placeholder="Enter supplier cost"></label><dl><dt>KargoDoor charge</dt><dd data-profit-charge>—</dd><dt>Gross profit</dt><dd data-profit-gross>—</dd><dt>Gross margin</dt><dd data-profit-margin>—</dd></dl></div>`;
+    const seaPricing = form.querySelector("[data-sea-pricing]");
+    const anchor = form.querySelector('[name="notes"]')?.closest("label");
+    if (seaPricing) seaPricing.after(section);
+    else if (anchor) anchor.before(section);
+    else form.append(section);
+    const update = () => {
+      const override = form.querySelector('[name="override_amount"]');
+      const customerCharge = override?.value.trim()
+        ? Number(override.value)
+        : number(form.querySelector("[data-sea-system]")?.textContent) || number(form.querySelector("[data-air-system]")?.textContent);
+      const supplierCost = Number(section.querySelector('[name="nihao_cost"]')?.value);
+      const put = (key, value) => { const node = section.querySelector(`[data-profit-${key}]`); if (node) node.textContent = value; };
+      put("charge", Number.isFinite(customerCharge) ? money(customerCharge) : "—");
+      if (!Number.isFinite(customerCharge) || !Number.isFinite(supplierCost) || supplierCost < 0) {
+        put("gross", "—"); put("margin", "—"); return;
+      }
+      const gross = customerCharge - supplierCost;
+      put("gross", money(gross));
+      put("margin", customerCharge ? `${((gross / customerCharge) * 100).toFixed(2)}%` : "—");
+    };
+    form.addEventListener("input", update);
+    new MutationObserver(update).observe(form, { subtree: true, childList: true, characterData: true });
+    update();
+  });
+})();
+
+(() => {
+  document.querySelectorAll("[data-customer-picker]").forEach((picker) => {
+    const form = picker.closest("form");
+    if (!form) return;
+    const fill = () => {
+      const option = picker.options[picker.selectedIndex];
+      if (!option?.dataset.customer) return;
+      try {
+        const customer = JSON.parse(option.dataset.customer);
+        const fields = { name: "customer_name", company: "company", mobile: "mobile", email: "email", address: "address" };
+        Object.entries(fields).forEach(([key, name]) => {
+          const field = form.querySelector(`[name="${name}"]`);
+          if (field) field.value = customer[key] || "";
+        });
+      } catch {
+        // Keep the manually entered customer details unchanged if a saved record is malformed.
+      }
+    };
+    picker.addEventListener("change", fill);
+  });
+})();
+
+(() => {
   const groups = [
     ["Category", "Quantity of Packages", "Package Tier", "CBM Price", "Fixed / Base Charge"],
     ["Actual Density (kg/CBM)", "Density Rate / kg", "Density-Based Charge", "Density Rule Applies?"],

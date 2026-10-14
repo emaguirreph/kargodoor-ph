@@ -111,7 +111,7 @@ function TrackContent() {
             type="text"
             value={code}
             onChange={(event) => setCode(event.target.value)}
-            placeholder="Example: KDSEA000001"
+            placeholder="Example: KDSEA-482731"
             autoComplete="off"
           />
 

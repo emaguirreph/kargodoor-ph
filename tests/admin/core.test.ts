@@ -322,7 +322,7 @@ test("approved quotations create one pending, unpaid shipment with a safe custom
   const created = sql.prepare("SELECT * FROM shipments WHERE id = ?").get(result.shipmentId)!;
   assert.equal(result.customerId, existingCustomerId);
   assert.equal(result.customerCreated, false);
-  assert.match(result.trackingNumber, /^KDSEA\d{6}$/);
+  assert.match(result.trackingNumber, /^KDSEA-[1-9]\d{5}$/);
   assert.equal(created.source_quotation_id, quotationId);
   assert.equal(created.status, "Awaiting Supplier Dispatch");
   assert.equal(created.payment_status, "Unpaid");
@@ -595,37 +595,44 @@ test("one account number can own multiple shipments with unique tracking numbers
   assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM shipments WHERE customer_id = ?").get(customerId)!.n, 2);
   await assert.rejects(saveRecord(db, "shipments", { ...shipment(customerId), tracking_number: "KD-SEA-000001", cargo_code: null }, user, "", ""), /tracking number already exists/);
 });
-test("new records receive sequential immutable account and tracking numbers", async () => {
+test("new records receive random immutable account and tracking numbers", async () => {
   const { sql, db, user } = database();
   const { customer_code: _account, ...newCustomer } = customer;
   assert.equal(_account, "KD-001");
   const firstCustomer = await saveRecord(db, "customers", newCustomer, user, "", "");
   const secondCustomer = await saveRecord(db, "customers", { ...newCustomer, full_name: "Second customer", mobile: "+639171234568" }, user, "", "");
-  assert.equal(sql.prepare("SELECT customer_code FROM customers WHERE id=?").get(firstCustomer)!.customer_code, "KDOOR0001");
-  assert.equal(sql.prepare("SELECT customer_code FROM customers WHERE id=?").get(secondCustomer)!.customer_code, "KDOOR0002");
+  const firstAccount = String(sql.prepare("SELECT customer_code FROM customers WHERE id=?").get(firstCustomer)!.customer_code);
+  const secondAccount = String(sql.prepare("SELECT customer_code FROM customers WHERE id=?").get(secondCustomer)!.customer_code);
+  assert.match(firstAccount, /^KDOOR-[1-9]\d{3}$/);
+  assert.match(secondAccount, /^KDOOR-[1-9]\d{3}$/);
+  assert.notEqual(firstAccount, secondAccount);
   const { tracking_number: _tracking, cargo_code: _cargo, ...newShipment } = shipment(firstCustomer);
   assert.equal(_tracking, "KDOOR-0001");
   assert.equal(_cargo, null);
   const seaOne = await saveRecord(db, "shipments", newShipment, user, "", "");
   const seaTwo = await saveRecord(db, "shipments", { ...newShipment, cargo_code: null }, user, "", "");
   const air = await saveRecord(db, "shipments", { ...newShipment, service_type: "Air Freight" }, user, "", "");
-  assert.equal(sql.prepare("SELECT tracking_number FROM shipments WHERE id=?").get(seaOne)!.tracking_number, "KDSEA000001");
-  assert.equal(sql.prepare("SELECT tracking_number FROM shipments WHERE id=?").get(seaTwo)!.tracking_number, "KDSEA000002");
-  assert.equal(sql.prepare("SELECT tracking_number FROM shipments WHERE id=?").get(air)!.tracking_number, "KDAIR000001");
+  const seaOneTracking = String(sql.prepare("SELECT tracking_number FROM shipments WHERE id=?").get(seaOne)!.tracking_number);
+  const seaTwoTracking = String(sql.prepare("SELECT tracking_number FROM shipments WHERE id=?").get(seaTwo)!.tracking_number);
+  const airTracking = String(sql.prepare("SELECT tracking_number FROM shipments WHERE id=?").get(air)!.tracking_number);
+  assert.match(seaOneTracking, /^KDSEA-[1-9]\d{5}$/);
+  assert.match(seaTwoTracking, /^KDSEA-[1-9]\d{5}$/);
+  assert.match(airTracking, /^KDAIR-[1-9]\d{5}$/);
+  assert.notEqual(seaOneTracking, seaTwoTracking);
   const customerRow = sql.prepare("SELECT * FROM customers WHERE id=?").get(firstCustomer)!;
   await saveRecord(db, "customers", newCustomer, user, firstCustomer, String(customerRow.updated_at));
-  assert.equal(sql.prepare("SELECT customer_code FROM customers WHERE id=?").get(firstCustomer)!.customer_code, "KDOOR0001");
+  assert.equal(sql.prepare("SELECT customer_code FROM customers WHERE id=?").get(firstCustomer)!.customer_code, firstAccount);
   const shipmentRow = sql.prepare("SELECT * FROM shipments WHERE id=?").get(seaOne)!;
   await saveRecord(db, "shipments", newShipment, user, seaOne, String(shipmentRow.updated_at));
-  assert.equal(sql.prepare("SELECT tracking_number FROM shipments WHERE id=?").get(seaOne)!.tracking_number, "KDSEA000001");
+  assert.equal(sql.prepare("SELECT tracking_number FROM shipments WHERE id=?").get(seaOne)!.tracking_number, seaOneTracking);
 });
-test("legacy dashed identifiers advance the new no-dash sequences", async () => {
+test("legacy identifiers remain compatible with random new identifiers", async () => {
   const { sql, db, user } = database();
   const legacyCustomer = await saveRecord(db, "customers", { ...customer, customer_code: "KDOOR-0002" }, user, "", "");
   const { customer_code: _account, ...newCustomer } = customer;
   assert.equal(_account, "KD-001");
   const newCustomerId = await saveRecord(db, "customers", { ...newCustomer, full_name: "New customer", mobile: "+639171234568" }, user, "", "");
-  assert.equal(sql.prepare("SELECT customer_code FROM customers WHERE id=?").get(newCustomerId)!.customer_code, "KDOOR0003");
+  assert.match(String(sql.prepare("SELECT customer_code FROM customers WHERE id=?").get(newCustomerId)!.customer_code), /^KDOOR-[1-9]\d{3}$/);
 
   await saveRecord(db, "shipments", { ...shipment(legacyCustomer), tracking_number: "KD-SEA-000002", cargo_code: null }, user, "", "");
   await saveRecord(db, "shipments", { ...shipment(legacyCustomer), tracking_number: "KD-AIR-000002", cargo_code: null, service_type: "Air Freight" }, user, "", "");
@@ -633,8 +640,8 @@ test("legacy dashed identifiers advance the new no-dash sequences", async () => 
   assert.equal(_tracking, "KDOOR-0001");
   const sea = await saveRecord(db, "shipments", newShipment, user, "", "");
   const air = await saveRecord(db, "shipments", { ...newShipment, service_type: "Air Freight" }, user, "", "");
-  assert.equal(sql.prepare("SELECT tracking_number FROM shipments WHERE id=?").get(sea)!.tracking_number, "KDSEA000003");
-  assert.equal(sql.prepare("SELECT tracking_number FROM shipments WHERE id=?").get(air)!.tracking_number, "KDAIR000003");
+  assert.match(String(sql.prepare("SELECT tracking_number FROM shipments WHERE id=?").get(sea)!.tracking_number), /^KDSEA-[1-9]\d{5}$/);
+  assert.match(String(sql.prepare("SELECT tracking_number FROM shipments WHERE id=?").get(air)!.tracking_number), /^KDAIR-[1-9]\d{5}$/);
 });
 test("invoice and payment customer links cannot disagree and deletes are restricted", async () => {
   const { sql, db, user } = database();

@@ -7,6 +7,16 @@
 
   if (!recordColumn) return;
 
+  document.querySelectorAll("details.admin-collapsible").forEach((details) => {
+    const summary = details.querySelector(":scope > summary");
+    if (summary?.textContent?.trim() !== "Quotation records") return;
+    details.open = true;
+    details.classList.remove("admin-collapsible");
+    const heading = document.createElement("h2");
+    heading.textContent = "Quotations";
+    summary.replaceWith(heading);
+  });
+
   document.querySelectorAll("table").forEach((table) => {
     const headers = [...table.querySelectorAll("thead th")];
     const recordIndex = headers.findIndex(

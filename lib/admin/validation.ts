@@ -177,8 +177,8 @@ const shipmentObjectSchema = z
       z.literal("").transform(() => null),
       required(60)
         .regex(
-          /^(?:KD-?(?:SEA|AIR)-?\d{6,}|(?:AIR-)?KDOOR-?\d{4,})$/i,
-          "Use KDSEA000001 or KDAIR000001. Existing dashed numbers are also accepted.",
+          /^(?:KD-?(?:SEA|AIR|FCL)-?\d{6,}|(?:AIR-)?KDOOR-?\d{4,})$/i,
+          "Use KDSEA-482731 or KDAIR-915204. Existing formats are also accepted.",
         )
         .transform((value) => value.toUpperCase()),
     ]),

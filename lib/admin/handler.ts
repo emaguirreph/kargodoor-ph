@@ -1402,6 +1402,15 @@ export async function handleAdmin(
         ].filter(Boolean).join("\n");
 
         const messages: Array<[string, string, string[]]> = [
+          ["awaiting-supplier-dispatch", "Awaiting Supplier Dispatch", [
+            `Hi ${customerName}! We are currently waiting for your supplier to send your package to our China warehouse.`,
+            "",
+            common,
+            warehouse ? `China Warehouse: ${warehouse}` : "",
+            "",
+            "Once your package arrives at our consolidation hub, we’ll verify the cargo details and send you the next update."
+          ]],
+
           ["china-warehouse", "China Warehouse", [
             `Hi ${customerName}! Your items have safely arrived at our main consolidation hub in ${warehouse || "China"}.`,
             "",
@@ -1813,6 +1822,7 @@ export async function handleAdmin(
     const table =
       rows.length
         ? `
+          ${entity === "customers" && rows.length > 10 ? `<input id="customer-list-expand" class="customer-list-expand" type="checkbox"><style>.customer-list-expand{position:absolute;inline-size:1px;block-size:1px;opacity:0}.customer-list-expand:not(:checked)~.table tr.customer-list-extra{display:none}.customer-list-expand:checked~.customer-list-show-more .more{display:none}.customer-list-expand:not(:checked)~.customer-list-show-more .less{display:none}</style>` : ""}
           <div class="table">
             <table>
               <thead>
@@ -1849,8 +1859,8 @@ export async function handleAdmin(
                     25,
                   )
                   .map(
-                    (row) =>
-                      `<tr>
+                    (row, index) =>
+                      `<tr${entity === "customers" && index >= 10 ? ' class="customer-list-extra"' : ""}>
                         ${keys
                           .map(
                             (
@@ -1899,6 +1909,7 @@ export async function handleAdmin(
               </tbody>
             </table>
           </div>
+          ${entity === "customers" && rows.length > 10 ? `<label class="button customer-list-show-more" for="customer-list-expand"><span class="more">Show ${rows.length - 10} more customers</span><span class="less">Show fewer customers</span></label>` : ""}
         `
         : "<p>No matching records.</p>";
 
@@ -2021,9 +2032,8 @@ export async function handleAdmin(
           </div>` : ""}
           </section>
 
-        <details class="admin-collapsible"${entity === "shipments" ? " open" : ""}>
-          <summary>${entity === "customers" ? "Customer records" : "Shipment records"}</summary>
-          <section>
+        <section>
+          <h2>${entity === "customers" ? "Customers" : "Shipments"}</h2>
           ${table}
 
           <div class="actions">
@@ -2060,7 +2070,6 @@ export async function handleAdmin(
             }
           </div>
         </section>
-        </details>
       `,
       user.name,
       200,

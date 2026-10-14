@@ -2,7 +2,7 @@ import type {
   D1Database,
   D1PreparedStatement,
 } from "@cloudflare/workers-types";
-import { randomUUID } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 import { AdminError } from "./security";
 import type { Entity, RecordData } from "./validation";
 
@@ -11,19 +11,15 @@ export async function generatedIdentifier(db: D1Database, entity: Entity, values
   if (entity === "shipments" && values.status === "Awaiting Supplier Dispatch") return undefined;
   if (values[field]) return undefined;
   const prefix = entity === "customers" ? "KDOOR" : values.service_type === "Air Freight" ? "KDAIR" : values.service_type === "FCL" ? "KDFCL" : "KDSEA";
-  const pattern = entity === "customers"
-    ? /^KDOOR-?(\d+)$/i
-    : values.service_type === "Air Freight"
-      ? /^KD-?AIR-?(\d+)$/i
-      : values.service_type === "FCL"
-        ? /^KD-?FCL-?(\d+)$/i
-      : /^KD-?SEA-?(\d+)$/i;
   const rows = (await db.prepare(`SELECT ${field} FROM ${entity}`).all<RecordData>()).results;
-  const highest = rows.reduce((max, row) => {
-    const match = pattern.exec(String(row[field] ?? ""));
-    return match ? Math.max(max, Number(match[1])) : max;
-  }, 0);
-  return `${prefix}${String(highest + 1).padStart(entity === "customers" ? 4 : 6, "0")}`;
+  const used = new Set(rows.map((row) => String(row[field] ?? "").toUpperCase()));
+  const minimum = entity === "customers" ? 1_000 : 100_000;
+  const maximum = entity === "customers" ? 10_000 : 1_000_000;
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const identifier = `${prefix}-${randomInt(minimum, maximum)}`;
+    if (!used.has(identifier)) return identifier;
+  }
+  throw new AdminError("Unable to reserve a unique identifier. Please try again.", 409);
 }
 
 export async function saveRecord(

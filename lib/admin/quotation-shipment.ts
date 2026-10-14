@@ -118,6 +118,11 @@ export async function createShipmentFromApprovedQuotation(
   const finalAmount = Number(quote.final_amount);
   if (!Number.isSafeInteger(finalAmount) || finalAmount < 0)
     throw new AdminError("This approved quotation has an invalid saved final amount.", 422);
+  const niHaoCost = quote.backend_cost === null || quote.backend_cost === undefined
+    ? null
+    : Number(quote.backend_cost);
+  if (niHaoCost !== null && (!Number.isSafeInteger(niHaoCost) || niHaoCost < 0))
+    throw new AdminError("This approved quotation has an invalid Ni Hao cost.", 422);
 
   const customer = await customerForQuotation(db, quote, customerSnapshot);
   const trackingNumber = await generatedIdentifier(db, "shipments", { service_type: serviceType });
@@ -134,8 +139,8 @@ export async function createShipmentFromApprovedQuotation(
     ).bind(customer.customerId, customerCode!, customer.create.fullName, customer.create.companyName, customer.create.mobile, customer.create.email, customer.create.address, now, now));
   }
   statements.push(db.prepare(
-    "INSERT INTO shipments (id, customer_id, source_quotation_id, tracking_number, service_type, china_warehouse, cbm, weight_kg, status, estimated_arrival, actual_arrival, shipping_charge, delivery_charge, payment_status, nihao_cost, cargo_code, warehouse_received_date, departure_date, tracking_remarks, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, 0, 'Unpaid', NULL, NULL, NULL, NULL, NULL, ?, ?)",
-  ).bind(shipmentId, customer.customerId, quotationId, trackingNumber, serviceType, chinaWarehouse, cbm, weight, serviceType === "Sea Freight" ? "Awaiting Supplier Dispatch" : "Pending Warehouse Receipt", finalAmount, now, now));
+    "INSERT INTO shipments (id, customer_id, source_quotation_id, tracking_number, service_type, china_warehouse, cbm, weight_kg, status, estimated_arrival, actual_arrival, shipping_charge, delivery_charge, payment_status, nihao_cost, cargo_code, warehouse_received_date, departure_date, tracking_remarks, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, 0, 'Unpaid', ?, NULL, NULL, NULL, NULL, ?, ?)",
+  ).bind(shipmentId, customer.customerId, quotationId, trackingNumber, serviceType, chinaWarehouse, cbm, weight, serviceType === "Sea Freight" ? "Awaiting Supplier Dispatch" : "Pending Warehouse Receipt", finalAmount, niHaoCost, now, now));
   statements.push(db.prepare(
     "INSERT INTO activity_log (id, admin_user_id, action, entity_type, entity_id, old_value, new_value, notes, created_at) VALUES (?, ?, 'create_from_approved_quotation', 'shipments', ?, NULL, ?, ?, ?)",
   ).bind(randomUUID(), adminUserId, shipmentId, JSON.stringify({
