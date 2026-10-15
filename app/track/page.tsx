@@ -131,8 +131,6 @@ function TrackContent() {
             <span>TRACKING NUMBER</span>
 
             <h2>{shipment.tracking_number}</h2>
-
-            <strong>{shipment.current_status}</strong>
           </div>
 
           <div className="kd-track-details">
@@ -149,7 +147,7 @@ function TrackContent() {
             </div>
 
             <div>
-              <span>WAREHOUSE RECEIVED</span>
+              <span>CHINA WAREHOUSE RECEIVED</span>
               <strong>
                 {shipment.warehouse_received_date || "—"}
               </strong>
@@ -161,12 +159,19 @@ function TrackContent() {
             </div>
           </div>
 
-          {shipment.status_message && (
-            <div className="kd-track-remarks">
+          <div className="kd-track-remarks">
+            <div className="kd-track-current-status">
+              <span>CURRENT STATUS</span>
+              <strong>{shipment.current_status}</strong>
+            </div>
+
+            {shipment.status_message && (
+              <>
               <span>STATUS UPDATE</span>
               <p>{shipment.status_message}</p>
-            </div>
-          )}
+              </>
+            )}
+          </div>
 
           {shipment.remarks && (
             <div className="kd-track-remarks">

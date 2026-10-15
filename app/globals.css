@@ -3108,6 +3108,22 @@ margin: 0;
   border-bottom: 1px solid #e5e7eb;
 }
 
+.kd-track-current-status {
+  margin: 0 0 20px;
+  padding: 14px 16px;
+  border-radius: 9px;
+  background: #eff8e8;
+  color: #264e0c;
+}
+
+.kd-track-current-status strong {
+  display: block;
+  margin-top: 4px;
+  font-family: "Inter", sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+}
+
 .kd-track-remarks p {
   margin: 0;
   color: #374151;
