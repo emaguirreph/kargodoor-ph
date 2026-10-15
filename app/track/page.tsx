@@ -15,10 +15,8 @@ type Shipment = {
   freight_type: string;
   origin_warehouse: string | null;
   warehouse_received_date: string | null;
-  departure_date: string | null;
   current_status: string;
   status_message: string | null;
-  eta: string | null;
   remarks: string | null;
   last_updated: string;
   standard_transit: string;
@@ -154,20 +152,6 @@ function TrackContent() {
               <span>WAREHOUSE RECEIVED</span>
               <strong>
                 {shipment.warehouse_received_date || "—"}
-              </strong>
-            </div>
-
-            <div>
-              <span>DEPARTURE DATE</span>
-              <strong>
-                {shipment.departure_date || "Not yet departed"}
-              </strong>
-            </div>
-
-            <div>
-              <span>ESTIMATED ARRIVAL</span>
-              <strong>
-                {shipment.eta || "To be updated"}
               </strong>
             </div>
 

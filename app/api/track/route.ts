@@ -8,9 +8,7 @@ type Shipment = {
   service_type: string;
   china_warehouse: string | null;
   warehouse_received_date: string | null;
-  departure_date: string | null;
   status: string;
-  estimated_arrival: string | null;
   tracking_remarks: string | null;
   updated_at: string;
 };
@@ -76,9 +74,7 @@ export async function GET(request: Request) {
             service_type,
             china_warehouse,
             warehouse_received_date,
-            departure_date,
             status,
-            estimated_arrival,
             tracking_remarks,
             updated_at
           FROM shipments
@@ -114,9 +110,6 @@ export async function GET(request: Request) {
       warehouse_received_date:
         shipment.warehouse_received_date,
 
-      departure_date:
-        shipment.departure_date,
-
       current_status:
         shipment.status,
 
@@ -124,9 +117,6 @@ export async function GET(request: Request) {
         shipment.service_type === "Sea Freight"
           ? seaStatusMessages[shipment.status] ?? null
           : null,
-
-      eta:
-        shipment.estimated_arrival,
 
       remarks:
         shipment.tracking_remarks,

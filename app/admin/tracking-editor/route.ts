@@ -14,9 +14,7 @@ const fields = [
   "freight_type",
   "origin_warehouse",
   "warehouse_received_date",
-  "departure_date",
   "current_status",
-  "eta",
   "remarks",
 ] as const;
 
@@ -503,12 +501,6 @@ ${input(
   "date",
 )}
 
-${input(
-  "departure_date",
-  "Departure Date",
-  "date",
-)}
-
 <label>
 
 Current Status *
@@ -536,12 +528,6 @@ ${statusOptions
 </datalist>
 
 </label>
-
-${input(
-  "eta",
-  "ETA",
-  "date",
-)}
 
 <label class="wide">
 
@@ -667,11 +653,7 @@ function validate(values: Values) {
     }
   }
 
-  for (const key of [
-    "warehouse_received_date",
-    "departure_date",
-    "eta",
-  ] as const) {
+  for (const key of ["warehouse_received_date"] as const) {
 
     const value = values[key];
 

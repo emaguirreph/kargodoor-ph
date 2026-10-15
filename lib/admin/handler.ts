@@ -824,13 +824,7 @@ export async function handleAdmin(
             "Warehouse received date",
             record,
             "date",
-          ) +
-          input(
-            "departure_date",
-            "Departure date",
-            record,
-            "date",
-          );
+          ) + hidden("departure_date", record.departure_date ?? "");
 
         /*
          * SHIPPING DETAILS
@@ -855,13 +849,7 @@ export async function handleAdmin(
             "Status",
             record,
             record.service_type === "Sea Freight" ? seaFreightStatuses : statuses,
-          ) +
-          input(
-            "estimated_arrival",
-            "Estimated arrival",
-            record,
-            "date",
-          ) +
+          ) + hidden("estimated_arrival", record.estimated_arrival ?? "") +
           input(
             "actual_arrival",
             "Actual arrival",
@@ -1053,7 +1041,7 @@ export async function handleAdmin(
         `
           ${picker}
 
-          <section>
+          <section class="compact-record-form">
             <form
               method="post"
               action="${path}"
@@ -1255,8 +1243,9 @@ export async function handleAdmin(
         schemaKeys[entity]
           .filter(
             (key) =>
-              key !==
-              "customer_id",
+              key !== "customer_id" &&
+              key !== "departure_date" &&
+              key !== "estimated_arrival",
           )
           .concat([
             "created_at",
@@ -1390,8 +1379,7 @@ export async function handleAdmin(
         const service = String(record.service_type || "");
         const warehouse = String(record.china_warehouse || "");
         const received = String(record.warehouse_received_date || "");
-        const departure = String(record.departure_date || "");
-        const arrival = String(record.actual_arrival || record.estimated_arrival || "");
+        const arrival = String(record.actual_arrival || "");
         const paymentStatus = String(record.payment_status || "");
         const verifiedCbm = String(record.verified_cbm || record.cbm || "");
         const verifiedWeight = String(record.verified_weight_kg || record.weight_kg || "");
@@ -1439,7 +1427,6 @@ export async function handleAdmin(
             "",
             common,
             service ? `Service: ${service}` : "",
-            departure ? `Departure Date: ${departure}` : "",
             "",
             "We’ll send another update once the ship docks in Manila.",
             "Track here: https://www.kargodoorph.com/track"
@@ -1450,7 +1437,6 @@ export async function handleAdmin(
             "",
             common,
             service ? `Service: ${service}` : "",
-            arrival ? `Estimated Arrival: ${arrival}` : "",
             "",
             "We’ll send you another update once your cargo arrives in the Philippines.",
             "Track here: https://www.kargodoorph.com/track"
@@ -1552,10 +1538,10 @@ export async function handleAdmin(
         `
           ${notice}
 
-          <section>
+          <section class="compact-record-details">
             ${customer}
 
-            <dl>
+            <dl class="compact-details-grid">
               ${details}
               ${margin}
             </dl>
