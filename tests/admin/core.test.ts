@@ -63,6 +63,7 @@ function database(includePhase1 = true) {
     sql.exec(readFileSync("migrations/admin/0022_full_container_quotations.sql", "utf8"));
     sql.exec(readFileSync("migrations/admin/0023_fcl_shipments.sql", "utf8"));
     sql.exec(readFileSync("migrations/admin/0025_sea_freight_tracking_statuses.sql", "utf8"));
+    sql.exec(readFileSync("migrations/admin/0026_bulk_quotation_shipments.sql", "utf8"));
   }
   const user = randomUUID();
   sql
@@ -349,6 +350,31 @@ test("approved FCL quotations create an FCL shipment and invoice-ready manual ra
   assert.equal(shipment.shipping_charge, 500000);
   const invoiceId = await createInvoice(db, { shipment_id: result.shipmentId, delivery_charge: "0", other_charge: "0", status: "Draft", issued_at: "", due_at: "" }, user);
   assert.equal(sql.prepare("SELECT shipment_id FROM invoices WHERE id=?").get(invoiceId)!.shipment_id, result.shipmentId);
+});
+test("an approved bulk furniture quotation creates one trackable shipment per package and keeps invoices separate", async () => {
+  const { sql, db, user } = database();
+  const customerId = await saveRecord(db, "customers", { ...customer, customer_code: "KDOOR-6690", email: "juan.test@example.com" }, user, "", "");
+  const packages = [
+    ["Wooden Dining Table", .288, 45, 273600, 45000],
+    ["Dining Chairs (Set of 4)", .48, 35, 456000, 60000],
+    ["Two-Seater Fabric Sofa", 1.148, 65, 1090600, 95000],
+    ["Wooden Coffee Table", .264, 25, 250800, 30000],
+    ["Wooden Bookshelf", .648, 40, 615600, 70000],
+  ].map(([item, cbm, weight, charge, nihaoCost]) => ({ item, catalogItem: "Furniture", category: "COMMODITIES", length: 1, width: 1, height: 1, cbm, weight, charge, nihaoCost, status: "China Warehouse" }));
+  const quotationId = insertQuotation(sql, { customerId, cargo: { bulkPackages: packages, originWarehouse: "Guangzhou", cbm: 2.828, weight: 210 } });
+  await createShipmentFromApprovedQuotation(db, user, quotationId);
+  const shipments = sql.prepare("SELECT tracking_number,source_quotation_id,status,tracking_remarks,shipping_charge,nihao_cost FROM shipments WHERE source_quotation_id=? ORDER BY created_at,id").all(quotationId);
+  assert.equal(shipments.length, 5);
+  assert.equal(new Set(shipments.map((shipment: any) => shipment.tracking_number)).size, 5);
+  for (const shipment of shipments as any[]) {
+    assert.match(shipment.tracking_number, /^KDSEA-[1-9]\d{5}$/);
+    assert.equal(shipment.source_quotation_id, quotationId);
+    assert.equal(shipment.status, "China Warehouse");
+    assert.match(shipment.tracking_remarks, /Item:/);
+  }
+  assert.equal(shipments.reduce((sum: number, shipment: any) => sum + shipment.shipping_charge, 0), 2686600);
+  assert.equal(shipments.reduce((sum: number, shipment: any) => sum + shipment.nihao_cost, 0), 300000);
+  assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM invoices").get()!.n, 0);
 });
 test("quotation shipment conversion rejects non-approved quotes and creates a customer for ambiguous or absent matches", async () => {
   const { sql, db, user } = database();
