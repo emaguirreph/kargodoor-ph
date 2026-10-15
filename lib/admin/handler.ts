@@ -849,13 +849,18 @@ export async function handleAdmin(
             "Status",
             record,
             record.service_type === "Sea Freight" ? seaFreightStatuses : statuses,
-          ) + hidden("estimated_arrival", record.estimated_arrival ?? "") +
-          input(
+          ) + hidden("estimated_arrival", record.estimated_arrival ?? "");
+
+        // Actual arrival is an end-of-journey record. Keeping it out of the
+        // earlier stages avoids implying that cargo has already reached Manila.
+        if (["Malabon Warehouse", "Delivered"].includes(String(record.status || ""))) {
+          fields += input(
             "actual_arrival",
             "Actual arrival",
             record,
             "date",
           );
+        }
 
         fields +=
           input(
@@ -1302,6 +1307,70 @@ export async function handleAdmin(
           )
           .join("");
 
+      const shipmentDetail = (label: string, value: string) => `
+        <div class="shipment-detail-item">
+          <dt>${esc(label)}</dt>
+          <dd>${value}</dd>
+        </div>`;
+
+      const shipmentDetails = entity === "shipments" ? (() => {
+        const status = String(record.status || "");
+        const verifiedCargo = record.verified_cbm !== null || record.verified_weight_kg !== null;
+        const actualArrivalVisible = ["Malabon Warehouse", "Delivered"].includes(status);
+        const money = (key: "shipping_charge" | "delivery_charge" | "nihao_cost") =>
+          record[key] === null ? "Not entered" : pesos(record[key]);
+        const marginValue = record.nihao_cost === null
+          ? "Enter Ni Hao cost to calculate"
+          : pesos(Number(record.shipping_charge) - Number(record.nihao_cost));
+
+        const shipment = [
+          shipmentDetail("Tracking number", esc(record.tracking_number) || "—"),
+          shipmentDetail("Service type", esc(record.service_type) || "—"),
+          shipmentDetail("Origin warehouse", esc(record.china_warehouse) || "—"),
+          shipmentDetail("China warehouse received", esc(record.warehouse_received_date) || "—"),
+          shipmentDetail("Status", esc(status) || "—"),
+          ...(actualArrivalVisible
+            ? [shipmentDetail("Actual arrival", esc(record.actual_arrival) || "Not recorded")]
+            : []),
+        ].join("");
+
+        const cargo = verifiedCargo
+          ? [
+              shipmentDetail("Verified CBM", esc(record.verified_cbm) || "—"),
+              shipmentDetail("Verified weight (kg)", esc(record.verified_weight_kg) || "—"),
+            ].join("")
+          : [
+              shipmentDetail("CBM", esc(record.cbm) || "—"),
+              shipmentDetail("Weight (kg)", esc(record.weight_kg) || "—"),
+            ].join("");
+
+        const finance = [
+          shipmentDetail("KargoDoor freight charge", money("shipping_charge")),
+          shipmentDetail("Ni Hao freight cost", money("nihao_cost")),
+          shipmentDetail("Freight margin", marginValue),
+          ...(Number(record.delivery_charge || 0) > 0
+            ? [shipmentDetail("Delivery charge", money("delivery_charge"))]
+            : []),
+          shipmentDetail("Payment status", esc(record.payment_status) || "—"),
+        ].join("");
+
+        return `
+          <div class="shipment-detail-sections">
+            <section class="shipment-detail-section">
+              <h2>Shipment</h2>
+              <dl class="shipment-detail-grid">${shipment}</dl>
+            </section>
+            <section class="shipment-detail-section">
+              <h2>${verifiedCargo ? "Verified cargo" : "Cargo"}</h2>
+              <dl class="shipment-detail-grid">${cargo}</dl>
+            </section>
+            <section class="shipment-detail-section">
+              <h2>Internal finance</h2>
+              <dl class="shipment-detail-grid">${finance}</dl>
+            </section>
+          </div>`;
+      })() : "";
+
       const margin =
         entity ===
         "shipments"
@@ -1541,10 +1610,7 @@ export async function handleAdmin(
           <section class="compact-record-details">
             ${customer}
 
-            <dl class="compact-details-grid">
-              ${details}
-              ${margin}
-            </dl>
+            ${entity === "shipments" ? shipmentDetails : `<dl class="compact-details-grid">${details}${margin}</dl>`}
 
             <div class="actions">
               ${canWrite ? `<a
