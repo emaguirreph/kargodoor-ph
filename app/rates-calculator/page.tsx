@@ -104,7 +104,7 @@ export default function RatesCalculatorPage() {
       : getAirEstimate(Math.max(numericWeight, numericCbm * 167));
 
     // Air Freight billable weight is the higher of Actual Weight or
-    // Volumetric Weight (CBM × 167). It is not rounded.
+    // Volumetric Weight (CBM × 167), rounded up to the next whole kilogram.
     if (leadCaptured) setEstimate(calculated);
     else {
       setEstimate(null);

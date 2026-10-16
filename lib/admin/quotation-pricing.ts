@@ -20,6 +20,7 @@ export type AirItem = typeof airItems[number];
 export const airPieceRates: Partial<Record<AirItem, number>> = { "Mobile Phones": 950, Tablets: 1200, "Laptop Computers": 2800 };
 export const airPerKgRates = { ordinary: 500, restricted: 600, medicine: 650 } as const;
 export const airVolumetricFactor = 167;
+export const roundAirBillableWeight = (weight: number) => Math.ceil(weight);
 const valid = (value: number) => Number.isFinite(value) && value >= 0;
 export function seaQuote(category: SeaCategory, cbm: number, weight: number, units = 0) {
   if (!valid(cbm) || !valid(weight) || cbm <= 0 || (category === "MOBILE / COMPUTERS / TABLETS" && (!Number.isInteger(units) || units < 1))) throw new Error("Invalid sea quotation inputs.");
@@ -41,6 +42,6 @@ export function airQuote(item: AirItem, cbm: number, weight: number, quantity: n
   if (item in airPieceRates) return { rate:airPieceRates[item]!, rateBasis:"Per piece", volumetricWeight:0, billableWeight:0, final:quantity*airPieceRates[item]!, formula:"Quantity × rate" };
   if (!valid(cbm) || !valid(weight) || cbm <= 0 || weight <= 0) throw new Error("CBM and actual weight are required.");
   const rate = item === "Ordinary Items" ? airPerKgRates.ordinary : item === "Medicine and Food Supplements" ? airPerKgRates.medicine : airPerKgRates.restricted;
-  const volumetricWeight=cbm*airVolumetricFactor, billableWeight=Math.max(weight,volumetricWeight);
-  return { rate, rateBasis:"Higher of Actual vs Volumetric", volumetricWeight, billableWeight, final:billableWeight*rate, formula:"MAX(Actual Weight, CBM × 167) × rate" };
+  const volumetricWeight=cbm*airVolumetricFactor, rawBillableWeight=Math.max(weight,volumetricWeight), billableWeight=roundAirBillableWeight(rawBillableWeight);
+  return { rate, rateBasis:"Higher of Actual vs Volumetric, rounded up to a whole kg", volumetricWeight, rawBillableWeight, billableWeight, final:billableWeight*rate, formula:"CEILING(MAX(Actual Weight, CBM × 167)) × rate" };
 }

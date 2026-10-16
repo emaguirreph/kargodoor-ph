@@ -247,7 +247,7 @@ test("rates guide renders authoritative pricing, navigation, and item filtering"
   assert.match(html, /₱1,200 \/ piece/);
   assert.match(html, /₱2,800 \/ piece/);
   assert.match(html, /MAX\(Actual Weight, CBM × 167\)/);
-  assert.match(html, /No rounding\./);
+  assert.match(html, /Round the higher weight up to the next whole kg\./);
   assert.match(html, /KD Standard<\/td><td>&gt;0\.125 CBM/);
   assert.match(html, /KD Max<\/td><td>Density charge wins<\/td><td>Density-based charge<\/td><td>Applies only when density is &gt;425 kg\/CBM and the density charge is higher than the base charge\./);
   assert.match(html, /Check Density Pricing<\/td><td>Density &gt;425 kg\/CBM/);

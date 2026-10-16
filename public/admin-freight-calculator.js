@@ -194,7 +194,7 @@
     let cost, basis;
     if (type.value === "Air Freight") {
       const pieces = ["Mobile Phones", "Tablets", "Laptop Computers"].includes(item.value);
-      const amount = pieces ? Number(units.value) : Math.max(Number(weight.value), Number(cbm.value) * 167);
+      const amount = pieces ? Number(units.value) : Math.ceil(Math.max(Number(weight.value), Number(cbm.value) * 167));
       if (!Number.isFinite(amount) || amount <= 0) return;
       cost = baseRate * amount;
       basis = `${money(baseRate)} / ${pieces ? "piece" : "billable kg"}`;

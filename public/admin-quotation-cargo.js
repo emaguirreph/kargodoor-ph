@@ -314,7 +314,7 @@
           formula.textContent = `Calculation: Total Amount = Quantity × Rate = ${result.quantity} pieces × ${money(result.rate)} per piece = ${money(result.final)}.`;
         } else {
           const volumetric = Number(result.volumetricWeight).toFixed(2);
-          formula.textContent = `Calculation: Volumetric Weight = Total CBM × 167 = ${result.cbm} CBM × 167 = ${volumetric} kg. Billable Weight = higher of Actual Weight (${result.weight} kg) and Volumetric Weight (${volumetric} kg) = ${result.billableWeight} kg. Total Amount = Billable Weight × Rate = ${result.billableWeight} kg × ${money(result.rate)} per kg = ${money(result.final)}.`;
+          formula.textContent = `Calculation: Volumetric Weight = Total CBM × 167 = ${result.cbm} CBM × 167 = ${volumetric} kg. Higher weight = ${result.rawBillableWeight} kg. Billable Weight = rounded up to the next whole kg = ${result.billableWeight} kg. Total Amount = Billable Weight × Rate = ${result.billableWeight} kg × ${money(result.rate)} per kg = ${money(result.final)}.`;
         }
         formula.hidden = false;
       }

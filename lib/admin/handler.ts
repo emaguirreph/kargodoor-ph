@@ -36,7 +36,7 @@ import { saveRecord, archiveOrCancelRecord } from "./data";
 import { page, esc, pesos, input, select, hidden } from "./ui";
 import { dashboard, finance, activity, saveStaffFollowUp } from "./reports";
 import { createPortal, disablePortal, portalFor, portalStatus, resetPortal } from "./customer-portal";
-import { copyButton, copyScript, customerShippingInstructions, shipmentShippingInstructions } from "./shipping-instructions";
+import { copyButton, copyScript, customerAccountCreatedMessage, customerPortalAccessMessage, customerShippingInstructions, shipmentShippingInstructions } from "./shipping-instructions";
 import { leadsPage } from "./leads";
 
 const labels: Record<string, string> = {
@@ -303,11 +303,13 @@ export async function handleAdmin(
         for (const key of form.keys()) if (!allowed.has(key) || form.getAll(key).length !== 1) throw new AdminError("Unexpected or repeated form field.");
         const customerId = form.get("customer_id") ?? "";
         if (!/^[\da-f-]{36}$/i.test(customerId)) throw new AdminError("Invalid customer ID.");
-        const customer = await db.prepare("SELECT email FROM customers WHERE id=?").bind(customerId).first<RecordData>();
+        const customer = await db.prepare("SELECT email,full_name,customer_code FROM customers WHERE id=?").bind(customerId).first<RecordData>();
         if (!customer) throw new AdminError("Record not found.", 404);
         if (portalAction === "portal_disable") { await disablePortal(db, customerId); return page("Saved", "", user.name, 303, { Location: `${path}?id=${customerId}&portal_saved=1` }); }
         const result = portalAction === "portal_create" ? await createPortal(db, customerId, customer.email) : await resetPortal(db, customerId, portalAction === "portal_reenable");
-        return page("Customer account created", `<section><h2>Customer account created.</h2><p><strong>Login Email:</strong> ${esc(result.email)}</p><p><strong>Temporary Password:</strong> <code>${esc(result.password)}</code></p><p class="muted">Copy the temporary password now. It is shown only once and the customer must change it after first login.</p></section>`, user.name);
+        const portalMessageId = `portal-access-${customerId}`;
+        const portalMessage = customerPortalAccessMessage({ name: customer.full_name, email: result.email, temporaryPassword: result.password });
+        return page("Customer account created", `<section><h2>Customer account created.</h2><p><strong>Login Email:</strong> ${esc(result.email)}</p><p><strong>Temporary Password:</strong> <code>${esc(result.password)}</code></p><p class="muted">Copy the temporary password now. It is shown only once and the customer must change it after first login.</p></section><section><h2>Send Portal Access</h2><p class="muted">Copy this private message and send it directly to the customer. It contains their temporary password.</p><textarea id="${esc(portalMessageId)}" readonly aria-label="Portal access message">${esc(portalMessage)}</textarea><div class="actions">${copyButton(portalMessageId, "Copy portal access message")}</div>${copyScript()}</section>`, user.name);
       }
 
       if (!entity && view === undefined) {
@@ -1475,7 +1477,11 @@ export async function handleAdmin(
             <dd>${portalStatus(portal)}</dd>
           </dl>
         </section>` : "";
+      const accountMessageId = `account-created-${id}`;
       const instructionId = `shipping-instructions-${id}`;
+      const accountMessage = entity === "customers"
+        ? customerAccountCreatedMessage({ name: record.full_name, customerCode: record.customer_code })
+        : "";
       const instructionMessage = entity === "customers"
         ? customerShippingInstructions({ name: record.full_name, customerCode: record.customer_code })
         : shipmentShippingInstructions({
@@ -1485,7 +1491,7 @@ export async function handleAdmin(
             supplierCourier: record.supplier_courier,
             supplierWaybill: record.supplier_waybill_number,
           });
-      const shippingInstructions = canWrite ? `<section><h2>Shipping Instructions</h2><p class="muted">Review the message, add the warehouse address, then copy it into Messenger, WhatsApp, or another customer chat.</p><textarea id="${instructionId}" readonly aria-label="Shipping instructions">${esc(instructionMessage)}</textarea><div class="actions">${copyButton(instructionId, "Send shipping instructions")}</div>${copyScript()}</section>` : "";
+      const shippingInstructions = canWrite ? `${entity === "customers" ? `<section><h2>Send Account Setup</h2><p class="muted">Send this first so the customer knows their KargoDoor account number before their supplier ships any package.</p><textarea id="${accountMessageId}" readonly aria-label="Account setup message">${esc(accountMessage)}</textarea><div class="actions">${copyButton(accountMessageId, "Copy account setup message")}</div></section>` : ""}<section><h2>Send Warehouse Instructions</h2><p class="muted">Review the message, add the warehouse address, then copy it into Messenger, WhatsApp, or another customer chat.</p><textarea id="${instructionId}" readonly aria-label="Warehouse instructions">${esc(instructionMessage)}</textarea><div class="actions">${copyButton(instructionId, "Copy warehouse instructions")}</div>${copyScript()}</section>` : "";
 
       const customerNotifications = entity === "shipments" && canWrite ? (() => {
         const customerName = String(linkedCustomer?.full_name || "Customer");

@@ -221,10 +221,10 @@ test("live admin Air calculation delegates to the authoritative pricing engine",
   const ordinary = calculateAdminAirQuote({ freightType: "Air Freight", item: "Ordinary Items", cbm: "0.10", weight: "10", quantity: "1" });
   assert.equal(ordinary.rate, 500);
   assert.equal(ordinary.volumetricWeight, 16.7);
-  assert.equal(ordinary.billableWeight, 16.7);
-  assert.equal(ordinary.final, 8350);
+  assert.equal(ordinary.billableWeight, 17);
+  assert.equal(ordinary.final, 8500);
   const actualWeight = calculateAdminAirQuote({ freightType: "Air Freight", item: "Ordinary Items", cbm: "0.01", weight: "20.1", quantity: "1" });
-  assert.equal(actualWeight.billableWeight, 20.1);
+  assert.equal(actualWeight.billableWeight, 21);
   assert.equal(calculateAdminAirQuote({ freightType: "Air Freight", item: "Liquid, Powder, Food, Computer Parts, Electronics", cbm: "0.01", weight: "1", quantity: "1" }).rate, 600);
   assert.equal(calculateAdminAirQuote({ freightType: "Air Freight", item: "Medicine and Food Supplements", cbm: "0.01", weight: "1", quantity: "1" }).rate, 650);
   for (const [item, rate] of [["Mobile Phones", 950], ["Tablets", 1200], ["Laptop Computers", 2800]] as const) {

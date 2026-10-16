@@ -89,7 +89,7 @@ export async function freightCalculatorPage(request: Request, envOverride?: Admi
   </section>
   <section data-air-rules hidden>
     <h2>Air Freight rules</h2>
-    <ul><li>Ordinary items: <strong>₱500/kg</strong>. Restricted items: <strong>₱600/kg</strong>. Medicine and food supplements: <strong>₱650/kg</strong>.</li><li>For per-kilogram items, volumetric weight = <strong>CBM × 167</strong>. The higher of actual and volumetric weight is charged.</li><li>Mobile phones, tablets, and laptops use per-piece pricing.</li></ul>
+    <ul><li>Ordinary items: <strong>₱500/kg</strong>. Restricted items: <strong>₱600/kg</strong>. Medicine and food supplements: <strong>₱650/kg</strong>.</li><li>For per-kilogram items, volumetric weight = <strong>CBM × 167</strong>. The higher of actual and volumetric weight is rounded up to the next whole kilogram before charging.</li><li>Mobile phones, tablets, and laptops use per-piece pricing.</li></ul>
   </section>
   <section data-cbm-converter>
     <h2>CBM Conversion</h2>

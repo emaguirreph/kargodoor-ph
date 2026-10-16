@@ -16,9 +16,9 @@ test("small-package density charges become KD Max only when they exceed the mini
   });
 });
 
-test("air estimates preserve the approved unrounded billable weight", () => {
+test("air estimates round billable weight up to the next whole kilogram", () => {
   assert.deepEqual(getAirEstimate(16.7), {
     packageName: "Air Freight",
-    amount: 8350,
+    amount: 8500,
   });
 });

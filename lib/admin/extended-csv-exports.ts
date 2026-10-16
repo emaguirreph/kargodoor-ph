@@ -147,7 +147,7 @@ function ratesCsv(date: string) {
       "Base Rate / Charging Basis": item in airPieceRates
         ? `${airPieceRates[item]!} per piece`
         : `${item === "Ordinary Items" ? airPerKgRates.ordinary : item === "Medicine and Food Supplements" ? airPerKgRates.medicine : airPerKgRates.restricted} per kg`,
-      Rule: item in airPieceRates ? "Per piece." : "Higher of actual or volumetric weight.",
+      Rule: item in airPieceRates ? "Per piece." : "Higher of actual or volumetric weight, rounded up to the next whole kg.",
     })),
   ];
   return download(filename("Rates-and-Pricing", date), columns, rows);
