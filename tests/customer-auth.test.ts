@@ -306,10 +306,13 @@ test(
       /redirect\("\/customer\/login"\)/,
     );
 
-    assert.ok(
-      !/shipment|invoice|payment|freight/i.test(
-        dashboard,
-      ),
+    assert.match(
+      dashboard,
+      /WHERE s\.customer_id = \?/,
+    );
+    assert.match(
+      dashboard,
+      /AND i\.customer_id = s\.customer_id/,
     );
 
     assert.match(

@@ -267,29 +267,35 @@ function quotationCustomerMessage(q: Row) {
 
 const quotationMessageCopyScript = () => `<script src="/admin-copy.js" defer></script>`;
 
-function customerPreview(q: Row) {
+function customerPreview(q: Row, accountNumber = "") {
   const customer = snapshot(q.customer_snapshot);
   const cargo = snapshot(q.cargo_snapshot);
   const c = customer.data;
   const shipment = cargo.data;
-  const dimensions = [shipment.length, shipment.width, shipment.height]
-    .map(detailValue)
-    .every((value) => value === "—")
-    ? "Not provided"
-    : `${detailValue(shipment.length)} × ${detailValue(shipment.width)} × ${detailValue(shipment.height)} ${detailValue(shipment.measurementUnit)}`;
   const warning = customer.valid && cargo.valid
     ? ""
     : '<p class="notice">Some legacy quotation details are unavailable. The saved quotation record is still open and can be edited.</p>';
-  const service = q.freight_type === "Full Container"
-    ? "FULL CONTAINER — ALL-IN SHIPPING"
-    : q.freight_type === "Sea Freight"
-      ? "SEA FREIGHT — ALL-IN SHIPPING"
-      : "AIR FREIGHT — ALL-IN SHIPPING";
-  const terms = q.notes === null || q.notes === undefined
-    ? defaultQuotationTerms
-    : String(q.notes);
-  const termsHtml = terms.split(/\n\s*\n/).filter(Boolean).map((paragraph) => `<p>${esc(paragraph).replace(/\n/g, "<br>")}</p>`).join("");
-  return `${warning}<article class="quotation-print"><h2>KARGODOOR PH</h2><h1>QUOTATION</h1><p><strong>Quotation No.</strong> ${esc(detailValue(q.quotation_number))}<br><strong>Date</strong> ${esc(detailValue(q.quotation_date))}${q.valid_until ? `<br><strong>Valid Until</strong> ${esc(q.valid_until)}` : ""}</p><h3>PREPARED FOR</h3><p>${esc(detailValue(c.name))}<br>${esc(detailValue(c.company))}<br>${esc(detailValue(c.mobile))}<br>${esc(detailValue(c.email))}<br>${esc(detailValue(c.address))}</p><h3>SHIPMENT DETAILS</h3><p>${esc(detailValue(shipment.description ?? shipment.item))}<br>Quantity: ${esc(detailValue(shipment.quantity ?? shipment.units))} ${esc(detailValue(shipment.unitType))}<br>Dimensions: ${esc(dimensions)}<br>Total CBM: ${esc(detailValue(shipment.cbm))}<br>Actual Weight: ${esc(detailValue(shipment.weight))}${shipment.weight === undefined || shipment.weight === null || shipment.weight === "" ? "" : " kg"}<br>${esc(detailValue(q.freight_type))}<br>Origin: ${esc(detailValue(shipment.origin))}<br>Destination / Receiving Warehouse: MALABON WAREHOUSE</p><h3>ESTIMATED SHIPPING RATE</h3><p class="quotation-total">${pesos(q.final_amount)}</p><p><strong>${service}</strong></p><h3>Terms and Conditions</h3>${termsHtml}<p>support@kargodoorph.com · www.kargodoorph.com</p></article>`;
+  const packageRows = Array.isArray(shipment.bulkPackages) ? shipment.bulkPackages : [];
+  const item = packageRows.length ? `${packageRows.length} package bulk quotation` : detailValue(shipment.description ?? shipment.item);
+  const detail = (label: string, content: unknown) => {
+    const itemValue = detailValue(content);
+    return itemValue === "—" ? "" : `<div class="quotation-detail-item"><dt>${esc(label)}</dt><dd>${esc(itemValue)}</dd></div>`;
+  };
+  const cost = q.backend_cost === null || q.backend_cost === undefined ? "Not entered" : pesos(q.backend_cost);
+  const gross = q.backend_cost === null || q.backend_cost === undefined ? "Enter Ni Hao cost to calculate" : pesos(Number(q.final_amount) - Number(q.backend_cost));
+  const margin = q.backend_cost === null || q.backend_cost === undefined || Number(q.final_amount) === 0 ? "—" : `${(((Number(q.final_amount) - Number(q.backend_cost)) / Number(q.final_amount)) * 100).toFixed(2)}%`;
+
+  return `${warning}<article class="quotation-print quotation-detail-view">
+    <dl class="quotation-meta">
+      <div class="quotation-detail-item"><dt>Account number</dt><dd>${esc(accountNumber) || "—"}</dd></div>
+      <div class="quotation-detail-item"><dt>Quotation date</dt><dd>${esc(detailValue(q.quotation_date))}</dd></div>
+    </dl>
+    <div class="quotation-detail-cards">
+      <section class="quotation-detail-card"><h2>Customer details</h2><dl class="quotation-detail-grid">${detail("Customer", c.name)}${detail("Company", c.company)}${detail("Mobile", c.mobile)}${detail("Email", c.email)}${detail("Address", c.address)}</dl></section>
+      <section class="quotation-detail-card"><h2>Cargo &amp; price</h2><dl class="quotation-detail-grid">${detail("Item", item)}${detail("Freight type", q.freight_type)}${detail("Total CBM", shipment.cbm)}${detail("Actual weight", shipment.weight === undefined || shipment.weight === null || shipment.weight === "" ? "" : `${shipment.weight} kg`)}${detail("Origin warehouse", shipment.originWarehouse)}<div class="quotation-detail-item quotation-total"><dt>KargoDoor shipping total</dt><dd>${pesos(q.final_amount)}</dd></div></dl></section>
+      <section class="quotation-detail-card quotation-internal-card"><h2>Internal cost &amp; profit</h2><dl class="quotation-detail-grid"><div class="quotation-detail-item"><dt>Ni Hao cost</dt><dd>${cost}</dd></div><div class="quotation-detail-item"><dt>KargoDoor charge</dt><dd>${pesos(q.final_amount)}</dd></div><div class="quotation-detail-item"><dt>Gross profit</dt><dd>${gross}</dd></div><div class="quotation-detail-item"><dt>Gross margin</dt><dd>${margin}</dd></div></dl></section>
+    </div>
+  </article>`;
 }
 export async function quotationsPage(
   request: Request,
@@ -897,14 +903,16 @@ export async function quotationsPage(
           staff,
         );
       }
+      const linkedCustomer = q.customer_id
+        ? await db
+            .prepare("SELECT customer_code FROM customers WHERE id=?")
+            .bind(q.customer_id)
+            .first<Row>()
+        : null;
+      const accountNumber = String(linkedCustomer?.customer_code ?? "");
       return page(
         "Quotation",
-        `<div class="actions"><a class="button" href="${path}">Back</a><a class="button" href="${path}?edit=${id}">Edit</a><a class="button" href="/admin/quotations/export?id=${id}">Download PDF</a><a class="button" href="/admin/quotations/image?id=${id}">Download Image</a><form method="post"><input type="hidden" name="csrf" value="${esc(csrfToken(env, user.id, path))}"><input type="hidden" name="action" value="duplicate"><input type="hidden" name="quotation_id" value="${esc(id)}"><button>Duplicate</button></form><button onclick="print()">Print / Save PDF</button>${canDeleteAdmin(user) ? `<a class="button" href="${path}?id=${esc(id)}&archive=1">Archive quotation</a>` : ""}</div><details class="admin-collapsible" open>
-  <summary>Quotation details</summary>
-  ${customerPreview(q)}
-  ${quotationCustomerMessage(q)}
-  ${quotationMessageCopyScript()}
-</details>`,
+        `<div class="actions"><a class="button" href="${path}?edit=${id}">Edit</a><a class="button" href="/admin/quotations/export?id=${id}">Download PDF</a><form method="post"><input type="hidden" name="csrf" value="${esc(csrfToken(env, user.id, path))}"><input type="hidden" name="action" value="duplicate"><input type="hidden" name="quotation_id" value="${esc(id)}"><button>Duplicate</button></form>${canDeleteAdmin(user) ? `<a class="button" href="${path}?id=${esc(id)}&archive=1">Archive quotation</a>` : ""}</div>${customerPreview(q, accountNumber)}${quotationCustomerMessage(q)}${quotationMessageCopyScript()}`,
         user.name,
         200,
         {},

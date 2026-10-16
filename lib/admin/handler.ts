@@ -1326,6 +1326,8 @@ export async function handleAdmin(
         const shipment = [
           shipmentDetail("Tracking number", esc(record.tracking_number) || "—"),
           shipmentDetail("Service type", esc(record.service_type) || "—"),
+          shipmentDetail("Initial CBM", esc(record.cbm) || "—"),
+          shipmentDetail("Initial weight (kg)", esc(record.weight_kg) || "—"),
           shipmentDetail("Origin warehouse", esc(record.china_warehouse) || "—"),
           shipmentDetail("China warehouse received", esc(record.warehouse_received_date) || "—"),
           shipmentDetail("Status", esc(status) || "—"),
@@ -1368,6 +1370,32 @@ export async function handleAdmin(
               <h2>Internal finance</h2>
               <dl class="shipment-detail-grid">${finance}</dl>
             </section>
+          </div>`;
+      })() : "";
+
+      const customerDetails = entity === "customers" ? (() => {
+        const detail = (label: string, value: unknown, wide = false) => `
+          <div class="customer-detail-item${wide ? " wide" : ""}">
+            <dt>${esc(label)}</dt>
+            <dd>${esc(value) || "—"}</dd>
+          </div>`;
+        const notes = String(record.notes || "").trim();
+
+        return `
+          <div class="customer-profile">
+            <div class="customer-profile-header">
+              <div>
+                <h2>${esc(record.full_name) || "Customer"}</h2>
+                ${record.company_name ? `<p class="muted">${esc(record.company_name)}</p>` : ""}
+              </div>
+              <span class="customer-account-badge">Account · ${esc(record.customer_code) || "—"}</span>
+            </div>
+            <dl class="customer-detail-grid">
+              ${detail("Mobile", record.mobile)}
+              ${detail("Email", record.email)}
+              ${detail("Address", record.address, true)}
+              ${notes ? detail("Notes", notes, true) : ""}
+            </dl>
           </div>`;
       })() : "";
 
@@ -1428,7 +1456,25 @@ export async function handleAdmin(
           ` : "";
 
       const portal = entity === "customers" ? await portalFor(db, id) : null;
-      const portalSection = entity === "customers" ? `<section><h2>Customer Portal Access</h2><dl><dt>Status</dt><dd>${portalStatus(portal)}</dd><dt>Login Email</dt><dd>${esc(portal?.login_email ?? record.email) || "—"}</dd></dl>${canWrite ? !portal ? `<form method="post" action="${path}">${hidden("csrf",csrfToken(env,user.id,path))}${hidden("action","portal_create")}${hidden("customer_id",id)}<button>Create Customer Account</button></form>` : !portal.enabled ? `<form method="post" action="${path}">${hidden("csrf",csrfToken(env,user.id,path))}${hidden("action","portal_reenable")}${hidden("customer_id",id)}<button>Re-enable Access</button></form>` : `<form method="post" action="${path}">${hidden("csrf",csrfToken(env,user.id,path))}${hidden("action","portal_reset")}${hidden("customer_id",id)}<button>Generate New Temporary Password</button></form><form method="post" action="${path}">${hidden("csrf",csrfToken(env,user.id,path))}${hidden("action","portal_disable")}${hidden("customer_id",id)}<button>Disable Access</button></form>` : ""}</section>` : "";
+      const portalActions = canWrite
+        ? !portal
+          ? `<form method="post" action="${path}">${hidden("csrf",csrfToken(env,user.id,path))}${hidden("action","portal_create")}${hidden("customer_id",id)}<button>Create Customer Account</button></form>`
+          : !portal.enabled
+            ? `<form method="post" action="${path}">${hidden("csrf",csrfToken(env,user.id,path))}${hidden("action","portal_reenable")}${hidden("customer_id",id)}<button>Re-enable Access</button></form>`
+            : `<form method="post" action="${path}">${hidden("csrf",csrfToken(env,user.id,path))}${hidden("action","portal_reset")}${hidden("customer_id",id)}<button>Generate New Temporary Password</button></form><form method="post" action="${path}">${hidden("csrf",csrfToken(env,user.id,path))}${hidden("action","portal_disable")}${hidden("customer_id",id)}<button>Disable Access</button></form>`
+        : "";
+      const portalSection = entity === "customers" ? `
+        <section class="customer-portal-access">
+          <div class="customer-portal-main">
+            <h2>Customer Portal Access</h2>
+            <p class="muted">Login email · ${esc(portal?.login_email ?? record.email) || "—"}</p>
+            ${portalActions ? `<div class="customer-portal-actions">${portalActions}</div>` : ""}
+          </div>
+          <dl class="customer-portal-status">
+            <dt>Status</dt>
+            <dd>${portalStatus(portal)}</dd>
+          </dl>
+        </section>` : "";
       const instructionId = `shipping-instructions-${id}`;
       const instructionMessage = entity === "customers"
         ? customerShippingInstructions({ name: record.full_name, customerCode: record.customer_code })
@@ -1610,7 +1656,7 @@ export async function handleAdmin(
           <section class="compact-record-details">
             ${customer}
 
-            ${entity === "shipments" ? shipmentDetails : `<dl class="compact-details-grid">${details}${margin}</dl>`}
+            ${entity === "shipments" ? shipmentDetails : entity === "customers" ? customerDetails : `<dl class="compact-details-grid">${details}${margin}</dl>`}
 
             <div class="actions">
               ${canWrite ? `<a

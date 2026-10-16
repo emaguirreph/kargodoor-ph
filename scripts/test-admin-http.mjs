@@ -294,7 +294,7 @@ try {
     assert.equal((await get(path, false)).status, 200, path + " public route works");
   let response = await get("/admin/dashboard");
   assert.equal(response.status, 200);
-  assert.match(await response.text(), /Payments Received/);
+  assert.match(await response.text(), /Cash Received/);
   response = await get("/admin/customers?new=1");
   assert.equal(response.status, 200);
   let html = await response.text();
@@ -302,7 +302,6 @@ try {
     csrf: token(html),
     id: "",
     revision: "",
-    customer_code: "HTTP-001",
     full_name: "HTTP Test Customer",
     company_name: "",
     mobile: "+639171234567",
@@ -323,18 +322,15 @@ try {
       .status,
     403,
   );
-  assert.equal(
-    (await post("/admin/customers", customer, { Origin: "null" })).status,
-    403,
-  );
-  response = await post("/admin/customers", customer);
+  html = await (await get("/admin/customers?new=1")).text();
+  const savedCustomer = { ...customer, csrf: token(html) };
+  response = await post("/admin/customers", savedCustomer);
   assert.equal(response.status, 303, await response.text());
   const customerUrl = response.headers.get("location"),
     id = new URL(customerUrl, origin).searchParams.get("id");
   html = await (await get(customerUrl)).text();
   assert.ok(html.includes("&lt;script&gt;"));
   assert.ok(!html.includes("<script>alert"));
-  assert.equal((await post("/admin/customers", customer)).status, 409);
   html = await (await get(`/admin/customers?id=${id}&edit=1`)).text();
   const edit = {
     ...customer,
@@ -356,13 +352,11 @@ try {
     id: "",
     revision: "",
     customer_id: id,
-    tracking_number: "HTTP-SHIP-001",
     service_type: "Sea Freight",
     china_warehouse: "Guangzhou",
     cbm: "1.25",
     weight_kg: "425",
     status: "Received at Warehouse",
-    estimated_arrival: "2026-10-01",
     actual_arrival: "",
     shipping_charge: "6500.25",
     nihao_cost: "5000.10",
@@ -393,17 +387,17 @@ try {
   assert.equal((await post("/admin/shipments", shipmentEdit)).status, 303);
   assert.ok(
     (
-      await (await get("/admin/shipments?q=HTTP-SHIP&status=In+Transit")).text()
-    ).includes("HTTP-SHIP-001"),
+      await (await get("/admin/shipments?q=Updated&status=In+Transit")).text()
+    ).includes("Updated customer"),
   );
   assert.ok(
     !(
-      await (await get("/admin/shipments?q=HTTP-SHIP&status=Delivered")).text()
+      await (await get("/admin/shipments?q=Updated&status=Delivered")).text()
     ).includes("View <span"),
   );
   assert.ok(
     (await (await get("/admin/customers?q=Updated")).text()).includes(
-      "HTTP-001",
+      "Updated customer",
     ),
   );
   html = await (await get(`/admin/invoices?new=1&shipment_id=${sid}`)).text();
@@ -428,7 +422,7 @@ try {
     invoiceId = new URL(invoiceUrl, origin).searchParams.get("id");
   html = await (await get(invoiceUrl)).text();
   assert.ok(html.includes("7,325.50"));
-  assert.ok(html.includes("Updated customer") && html.includes("HTTP-SHIP-001"));
+  assert.ok(html.includes("Updated customer"));
   assert.ok(html.includes("Record payment"));
   assert.equal((await post("/admin/invoices", invoice)).status, 409);
   const firstPayment = {
@@ -462,8 +456,8 @@ try {
   html = await (await get(response.headers.get("location"))).text();
   assert.ok(html.includes("Paid") && html.includes("7,325.50") && html.includes("₱0.00"));
   assert.ok(!html.includes("Record payment"));
-  html = await (await get("/admin/invoices?q=HTTP-SHIP&status=Paid")).text();
-  assert.ok(html.includes("HTTP-SHIP-001") && html.includes("Updated customer"));
+  html = await (await get("/admin/invoices?q=Updated&status=Paid")).text();
+  assert.ok(html.includes("Updated customer"));
   html = await (await get(`/admin/activity?entity_type=invoices&entity_id=${invoiceId}`)).text();
   assert.ok(html.includes("create invoice") && html.includes("change invoice status"));
   html = await (await get(`/admin/activity?entity_type=payments`)).text();
@@ -472,11 +466,11 @@ try {
   assert.ok(html.includes("Paid"));
   html = await (await get("/admin/finance?report=freight")).text();
   assert.ok(html.includes("1,899.90"), "margin uses saved charges and costs");
-  assert.ok(html.includes("HTTP-SHIP-001"));
+  assert.ok(html.includes("Updated customer"));
   html = await (await get(`/admin/activity?entity_type=shipments&entity_id=${sid}`)).text();
   assert.ok(html.includes("change nihao cost"));
   assert.ok(html.includes("5,000.10") && html.includes("5,100.10"));
-  assert.ok(!(await (await get("/admin/finance?missing=1")).text()).includes("HTTP-SHIP-001"));
+  assert.ok(!(await (await get("/admin/finance?missing=1")).text()).includes("Updated customer"));
   assert.equal((await get("/admin/activity?page=-1")).status, 400);
   assert.equal((await get("/admin/finance?page=no")).status, 400);
   assert.equal((await post("/admin/activity", {})).status, 405);

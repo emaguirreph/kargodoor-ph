@@ -24,8 +24,11 @@ export async function GET(request: Request) {
       ? `<section><h2>Package shipments</h2><p class="notice">${shipments.length} package${shipments.length === 1 ? "" : "s"} linked to this quotation: ${shipments.map((shipment) => `<a href="/admin/shipments?id=${esc(shipment.id)}">${esc(shipment.tracking_number)}</a>`).join(", ")}</p></section>`
       : quote?.status === "Approved"
         ? `<section><h2>Create shipments</h2><p>Create operational shipments from this approved quotation. Bulk quotations create one tracking number for every saved package.</p><form method="post" class="actions"><input type="hidden" name="action" value="start_shipment"><input type="hidden" name="quotation_id" value="${esc(quotationId)}"><input type="hidden" name="csrf" value="${esc(csrfToken(env, user.id, "/admin/quotations"))}"><button>Create Shipments</button></form></section>`
-        : `<section><h2>Add shipment</h2><p class="muted">Approve this quotation in Edit before adding a shipment.</p></section>`;
-    const html = (await response.text()).replace('<article class="quotation-print">', `${action}<article class="quotation-print">`);
+        : "";
+    const baseHtml = await response.text();
+    const html = action
+      ? baseHtml.replace('<article class="quotation-print quotation-detail-view">', `${action}<article class="quotation-print quotation-detail-view">`)
+      : baseHtml;
     return new Response(html, { status: response.status, headers: response.headers });
   } catch {
     return response;

@@ -461,7 +461,7 @@ test("Air Freight Create renderer uses the new Cargo Details structure", async (
   assert.ok(html.includes('data-air-pricing'), "Air panel must be available after a freight switch");
 });
 
-test("quotation details are open by default and tolerate legacy optional cargo fields", async () => {
+test("quotation detail uses the compact three-column layout and tolerates legacy optional cargo fields", async () => {
   const { sql, env, user } = quotationDatabase();
   const id = randomUUID();
   sql.prepare(`INSERT INTO quotations (
@@ -482,17 +482,22 @@ test("quotation details are open by default and tolerate legacy optional cargo f
   );
   assert.equal(response.status, 200);
   const html = await response.text();
-  assert.match(html, /<details class="admin-collapsible" open>/);
-  assert.match(html, /Quotation details/);
+  assert.match(html, /quotation-detail-cards/);
+  assert.match(html, /Customer details/);
+  assert.match(html, /Cargo &amp; price/);
+  assert.match(html, /Internal cost &amp; profit/);
+  assert.match(html, /Account number/);
   assert.match(html, /Legacy Customer/);
   assert.match(html, /Quotation Sent/);
   assert.match(html, /Instructions to Suppliers/);
   assert.match(html, /Attach a cargo-mark label to every package/);
   assert.match(html, /发货前注意重要事项/);
-  assert.match(html, /Dimensions: Not provided/);
-  assert.match(html, /Total CBM: —/);
-  for (const action of ["Edit", "Download PDF", "Download Image", "Duplicate", "Print / Save PDF", "Archive quotation"])
+  assert.doesNotMatch(html, /Dimensions: Not provided/);
+  assert.doesNotMatch(html, /Quantity:/);
+  for (const action of ["Edit", "Download PDF", "Duplicate", "Archive quotation"])
     assert.ok(html.includes(action), `${action} must remain available from quotation details`);
+  assert.doesNotMatch(html, /Download Image/);
+  assert.doesNotMatch(html, /Print \/ Save PDF/);
 
   const archive = await quotationsPage(
     new Request("http://localhost:3000/admin/quotations", {
