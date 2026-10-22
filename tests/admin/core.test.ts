@@ -152,6 +152,9 @@ test("shipping instructions include the customer account code and supplier detai
   assert.match(customerMessage, /Account\/Cargo Code: KD-10025/);
   assert.match(customerMessage, /place KD-10025 clearly on every package/);
   assert.match(customerMessage, /广州市白云区江高镇沙溪东路18号166通达仓库/);
+  assert.match(customerMessage, /发货前注意重要事项/);
+  assert.match(customerMessage, /English translation:/);
+  assert.match(customerMessage, /Attach a cargo-mark label to every package/);
 
   const shipmentMessage = shipmentShippingInstructions({
     name: "Maria",
@@ -164,6 +167,7 @@ test("shipping instructions include the customer account code and supplier detai
   assert.match(shipmentMessage, /广州市白云区江高镇沙溪东路18号166通达仓库/);
   assert.match(shipmentMessage, /Courier: SF Express/);
   assert.match(shipmentMessage, /Tracking\/Waybill number: SF123456/);
+  assert.match(shipmentMessage, /Include one packing list with each shipment/);
   assert.match(warehouseAddress("Tongda Air Cargo"), /TONGDA AIR CARGO/);
 });
 

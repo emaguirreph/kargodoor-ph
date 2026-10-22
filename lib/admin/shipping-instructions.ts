@@ -58,6 +58,17 @@ export function warehouseAddress(warehouse: unknown): string {
     : "";
 }
 
+const supplierRequirements = `Instructions to Suppliers
+发货前注意重要事项：
+1. 请务必每件货物贴好唛头标签（包括客户代号，菲律宾收货人电话，中国寄件人电话），否则仓库无法收货入仓；
+2. 请每票货随货附一张装箱单，包含详细中文品名，材质，件数，重量，发货人电话等；
+3. 送货前请确保货物包装完整无破损，易碎货物加固包装，否则仓库不接收包装破损货物。
+
+English translation:
+1. Attach a cargo-mark label to every package. It must include the customer code, the Philippine recipient’s phone number, and the China sender’s phone number; otherwise, the warehouse cannot receive the cargo.
+2. Include one packing list with each shipment, showing the detailed Chinese product name, material, quantity, weight, and sender’s phone number.
+3. Ensure all packaging is complete and undamaged before delivery. Reinforce fragile cargo. The warehouse will not accept cargo with damaged packaging.`;
+
 export function customerAccountCreatedMessage(customer: ShippingInstructionCustomer): string {
   const name = text(customer.name, "there");
   const code = text(customer.customerCode, "[account/cargo code]");
@@ -85,6 +96,8 @@ Warehouse Address:
 ${address}
 
 Please ask your supplier to place ${code} clearly on every package label. This helps us receive, identify, and update your shipment correctly.
+
+${supplierRequirements}
 
 Once shipped, please send us the courier name, tracking/waybill number, and a receipt or package photo so we can monitor your cargo going to our warehouse.
 
@@ -122,6 +135,8 @@ Assigned Warehouse: ${warehouse}
 Warehouse Address: ${address}
 
 Please ask your supplier to place ${code} clearly on every package before shipping.
+
+${supplierRequirements}
 
 Once shipped, please send us:
 • Courier: ${courier}
