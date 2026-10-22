@@ -18,6 +18,7 @@
     const width = section.querySelector('input[name="width"]');
     const height = section.querySelector('input[name="height"]');
     const measurement = section.querySelector('select[name="measurement_unit"]');
+    const warehouse = section.querySelector('select[name="origin_warehouse"]');
     const weight = section.querySelector('input[name="weight"]');
     const units = section.querySelector('input[name="units"]');
     let packageQuantity = section.querySelector('input[name="package_quantity"]');
@@ -141,6 +142,15 @@
       updateCategory();
       syncUnits();
       syncPricingPanel();
+    };
+
+    const syncWarehouseForFreight = () => {
+      if (!freight || !warehouse) return;
+      if (freight.value === "Air Freight" && warehouse.value !== "Tongda Air Cargo") {
+        warehouse.value = "Tongda Air Cargo";
+      } else if (freight.value === "Sea Freight" && warehouse.value === "Tongda Air Cargo") {
+        warehouse.value = "Guangzhou";
+      }
     };
 
     const updateCbm = () => {
@@ -429,6 +439,7 @@
     item?.addEventListener("input", calculate);
     item?.addEventListener("change", calculate);
     freight?.addEventListener("change", () => {
+      syncWarehouseForFreight();
       updateItems();
       calculate();
     });

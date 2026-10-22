@@ -1,6 +1,8 @@
 export type ShippingInstructionCustomer = {
   name?: unknown;
   customerCode?: unknown;
+  warehouse?: unknown;
+  warehouseAddress?: unknown;
 };
 
 export type ShippingInstructionShipment = ShippingInstructionCustomer & {
@@ -16,6 +18,45 @@ export type PortalAccessMessage = ShippingInstructionCustomer & {
 };
 
 const text = (value: unknown, fallback = "") => String(value ?? "").trim() || fallback;
+
+export const warehouseNames = ["Guangzhou", "Yiwu", "Shishi", "Tongda Air Cargo"] as const;
+export type WarehouseName = typeof warehouseNames[number];
+
+const warehouseAddresses: Record<WarehouseName, string> = {
+  Shishi: `通达国际物流（石狮）
+地址：福建省晋江市龙湖镇梧坑村逸海产业园4栋A1通达仓库（+客户唛头）
+邮编：362200
+联系人：张先生 13600719368 / 0595-85293217
+高德导航搜索“泉海通达物流”
+Receiving Time: Monday to Sunday 8am to 6pm (except for holidays)`,
+  Guangzhou: `通达国际物流（广州）
+地址：广州市白云区江高镇沙溪东路18号166通达仓库（+客户唛头）
+联系人：伍先生
+联系电话：13924091288 / 13560372000
+固定电话：020-81997500
+邮编：510450
+高德导航搜索“广州通达仓库”
+Receiving Time: Monday to Sunday 8am to 6pm (except for holidays)`,
+  Yiwu: `通达国际物流（义乌）
+地址：浙江省义乌市苏溪镇好派路121号飞天制衣1楼通达仓库（+客户唛头）
+联系人：施先生 13867932099 / 18069956177
+固定电话：0579-85201593
+邮编：322009
+Receiving Time: Monday to Sunday 8am to 5pm (except for holidays)`,
+  "Tongda Air Cargo": `TONGDA AIR CARGO 通达空运
+贴标: AIR + 客户唛头
+收件人：通达空运
+地址：福建泉州市晋江市龙湖梧坑逸海产业园4栋空运部（+客户唛头）
+手机号：13533392699
+邮箱：1104931438@qq.com`,
+};
+
+export function warehouseAddress(warehouse: unknown): string {
+  const name = text(warehouse);
+  return Object.prototype.hasOwnProperty.call(warehouseAddresses, name)
+    ? warehouseAddresses[name as WarehouseName]
+    : "";
+}
 
 export function customerAccountCreatedMessage(customer: ShippingInstructionCustomer): string {
   const name = text(customer.name, "there");
@@ -34,11 +75,14 @@ We’ll send your warehouse address and shipping instructions next.
 export function customerShippingInstructions(customer: ShippingInstructionCustomer): string {
   const name = text(customer.name, "there");
   const code = text(customer.customerCode, "[account/cargo code]");
+  const warehouse = text(customer.warehouse, "[Confirm the assigned warehouse]");
+  const address = text(customer.warehouseAddress || warehouseAddress(warehouse), "[Add warehouse address]");
   return `Hi ${name}! Here are your KargoDoor China warehouse shipping instructions.
 
 Account/Cargo Code: ${code}
-Assigned Warehouse: [Confirm the assigned warehouse]
-Warehouse Address: [Add warehouse address]
+Assigned Warehouse: ${warehouse}
+Warehouse Address:
+${address}
 
 Please ask your supplier to place ${code} clearly on every package label. This helps us receive, identify, and update your shipment correctly.
 
@@ -68,7 +112,7 @@ export function shipmentShippingInstructions(shipment: ShippingInstructionShipme
   const name = text(shipment.name, "there");
   const code = text(shipment.customerCode, "[account/cargo code]");
   const warehouse = text(shipment.warehouse, "[Confirm the assigned warehouse]");
-  const address = text(shipment.warehouseAddress, "[Add warehouse address]");
+  const address = text(shipment.warehouseAddress || warehouseAddress(warehouse), "[Add warehouse address]");
   const courier = text(shipment.supplierCourier, "[courier name]");
   const waybill = text(shipment.supplierWaybill, "[tracking/waybill number]");
   return `Hi ${name}! Here are the shipping instructions for your KargoDoor cargo.

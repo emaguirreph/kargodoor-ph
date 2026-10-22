@@ -36,7 +36,7 @@ import { saveRecord, archiveOrCancelRecord } from "./data";
 import { page, esc, pesos, input, select, hidden } from "./ui";
 import { dashboard, finance, activity, saveStaffFollowUp } from "./reports";
 import { createPortal, disablePortal, portalFor, portalStatus, resetPortal } from "./customer-portal";
-import { copyButton, copyScript, customerAccountCreatedMessage, customerPortalAccessMessage, customerShippingInstructions, shipmentShippingInstructions } from "./shipping-instructions";
+import { copyButton, copyScript, customerAccountCreatedMessage, customerPortalAccessMessage, customerShippingInstructions, shipmentShippingInstructions, warehouseAddress, warehouseNames } from "./shipping-instructions";
 import { leadsPage } from "./leads";
 
 const labels: Record<string, string> = {
@@ -1482,16 +1482,28 @@ export async function handleAdmin(
       const accountMessage = entity === "customers"
         ? customerAccountCreatedMessage({ name: record.full_name, customerCode: record.customer_code })
         : "";
+      const customerWarehouseMessages = entity === "customers"
+        ? Object.fromEntries(warehouseNames.map((warehouse) => [warehouse, customerShippingInstructions({
+            name: record.full_name,
+            customerCode: record.customer_code,
+            warehouse,
+            warehouseAddress: warehouseAddress(warehouse),
+          })]))
+        : {};
       const instructionMessage = entity === "customers"
-        ? customerShippingInstructions({ name: record.full_name, customerCode: record.customer_code })
+        ? customerWarehouseMessages.Guangzhou
         : shipmentShippingInstructions({
             name: linkedCustomer?.full_name,
             customerCode: linkedCustomer?.customer_code,
             warehouse: record.china_warehouse,
+            warehouseAddress: warehouseAddress(record.china_warehouse),
             supplierCourier: record.supplier_courier,
             supplierWaybill: record.supplier_waybill_number,
           });
-      const shippingInstructions = canWrite ? `${entity === "customers" ? `<section><h2>Send Account Setup</h2><p class="muted">Send this first so the customer knows their KargoDoor account number before their supplier ships any package.</p><textarea id="${accountMessageId}" readonly aria-label="Account setup message">${esc(accountMessage)}</textarea><div class="actions">${copyButton(accountMessageId, "Copy account setup message")}</div></section>` : ""}<section><h2>Send Warehouse Instructions</h2><p class="muted">Review the message, add the warehouse address, then copy it into Messenger, WhatsApp, or another customer chat.</p><textarea id="${instructionId}" readonly aria-label="Warehouse instructions">${esc(instructionMessage)}</textarea><div class="actions">${copyButton(instructionId, "Copy warehouse instructions")}</div>${copyScript()}</section>` : "";
+      const warehouseMessageSelector = entity === "customers"
+        ? `<label>Select warehouse<select data-warehouse-message-selector data-target="${esc(instructionId)}" data-messages="${esc(JSON.stringify(customerWarehouseMessages))}">${warehouseNames.map((warehouse) => `<option>${esc(warehouse)}</option>`).join("")}</select></label><script>document.querySelectorAll("[data-warehouse-message-selector]").forEach(select=>select.addEventListener("change",()=>{try{const messages=JSON.parse(select.dataset.messages||"{}");const target=document.getElementById(select.dataset.target||"");if(target&&messages[select.value])target.value=messages[select.value];}catch{}}));</script>`
+        : "";
+      const shippingInstructions = canWrite ? `${entity === "customers" ? `<section><h2>Send Account Setup</h2><p class="muted">Send this first so the customer knows their KargoDoor account number before their supplier ships any package.</p><textarea id="${accountMessageId}" readonly aria-label="Account setup message">${esc(accountMessage)}</textarea><div class="actions">${copyButton(accountMessageId, "Copy account setup message")}</div></section>` : ""}<section><h2>Send Warehouse Instructions</h2><p class="muted">Select the warehouse and its complete address is added automatically before you copy the message.</p>${warehouseMessageSelector}<textarea id="${instructionId}" readonly aria-label="Warehouse instructions">${esc(instructionMessage)}</textarea><div class="actions">${copyButton(instructionId, "Copy warehouse instructions")}</div>${copyScript()}</section>` : "";
 
       const customerNotifications = entity === "shipments" && canWrite ? (() => {
         const customerName = String(linkedCustomer?.full_name || "Customer");

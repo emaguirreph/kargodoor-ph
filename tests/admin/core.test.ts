@@ -33,7 +33,7 @@ import {
   requireAdminMutation,
 } from "../../lib/admin/security";
 import { expensesPage, saveExpense, mutateExpense } from "../../lib/admin/expenses";
-import { customerShippingInstructions, shipmentShippingInstructions } from "../../lib/admin/shipping-instructions";
+import { customerShippingInstructions, shipmentShippingInstructions, warehouseAddress } from "../../lib/admin/shipping-instructions";
 function database(includePhase1 = true) {
   const sql = new DatabaseSync(":memory:");
   sql.exec("PRAGMA foreign_keys=ON");
@@ -147,10 +147,11 @@ const shipmentInput = (id: string) =>
 const shipment = (id: string) => shipmentSchema.parse(shipmentInput(id));
 
 test("shipping instructions include the customer account code and supplier details", () => {
-  const customerMessage = customerShippingInstructions({ name: "Maria", customerCode: "KD-10025" });
+  const customerMessage = customerShippingInstructions({ name: "Maria", customerCode: "KD-10025", warehouse: "Guangzhou" });
   assert.match(customerMessage, /Hi Maria/);
   assert.match(customerMessage, /Account\/Cargo Code: KD-10025/);
   assert.match(customerMessage, /place KD-10025 clearly on every package/);
+  assert.match(customerMessage, /广州市白云区江高镇沙溪东路18号166通达仓库/);
 
   const shipmentMessage = shipmentShippingInstructions({
     name: "Maria",
@@ -160,8 +161,10 @@ test("shipping instructions include the customer account code and supplier detai
     supplierWaybill: "SF123456",
   });
   assert.match(shipmentMessage, /Assigned Warehouse: Guangzhou/);
+  assert.match(shipmentMessage, /广州市白云区江高镇沙溪东路18号166通达仓库/);
   assert.match(shipmentMessage, /Courier: SF Express/);
   assert.match(shipmentMessage, /Tracking\/Waybill number: SF123456/);
+  assert.match(warehouseAddress("Tongda Air Cargo"), /TONGDA AIR CARGO/);
 });
 
 function insertQuotation(sql: DatabaseSync, values: {
@@ -513,7 +516,9 @@ test("required fields, dates, enum, numeric precision and overposting are valida
   );
   assert.equal("cargo_code" in parsedShipmentForm, false);
   assert.equal(shipment(randomUUID()).shipping_charge, 650025);
-  for (const bad of ["-1", "Infinity", "NaN", "1e3", "2.0001", ""])
+  assert.equal(shipmentSchema.safeParse({ ...shipmentInput(randomUUID()), china_warehouse: "Tongda Air Cargo" }).success, true);
+  assert.equal(shipmentSchema.safeParse({ ...shipmentInput(randomUUID()), cbm: "2.000123" }).success, true);
+  for (const bad of ["-1", "Infinity", "NaN", "1e3", "2.0001234", ""])
     assert.equal(shipmentSchema.safeParse({ ...shipmentInput(randomUUID()), cbm: bad }).success, false);
   for (const bad of ["-1", "1.001", "", "NaN"])
     assert.equal(shipmentSchema.safeParse({ ...shipmentInput(randomUUID()), shipping_charge: bad }).success, false);

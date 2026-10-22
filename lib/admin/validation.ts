@@ -4,6 +4,7 @@ export const warehouses = [
   "Guangzhou",
   "Yiwu",
   "Shishi",
+  "Tongda Air Cargo",
   "Hong Kong",
   "Taiwan",
 ] as const;
@@ -44,11 +45,11 @@ const optional = (max: number) =>
     .max(max)
     .transform((value) => value || null);
 
-const decimal = (max: number) =>
+const decimal = (max: number, precision = 3) =>
   required(30)
     .regex(
-      /^\d+(\.\d{1,3})?$/,
-      "Use a positive number with up to 3 decimals",
+      new RegExp(`^\\d+(\\.\\d{1,${precision}})?$`),
+      `Use a positive number with up to ${precision} decimals`,
     )
     .transform(Number)
     .refine(
@@ -58,10 +59,10 @@ const decimal = (max: number) =>
       "Number is too large",
     );
 
-const optionalDecimal = (max: number) =>
+const optionalDecimal = (max: number, precision = 3) =>
   z.union([
     z.literal("").transform(() => null),
-    decimal(max),
+    decimal(max, precision),
   ]);
 
 const money = required(30)
@@ -207,7 +208,7 @@ const shipmentObjectSchema = z
     departure_date:
       date,
 
-    cbm: decimal(1000000),
+    cbm: decimal(1000000, 6),
 
     weight_kg:
       decimal(100000000),
@@ -244,7 +245,7 @@ const shipmentObjectSchema = z
 
     supplier_waybill_number: optional(120),
     supplier_courier: optional(120),
-    verified_cbm: optionalDecimal(1000000),
+    verified_cbm: optionalDecimal(1000000, 6),
     verified_weight_kg: optionalDecimal(100000000),
   })
   .strict();
