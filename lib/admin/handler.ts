@@ -2032,10 +2032,6 @@ export async function handleAdmin(
                     )
                     .join("")}
 
-                  <th>
-                    Details
-                  </th>
-
                   ${entity === "customers" && canWrite ? `<th>
                     Shipment
                   </th>` : ""}
@@ -2055,35 +2051,12 @@ export async function handleAdmin(
                           .map(
                             (
                               key,
-                            ) =>
-                              `<td>${esc(
-                                row[
-                                  key
-                                ],
-                              ) || "—"}</td>`,
+                            ) => {
+                              const value = esc(row[key]) || "—";
+                              return `<td>${key === keys[0] ? `<a class="record-identifier" href="${path}?id=${esc(row.id)}">${value}</a>` : value}</td>`;
+                            },
                           )
                           .join("")}
-
-                        <td>
-                          <a
-                            href="${path}?id=${esc(
-                              row.id,
-                            )}"
-                          >
-                            View
-                            <span
-                              class="muted"
-                            >
-                              ${esc(
-                                row[
-                                  keys[
-                                    0
-                                  ]
-                                ],
-                              )}
-                            </span>
-                          </a>
-                        </td>
 
                         ${entity === "customers" && canWrite ? `<td>
                           <a
