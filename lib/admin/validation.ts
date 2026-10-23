@@ -63,11 +63,14 @@ const optionalDecimal = (max: number, precision = 3) =>
   z
     .string()
     .trim()
-    .transform((value) =>
-      /^\d{1,3}(?:,\d{3})+(?:\.\d+)?$/.test(value)
+    .transform((value) => {
+      const normalizedThousands = /^\d{1,3}(?:,\d{3})+(?:\.\d+)?$/.test(value)
         ? value.replaceAll(",", "")
-        : value,
-    )
+        : value;
+      return normalizedThousands.startsWith(".")
+        ? `0${normalizedThousands}`
+        : normalizedThousands;
+    })
     .refine(
       (value) =>
         !value ||

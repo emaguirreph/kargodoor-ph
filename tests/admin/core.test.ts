@@ -585,6 +585,14 @@ test("required fields, dates, enum, numeric precision and overposting are valida
   assert.equal(verifiedShipmentForm.cbm, 0.330456);
   assert.equal(verifiedShipmentForm.verified_cbm, 0.360789);
   assert.equal(verifiedShipmentForm.verified_weight_kg, 45);
+  const shorthandVerifiedMeasurement = parseForm(
+    "shipments",
+    new URLSearchParams(Object.entries({
+      ...shipmentFormInput,
+      verified_cbm: ".36",
+    })),
+  );
+  assert.equal(shorthandVerifiedMeasurement.verified_cbm, 0.36);
   const formattedVerifiedMeasurement = parseForm(
     "shipments",
     new URLSearchParams(Object.entries({
