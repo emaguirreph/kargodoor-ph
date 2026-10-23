@@ -1442,6 +1442,13 @@ export async function handleAdmin(
             >
               View shipments
             </a>
+            <a
+              href="/customer/login"
+              target="_blank"
+              rel="noopener"
+            >
+              View customer portal
+            </a>
             ${canWrite ? `
             <a
               href="/admin/shipments?new=1&customer_id=${esc(
