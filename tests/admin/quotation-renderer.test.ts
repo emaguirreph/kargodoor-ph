@@ -126,7 +126,7 @@ function assertCargoDetailsMarkup(html: string, includeSeaOutputs = true) {
   assert.ok(html.includes("Supplier / Origin Location"), "Supplier / Origin Location must be rendered");
   assert.ok(html.includes("KargoDoor Warehouse"), "KargoDoor Warehouse must be rendered");
   assert.ok(html.includes("Freight Type"), "Freight Type must be rendered");
-  assert.ok(html.includes("Total CBM"), "Total CBM must be rendered");
+  assert.ok(html.includes("Declared CBM"), "Declared CBM must be rendered");
   assert.ok(html.includes("Actual Weight") || html.includes("Declared Weight"), "Weight input must be rendered");
   assert.ok(
     html.includes("Applicable to Mobile Phones / Computers / Tablets."),
@@ -153,8 +153,8 @@ function assertCargoDetailsMarkup(html: string, includeSeaOutputs = true) {
   }
 
   assert.match(html, /data-category-output[^>]*readonly/, "Category must be read-only");
-  assert.match(html, /name="cbm"[^>]*data-cbm-output/, "Total CBM must be editable");
-  assert.ok(html.includes("Editable — use confirmed total package CBM when provided by supplier."));
+  assert.match(html, /name="cbm"[^>]*data-cbm-output/, "Declared CBM must be editable");
+  assert.ok(html.includes("Editable — use the supplier's declared package CBM."));
   assert.ok(html.includes("CBM CONVERTER"));
   assert.ok(html.includes("Calculator only — L × W × H × Calculator Quantity."));
   assert.ok(html.includes("Quantity of Packages"));
@@ -165,7 +165,7 @@ function assertCargoDetailsMarkup(html: string, includeSeaOutputs = true) {
     assert.equal((html.match(new RegExp(`name="${name}"`, "g")) ?? []).length, 1, `${name} must render once`);
   }
   const weightLabel = html.includes("Declared Weight (kg)") ? "Declared Weight (kg)" : "Actual Weight (kg)";
-  const order = ["Item / Commodity", "Category", "Supplier / Origin Location", "KargoDoor Warehouse", "Total CBM", "Freight Type", weightLabel];
+  const order = ["Item / Commodity", "Category", "Supplier / Origin Location", "KargoDoor Warehouse", "Declared CBM", "Freight Type", weightLabel];
   for (let index = 1; index < order.length; index++) assert.ok(html.indexOf(order[index - 1]) < html.indexOf(order[index]), `${order[index - 1]} must precede ${order[index]}`);
 
   for (const name of ["quantity", "unit_type", "category"]) {

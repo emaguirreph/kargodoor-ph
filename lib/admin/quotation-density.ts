@@ -9,7 +9,7 @@ const numeric = (value: unknown, label: string) => {
 };
 
 export function calculateDensity(cbm: unknown, weight: unknown) {
-  const totalCbm = numeric(cbm, "Total CBM");
+  const totalCbm = numeric(cbm, "Declared CBM");
   const actualWeight = numeric(weight, "actual weight");
   if (totalCbm <= 0) return null;
   return actualWeight / totalCbm;

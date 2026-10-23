@@ -1376,7 +1376,6 @@ export async function handleAdmin(
 
       const shipmentDetails = entity === "shipments" ? (() => {
         const status = String(record.status || "");
-        const verifiedCargo = record.verified_cbm !== null || record.verified_weight_kg !== null;
         const actualArrivalVisible = ["Malabon Warehouse", "Delivered"].includes(status);
         const money = (key: "shipping_charge" | "delivery_charge" | "nihao_cost") =>
           record[key] === null ? "Not entered" : pesos(record[key]);
@@ -1397,15 +1396,10 @@ export async function handleAdmin(
             : []),
         ].join("");
 
-        const cargo = verifiedCargo
-          ? [
-              shipmentDetail("Verified CBM", esc(record.verified_cbm) || "—"),
-              shipmentDetail("Verified weight (kg)", esc(record.verified_weight_kg) || "—"),
-            ].join("")
-          : [
-              shipmentDetail("Declared CBM", esc(record.cbm) || "—"),
-              shipmentDetail("Declared weight (kg)", esc(record.weight_kg) || "—"),
-            ].join("");
+        const cargo = [
+          shipmentDetail("Verified CBM", esc(record.verified_cbm) || "—"),
+          shipmentDetail("Verified weight (kg)", esc(record.verified_weight_kg) || "—"),
+        ].join("");
 
         const finance = [
           shipmentDetail("KargoDoor freight charge", money("shipping_charge")),
@@ -1424,7 +1418,7 @@ export async function handleAdmin(
               <dl class="shipment-detail-grid">${shipment}</dl>
             </section>
             <section class="shipment-detail-section">
-              <h2>${verifiedCargo ? "Verified cargo" : "Cargo"}</h2>
+              <h2>Verified cargo</h2>
               <dl class="shipment-detail-grid">${cargo}</dl>
             </section>
             <section class="shipment-detail-section">

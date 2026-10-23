@@ -15,7 +15,7 @@ export function calculateAdminSeaQuote(input: Record<string, unknown>) {
   if (!(item in itemCategories) && item !== "OTHER / NOT LISTED") throw new Error("Choose a valid Sea Freight item.");
   const category = item in itemCategories ? itemCategories[item] : String(input.category ?? "") as SeaCategory;
   if (!(category in seaRates)) throw new Error("Choose a valid Sea Freight category.");
-  const cbm = numeric(input.cbm, "Total CBM");
+  const cbm = numeric(input.cbm, "Declared CBM");
   const weight = numeric(input.weight, "actual weight");
   const units = numeric(input.units, "units", false);
   const calculation = seaQuote(category, cbm, weight, units);
@@ -35,7 +35,7 @@ export function calculateAdminAirQuote(input: Record<string, unknown>) {
   if (input.freightType !== "Air Freight") throw new Error("Live calculation is available for Air Freight only.");
   const item = String(input.item ?? "") as AirItem;
   if (!airItems.includes(item)) throw new Error("Choose a valid Air Freight item.");
-  const cbm = numeric(input.cbm, "Total CBM");
+  const cbm = numeric(input.cbm, "Declared CBM");
   const weight = numeric(input.weight, "actual weight");
   const quantity = numeric(input.quantity, "quantity");
   const calculation = airQuote(item, cbm, weight, quantity);
