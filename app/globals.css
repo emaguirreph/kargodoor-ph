@@ -3257,6 +3257,16 @@ margin: 0;
   color: #66788a;
 }
 
+.kd-customer-dashboard-heading .kd-customer-account-code {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #e9f5fc;
+  color: var(--kd-blue);
+  font-size: 0.9rem;
+}
+
 .kd-customer-dashboard-section {
   margin-top: 30px;
 }
@@ -3296,6 +3306,122 @@ margin: 0;
 
 .kd-customer-table tbody tr:last-child td {
   border-bottom: 0;
+}
+
+.kd-customer-instruction-row td {
+  padding: 0;
+  white-space: normal;
+}
+
+.kd-customer-instructions {
+  background: #f8fbfe;
+  border-top: 1px solid #e7edf4;
+}
+
+.kd-customer-instructions summary {
+  padding: 13px 14px;
+  color: var(--kd-strong-blue);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.kd-customer-payment-instructions {
+  border-top: 1px solid #e7edf4;
+  background: #fff;
+}
+
+.kd-customer-payment-instructions summary {
+  padding: 13px 14px;
+  color: var(--kd-strong-blue);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.kd-customer-payment-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 0 14px 16px;
+}
+
+.kd-customer-payment-grid section {
+  margin: 0;
+  padding: 14px;
+  border: 1px solid #dce6f2;
+  border-radius: 6px;
+}
+
+.kd-customer-payment-grid h3 {
+  margin: 0 0 12px;
+  color: var(--kd-blue);
+  font-size: 0.9rem;
+}
+
+.kd-customer-payment-grid dl {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.kd-customer-payment-grid dt {
+  color: #66788a;
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.kd-customer-payment-grid dd {
+  margin: 3px 0 0;
+  color: var(--kd-text);
+  font-weight: 600;
+}
+
+.kd-customer-code-note {
+  margin: 0 14px 14px;
+  padding: 12px;
+  border-left: 3px solid var(--kd-green);
+  background: #f1faed;
+  color: #38596f;
+  line-height: 1.55;
+}
+
+.kd-customer-instructions pre {
+  margin: 0 14px 16px;
+  padding: 14px;
+  overflow-x: auto;
+  border: 1px solid #dce6f2;
+  border-radius: 6px;
+  background: #fff;
+  color: var(--kd-text);
+  font: 0.84rem/1.55 var(--kd-body-font);
+  white-space: pre-wrap;
+}
+
+.kd-customer-shipment-dates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0 14px 14px;
+}
+
+.kd-customer-shipment-dates > div {
+  padding: 12px;
+  border: 1px solid #dce6f2;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.kd-customer-shipment-dates dt {
+  color: #66788a;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.kd-customer-shipment-dates dd {
+  margin: 5px 0 0;
+  color: var(--kd-text);
+  font-weight: 600;
 }
 
 .kd-customer-track {
@@ -3343,6 +3469,14 @@ margin: 0;
 
   .kd-customer-table {
     min-width: 780px;
+  }
+
+  .kd-customer-shipment-dates {
+    grid-template-columns: 1fr;
+  }
+
+  .kd-customer-payment-grid {
+    grid-template-columns: 1fr;
   }
 
   .kd-customer-dashboard-actions {

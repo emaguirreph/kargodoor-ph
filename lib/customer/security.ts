@@ -60,11 +60,11 @@ export async function createCustomerSession(db: D1Database, accountId: string, n
 
 export async function customerSession(db: D1Database, token: string | undefined, now = new Date()) {
   if (!token || token.length > 512) return null;
-  return await db.prepare(`SELECT a.id,a.customer_id,c.full_name,a.login_email,a.password_state
+  return await db.prepare(`SELECT a.id,a.customer_id,c.full_name,c.customer_code,a.login_email,a.password_state
     FROM customer_sessions s JOIN customer_accounts a ON a.id=s.customer_account_id
     JOIN customers c ON c.id=a.customer_id
     WHERE s.token_hash=? AND s.expires_at>? AND a.enabled=1 LIMIT 1`)
-    .bind(hashSessionToken(token), now.toISOString()).first<Pick<CustomerAccount, "id" | "customer_id" | "full_name" | "login_email" | "password_state">>();
+    .bind(hashSessionToken(token), now.toISOString()).first<Pick<CustomerAccount, "id" | "customer_id" | "full_name" | "login_email" | "password_state"> & { customer_code: string }>();
 }
 
 export async function replaceCustomerPassword(db: D1Database, accountId: string, password: string) {

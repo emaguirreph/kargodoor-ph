@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { Footer, Header } from "@/components/site-chrome";
 import { MessengerLink } from "@/components/messenger-link";
+import { shipmentShippingInstructions, warehouseAddress } from "@/lib/admin/shipping-instructions";
 import {
   customerSession,
   customerSessionCookie,
@@ -17,6 +18,9 @@ type CustomerShipment = {
   cbm: number;
   weight_kg: number;
   status: string;
+  china_warehouse: string;
+  warehouse_received_date: string | null;
+  actual_arrival: string | null;
   shipping_charge: number;
   shipment_delivery_charge: number;
   invoice_delivery_charge: number | null;
@@ -63,8 +67,10 @@ function deliveryCharge(shipment: CustomerShipment) {
 
 function ShipmentRow({
   shipment,
+  customer,
 }: {
   shipment: CustomerShipment;
+  customer: { full_name: string; customer_code: string };
 }) {
   const measurement =
     shipment.service_type === "Sea Freight"
@@ -79,46 +85,99 @@ function ShipmentRow({
           })} kg`
         : "—";
 
+  const instructions = shipmentShippingInstructions({
+    name: customer.full_name,
+    customerCode: customer.customer_code,
+    warehouse: shipment.china_warehouse,
+    warehouseAddress: warehouseAddress(shipment.china_warehouse),
+  });
+  const chinaReceivedDate = shipment.warehouse_received_date || "Pending warehouse receipt";
+  const phWarehouseReceivedDate = shipment.actual_arrival || "—";
+
   return (
-    <tr>
-      <td>
-        <strong>{shipment.tracking_number}</strong>
-      </td>
+    <>
+      <tr>
+        <td>
+          <a
+            className="kd-customer-track"
+            href={`/track?tracking=${encodeURIComponent(
+              shipment.tracking_number,
+            )}`}
+          >
+            <strong>{shipment.tracking_number}</strong>
+          </a>
+        </td>
 
-      <td>{shipment.status}</td>
+        <td>{shipment.status}</td>
 
-      <td>{shipment.service_type}</td>
+        <td>{shipment.service_type}</td>
 
-      <td>{measurement}</td>
+        <td>{measurement}</td>
 
-      <td>{formatMoney(shipment.shipping_charge)}</td>
+        <td>{formatMoney(shipment.shipping_charge)}</td>
 
-      <td>{formatMoney(deliveryCharge(shipment))}</td>
+        <td>{formatMoney(deliveryCharge(shipment))}</td>
 
-      <td>
-        <strong>{paymentLabel(shipment)}</strong>
-      </td>
+        <td>
+          <strong>{paymentLabel(shipment)}</strong>
+        </td>
 
-      <td>
-        <a
-          className="kd-customer-track"
-          href={`/track?tracking=${encodeURIComponent(
-            shipment.tracking_number,
-          )}`}
-        >
-          TRACK
-        </a>
-      </td>
-    </tr>
+      </tr>
+      <tr className="kd-customer-instruction-row">
+        <td colSpan={7}>
+          <details className="kd-customer-instructions">
+            <summary>Shipping instructions for this package</summary>
+            <p className="kd-customer-code-note">
+              <strong>Account / Cargo Code: {customer.customer_code}</strong> — use this on every supplier label so KargoDoor can identify your cargo. <strong>Tracking Number: {shipment.tracking_number}</strong> — this is the unique KargoDoor reference for this specific package and is different from your account/cargo code.
+            </p>
+            <dl className="kd-customer-shipment-dates">
+              <div>
+                <dt>China received date</dt>
+                <dd>{chinaReceivedDate}</dd>
+              </div>
+              <div>
+                <dt>PH warehouse received date</dt>
+                <dd>{phWarehouseReceivedDate}</dd>
+              </div>
+            </dl>
+            <pre>{instructions}</pre>
+          </details>
+          {paymentLabel(shipment) !== "PAID" ? (
+            <details className="kd-customer-payment-instructions">
+              <summary>Payment instructions</summary>
+              <div className="kd-customer-payment-grid">
+                <section>
+                  <h3>Bank Account Information</h3>
+                  <dl>
+                    <div><dt>Bank</dt><dd>UnionBank of the Philippines</dd></div>
+                    <div><dt>Account Name</dt><dd>KargoDoor Cargo Forwarding</dd></div>
+                    <div><dt>Account Number</dt><dd>002170017106</dd></div>
+                  </dl>
+                </section>
+                <section>
+                  <h3>GCash</h3>
+                  <dl>
+                    <div><dt>GCash Number</dt><dd>0917 157 7370</dd></div>
+                    <div><dt>Account Name</dt><dd>EMMARUTH GALLARDO</dd></div>
+                  </dl>
+                </section>
+              </div>
+            </details>
+          ) : null}
+        </td>
+      </tr>
+    </>
   );
 }
 
 function ShipmentTable({
   shipments,
   emptyMessage,
+  customer,
 }: {
   shipments: CustomerShipment[];
   emptyMessage: string;
+  customer: { full_name: string; customer_code: string };
 }) {
   if (shipments.length === 0) {
     return (
@@ -140,7 +199,6 @@ function ShipmentTable({
             <th>Freight</th>
             <th>Delivery</th>
             <th>Payment</th>
-            <th></th>
           </tr>
         </thead>
 
@@ -149,6 +207,7 @@ function ShipmentTable({
             <ShipmentRow
               key={shipment.id}
               shipment={shipment}
+              customer={customer}
             />
           ))}
         </tbody>
@@ -186,6 +245,9 @@ export default async function CustomerPage() {
         s.cbm,
         s.weight_kg,
         s.status,
+        s.china_warehouse,
+        s.warehouse_received_date,
+        s.actual_arrival,
         s.shipping_charge,
         s.delivery_charge AS shipment_delivery_charge,
 
@@ -240,6 +302,9 @@ export default async function CustomerPage() {
           <div className="kd-customer-dashboard-heading">
             <h1>MY KargoDoorPH</h1>
             <p>Welcome, {customer.full_name}</p>
+            <p className="kd-customer-account-code">
+              Account / Cargo Code: <strong>{customer.customer_code}</strong>
+            </p>
           </div>
 
           <section className="kd-customer-dashboard-section">
@@ -248,6 +313,7 @@ export default async function CustomerPage() {
             <ShipmentTable
               shipments={activeShipments}
               emptyMessage="You have no active shipments."
+              customer={customer}
             />
           </section>
 
@@ -257,6 +323,7 @@ export default async function CustomerPage() {
             <ShipmentTable
               shipments={shipmentHistory}
               emptyMessage="No shipment history yet."
+              customer={customer}
             />
           </section>
 
