@@ -34,7 +34,7 @@
     },
     {
       "binding": "ADMIN_DB",
-      "database_name": "kargodoor-admin-phase1",
+      "database_name": "kargodoor-admin",
       "database_id": "e162f77c-441b-40ee-a916-fac23285f1e5",
       "migrations_dir": "migrations/admin"
     }
