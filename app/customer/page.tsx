@@ -14,6 +14,7 @@ export const dynamic = "force-dynamic";
 export type CustomerShipment = {
   id: string;
   tracking_number: string;
+  item: string;
   service_type: "Sea Freight" | "Air Freight" | "FCL";
   cbm: number;
   weight_kg: number;
@@ -124,6 +125,8 @@ function ShipmentRow({
           </a>
         </td>
 
+        <td>{shipment.item || "—"}</td>
+
         <td>{shipment.status}</td>
 
         <td>{shipment.service_type}</td>
@@ -147,7 +150,7 @@ function ShipmentRow({
 
       </tr>
       <tr className="kd-customer-instruction-row">
-        <td colSpan={7}>
+        <td colSpan={8}>
           <details className="kd-customer-instructions">
             <summary>Shipping instructions for this package</summary>
             <p className="kd-customer-code-note">
@@ -216,6 +219,7 @@ export function ShipmentTable({
         <thead>
           <tr>
             <th>Tracking No.</th>
+            <th>Item</th>
             <th>Status</th>
             <th>Service</th>
             <th>CBM / Weight</th>
@@ -264,6 +268,11 @@ export default async function CustomerPage() {
       SELECT
         s.id,
         s.tracking_number,
+        CASE
+          WHEN s.tracking_remarks LIKE 'Item: %'
+            THEN substr(s.tracking_remarks, 7, instr(s.tracking_remarks || char(10), char(10)) - 7)
+          ELSE COALESCE(NULLIF(json_extract(q.cargo_snapshot, '$.item'), ''), '—')
+        END AS item,
         s.service_type,
         s.cbm,
         s.weight_kg,
@@ -292,6 +301,9 @@ export default async function CustomerPage() {
         ) AS payments_total
 
       FROM shipments s
+
+      LEFT JOIN quotations q
+        ON q.id = s.source_quotation_id
 
       LEFT JOIN invoices i
         ON i.shipment_id = s.id
