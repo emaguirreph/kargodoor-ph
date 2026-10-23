@@ -124,7 +124,7 @@ function validateFormOrigin(
 
 export async function handleAdmin(
   request: Request,
-  view?: Entity | "finance" | "finance/expenses" | "finance/cash" | "finance/export" | "activity" | "leads",
+  view?: Entity | "finance" | "finance/expenses" | "finance/cash" | "finance/export" | "activity" | "leads" | "customer-preview",
 ) {
   let localChallenge = false;
 
@@ -188,6 +188,29 @@ export async function handleAdmin(
         "Method not allowed.",
         405,
       );
+    }
+
+    if (view === "customer-preview") {
+      const customerId = url.searchParams.get("customer_id") ?? "";
+      if (!/^[\da-f-]{36}$/i.test(customerId)) throw new AdminError("Choose a valid customer to preview.");
+      const customer = await db.prepare("SELECT full_name,customer_code FROM customers WHERE id=? AND archived_at IS NULL").bind(customerId).first<RecordData>();
+      if (!customer) throw new AdminError("Customer not found.", 404);
+      const shipmentRows = (await db.prepare(`SELECT s.tracking_number,s.service_type,s.cbm,s.weight_kg,s.status,s.shipping_charge,s.delivery_charge,
+        i.delivery_charge AS invoice_delivery_charge,i.status AS invoice_status,i.total AS invoice_total,i.other_charge AS invoice_other_charge,
+        COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.invoice_id=i.id AND p.customer_id=s.customer_id),0) AS payments_total
+        FROM shipments s LEFT JOIN invoices i ON i.shipment_id=s.id AND i.customer_id=s.customer_id AND i.status!='Void'
+        WHERE s.customer_id=? ORDER BY s.created_at DESC`).bind(customerId).all<RecordData>()).results;
+      const row = (shipment: RecordData) => {
+        const invoiceDue = Number(shipment.invoice_total ?? 0) + Number(shipment.invoice_other_charge ?? 0);
+        const paid = shipment.invoice_status === "Paid" && Number(shipment.payments_total ?? 0) >= invoiceDue;
+        const delivery = shipment.invoice_status && shipment.invoice_status !== "Void" && shipment.invoice_delivery_charge !== null ? shipment.invoice_delivery_charge : shipment.delivery_charge;
+        const measurement = shipment.service_type === "Sea Freight" ? Number(shipment.cbm) > 0 ? `${Number(shipment.cbm).toLocaleString("en-PH", { maximumFractionDigits: 3 })} CBM` : "—" : Number(shipment.weight_kg) > 0 ? `${Number(shipment.weight_kg).toLocaleString("en-PH", { maximumFractionDigits: 2 })} kg` : "—";
+        return `<tr><td>${esc(shipment.tracking_number)}</td><td>${esc(shipment.status)}</td><td>${esc(shipment.service_type)}</td><td>${esc(measurement)}</td><td>${pesos(shipment.shipping_charge)}</td><td>${pesos(delivery)}</td><td><strong>${paid ? "PAID" : "UNPAID"}</strong></td></tr>`;
+      };
+      const active = shipmentRows.filter((shipment) => shipment.status !== "Delivered" && shipment.status !== "Cancelled");
+      const history = shipmentRows.filter((shipment) => shipment.status === "Delivered" || shipment.status === "Cancelled");
+      const table = (rows: RecordData[], empty: string) => rows.length ? `<div class="table"><table><thead><tr><th>Tracking No.</th><th>Status</th><th>Service</th><th>CBM / Weight</th><th>Freight</th><th>Delivery</th><th>Payment</th></tr></thead><tbody>${rows.map(row).join("")}</tbody></table></div>` : `<p class="muted">${esc(empty)}</p>`;
+      return page("Customer Portal Preview", `<section><p class="notice"><strong>Admin preview only.</strong> This is the customer dashboard view for ${esc(customer.full_name)}. The customer is not signed in and cannot see this preview.</p><div class="actions"><a href="/admin/customers?id=${esc(customerId)}">← Back to customer</a></div></section><section><h2>MY KargoDoorPH</h2><p>Welcome, ${esc(customer.full_name)}</p><p><strong>Account / Cargo Code: ${esc(customer.customer_code)}</strong></p><h2>My Shipments</h2>${table(active, "You have no active shipments.")}<h2>Shipment History</h2>${table(history, "No shipment history yet.")}</section>`, user.name, 200, {}, canWrite, staff);
     }
 
     /*
@@ -1443,11 +1466,9 @@ export async function handleAdmin(
               View shipments
             </a>
             <a
-              href="/customer/login"
-              target="_blank"
-              rel="noopener"
+              href="/admin/customer-preview?customer_id=${esc(id)}"
             >
-              View customer portal
+              View customer portal preview
             </a>
             ${canWrite ? `
             <a
