@@ -15,6 +15,7 @@ import {
   hashSessionToken,
   loginCustomer,
   normalizeCustomerEmail,
+  normalizeCustomerMobile,
   requestCookie,
   verifyCustomerPassword,
   type CustomerAccount,
@@ -127,6 +128,10 @@ test(
       "portal@example.test",
     );
 
+    assert.equal(normalizeCustomerMobile("+63 912-345-6789"), "09123456789");
+    assert.equal(normalizeCustomerMobile("9123456789"), "09123456789");
+    assert.equal(normalizeCustomerMobile("not a mobile number"), null);
+
     assert.equal(
       verifyCustomerPassword(password, account),
       true,
@@ -147,6 +152,9 @@ test(
       login?.account.customer_id,
       "customer",
     );
+
+    const mobileLogin = await loginCustomer(db, "+63 912 345 6789", password);
+    assert.equal(mobileLogin?.account.customer_id, "customer");
 
     assert.equal(
       await loginCustomer(
@@ -257,6 +265,11 @@ test(
       login!.session.token,
     );
 
+    await deleteCustomerSession(
+      db,
+      mobileLogin!.session.token,
+    );
+
     assert.equal(
       sql
         .prepare(
@@ -293,7 +306,7 @@ test(
 
     assert.match(
       login,
-      /Invalid email or password./,
+      /Invalid email, mobile number, or password./,
     );
 
     assert.match(

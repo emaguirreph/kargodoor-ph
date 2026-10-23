@@ -25,7 +25,7 @@ function fixture() {
   const adminId = randomUUID(), secret = randomBytes(24).toString("hex"), salt = randomBytes(16).toString("hex");
   sql.prepare("INSERT INTO admin_users VALUES (?,?,?,?,?,?)").run(adminId,"Test owner","owner@example.test","owner","2026-01-01","2026-01-01");
   const ids = [randomUUID(), randomUUID()];
-  ids.forEach((id,i) => sql.prepare("INSERT INTO customers VALUES (?,?,?,?,?,?,?,?,?,?)").run(id,`KDOOR${i}`,`Customer ${i}`,null,"09123456789",`customer${i}@example.test`,null,null,"2026-01-01","2026-01-01"));
+  ids.forEach((id,i) => sql.prepare("INSERT INTO customers (id,customer_code,full_name,company_name,mobile,email,address,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)").run(id,`KDOOR${i}`,`Customer ${i}`,null,"09123456789",`customer${i}@example.test`,null,null,"2026-01-01","2026-01-01"));
   const env = { ADMIN_DB: db, ADMIN_ORIGIN: "http://localhost:8787", ADMIN_LOCAL_DEV: "true", LOCAL_ADMIN_EMAIL: "owner@example.test", LOCAL_ADMIN_HASH: `${salt}:${scryptSync(secret,salt,64).toString("hex")}`, ADMIN_CSRF_SECRET: randomBytes(32).toString("hex") };
   Object.assign(globalThis, { [Symbol.for("__cloudflare-context__")]: { env } });
   const headers = { Authorization: `Basic ${Buffer.from(`owner@example.test:${secret}`).toString("base64")}`, Origin: env.ADMIN_ORIGIN };

@@ -20,6 +20,15 @@ export type CustomerAccount = {
 };
 
 export const normalizeCustomerEmail = (email: string) => email.trim().toLowerCase();
+export function normalizeCustomerMobile(mobile: string) {
+  const digits = mobile.replace(/\D/g, "");
+  const local = digits.startsWith("63") && digits.length === 12
+    ? `0${digits.slice(2)}`
+    : digits.length === 10 && digits.startsWith("9")
+      ? `0${digits}`
+      : digits;
+  return /^09\d{9}$/.test(local) ? local : null;
+}
 export const hashSessionToken = (token: string) => createHash("sha256").update(token).digest("hex");
 
 function scrypt(password: string, salt: string, n: number, r: number, p: number, keyLength: number) {
@@ -42,10 +51,19 @@ export function customerPasswordHash(password: string, salt: string, n = 32_768,
   return scrypt(password, salt, n, r, p, keyLength).toString("hex");
 }
 
-export async function loginCustomer(db: D1Database, email: string, password: string) {
-  const account = await db.prepare(`SELECT a.*,c.full_name FROM customer_accounts a
-    JOIN customers c ON c.id=a.customer_id WHERE a.login_email=? LIMIT 1`)
-    .bind(normalizeCustomerEmail(email)).first<CustomerAccount>();
+export async function loginCustomer(db: D1Database, identifier: string, password: string) {
+  const email = normalizeCustomerEmail(identifier);
+  const mobile = normalizeCustomerMobile(identifier);
+  const account = email.includes("@")
+    ? await db.prepare(`SELECT a.*,c.full_name FROM customer_accounts a
+        JOIN customers c ON c.id=a.customer_id WHERE a.login_email=? LIMIT 1`)
+      .bind(email).first<CustomerAccount>()
+    : mobile
+      ? await db.prepare(`SELECT a.*,c.full_name FROM customer_accounts a
+          JOIN customers c ON c.id=a.customer_id
+          WHERE replace(replace(replace(replace(replace(replace(c.mobile,' ',''),'-',''),'(',''),')',''),'+',''),'.','') IN (?,?,?) LIMIT 1`)
+        .bind(mobile, mobile.slice(1), `63${mobile.slice(1)}`).first<CustomerAccount>()
+      : null;
   if (!account || Number(account.enabled) !== 1 || !verifyCustomerPassword(password, account)) return null;
   return { account, session: await createCustomerSession(db, account.id) };
 }
