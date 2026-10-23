@@ -17,6 +17,8 @@ export type CustomerShipment = {
   service_type: "Sea Freight" | "Air Freight" | "FCL";
   cbm: number;
   weight_kg: number;
+  verified_cbm: number | null;
+  verified_weight_kg: number | null;
   status: string;
   china_warehouse: string;
   warehouse_received_date: string | null;
@@ -72,15 +74,29 @@ function ShipmentRow({
   shipment: CustomerShipment;
   customer: { full_name: string; customer_code: string };
 }) {
-  const measurement =
-    shipment.service_type === "Sea Freight"
-      ? shipment.cbm > 0
-        ? `${shipment.cbm.toLocaleString("en-PH", {
+  const hasVerifiedMeasurements =
+    shipment.verified_cbm !== null &&
+    shipment.verified_weight_kg !== null;
+  const cbm = hasVerifiedMeasurements
+    ? shipment.verified_cbm ?? 0
+    : shipment.cbm;
+  const weight = hasVerifiedMeasurements
+    ? shipment.verified_weight_kg ?? 0
+    : shipment.weight_kg;
+  const measurement = hasVerifiedMeasurements
+    ? `${cbm.toLocaleString("en-PH", {
+        maximumFractionDigits: 3,
+      })} CBM · ${weight.toLocaleString("en-PH", {
+        maximumFractionDigits: 2,
+      })} kg`
+    : shipment.service_type === "Sea Freight"
+      ? cbm > 0
+        ? `${cbm.toLocaleString("en-PH", {
             maximumFractionDigits: 3,
           })} CBM`
         : "—"
-      : shipment.weight_kg > 0
-        ? `${shipment.weight_kg.toLocaleString("en-PH", {
+      : weight > 0
+        ? `${weight.toLocaleString("en-PH", {
             maximumFractionDigits: 2,
           })} kg`
         : "—";
@@ -112,7 +128,14 @@ function ShipmentRow({
 
         <td>{shipment.service_type}</td>
 
-        <td>{measurement}</td>
+        <td>
+          {measurement}
+          {hasVerifiedMeasurements ? (
+            <small className="kd-customer-verified-measurement">
+              Warehouse verified
+            </small>
+          ) : null}
+        </td>
 
         <td>{formatMoney(shipment.shipping_charge)}</td>
 
@@ -244,6 +267,8 @@ export default async function CustomerPage() {
         s.service_type,
         s.cbm,
         s.weight_kg,
+        s.verified_cbm,
+        s.verified_weight_kg,
         s.status,
         s.china_warehouse,
         s.warehouse_received_date,

@@ -38,6 +38,7 @@ import { dashboard, finance, activity, saveStaffFollowUp } from "./reports";
 import { createPortal, disablePortal, portalFor, portalStatus, resetPortal } from "./customer-portal";
 import { copyButton, copyScript, customerAccountCreatedMessage, customerPortalAccessMessage, customerShippingInstructions, shipmentShippingInstructions, warehouseAddress, warehouseNames } from "./shipping-instructions";
 import { leadsPage } from "./leads";
+import { syncVerifiedFreightToInvoice, verifiedShipmentFreight } from "./shipment-verified-pricing";
 
 const labels: Record<string, string> = {
   nihao_cost: "Ni Hao freight cost",
@@ -420,7 +421,7 @@ export async function handleAdmin(
         );
       }
 
-      const values =
+      let values =
         parseForm(
           entity!,
           form,
@@ -445,6 +446,28 @@ export async function handleAdmin(
         );
       }
 
+      let verifiedFreight: Awaited<ReturnType<typeof verifiedShipmentFreight>> = null;
+      const shipmentValues = values as RecordData;
+      if (
+        entity === "shipments" &&
+        id &&
+        shipmentValues.verified_cbm !== null &&
+        shipmentValues.verified_weight_kg !== null
+      ) {
+        verifiedFreight = await verifiedShipmentFreight(
+          db,
+          String(id),
+          Number(shipmentValues.verified_cbm),
+          Number(shipmentValues.verified_weight_kg),
+        );
+        if (verifiedFreight) {
+          values = {
+            ...values,
+            shipping_charge: verifiedFreight.shippingCharge,
+          };
+        }
+      }
+
       const recordId =
         await saveRecord(
           db,
@@ -454,6 +477,15 @@ export async function handleAdmin(
           id,
           revision,
         );
+
+      if (verifiedFreight) {
+        await syncVerifiedFreightToInvoice(
+          db,
+          recordId,
+          verifiedFreight.shippingCharge,
+          user.id,
+        );
+      }
 
       return page(
         "Saved",

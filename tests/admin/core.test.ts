@@ -18,6 +18,7 @@ import {
 import { marginSummarySql, finance, activity, dashboard, saveStaffFollowUp } from "../../lib/admin/reports";
 import { saveRecord } from "../../lib/admin/data";
 import { createShipmentFromApprovedQuotation } from "../../lib/admin/quotation-shipment";
+import { syncVerifiedFreightToInvoice, verifiedShipmentFreight } from "../../lib/admin/shipment-verified-pricing";
 import { createInvoice, issueInvoice, recordPayment } from "../../lib/admin/billing";
 import {
   validateJwt,
@@ -342,6 +343,59 @@ test("approved quotations create one pending, unpaid shipment with a safe custom
   assert.equal(log.admin_user_id, user);
   assert.equal(JSON.parse(String(log.new_value)).source_quotation_id, quotationId);
   await assert.rejects(createShipmentFromApprovedQuotation(db, user, quotationId), /already exists/);
+});
+test("verified warehouse measurements recalculate Sea and Air freight and refresh only eligible invoices", async () => {
+  const { sql, db, user } = database();
+
+  const seaQuotationId = insertQuotation(sql, {
+    cargo: {
+      item: "Bags",
+      category: "LOW VALUE GOODS",
+      cbm: "1.25",
+      weight: "425",
+      originWarehouse: "Guangzhou",
+    },
+  });
+  const seaShipment = await createShipmentFromApprovedQuotation(db, user, seaQuotationId);
+  const seaInvoice = await createInvoice(db, {
+    shipment_id: seaShipment.shipmentId,
+    delivery_charge: "100",
+    other_charge: "0",
+    status: "Draft",
+    issued_at: "",
+    due_at: "",
+  }, user);
+  const sea = await verifiedShipmentFreight(db, seaShipment.shipmentId, 1, 500);
+  assert.deepEqual(sea, { shippingCharge: 950000, pricingMethod: "Density-Based" });
+  await syncVerifiedFreightToInvoice(db, seaShipment.shipmentId, sea!.shippingCharge, user);
+  const verifiedInvoice = sql.prepare("SELECT subtotal,total FROM invoices WHERE id=?").get(seaInvoice)!;
+  assert.equal(verifiedInvoice.subtotal, 950000);
+  assert.equal(verifiedInvoice.total, 960000);
+
+  const airQuotationId = insertQuotation(sql, {
+    freightType: "Air Freight",
+    cargo: {
+      item: "Ordinary Items",
+      category: "Ordinary Items",
+      cbm: "0.009",
+      weight: "1.02",
+      packageQuantity: "1",
+      calculatorQuantity: "1",
+      originWarehouse: "Guangzhou",
+    },
+  });
+  const airShipment = await createShipmentFromApprovedQuotation(db, user, airQuotationId);
+  const air = await verifiedShipmentFreight(db, airShipment.shipmentId, 0.009, 1.02);
+  assert.deepEqual(air, {
+    shippingCharge: 100000,
+    pricingMethod: "CEILING(MAX(Declared Weight, CBM × 167)) × rate",
+  });
+
+  sql.prepare("UPDATE invoices SET status='Paid' WHERE id=?").run(seaInvoice);
+  await syncVerifiedFreightToInvoice(db, seaShipment.shipmentId, 123400, user);
+  const paidInvoice = sql.prepare("SELECT subtotal,total FROM invoices WHERE id=?").get(seaInvoice)!;
+  assert.equal(paidInvoice.subtotal, 950000);
+  assert.equal(paidInvoice.total, 960000);
 });
 test("approved FCL quotations create an FCL shipment and invoice-ready manual rate", async () => {
   const { sql, db, user } = database();

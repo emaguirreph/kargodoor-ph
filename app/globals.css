@@ -3430,6 +3430,14 @@ margin: 0;
   border-bottom: 0;
 }
 
+.kd-customer-verified-measurement {
+  display: block;
+  margin-top: 3px;
+  color: #26734d;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
 .kd-customer-instruction-row td {
   padding: 0;
   white-space: normal;
