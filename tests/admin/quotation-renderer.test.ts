@@ -127,7 +127,7 @@ function assertCargoDetailsMarkup(html: string, includeSeaOutputs = true) {
   assert.ok(html.includes("KargoDoor Warehouse"), "KargoDoor Warehouse must be rendered");
   assert.ok(html.includes("Freight Type"), "Freight Type must be rendered");
   assert.ok(html.includes("Total CBM"), "Total CBM must be rendered");
-  assert.ok(html.includes("Actual Weight"), "Actual Weight must be rendered");
+  assert.ok(html.includes("Actual Weight") || html.includes("Declared Weight"), "Weight input must be rendered");
   assert.ok(
     html.includes("Applicable to Mobile Phones / Computers / Tablets."),
     "Units helper text must be rendered",
@@ -164,7 +164,8 @@ function assertCargoDetailsMarkup(html: string, includeSeaOutputs = true) {
   for (const name of ["length", "width", "height", "measurement_unit"]) {
     assert.equal((html.match(new RegExp(`name="${name}"`, "g")) ?? []).length, 1, `${name} must render once`);
   }
-  const order = ["Item / Commodity", "Category", "Supplier / Origin Location", "KargoDoor Warehouse", "Total CBM", "Freight Type", "Actual Weight (kg)"];
+  const weightLabel = html.includes("Declared Weight (kg)") ? "Declared Weight (kg)" : "Actual Weight (kg)";
+  const order = ["Item / Commodity", "Category", "Supplier / Origin Location", "KargoDoor Warehouse", "Total CBM", "Freight Type", weightLabel];
   for (let index = 1; index < order.length; index++) assert.ok(html.indexOf(order[index - 1]) < html.indexOf(order[index]), `${order[index - 1]} must precede ${order[index]}`);
 
   for (const name of ["quantity", "unit_type", "category"]) {

@@ -40,8 +40,8 @@ export function seaQuote(category: SeaCategory, cbm: number, weight: number, uni
 export function airQuote(item: AirItem, cbm: number, weight: number, quantity: number) {
   if (!valid(quantity) || !Number.isInteger(quantity) || quantity < 1) throw new Error("Quantity is required.");
   if (item in airPieceRates) return { rate:airPieceRates[item]!, rateBasis:"Per piece", volumetricWeight:0, billableWeight:0, final:quantity*airPieceRates[item]!, formula:"Quantity × rate" };
-  if (!valid(cbm) || !valid(weight) || cbm <= 0 || weight <= 0) throw new Error("CBM and actual weight are required.");
+  if (!valid(cbm) || !valid(weight) || cbm <= 0 || weight <= 0) throw new Error("CBM and declared weight are required.");
   const rate = item === "Ordinary Items" ? airPerKgRates.ordinary : item === "Medicine and Food Supplements" ? airPerKgRates.medicine : airPerKgRates.restricted;
   const volumetricWeight=cbm*airVolumetricFactor, rawBillableWeight=Math.max(weight,volumetricWeight), billableWeight=roundAirBillableWeight(rawBillableWeight);
-  return { rate, rateBasis:"Higher of Actual vs Volumetric, rounded up to a whole kg", volumetricWeight, rawBillableWeight, billableWeight, final:billableWeight*rate, formula:"CEILING(MAX(Actual Weight, CBM × 167)) × rate" };
+  return { rate, rateBasis:"Higher of Declared vs Volumetric, rounded up to a whole kg", volumetricWeight, rawBillableWeight, billableWeight, final:billableWeight*rate, formula:"CEILING(MAX(Declared Weight, CBM × 167)) × rate" };
 }

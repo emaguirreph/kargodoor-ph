@@ -56,6 +56,7 @@ export function input(
   type = "text",
   required = false,
   max = 160,
+  step?: string,
 ) {
   const raw = values[key];
   const value =
@@ -63,7 +64,10 @@ export function input(
     typeof raw === "number"
       ? (raw / 100).toFixed(2)
       : raw;
-  return `<label>${esc(label)}${required ? " *" : ""}<input name="${key}" type="${type}" value="${esc(value)}" ${required ? "required" : ""} maxlength="${max}" ${type === "number" ? 'min="0" step="0.001"' : ""}></label>`;
+  const numericAttributes = type === "number"
+    ? `min="0" step="${esc(step ?? "0.001")}"`
+    : "";
+  return `<label>${esc(label)}${required ? " *" : ""}<input name="${key}" type="${type}" value="${esc(value)}" ${required ? "required" : ""} maxlength="${max}" ${numericAttributes}></label>`;
 }
 export function select(
   key: string,

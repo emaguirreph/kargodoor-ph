@@ -61,8 +61,8 @@ const labels: Record<string, string> = {
   actual_arrival: "Actual arrival",
   tracking_remarks: "Tracking remarks",
   payment_status: "Payment status",
-  cbm: "CBM",
-  weight_kg: "Weight (kg)",
+  cbm: "Declared CBM",
+  weight_kg: "Declared weight (kg)",
   supplier_waybill_number: "Supplier waybill number",
   supplier_courier: "Supplier courier",
   verified_cbm: "Verified CBM",
@@ -834,14 +834,16 @@ export async function handleAdmin(
         fields +=
           input(
             "cbm",
-            "CBM",
+            "Declared CBM",
             record,
             "number",
             true,
+            160,
+            "any",
           ) +
           input(
             "weight_kg",
-            "Weight (kg)",
+            "Declared weight (kg)",
             record,
             "number",
             true,
@@ -887,6 +889,8 @@ export async function handleAdmin(
             record,
             "number",
             false,
+            160,
+            "any",
           ) +
           input(
             "verified_weight_kg",
@@ -1328,8 +1332,8 @@ export async function handleAdmin(
         const shipment = [
           shipmentDetail("Tracking number", esc(record.tracking_number) || "—"),
           shipmentDetail("Service type", esc(record.service_type) || "—"),
-          shipmentDetail("Initial CBM", esc(record.cbm) || "—"),
-          shipmentDetail("Initial weight (kg)", esc(record.weight_kg) || "—"),
+          shipmentDetail("Declared CBM", esc(record.cbm) || "—"),
+          shipmentDetail("Declared weight (kg)", esc(record.weight_kg) || "—"),
           shipmentDetail("Origin warehouse", esc(record.china_warehouse) || "—"),
           shipmentDetail("China warehouse received", esc(record.warehouse_received_date) || "—"),
           shipmentDetail("Status", esc(status) || "—"),
@@ -1344,8 +1348,8 @@ export async function handleAdmin(
               shipmentDetail("Verified weight (kg)", esc(record.verified_weight_kg) || "—"),
             ].join("")
           : [
-              shipmentDetail("CBM", esc(record.cbm) || "—"),
-              shipmentDetail("Weight (kg)", esc(record.weight_kg) || "—"),
+              shipmentDetail("Declared CBM", esc(record.cbm) || "—"),
+              shipmentDetail("Declared weight (kg)", esc(record.weight_kg) || "—"),
             ].join("");
 
         const finance = [
@@ -1514,8 +1518,11 @@ export async function handleAdmin(
         const received = String(record.warehouse_received_date || "");
         const arrival = String(record.actual_arrival || "");
         const paymentStatus = String(record.payment_status || "");
-        const verifiedCbm = String(record.verified_cbm || record.cbm || "");
-        const verifiedWeight = String(record.verified_weight_kg || record.weight_kg || "");
+        const declaredCbm = String(record.cbm || "");
+        const declaredWeight = String(record.weight_kg || "");
+        const verifiedCbm = record.verified_cbm === null || record.verified_cbm === undefined || record.verified_cbm === "" ? "" : String(record.verified_cbm);
+        const verifiedWeight = record.verified_weight_kg === null || record.verified_weight_kg === undefined || record.verified_weight_kg === "" ? "" : String(record.verified_weight_kg);
+        const hasVerifiedMeasurements = Boolean(verifiedCbm && verifiedWeight);
 
         const common = [
           tracking ? `Tracking Number: ${tracking}` : "",
@@ -1533,16 +1540,29 @@ export async function handleAdmin(
           ]],
 
           ["china-warehouse", "China Warehouse", [
-            `Hi ${customerName}! Your items have safely arrived at our main consolidation hub in ${warehouse || "China"}.`,
+            `Hi ${customerName}! 😊`,
+            `Good news! Your items have safely arrived at our main consolidation hub in ${warehouse ? `${warehouse}, China` : "China"}.`,
             "",
+            "**Shipment Details**",
             common,
             received ? `Received: ${received}` : "",
-            verifiedCbm ? `Verified CBM: ${verifiedCbm}` : "",
-            verifiedWeight ? `Verified Weight: ${verifiedWeight} kg` : "",
             "",
-            "We are checking the actual cargo details. Final CBM, weight, and applicable charges may be updated after warehouse verification.",
+            "**Declared Measurements:**",
+            declaredCbm ? `• CBM: ${declaredCbm}` : "",
+            declaredWeight ? `• Weight: ${declaredWeight} kg` : "",
             "",
-            "We’ll keep you updated on the next step."
+            "**Warehouse-Verified Measurements:**",
+            hasVerifiedMeasurements ? `• CBM: ${verifiedCbm}` : "• CBM: Pending warehouse verification",
+            hasVerifiedMeasurements ? `• Weight: ${verifiedWeight} kg` : "• Weight: Pending warehouse verification",
+            "",
+            "📦 **Final Shipping Cost Calculation**",
+            "Your final shipping charge will be based on the **warehouse-verified measurements**, not the initially declared figures.",
+            "For sea freight, we calculate both the volume-based charge (CBM × applicable rate) and weight-based charge (kg × applicable rate). **Whichever amount is higher will be your final shipping cost**, subject to the applicable minimum charge and any additional charges disclosed in your quotation.",
+            hasVerifiedMeasurements
+              ? `For your shipment, we will use the verified **${verifiedCbm} CBM and ${verifiedWeight} kg** to calculate the final freight charge.`
+              : "We’ll use the warehouse-verified CBM and weight to calculate your final freight charge once verification is complete.",
+            "We’ll send you the updated shipping quotation and keep you informed of the next steps.",
+            "Thank you for trusting KargoDoor PH! 💚"
           ]],
 
           ["china-port", "China Port", [

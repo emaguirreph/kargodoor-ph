@@ -172,7 +172,7 @@ function customerQuotationPdf(q: QuotationPdfData, logoJpeg?: Uint8Array): Uint8
   }
 
   pair("Total CBM", cargo.cbm);
-  if (cargo.weight !== void 0) pair("Actual Weight", `${cargo.weight} kg`);
+  if (cargo.weight !== void 0) pair("Declared Weight", `${cargo.weight} kg`);
   const cargoEndY = y;
 
   // Right column: customer-facing rate, freight type, and origin warehouse.

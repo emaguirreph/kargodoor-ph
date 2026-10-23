@@ -20,6 +20,10 @@
     const measurement = section.querySelector('select[name="measurement_unit"]');
     const warehouse = section.querySelector('select[name="origin_warehouse"]');
     const weight = section.querySelector('input[name="weight"]');
+    const weightLabel = weight?.closest("label");
+    if (weightLabel?.firstChild?.nodeType === Node.TEXT_NODE) {
+      weightLabel.firstChild.textContent = "Declared Weight (kg)";
+    }
     const units = section.querySelector('input[name="units"]');
     let packageQuantity = section.querySelector('input[name="package_quantity"]');
     const unitsField = section.querySelector("[data-units-field]");
@@ -243,7 +247,7 @@
       panel.dataset.airLiveResults = "";
       panel.innerHTML = `
         <div data-air-pricing-layout>
-          <dl><dt>Air Category</dt><dd data-air-category>—</dd><dt>Total CBM</dt><dd data-air-cbm>—</dd><dt>Actual Weight</dt><dd data-air-weight>—</dd></dl>
+          <dl><dt>Air Category</dt><dd data-air-category>—</dd><dt>Total CBM</dt><dd data-air-cbm>—</dd><dt>Declared Weight</dt><dd data-air-weight>—</dd></dl>
           <dl><dt>Volumetric Weight (CBM × 167)</dt><dd data-air-volumetric>—</dd><dt>Billable Weight</dt><dd data-air-billable>—</dd><dt>Units / Pieces</dt><dd data-air-units>—</dd><dt>Rate</dt><dd data-air-rate>—</dd></dl>
           <dl><dt>Pricing Method</dt><dd data-air-method>—</dd><div data-air-total-card><strong>Total Amount</strong><span data-air-system>—</span></div></dl>
         </div>
@@ -369,7 +373,7 @@
 
       if (freight.value === "Sea Freight") {
         if (!cbm.value || !weight.value) {
-          showSeaMessage("Enter both Total CBM and Actual Weight to calculate Sea Freight.");
+          showSeaMessage("Enter both Total CBM and Declared Weight to calculate Sea Freight.");
           return;
         }
       } else if (isPieceAir) {
@@ -379,7 +383,7 @@
         }
       } else {
         if (!cbm.value || !weight.value) {
-          showAirMessage("Enter both Total CBM and Actual Weight to calculate Air Freight.");
+          showAirMessage("Enter both Total CBM and Declared Weight to calculate Air Freight.");
           return;
         }
       }
