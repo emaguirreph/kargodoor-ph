@@ -303,13 +303,13 @@ export async function handleAdmin(
         for (const key of form.keys()) if (!allowed.has(key) || form.getAll(key).length !== 1) throw new AdminError("Unexpected or repeated form field.");
         const customerId = form.get("customer_id") ?? "";
         if (!/^[\da-f-]{36}$/i.test(customerId)) throw new AdminError("Invalid customer ID.");
-        const customer = await db.prepare("SELECT email,full_name,customer_code FROM customers WHERE id=?").bind(customerId).first<RecordData>();
+        const customer = await db.prepare("SELECT email,mobile,full_name,customer_code FROM customers WHERE id=?").bind(customerId).first<RecordData>();
         if (!customer) throw new AdminError("Record not found.", 404);
         if (portalAction === "portal_disable") { await disablePortal(db, customerId); return page("Saved", "", user.name, 303, { Location: `${path}?id=${customerId}&portal_saved=1` }); }
-        const result = portalAction === "portal_create" ? await createPortal(db, customerId, customer.email) : await resetPortal(db, customerId, portalAction === "portal_reenable");
+        const result = portalAction === "portal_create" ? await createPortal(db, customerId, customer.email, customer.mobile) : await resetPortal(db, customerId, portalAction === "portal_reenable");
         const portalMessageId = `portal-access-${customerId}`;
-        const portalMessage = customerPortalAccessMessage({ name: customer.full_name, email: result.email, temporaryPassword: result.password });
-        return page("Customer account created", `<section><h2>Customer account created.</h2><p><strong>Login Email:</strong> ${esc(result.email)}</p><p><strong>Temporary Password:</strong> <code>${esc(result.password)}</code></p><p class="muted">Copy the temporary password now. It is shown only once and the customer must change it after first login.</p></section><section><h2>Send Portal Access</h2><p class="muted">Copy this private message and send it directly to the customer. It contains their temporary password.</p><textarea id="${esc(portalMessageId)}" readonly aria-label="Portal access message">${esc(portalMessage)}</textarea><div class="actions">${copyButton(portalMessageId, "Copy portal access message")}</div>${copyScript()}</section>`, user.name);
+        const portalMessage = customerPortalAccessMessage({ name: customer.full_name, login: result.login, loginLabel: result.loginLabel, temporaryPassword: result.password });
+        return page("Customer account created", `<section><h2>Customer account created.</h2><p><strong>Login ${esc(result.loginLabel)}:</strong> ${esc(result.login)}</p><p><strong>Temporary Password:</strong> <code>${esc(result.password)}</code></p><p class="muted">Copy the temporary password now. It is shown only once and the customer must change it after first login.</p></section><section><h2>Send Portal Access</h2><p class="muted">Copy this private message and send it directly to the customer. It contains their temporary password.</p><textarea id="${esc(portalMessageId)}" readonly aria-label="Portal access message">${esc(portalMessage)}</textarea><div class="actions">${copyButton(portalMessageId, "Copy portal access message")}</div>${copyScript()}</section>`, user.name);
       }
 
       if (!entity && view === undefined) {
@@ -1480,7 +1480,7 @@ export async function handleAdmin(
         <section class="customer-portal-access">
           <div class="customer-portal-main">
             <h2>Customer Portal Access</h2>
-            <p class="muted">Login email · ${esc(portal?.login_email ?? record.email) || "—"}</p>
+            <p class="muted">${portal?.login_mobile ? "Login mobile number" : "Login email"} · ${esc(portal?.login_mobile ?? portal?.login_email ?? record.mobile ?? record.email) || "—"}</p>
             ${portalActions ? `<div class="customer-portal-actions">${portalActions}</div>` : ""}
           </div>
           <dl class="customer-portal-status">

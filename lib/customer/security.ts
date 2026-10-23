@@ -9,6 +9,7 @@ export type CustomerAccount = {
   customer_id: string;
   full_name: string;
   login_email: string;
+  login_mobile?: string | null;
   password_hash: string;
   password_salt: string;
   password_n: number;
@@ -61,8 +62,8 @@ export async function loginCustomer(db: D1Database, identifier: string, password
     : mobile
       ? await db.prepare(`SELECT a.*,c.full_name FROM customer_accounts a
           JOIN customers c ON c.id=a.customer_id
-          WHERE replace(replace(replace(replace(replace(replace(c.mobile,' ',''),'-',''),'(',''),')',''),'+',''),'.','') IN (?,?,?) LIMIT 1`)
-        .bind(mobile, mobile.slice(1), `63${mobile.slice(1)}`).first<CustomerAccount>()
+          WHERE a.login_mobile=? OR replace(replace(replace(replace(replace(replace(c.mobile,' ',''),'-',''),'(',''),')',''),'+',''),'.','') IN (?,?,?) LIMIT 1`)
+        .bind(mobile, mobile, mobile.slice(1), `63${mobile.slice(1)}`).first<CustomerAccount>()
       : null;
   if (!account || Number(account.enabled) !== 1 || !verifyCustomerPassword(password, account)) return null;
   return { account, session: await createCustomerSession(db, account.id) };

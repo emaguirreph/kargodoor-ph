@@ -36,6 +36,7 @@ function fixture() {
     "0007_staff_follow_up.sql",
     "0008_customer_accounts.sql",
     "0009_customer_account_password_state.sql",
+    "0027_customer_portal_mobile_login.sql",
   ]) {
     sql.exec(readFileSync(`migrations/admin/${file}`, "utf8"));
   }
@@ -61,7 +62,7 @@ function fixture() {
   const hash = customerPasswordHash(password, salt);
 
   sql.prepare(
-    "INSERT INTO customer_accounts VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+    "INSERT INTO customer_accounts (id,customer_id,login_email,password_hash,password_salt,password_algorithm,password_n,password_r,password_p,password_key_length,enabled,created_at,updated_at,password_state) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
   ).run(
     accountId,
     "customer",

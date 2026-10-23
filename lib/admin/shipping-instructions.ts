@@ -13,7 +13,8 @@ export type ShippingInstructionShipment = ShippingInstructionCustomer & {
 };
 
 export type PortalAccessMessage = ShippingInstructionCustomer & {
-  email?: unknown;
+  login?: unknown;
+  loginLabel?: unknown;
   temporaryPassword?: unknown;
 };
 
@@ -106,12 +107,13 @@ Once shipped, please send us the courier name, tracking/waybill number, and a re
 
 export function customerPortalAccessMessage(portal: PortalAccessMessage): string {
   const name = text(portal.name, "there");
-  const email = text(portal.email, "[customer email]");
+  const login = text(portal.login, "[email or mobile number]");
+  const loginLabel = text(portal.loginLabel, "email or mobile number");
   const password = text(portal.temporaryPassword, "[temporary password]");
   return `Hi ${name}! Your KargoDoor customer portal account is ready.
 
 Login page: https://kargodoorph.com/customer/login
-Login email: ${email}
+Login ${loginLabel}: ${login}
 Temporary password: ${password}
 
 Please sign in and change your password right away. Never share your temporary password with anyone.

@@ -25,7 +25,7 @@ function fixture() {
   const adminId = randomUUID(), secret = randomBytes(24).toString("hex"), salt = randomBytes(16).toString("hex");
   sql.prepare("INSERT INTO admin_users VALUES (?,?,?,?,?,?)").run(adminId,"Test owner","owner@example.test","owner","2026-01-01","2026-01-01");
   const ids = [randomUUID(), randomUUID()];
-  ids.forEach((id,i) => sql.prepare("INSERT INTO customers (id,customer_code,full_name,company_name,mobile,email,address,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)").run(id,`KDOOR${i}`,`Customer ${i}`,null,"09123456789",`customer${i}@example.test`,null,null,"2026-01-01","2026-01-01"));
+  ids.forEach((id,i) => sql.prepare("INSERT INTO customers (id,customer_code,full_name,company_name,mobile,email,address,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)").run(id,`KDOOR${i}`,`Customer ${i}`,null,`0912345678${i}`,`customer${i}@example.test`,null,null,"2026-01-01","2026-01-01"));
   const env = { ADMIN_DB: db, ADMIN_ORIGIN: "http://localhost:8787", ADMIN_LOCAL_DEV: "true", LOCAL_ADMIN_EMAIL: "owner@example.test", LOCAL_ADMIN_HASH: `${salt}:${scryptSync(secret,salt,64).toString("hex")}`, ADMIN_CSRF_SECRET: randomBytes(32).toString("hex") };
   Object.assign(globalThis, { [Symbol.for("__cloudflare-context__")]: { env } });
   const headers = { Authorization: `Basic ${Buffer.from(`owner@example.test:${secret}`).toString("base64")}`, Origin: env.ADMIN_ORIGIN };
@@ -47,6 +47,20 @@ test("Admin create/reset response password verifies against exact stored row; no
   assert.equal(next === password,false);
   assert.equal(verifyCustomerPassword(next,f.account()),true);
   assert.equal(verifyCustomerPassword(password,f.account()),false);
+});
+
+test("Admin can create a portal for a customer with a verified mobile but no email", async () => {
+  const f=fixture();
+  f.sql.prepare("UPDATE customers SET email=NULL WHERE id=?").run(f.ids[0]);
+  const created=await f.admin("portal_create");
+  assert.equal(created.status,200);
+  const html=await created.text(), password=html.match(/<code>([^<]+)<\/code>/)?.[1];
+  assert.match(html,/Login mobile number:/);
+  assert.ok(password);
+  const account=f.account();
+  assert.equal(account.login_mobile,"09123456780");
+  const signedIn=await login(request("/api/customer/login",{identifier:"+63 912 345 6780",password}));
+  assert.equal(signedIn.headers.get("location"),"https://example.test/customer/change-password");
 });
 
 test("actual login, password-change and logout routes complete with browser-scoped cookies", async () => {
