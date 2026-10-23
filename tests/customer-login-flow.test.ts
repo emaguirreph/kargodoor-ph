@@ -85,12 +85,19 @@ test("actual login, password-change and logout routes complete with browser-scop
   assert.equal((await customerSession(f.db,fresh))?.password_state,"active");
   assert.equal(verifyCustomerPassword(password,f.account()),false);
   assert.equal(verifyCustomerPassword(permanent,f.account()),true);
+  const changedAgain=randomBytes(24).toString("base64url");
+  const rejected=await change(request(action,{current_password:"wrong",password:changedAgain,confirm_password:changedAgain},fresh));
+  assert.equal(rejected.headers.get("location"),"https://example.test/customer/change-password");
+  const changedAgainResponse=await change(request(action,{current_password:permanent,password:changedAgain,confirm_password:changedAgain},fresh));
+  assert.equal(changedAgainResponse.headers.get("location"),"https://example.test/customer");
+  assert.equal(verifyCustomerPassword(changedAgain,f.account()),true);
   const logged=await login(request("/api/customer/login",{email:"customer0@example.test",password:permanent}));
-  assert.equal(logged.headers.get("location"),"https://example.test/customer");
-  const out=await logout(request("/customer/logout",{},fresh));
+  assert.equal(logged.headers.get("location"),"https://example.test/customer/login?error=1");
+  const latest=tokenFrom(changedAgainResponse);
+  const out=await logout(request("/customer/logout",{},latest));
   assert.equal(out.headers.get("location"),"https://example.test/customer/login");
   assert.match(out.headers.get("set-cookie")!,/Max-Age=0/);
-  assert.equal(await customerSession(f.db,fresh),null);
+  assert.equal(await customerSession(f.db,latest),null);
 });
 
 test("reset/disable isolate customers, invalidate sessions and reject wrong credentials", async () => {

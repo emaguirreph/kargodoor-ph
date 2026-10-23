@@ -335,6 +335,10 @@ export default async function CustomerPage() {
               CONTACT KARGODOOR
             </MessengerLink>
 
+            <a href="/customer/change-password">
+              CHANGE PASSWORD
+            </a>
+
             <form action="/customer/logout" method="post">
               <button type="submit">
                 LOG OUT
