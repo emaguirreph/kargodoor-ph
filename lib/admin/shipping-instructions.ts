@@ -107,19 +107,18 @@ Once shipped, please send us the courier name, tracking/waybill number, and a re
 
 export function customerPortalAccessMessage(portal: PortalAccessMessage): string {
   const name = text(portal.name, "there");
+  const customerCode = text(portal.customerCode, "[account/cargo code]");
   const login = text(portal.login, "[email or mobile number]");
   const loginLabel = text(portal.loginLabel, "email or mobile number");
   const password = text(portal.temporaryPassword, "[temporary password]");
-  return `Hi ${name}! Your KargoDoor customer portal account is ready.
-
+  return `Hi ${name}!
+Your KargoDoor customer portal account is ready.
+Here is your Account/Cargo Code: ${customerCode}
 Login page: https://kargodoorph.com/customer/login
 Login ${loginLabel}: ${login}
 Temporary password: ${password}
-
 Please sign in and change your password right away. Never share your temporary password with anyone.
-
 You can use the portal to view your shipment and payment updates.
-
 — KargoDoor PH`;
 }
 

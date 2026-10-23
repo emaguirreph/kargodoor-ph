@@ -56,6 +56,7 @@ test("Admin can create a portal for a customer with a verified mobile but no ema
   assert.equal(created.status,200);
   const html=await created.text(), password=html.match(/<code>([^<]+)<\/code>/)?.[1];
   assert.match(html,/Login mobile number:/);
+  assert.match(html,/Here is your Account\/Cargo Code: KDOOR0/);
   assert.ok(password);
   const account=f.account();
   assert.equal(account.login_mobile,"09123456780");

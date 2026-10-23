@@ -308,7 +308,7 @@ export async function handleAdmin(
         if (portalAction === "portal_disable") { await disablePortal(db, customerId); return page("Saved", "", user.name, 303, { Location: `${path}?id=${customerId}&portal_saved=1` }); }
         const result = portalAction === "portal_create" ? await createPortal(db, customerId, customer.email, customer.mobile) : await resetPortal(db, customerId, portalAction === "portal_reenable");
         const portalMessageId = `portal-access-${customerId}`;
-        const portalMessage = customerPortalAccessMessage({ name: customer.full_name, login: result.login, loginLabel: result.loginLabel, temporaryPassword: result.password });
+        const portalMessage = customerPortalAccessMessage({ name: customer.full_name, customerCode: customer.customer_code, login: result.login, loginLabel: result.loginLabel, temporaryPassword: result.password });
         return page("Customer account created", `<section><h2>Customer account created.</h2><p><strong>Login ${esc(result.loginLabel)}:</strong> ${esc(result.login)}</p><p><strong>Temporary Password:</strong> <code>${esc(result.password)}</code></p><p class="muted">Copy the temporary password now. It is shown only once and the customer must change it after first login.</p></section><section><h2>Send Portal Access</h2><p class="muted">Copy this private message and send it directly to the customer. It contains their temporary password.</p><textarea id="${esc(portalMessageId)}" readonly aria-label="Portal access message">${esc(portalMessage)}</textarea><div class="actions">${copyButton(portalMessageId, "Copy portal access message")}</div>${copyScript()}</section>`, user.name);
       }
 
