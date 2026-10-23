@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  CSSProperties,
   FormEvent,
   Suspense,
   useCallback,
@@ -21,6 +22,27 @@ type Shipment = {
   last_updated: string;
   standard_transit: string;
 };
+
+const seaStages = [
+  "Awaiting Supplier Dispatch",
+  "China Warehouse",
+  "China Port",
+  "Sea Transit",
+  "Manila Port",
+  "Gatepass",
+  "Malabon Warehouse",
+  "Delivered",
+];
+
+function seaStageIndex(status: string) {
+  const legacyPositions: Record<string, number> = {
+    "Received at Warehouse": 1,
+    "In Transit": 3,
+    "Arrived in Philippines": 4,
+    "Ready for Release": 6,
+  };
+  return Math.max(0, seaStages.indexOf(status), legacyPositions[status] ?? -1);
+}
 
 function TrackContent() {
   const searchParams = useSearchParams();
@@ -87,6 +109,13 @@ function TrackContent() {
     await trackShipment(code);
   }
 
+  const stageIndex = shipment?.freight_type === "Sea Freight"
+    ? seaStageIndex(shipment.current_status)
+    : -1;
+  const progress = stageIndex >= 0
+    ? `${(stageIndex / (seaStages.length - 1)) * 100}%`
+    : "0%";
+
   return (
     <>
       <header className="kd-track-heading">
@@ -132,6 +161,27 @@ function TrackContent() {
 
             <h2>{shipment.tracking_number}</h2>
           </div>
+
+          {stageIndex >= 0 && (
+            <section
+              className="kd-track-progress"
+              aria-label={`Shipment progress: ${shipment.current_status}`}
+              style={{ "--kd-track-progress": progress } as CSSProperties}
+            >
+              <span>SHIPMENT PROGRESS</span>
+              <ol>
+                {seaStages.map((stage, index) => (
+                  <li
+                    className={index <= stageIndex ? "is-complete" : ""}
+                    key={stage}
+                  >
+                    <i aria-hidden="true" />
+                    <small>{stage}</small>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )}
 
           <div className="kd-track-details">
             <div>
