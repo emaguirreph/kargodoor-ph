@@ -11,7 +11,7 @@ import {
 
 export const dynamic = "force-dynamic";
 
-type CustomerShipment = {
+export type CustomerShipment = {
   id: string;
   tracking_number: string;
   service_type: "Sea Freight" | "Air Freight" | "FCL";
@@ -170,7 +170,7 @@ function ShipmentRow({
   );
 }
 
-function ShipmentTable({
+export function ShipmentTable({
   shipments,
   emptyMessage,
   customer,
