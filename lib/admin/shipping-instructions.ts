@@ -112,13 +112,19 @@ export function customerPortalAccessMessage(portal: PortalAccessMessage): string
   const loginLabel = text(portal.loginLabel, "email or mobile number");
   const password = text(portal.temporaryPassword, "[temporary password]");
   return `Hi ${name}!
+
 Your KargoDoor customer portal account is ready.
-Here is your Account/Cargo Code: ${customerCode}
+
+Here is your Account/Cargo Code: *${customerCode}*
+
 Login page: https://kargodoorph.com/customer/login
 Login ${loginLabel}: ${login}
 Temporary password: ${password}
+
 Please sign in and change your password right away. Never share your temporary password with anyone.
+
 You can use the portal to view your shipment and payment updates.
+
 — KargoDoor PH`;
 }
 
