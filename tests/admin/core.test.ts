@@ -585,6 +585,16 @@ test("required fields, dates, enum, numeric precision and overposting are valida
   assert.equal(verifiedShipmentForm.cbm, 0.330456);
   assert.equal(verifiedShipmentForm.verified_cbm, 0.360789);
   assert.equal(verifiedShipmentForm.verified_weight_kg, 45);
+  const formattedVerifiedMeasurement = parseForm(
+    "shipments",
+    new URLSearchParams(Object.entries({
+      ...shipmentFormInput,
+      verified_cbm: "1,000.36",
+      verified_weight_kg: "1,200",
+    })),
+  );
+  assert.equal(formattedVerifiedMeasurement.verified_cbm, 1000.36);
+  assert.equal(formattedVerifiedMeasurement.verified_weight_kg, 1200);
   assert.equal(shipment(randomUUID()).shipping_charge, 650025);
   assert.equal(shipmentSchema.safeParse({ ...shipmentInput(randomUUID()), china_warehouse: "Tongda Air Cargo" }).success, true);
   assert.equal(shipmentSchema.safeParse({ ...shipmentInput(randomUUID()), cbm: "2.000123" }).success, true);

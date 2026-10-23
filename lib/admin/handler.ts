@@ -940,7 +940,7 @@ export async function handleAdmin(
           ) +
           input(
             "verified_cbm",
-            "Verified CBM",
+            "Verified CBM (number only, e.g. 0.36)",
             record,
             "number",
             false,
@@ -949,7 +949,7 @@ export async function handleAdmin(
           ) +
           input(
             "verified_weight_kg",
-            "Verified weight (kg)",
+            "Verified weight (kg; number only, e.g. 45)",
             record,
             "number",
             false,

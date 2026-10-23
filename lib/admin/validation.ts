@@ -60,10 +60,27 @@ const decimal = (max: number, precision = 3) =>
     );
 
 const optionalDecimal = (max: number, precision = 3) =>
-  z.union([
-    z.literal("").transform(() => null),
-    decimal(max, precision),
-  ]);
+  z
+    .string()
+    .trim()
+    .transform((value) =>
+      /^\d{1,3}(?:,\d{3})+(?:\.\d+)?$/.test(value)
+        ? value.replaceAll(",", "")
+        : value,
+    )
+    .refine(
+      (value) =>
+        !value ||
+        new RegExp(`^\\d+(\\.\\d{1,${precision}})?$`).test(value),
+      `Enter only a number with up to ${precision} decimal places`,
+    )
+    .transform((value) => (value ? Number(value) : null))
+    .refine(
+      (value) =>
+        value === null ||
+        (Number.isFinite(value) && value <= max),
+      "Number is too large",
+    );
 
 const money = required(30)
   .regex(
