@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
@@ -70,57 +70,23 @@ function deliveryCharge(shipment: CustomerShipment) {
   return shipment.shipment_delivery_charge;
 }
 
-const stages = [
-  "Awaiting Supplier Dispatch",
-  "China Warehouse",
-  "China Port",
-  "Sea Transit",
-  "Manila Port",
-  "Gatepass",
-  "Malabon Warehouse",
-  "Delivered",
-];
+const cbmText = (value: number | null) =>
+  value !== null && value > 0 ? `${value.toLocaleString("en-PH", { maximumFractionDigits: 3 })} CBM` : null;
+const kgText = (value: number | null) =>
+  value !== null && value > 0 ? `${value.toLocaleString("en-PH", { maximumFractionDigits: 2 })} kg` : null;
+/** "0.33 CBM · 120 kg", or whichever half is known. */
+const measureText = (cbm: number | null, kg: number | null) =>
+  [cbmText(cbm), kgText(kg)].filter(Boolean).join(" · ") || null;
 
-function ShipmentCard({
+function ShipmentRow({
   shipment,
   customer,
 }: {
   shipment: CustomerShipment;
   customer: { full_name: string; customer_code: string };
 }) {
-  const hasVerifiedMeasurements =
-    shipment.verified_cbm !== null &&
-    shipment.verified_weight_kg !== null;
-  const cbm = hasVerifiedMeasurements
-    ? shipment.verified_cbm ?? 0
-    : shipment.cbm;
-  const weight = hasVerifiedMeasurements
-    ? shipment.verified_weight_kg ?? 0
-    : shipment.weight_kg;
-  const measurement = hasVerifiedMeasurements
-    ? `${cbm.toLocaleString("en-PH", {
-        maximumFractionDigits: 3,
-      })} CBM · ${weight.toLocaleString("en-PH", {
-        maximumFractionDigits: 2,
-      })} kg`
-    : shipment.service_type === "Sea Freight"
-      ? cbm > 0
-        ? `${cbm.toLocaleString("en-PH", {
-            maximumFractionDigits: 3,
-          })} CBM`
-        : "—"
-      : weight > 0
-        ? `${weight.toLocaleString("en-PH", {
-            maximumFractionDigits: 2,
-          })} kg`
-        : "—";
-
-  const declaredCbm = shipment.cbm > 0
-    ? `${shipment.cbm.toLocaleString("en-PH", { maximumFractionDigits: 3 })} CBM`
-    : "—";
-  const declaredWeight = shipment.weight_kg > 0
-    ? `${shipment.weight_kg.toLocaleString("en-PH", { maximumFractionDigits: 2 })} kg`
-    : "—";
+  const declared = measureText(shipment.cbm, shipment.weight_kg) ?? "—";
+  const verified = measureText(shipment.verified_cbm, shipment.verified_weight_kg);
 
   const instructions = shipmentShippingInstructions({
     name: customer.full_name,
@@ -131,88 +97,75 @@ function ShipmentCard({
   const chinaReceivedDate = shipment.warehouse_received_date || "Pending warehouse receipt";
   const phWarehouseReceivedDate = shipment.actual_arrival || "—";
   const payment = paymentLabel(shipment);
-  const stage = stages.indexOf(shipment.status);
 
   return (
-    <article className="ship">
-      <div className="st">
-        <div>
-          <a className="tn" href={`/track?tracking=${encodeURIComponent(shipment.tracking_number)}`}>
-            {shipment.tracking_number}
-          </a>
-          <div className="item">{shipment.item || "—"}</div>
-        </div>
-        <span className={`pay ${payment === "PAID" ? "paid" : "unpaid"}`}>{payment}</span>
-      </div>
-
-      <div className="stbar">
-        <div className="row">
-          <span>{shipment.status}</span>
-          {stage >= 0 && <span>{stage + 1} / {stages.length}</span>}
-        </div>
-        {stage >= 0 && (
-          <div className="prog" aria-hidden="true">
-            <i style={{ "--w": `${Math.round((stage / (stages.length - 1)) * 100)}%` } as CSSProperties} />
-          </div>
-        )}
-      </div>
-
-      <dl className="sdl">
-        <div><dt>Service</dt><dd>{shipment.service_type}</dd></div>
-        <div><dt>CN Warehouse</dt><dd>{shipment.china_warehouse || "—"}</dd></div>
-        <div><dt>Declared CBM</dt><dd>{declaredCbm}</dd></div>
-        <div><dt>Declared Weight</dt><dd>{declaredWeight}</dd></div>
-        <div>
-          <dt>CBM / Weight</dt>
-          <dd>
-            {measurement}
-            {hasVerifiedMeasurements ? <small>Warehouse verified</small> : null}
-          </dd>
-        </div>
-        <div><dt>Freight</dt><dd>{formatMoney(shipment.shipping_charge)}</dd></div>
-        <div><dt>Delivery</dt><dd>{formatMoney(deliveryCharge(shipment))}</dd></div>
-      </dl>
-
-      <details>
-        <summary>Shipping instructions for this package</summary>
-        <p className="cnote">
-          <strong>Account / Cargo Code: {customer.customer_code}</strong> — use this on every supplier label so KargoDoor can identify your cargo. <strong>Tracking Number: {shipment.tracking_number}</strong> — this is the unique KargoDoor reference for this specific package and is different from your account/cargo code.
-        </p>
-        <dl className="dates">
-          <div>
-            <dt>China received date</dt>
-            <dd>{chinaReceivedDate}</dd>
-          </div>
-          <div>
-            <dt>PH warehouse received date</dt>
-            <dd>{phWarehouseReceivedDate}</dd>
-          </div>
-        </dl>
-        <pre>{instructions}</pre>
-      </details>
-      {payment !== "PAID" ? (
-        <details>
-          <summary>Payment instructions</summary>
-          <div className="paygrid">
-            <section>
-              <h3>Bank Account Information</h3>
-              <dl>
-                <div><dt>Bank</dt><dd>UnionBank of the Philippines</dd></div>
-                <div><dt>Account Name</dt><dd>KargoDoor Cargo Forwarding</dd></div>
-                <div><dt>Account Number</dt><dd>002170017106</dd></div>
-              </dl>
-            </section>
-            <section>
-              <h3>GCash</h3>
-              <dl>
-                <div><dt>GCash Number</dt><dd>0917 157 7370</dd></div>
-                <div><dt>Account Name</dt><dd>EMMARUTH GALLARDO</dd></div>
-              </dl>
-            </section>
-          </div>
-        </details>
-      ) : null}
-    </article>
+    <tbody>
+      <tr className="srow">
+        <td data-label="Tracking No.">
+          {shipment.tracking_number ? (
+            <a className="tn" href={`/track?tracking=${encodeURIComponent(shipment.tracking_number)}`}>
+              {shipment.tracking_number}
+            </a>
+          ) : (
+            <span className="tn">—</span>
+          )}
+          {shipment.item && shipment.item !== "—" ? <span className="item">{shipment.item}</span> : null}
+        </td>
+        <td data-label="Status">{shipment.status}</td>
+        <td data-label="Service">{shipment.service_type}</td>
+        <td data-label="CN Warehouse">{shipment.china_warehouse || "—"}</td>
+        <td data-label="Declared CBM / Weight">{declared}</td>
+        <td data-label="Verified CBM / Weight">{verified ?? <span className="pend">Pending</span>}</td>
+        <td data-label="Freight">{formatMoney(shipment.shipping_charge)}</td>
+        <td data-label="Delivery">{formatMoney(deliveryCharge(shipment))}</td>
+        <td data-label="Payment">
+          <span className={`pay ${payment === "PAID" ? "paid" : "unpaid"}`}>{payment}</span>
+        </td>
+      </tr>
+      <tr className="sinfo">
+        <td colSpan={9}>
+          <details>
+            <summary>Shipping instructions for this package</summary>
+            <p className="cnote">
+              <strong>Account / Cargo Code: {customer.customer_code}</strong> — use this on every supplier label so KargoDoor can identify your cargo. <strong>Tracking Number: {shipment.tracking_number}</strong> — this is the unique KargoDoor reference for this specific package and is different from your account/cargo code.
+            </p>
+            <dl className="dates">
+              <div>
+                <dt>China received date</dt>
+                <dd>{chinaReceivedDate}</dd>
+              </div>
+              <div>
+                <dt>PH warehouse received date</dt>
+                <dd>{phWarehouseReceivedDate}</dd>
+              </div>
+            </dl>
+            <pre>{instructions}</pre>
+          </details>
+          {payment !== "PAID" ? (
+            <details>
+              <summary>Payment instructions</summary>
+              <div className="paygrid">
+                <section>
+                  <h3>Bank Account Information</h3>
+                  <dl>
+                    <div><dt>Bank</dt><dd>UnionBank of the Philippines</dd></div>
+                    <div><dt>Account Name</dt><dd>KargoDoor Cargo Forwarding</dd></div>
+                    <div><dt>Account Number</dt><dd>002170017106</dd></div>
+                  </dl>
+                </section>
+                <section>
+                  <h3>GCash</h3>
+                  <dl>
+                    <div><dt>GCash Number</dt><dd>0917 157 7370</dd></div>
+                    <div><dt>Account Name</dt><dd>EMMARUTH GALLARDO</dd></div>
+                  </dl>
+                </section>
+              </div>
+            </details>
+          ) : null}
+        </td>
+      </tr>
+    </tbody>
   );
 }
 
@@ -234,14 +187,29 @@ export function ShipmentTable({
   }
 
   return (
-    <div className="ships">
-      {shipments.map((shipment) => (
-        <ShipmentCard
-          key={shipment.id}
-          shipment={shipment}
-          customer={customer}
-        />
-      ))}
+    <div className="stable-wrap">
+      <table className="stable">
+        <thead>
+          <tr>
+            <th>Tracking No.</th>
+            <th>Status</th>
+            <th>Service</th>
+            <th>CN Warehouse</th>
+            <th>Declared CBM / Weight</th>
+            <th>Verified CBM / Weight</th>
+            <th>Freight</th>
+            <th>Delivery</th>
+            <th>Payment</th>
+          </tr>
+        </thead>
+        {shipments.map((shipment) => (
+          <ShipmentRow
+            key={shipment.id}
+            shipment={shipment}
+            customer={customer}
+          />
+        ))}
+      </table>
     </div>
   );
 }
