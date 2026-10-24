@@ -33,60 +33,19 @@ source:`<svg viewBox="0 0 400 260" preserveAspectRatio="xMidYMid slice" aria-hid
 
 export type SceneKind = keyof typeof SCENES;
 
-export const HERO_ROUTE = `<svg viewBox="0 0 1200 190" aria-hidden="true">
-      <path id="seaP" class="arc" d="M90 150 C 380 60, 820 60, 1110 140" stroke="rgba(127,211,76,.8)" stroke-width="3" fill="none"/>
-      <path id="airP" class="arc" d="M90 150 C 360 -10, 840 -10, 1110 140" stroke="rgba(255,255,255,.35)" stroke-width="2" fill="none"/>
-      <circle cx="90" cy="150" r="9" fill="#7fd34c"/><circle cx="90" cy="150" r="9" fill="#7fd34c" class="pulse-ring"/>
-      <circle cx="1110" cy="140" r="9" fill="#7fd34c"/><circle cx="1110" cy="140" r="9" fill="#7fd34c" class="pulse-ring"/>
-      <text x="90" y="182" fill="#c8d6f3" font-family="Plus Jakarta Sans,sans-serif" font-size="15" font-weight="800" letter-spacing="2" text-anchor="middle">GUANGZHOU</text>
-      <text x="1110" y="172" fill="#c8d6f3" font-family="Plus Jakarta Sans,sans-serif" font-size="15" font-weight="800" letter-spacing="2" text-anchor="middle">MALABON WAREHOUSE</text>
-      <g><g transform="translate(-22,-26)"><path d="M4 18h40l-6 10H10z" fill="#fff"/><rect x="12" y="8" width="10" height="10" fill="#55a430"/><rect x="23" y="4" width="10" height="14" fill="#d39a55"/><rect x="34" y="10" width="6" height="8" fill="#1356c9"/></g><animateMotion dur="10s" repeatCount="indefinite" rotate="auto"><mpath href="#seaP"/></animateMotion></g>
-      <g><g transform="translate(-18,-12)"><path d="M0 12 L30 8 L40 12 L30 16Z" fill="#fff"/><path d="M14 11 L22 0 L26 0 L22 11Z M14 13 L22 24 L26 24 L22 13Z" fill="#c8d6f3"/></g><animateMotion dur="5s" repeatCount="indefinite" rotate="auto"><mpath href="#airP"/></animateMotion></g>
-    </svg>`;
+export const HERO_ROUTE = `<svg viewBox="0 0 1200 170" overflow="visible" aria-hidden="true">
+      <path id="seaP" class="arc" d="M90 140 C 380 60, 820 60, 1110 130" stroke="#55a430" stroke-width="3.5" fill="none"/>
+      <path id="airP" class="arc" d="M90 140 C 360 -10, 840 -10, 1110 130" stroke="#1356c9" stroke-opacity=".55" stroke-width="2.6" fill="none"/>
+      <circle cx="90" cy="140" r="10" fill="#55a430"/><circle cx="90" cy="140" r="10" fill="#55a430" class="pulse-ring"/>
+      <circle cx="1110" cy="130" r="10" fill="#003b9d"/><circle cx="1110" cy="130" r="10" fill="#003b9d" class="pulse-ring"/>
+      <g font-family="Plus Jakarta Sans,sans-serif" font-size="21" font-weight="800" letter-spacing="2.5" text-anchor="middle">
+        <rect class="lb" x="15" y="80" width="150" height="40" rx="20" fill="#fff" stroke="#dce5f2"/><text class="tc" x="90" y="108" fill="#3f8a1f">CHINA</text>
+        <rect class="lb" x="1005" y="70" width="210" height="40" rx="20" fill="#fff" stroke="#dce5f2"/><text class="tp" x="1110" y="98" fill="#003b9d">PHILIPPINES</text>
+      </g>
+      <g><g transform="translate(-22,-26)"><path d="M4 18h40l-6 10H10z" fill="#003b9d"/><rect x="12" y="8" width="10" height="10" fill="#55a430"/><rect x="23" y="4" width="10" height="14" fill="#d39a55"/><rect x="34" y="10" width="6" height="8" fill="#1356c9"/></g><animateMotion dur="10s" repeatCount="indefinite" rotate="auto"><mpath href="#seaP"/></animateMotion></g>
+      <g><g transform="translate(-18,-12)"><path d="M0 12 L30 8 L40 12 L30 16Z" fill="#1356c9"/><path d="M14 11 L22 0 L26 0 L22 11Z M14 13 L22 24 L26 24 L22 13Z" fill="#7fa6e6"/></g><animateMotion dur="5s" repeatCount="indefinite" rotate="auto"><mpath href="#airP"/></animateMotion></g>
+      </svg>`;
 
-export const STORY_STAGE = `<svg viewBox="0 0 400 300" preserveAspectRatio="xMidYMid slice">
-          <defs>
-            <g id="cityFar"><path d="M0 230V190h22v-20h16v30h14v-46h20v46h12v-26h22v26h18v-60h8v-10h8v10h8v60h14v-34h24v34h16v-24h18v24h20v-52h22v52h16v-30h18v30h20v-40h16v40h18v-28h22v28h16v-18h12v48z" /></g>
-            <g id="cityNear"><path d="M0 250v-36h30v-24h28v60h18v-44h34v44h20v-70h26v70h16v-30h30v30h22v-56h30v56h18v-38h26v38h20v-26h30v26h12v-48h20v48z"/></g>
-            <g id="clouds"><ellipse cx="60" cy="50" rx="34" ry="12"/><ellipse cx="80" cy="42" rx="22" ry="14"/><ellipse cx="250" cy="70" rx="40" ry="12"/><ellipse cx="272" cy="61" rx="22" ry="13"/></g>
-          </defs>
-          <circle cx="330" cy="60" r="30" fill="#ffe6a0" opacity=".9"/>
-          <g class="sky1" fill="#fff" opacity=".85"><use href="#clouds"/><use href="#clouds" x="400"/></g>
-          <g class="sky1" fill="#a9c6f2"><use href="#cityFar"/><use href="#cityFar" x="400"/></g>
-          <g class="sky2" fill="#7fa6e6"><use href="#cityNear"/><use href="#cityNear" x="400"/></g>
-          <rect x="0" y="250" width="400" height="14" fill="#55a430"/>
-          <rect x="0" y="262" width="400" height="38" fill="#2c3f66"/>
-          <g class="ground-dash" fill="#fff" opacity=".7"><rect x="0" y="280" width="40" height="4" rx="2"/><rect x="80" y="280" width="40" height="4" rx="2"/><rect x="160" y="280" width="40" height="4" rx="2"/><rect x="240" y="280" width="40" height="4" rx="2"/><rect x="320" y="280" width="40" height="4" rx="2"/><rect x="400" y="280" width="40" height="4" rx="2"/></g>
-          <ellipse cx="230" cy="264" rx="90" ry="6" fill="#000" opacity=".2"/>
-          
-          <g class="legB"><path d="M178 190 V226" stroke="#00163f" stroke-width="17" stroke-linecap="round"/><g class="shinB" style="--kx:178px;--ky:226px"><path d="M178 226 V256" stroke="#00163f" stroke-width="15" stroke-linecap="round"/><path d="M172 257 h22 a5 5 0 0 1 0 8 h-24 z" fill="#111827"/></g></g>
-          
-          <g>
-            <path d="M262 140 L292 250" stroke="#3f8a1f" stroke-width="7" stroke-linecap="round"/>
-            <path d="M292 254 H338" stroke="#3f8a1f" stroke-width="6" stroke-linecap="round"/>
-            <g transform="rotate(-4 315 250)">
-              <rect x="294" y="208" width="44" height="44" rx="3" fill="#d39a55"/><rect x="312" y="208" width="8" height="44" fill="#55a430"/><text x="300" y="242" font-family="Poppins,sans-serif" font-weight="900" font-style="italic" font-size="11" fill="#003b9d">KD</text>
-              <rect x="298" y="172" width="36" height="36" rx="3" fill="#ebbb7d"/><rect x="313" y="172" width="7" height="36" fill="#55a430"/>
-            </g>
-            <g class="wheel"><circle cx="292" cy="252" r="12" fill="#1f2937"/><circle cx="292" cy="252" r="5" fill="#9ca3af"/><path d="M292 242v20M282 252h20" stroke="#4b5563" stroke-width="2"/></g>
-          </g>
-          
-          <g class="legA"><path d="M178 190 V226" stroke="#00215c" stroke-width="17" stroke-linecap="round"/><g class="shinA" style="--kx:178px;--ky:226px"><path d="M178 226 V256" stroke="#00215c" stroke-width="15" stroke-linecap="round"/><path d="M172 257 h22 a5 5 0 0 1 0 8 h-24 z" fill="#1f2937"/></g></g>
-          
-          <g class="bodybob">
-            <path d="M206 136 L230 158 L258 144" stroke="#002a78" stroke-width="11" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-            <path d="M181 190 L205 132" stroke="#003b9d" stroke-width="36" stroke-linecap="round"/>
-            <text x="184" y="170" font-family="Poppins,sans-serif" font-weight="900" font-style="italic" font-size="12" fill="#7fd34c" transform="rotate(-67 190 165)">KD</text>
-            <path d="M210 108 l4 18" stroke="#b97a4f" stroke-width="10" stroke-linecap="round"/>
-            <circle cx="220" cy="100" r="18" fill="#c68a5e"/>
-            <path d="M202 99 a18 18 0 0 1 36 -2 z" fill="#55a430"/>
-            <path d="M232 95 l20 3 -2 5 -20 -2 z" fill="#3f8a1f"/>
-            <circle cx="229" cy="104" r="2.2" fill="#1f2937"/>
-            <path d="M226 112 q4 3 8 0" stroke="#7a4a2c" stroke-width="2" fill="none" stroke-linecap="round"/>
-            <path d="M208 140 L234 160 L262 142" stroke="#003b9d" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-            <circle cx="263" cy="141" r="6.5" fill="#c68a5e"/>
-          </g>
-        </svg>`;
 
 export function Scene({ kind, className = "", style }: { kind: SceneKind; className?: string; style?: CSSProperties }) {
   return <div className={className} style={style} dangerouslySetInnerHTML={{ __html: SCENES[kind] }} />;

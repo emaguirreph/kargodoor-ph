@@ -1,0 +1,68 @@
+/* Homepage additions to the v5 design: light photo hero, blue quick calculator, story photo, colored social icons. */
+.v5{--hw:244 247 252}
+@media (prefers-color-scheme:dark){.v5{--hw:6 16 31}}
+
+/* Hero: the original port photo, brightened, with the China to Philippines route under the truck */
+.v5 .hero2{position:relative;overflow:hidden;isolation:isolate;background:var(--bg);text-align:center;padding-top:clamp(54px,8vw,96px);--rh:clamp(70px,8vw,118px)}
+.v5 .h2-photo{position:absolute;left:0;right:0;top:0;bottom:var(--rh);z-index:-2;background:url(/assets/kargodoor-home-hero-light.webp) 62% 100%/cover no-repeat;filter:brightness(1.14) saturate(.88) contrast(.96)}
+.v5 .h2-wash{position:absolute;inset:0;z-index:-1;background:
+  linear-gradient(0deg,rgb(var(--hw)) 0,rgb(var(--hw)) var(--rh),rgb(var(--hw) / .8) calc(var(--rh) + 40px),rgb(var(--hw) / 0) calc(var(--rh) + 90px)),
+  linear-gradient(180deg,rgb(var(--hw) / .98) 0%,rgb(var(--hw) / .93) 32%,rgb(var(--hw) / .6) 52%,rgb(var(--hw) / .18) 70%),
+  linear-gradient(90deg,rgb(var(--hw) / .5),rgb(var(--hw) / 0) 35%)}
+.v5 .hero2 .pill{padding:13px 24px;font-size:clamp(.88rem,1.3vw,1.05rem);background:var(--surface);color:var(--green);box-shadow:0 0 0 1px var(--line),0 10px 24px -18px rgba(0,33,92,.6)}
+.v5 .hero2 .pill i{width:10px;height:10px}
+.v5 .hero2 .zh{color:var(--muted);font-size:clamp(1.1rem,1.8vw,1.4rem);font-weight:700;letter-spacing:.6em;margin-right:-.6em}
+.v5 .hero2 h1{max-width:13ch}
+.v5 .hero2 h1 .l1{display:block;color:var(--blue);animation:v5-up .8s .1s both}
+.v5 .hero2 h1 .l2{display:block;background:linear-gradient(90deg,var(--green),#7fd34c,#3f8a1f,var(--green));background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:v5-up .8s .25s both,v5-shine 6s linear infinite}
+.v5 .hero2 .lead{color:var(--muted);max-width:760px;animation:v5-up .8s .4s both}
+.v5 .hero2 .btn-solid{background:var(--surface)}
+.v5 .hero2 .chips span{background:var(--surface);box-shadow:0 0 0 1px var(--line);color:var(--fg)}
+.v5 .hero2 .chips svg{color:var(--green)}
+.v5 .h2-spacer{height:clamp(220px,27vw,380px)}
+.v5 .h2-floor{height:var(--rh)}
+.v5 .h2-route{position:absolute;left:0;right:0;bottom:44px}
+.v5 .h2-route svg{display:block;width:min(1100px,100%);height:auto;margin:0 auto;overflow:visible}
+.v5 .h2-route .arc{stroke-dasharray:8 10;animation:v5-dash 1.4s linear infinite}
+@media (max-width:700px){
+  .v5 .hero2{--rh:96px}
+  .v5 .h2-photo{background-position:70% 100%}
+  .v5 .h2-spacer{height:210px}
+  .v5 .h2-route{bottom:66px}
+  .v5 .h2-route .lb{display:none}
+  .v5 .h2-route text{font-size:44px;letter-spacing:3px}
+  .v5 .h2-route .tc{text-anchor:start;transform:translate(-80px,-10px)}
+  .v5 .h2-route .tp{text-anchor:end;transform:translate(90px,0)}
+}
+
+/* Quick calculator in brand blue */
+.v5 .q-blue .qbar{margin-top:-56px;background:linear-gradient(135deg,#003b9d 0%,#0a4fc0 100%);border:0;box-shadow:0 30px 60px -28px rgba(0,59,157,.75)}
+.v5 .q-blue .qbar .qh{color:#fff}
+.v5 .q-blue .qbar .qh svg{color:#7fd34c}
+.v5 .q-blue .seg{background:rgba(255,255,255,.14)}
+.v5 .q-blue .seg .thumb{background:#fff}
+.v5 .q-blue .seg button{color:#dbe6fb}
+.v5 .q-blue .seg button[aria-pressed="true"]{color:#003b9d}
+.v5 .q-blue .field label{color:#dbe6fb}
+.v5 .q-blue .field input{background:#fff;color:#0b1f45;border-color:transparent}
+.v5 .q-blue .field input:focus{border-color:#7fd34c;box-shadow:0 0 0 5px rgba(127,211,76,.25)}
+.v5 .q-blue .qbar .btn{background:var(--green);color:#fff;box-shadow:0 14px 30px -12px rgba(63,138,31,.9)}
+
+/* Our Story: real team photo */
+.v5 .stage.photo{aspect-ratio:5/5.4;background:var(--surface-2)}
+.v5 .stage.photo img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 35%;display:block}
+
+/* One-line headings on wide screens */
+@media (min-width:1000px){
+  .v5 #rates-title{white-space:nowrap;font-size:clamp(1.9rem,3.1vw,2.9rem)}
+  .v5 .head:has(#faq-title){max-width:none}
+  .v5 #faq-title{white-space:nowrap}
+}
+
+/* Follow us: brand colors */
+.v5 .soc a{color:#fff}
+.v5 .soc a[aria-label*="Facebook"]{background:#1877f2}
+.v5 .soc a[aria-label*="Instagram"]{background:radial-gradient(circle at 30% 107%,#fdf497 0%,#fdf497 5%,#fd5949 45%,#d6249f 60%,#285aeb 90%)}
+.v5 .soc a[aria-label*="TikTok"]{background:#000}
+.v5 .soc a[aria-label*="TikTok"] svg{filter:drop-shadow(-1.5px -1px 0 #25f4ee) drop-shadow(1.5px 1px 0 #fe2c55)}
+.v5 .soc a:hover{filter:brightness(1.08)}

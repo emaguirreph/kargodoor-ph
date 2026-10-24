@@ -1,13 +1,12 @@
 import Link from "next/link";
 import { SiteShell } from "@/components/v5/chrome";
-import { HERO_ROUTE, STORY_STAGE, Scene } from "@/components/v5/art";
+import { HERO_ROUTE, Scene } from "@/components/v5/art";
 import { TierGrid } from "@/components/v5/sizes";
 import { QuickCalculator, WhenVisible } from "@/components/v5/widgets";
 import { MessengerLink } from "@/components/messenger-link";
 import { faqs } from "@/lib/faq-content";
 import { pageMetadata } from "@/lib/seo";
 import { icon, stepIcons } from "@/components/v5/icons";
-import type { CSSProperties } from "react";
 
 export const metadata = pageMetadata(
   "Shipping from China to the Philippines | KargoDoor PH",
@@ -72,21 +71,12 @@ const homeFaqQuestions = [
   "How long does shipping take?",
 ];
 
-const floatingBoxes = [
-  { "--s": "46px", left: "8%", top: "22%", "--d": "8s" },
-  { "--s": "30px", left: "16%", top: "62%", "--d": "10s", "--rot": "-14deg" },
-  { "--s": "58px", right: "9%", top: "30%", "--d": "11s", "--rot": "-8deg" },
-  { "--s": "26px", right: "20%", top: "12%", "--d": "7s" },
-  { "--s": "36px", right: "14%", top: "64%", "--d": "9s", "--rot": "16deg" },
-] as unknown as CSSProperties[];
-
 export default function HomePage() {
   return (
     <SiteShell>
-      <section className="hero" aria-labelledby="hero-title">
-        <div className="grid-bg" />
-        <div className="blob b1" /><div className="blob b2" /><div className="blob b3" />
-        {floatingBoxes.map((style, i) => <span className="fbox" style={style} key={i} />)}
+      <section className="hero2" aria-labelledby="hero-title">
+        <div className="h2-photo" role="img" aria-label="KargoDoor PH truck at the port with a container ship and a plane" />
+        <div className="h2-wash" />
         <div className="wrap hero-in">
           <span className="pill"><i />SOURCE · SHIP · RECEIVE</span>
           <span className="zh" lang="zh">采购 · 运输 · 收货</span>
@@ -96,7 +86,7 @@ export default function HomePage() {
             <MessengerLink className="btn btn-green glow" target="_blank" rel="noopener noreferrer" analyticsEvent="generate_lead">
               GET A QUOTE <span className="arr">→</span>
             </MessengerLink>
-            <Link className="btn btn-line" href="/rates-calculator">CALCULATOR</Link>
+            <Link className="btn btn-outline btn-solid" href="/rates-calculator">CALCULATOR</Link>
           </div>
           <div className="chips">
             <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M3 17l2 4h14l2-4H3zM6 17V9h12v8M12 9V4" /></svg>Sea Freight — 3–5 weeks</span>
@@ -104,10 +94,12 @@ export default function HomePage() {
             <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden="true"><path d="M5 12l5 5L20 7" /></svg>No hidden fees.</span>
           </div>
         </div>
-        <div className="wrap"><div className="route" dangerouslySetInnerHTML={{ __html: HERO_ROUTE }} /></div>
+        <div className="h2-spacer" />
+        <div className="h2-floor" />
+        <div className="wrap h2-route" dangerouslySetInnerHTML={{ __html: HERO_ROUTE }} />
       </section>
 
-      <div className="wrap">
+      <div className="wrap q-blue">
         <QuickCalculator />
       </div>
 
@@ -190,7 +182,9 @@ export default function HomePage() {
 
       <section className="band story" aria-labelledby="story-title">
         <div className="wrap story-grid">
-          <div className="stage rv" aria-hidden="true" dangerouslySetInnerHTML={{ __html: STORY_STAGE }} />
+          <div className="stage photo rv">
+            <img src="/assets/kargodoor-team-at-work.webp" alt="A KargoDoor PH kargador carrying cargo at the warehouse" width="1000" height="1191" loading="lazy" />
+          </div>
           <div className="story-txt rv">
             <span className="pill" style={{ alignSelf: "flex-start" }}><i />OUR STORY</span>
             <h2 id="story-title">Inspired by the Filipino <span>“Kargador”</span></h2>
@@ -204,7 +198,7 @@ export default function HomePage() {
               to the Philippines, so you can focus on what matters most—your
               business, your customers, and your next opportunity.
             </p>
-            <p className="sign">From China to the Philippines, we make cargo simple.</p>
+            <p className="sign">From China to the Philippines,<br /> we make cargo simple.</p>
           </div>
         </div>
       </section>
