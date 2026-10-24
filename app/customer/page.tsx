@@ -115,6 +115,13 @@ function ShipmentCard({
           })} kg`
         : "—";
 
+  const declaredCbm = shipment.cbm > 0
+    ? `${shipment.cbm.toLocaleString("en-PH", { maximumFractionDigits: 3 })} CBM`
+    : "—";
+  const declaredWeight = shipment.weight_kg > 0
+    ? `${shipment.weight_kg.toLocaleString("en-PH", { maximumFractionDigits: 2 })} kg`
+    : "—";
+
   const instructions = shipmentShippingInstructions({
     name: customer.full_name,
     customerCode: customer.customer_code,
@@ -152,6 +159,9 @@ function ShipmentCard({
 
       <dl className="sdl">
         <div><dt>Service</dt><dd>{shipment.service_type}</dd></div>
+        <div><dt>CN Warehouse</dt><dd>{shipment.china_warehouse || "—"}</dd></div>
+        <div><dt>Declared CBM</dt><dd>{declaredCbm}</dd></div>
+        <div><dt>Declared Weight</dt><dd>{declaredWeight}</dd></div>
         <div>
           <dt>CBM / Weight</dt>
           <dd>

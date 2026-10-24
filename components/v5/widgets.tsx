@@ -67,9 +67,9 @@ export function WhenVisible({ className, children }: { className: string; childr
   return <div ref={ref} className={`${className}${seen ? " go" : ""}`}>{children}</div>;
 }
 
-const warehouses = ["Guangzhou", "Yiwu", "Shishi", "Hong Kong", "Taiwan"] as const;
+const warehouses = ["Guangzhou", "Yiwu", "Shishi", "Fujian Air", "Hong Kong", "Taiwan"] as const;
 
-/** Real map of southeast China, Taiwan and the Philippines, with a route from each China warehouse to Malabon. */
+/** Real map of southeast China, Taiwan and the Philippines, with a route from each China warehouse to the Philippines. */
 export function WarehouseMap() {
   const [active, setActive] = useState(0);
   const [auto, setAuto] = useState(true);
@@ -87,7 +87,7 @@ export function WarehouseMap() {
   return (
     <div className="wh">
       <div className="map rv">
-        <svg viewBox={`0 0 ${MAP_W} ${MAP_H}`} role="img" aria-label="Map of KargoDoor warehouses in Guangzhou, Yiwu, Shishi, Hong Kong, and Taiwan, shipping to our Malabon Warehouse in the Philippines">
+        <svg viewBox={`0 0 ${MAP_W} ${MAP_H}`} role="img" aria-label="Map of KargoDoor warehouses in Guangzhou, Yiwu, Shishi, Fujian Air, Hong Kong, and Taiwan, shipping to the Philippines">
           <rect width={MAP_W} height={MAP_H} rx="18" className="sea" />
           <path d={MAP_OTHER} className="land other" />
           <path d={MAP_CHINA} className="land cn" />
@@ -111,7 +111,6 @@ export function WarehouseMap() {
           <text x={x - 12} y={y - 12} textAnchor="end" className="pinlabel">{warehouses[active]}</text>
           <circle cx={mx} cy={my} r="9" fill="var(--brand)" stroke="#fff" strokeWidth="2" />
           <circle cx={mx} cy={my} r="9" fill="var(--brand)" className="pulse-ring" />
-          <text x={mx} y={my + 26} textAnchor="middle" className="pinlabel">MALABON WAREHOUSE</text>
         </svg>
       </div>
       <div className="whlist rv">

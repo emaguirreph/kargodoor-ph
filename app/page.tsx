@@ -187,7 +187,7 @@ export default function HomePage() {
           </div>
           <div className="story-txt rv">
             <span className="pill" style={{ alignSelf: "flex-start" }}><i />OUR STORY</span>
-            <h2 id="story-title">Inspired by the Filipino <span>“Kargador”</span></h2>
+            <h2 id="story-title"><span className="one">Inspired by the Filipino</span> <span>“Kargador”</span></h2>
             <p className="lead">
               A <strong>kargador</strong> carries the load, makes the heavy
               work lighter, and helps others move forward.

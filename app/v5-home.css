@@ -182,3 +182,45 @@ html:has(.v5){font-size:17px}
 @media (max-width:700px){.v5 .fcl{grid-template-columns:1fr;text-align:center}.v5 .fcl .cont{margin-inline:auto}}
 .v5 .face>*{flex-shrink:0}
 .v5 .flip,.v5 .flip-in{min-height:330px}
+
+/* ---------- Round 3 ---------- */
+/* Nav logo: transparent, bigger, still inside the header bar */
+.v5 .logo{background:none;border-radius:0}
+.v5 .logo img{height:52px}
+.v5 .site-hdr.scrolled .logo img{height:46px}
+@media (max-width:700px){.v5 .logo img{height:42px}.v5 .site-hdr.scrolled .logo img{height:38px}}
+
+/* Service flip cards: blue back so the two sides are easy to tell apart */
+.v5 .face.back{background:linear-gradient(160deg,#003b9d 0%,#0a4fc0 100%);border-color:transparent;color:#fff}
+.v5 .face.back h2{color:#fff}
+.v5 .face.back ul,.v5 .face.back p,.v5 .face.back .muted{color:#e3ecfb}
+.v5 .face.back li::before{background:#7fd34c}
+.v5 .face.back .eta{background:rgba(255,255,255,.16);color:#fff}
+.v5 .face.back a{color:#b9f08f}
+
+/* One-line headings on desktop */
+.v5 .story-txt h2 .one{display:block;color:inherit}
+@media (min-width:1000px){
+  .v5 #tiers-title,.v5 #service-cta-title{white-space:nowrap}
+  .v5 #tiers-title{font-size:clamp(1.6rem,2.6vw,2.3rem)}
+  .v5 .story-txt h2 .one{white-space:nowrap}
+  .v5 .story-txt h2{font-size:clamp(1.8rem,2.7vw,2.5rem)}
+}
+
+/* Homepage hero: heading on the left, truck on the right, route clear of the calculator */
+@media (min-width:1000px){
+  .v5 .hero2{text-align:left;padding-top:clamp(36px,3.4vw,56px)}
+  .v5 .hero2 .hero-in{align-items:flex-start;max-width:var(--max,1200px)}
+  .v5 .hero2 .hero-in>*{max-width:560px}
+  .v5 .hero2 .zh{margin-right:0}
+  .v5 .hero2 .ctas,.v5 .hero2 .chips{justify-content:flex-start}
+  .v5 .hero2 .chips{max-width:600px}
+  .v5 .h2-photo{background-position:100% 100%;background-size:cover}
+  .v5 .h2-wash{background:
+    linear-gradient(0deg,rgb(var(--hw)) 0,rgb(var(--hw)) var(--rh),rgb(var(--hw) / 0) calc(var(--rh) + 70px)),
+    linear-gradient(90deg,rgb(var(--hw) / .97) 0%,rgb(var(--hw) / .9) 34%,rgb(var(--hw) / .35) 50%,rgb(var(--hw) / 0) 60%)}
+  .v5 .h2-spacer{height:clamp(30px,3vw,50px)}
+}
+.v5 .hero2{--rh:clamp(76px,7vw,100px)}
+.v5 .h2-route{bottom:clamp(8px,1vw,16px)}
+.v5 .q-blue .qbar{margin-top:8px}

@@ -394,7 +394,7 @@ export default function RatesCalculatorPage() {
           <div className="fcl rv">
             <svg viewBox="0 0 64 40" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" aria-hidden="true" className="cont"><rect x="3" y="5" width="58" height="30" rx="2" /><path d="M13 9v22M23 9v22M33 9v22M43 9v22M53 9v22" /></svg>
             <div className="stack">
-              <h2 style={{ fontSize: "clamp(1.5rem,3vw,2rem)" }}>Full Container</h2>
+              <h2 style={{ fontSize: "clamp(1.5rem,3vw,2rem)" }}>Full Container Load</h2>
               <p>Please contact KargoDoor PH.</p>
             </div>
             <MessengerLink className="btn btn-green" target="_blank" rel="noopener noreferrer" analyticsEvent="generate_lead">
