@@ -78,12 +78,17 @@ export default function HomePage() {
         <div className="h2-photo" role="img" aria-label="KargoDoor PH truck at the port with a container ship and a plane" />
         <div className="h2-wash" />
         <div className="wrap hero-in">
-          <div className="tri">
-            <span className="pill" aria-label="SOURCE · SHIP · RECEIVE"><i /><b>SOURCE</b><s>·</s><b>SHIP</b><s>·</s><b>RECEIVE</b></span>
-            <span className="zh" lang="zh" aria-label="采购 · 运输 · 收货"><b>采购</b><s>·</s><b>运输</b><s>·</s><b>收货</b></span>
+          {/* One grid for both rows so each Chinese word sits under its English word in every browser. */}
+          <div className="tri" role="group" aria-label="SOURCE · SHIP · RECEIVE. 采购 · 运输 · 收货">
+            <span className="tri-bg" aria-hidden="true" />
+            <i aria-hidden="true" />
+            <b className="en" aria-hidden="true">SOURCE</b><s className="en" aria-hidden="true">·</s><b className="en" aria-hidden="true">SHIP</b><s className="en" aria-hidden="true">·</s><b className="en" aria-hidden="true">RECEIVE</b>
+            <b className="cn" lang="zh" aria-hidden="true">采购</b><s className="cn" aria-hidden="true">·</s><b className="cn" lang="zh" aria-hidden="true">运输</b><s className="cn" aria-hidden="true">·</s><b className="cn" lang="zh" aria-hidden="true">收货</b>
           </div>
-          <h1 id="hero-title"><span className="l1">China to PH,</span><span className="l2">made SIMPLE</span></h1>
-          <p className="lead">Reliable and affordable shipping.</p>
+          <div className="h-title">
+            <h1 id="hero-title"><span className="l1">China to PH,</span><span className="l2">made SIMPLE</span></h1>
+            <p className="lead">Reliable and affordable shipping.</p>
+          </div>
           <div className="ctas">
             <MessengerLink className="btn btn-green glow" target="_blank" rel="noopener noreferrer" analyticsEvent="generate_lead">
               GET A QUOTE <span className="arr">→</span>
@@ -93,7 +98,9 @@ export default function HomePage() {
           <div className="chips">
             <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M3 17l2 4h14l2-4H3zM6 17V9h12v8M12 9V4" /></svg>Sea Freight — 3–5 weeks</span>
             <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M2 14l20-7-6 13-4-5-5 3 1-5z" /></svg>Air Freight — 5–7 days</span>
-            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden="true"><path d="M5 12l5 5L20 7" /></svg>All-in rates and pay upon arrival.</span>
+            <i className="brk" aria-hidden="true" />
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden="true"><path d="M5 12l5 5L20 7" /></svg>All-in rates</span>
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2" /><circle cx="12" cy="12" r="2.5" /></svg>Pay upon arrival</span>
           </div>
         </div>
         <div className="h2-spacer" />

@@ -260,3 +260,34 @@ html:has(.v5){font-size:17px}
 .v5 .allin-foot{margin:clamp(18px,2.4vw,26px) 0 0;font-weight:800;color:var(--green)}
 @media (max-width:1000px){.v5 .allin-grid{grid-template-columns:repeat(3,minmax(0,1fr));row-gap:22px}.v5 .allin-grid li:nth-child(3n+1){border-left:0}}
 @media (max-width:560px){.v5 .allin-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.v5 .allin-grid li{border-left:0!important;padding:4px 6px}}
+
+/* ---------- Round 5 ---------- */
+/* SOURCE · SHIP · RECEIVE: one grid for both rows (no subgrid), the pill drawn behind row 1 */
+.v5 .hero2 .tri{display:inline-grid;grid-template-columns:repeat(6,auto);grid-template-rows:auto auto;column-gap:12px;row-gap:14px;align-items:center;padding-inline:20px;position:relative;letter-spacing:0;animation:v5-up .8s both}
+.v5 .hero2 .tri>*{position:relative;z-index:1;margin:0}
+.v5 .hero2 .tri .tri-bg{grid-area:1/1/2/-1;z-index:0;align-self:stretch;margin-inline:-20px;border-radius:999px;background:var(--surface);box-shadow:0 0 0 1px var(--line),0 10px 24px -18px rgba(0,33,92,.6)}
+.v5 .hero2 .tri i{grid-area:1/1;width:10px;height:10px;border-radius:50%;background:var(--green);animation:v5-blink 1.6s infinite}
+.v5 .hero2 .tri .en{grid-row:1;padding-block:10px;font:800 clamp(.8rem,1vw,.92rem)/1 var(--f-b);color:var(--green)}
+.v5 .hero2 .tri b.en{letter-spacing:.2em;padding-left:.2em}
+.v5 .hero2 .tri .cn{grid-row:2;color:var(--muted);font-size:clamp(1rem,1.4vw,1.15rem);font-weight:700;line-height:1}
+.v5 .hero2 .tri b.cn{letter-spacing:.25em;padding-left:.25em}
+.v5 .hero2 .tri s.cn{font-family:var(--f-b);font-weight:800}
+.v5 .hero2 .tri b,.v5 .hero2 .tri s{text-align:center;text-decoration:none}
+.v5 .hero2 .tri b:nth-of-type(1),.v5 .hero2 .tri b:nth-of-type(4){grid-column:2}
+.v5 .hero2 .tri s:nth-of-type(1),.v5 .hero2 .tri s:nth-of-type(3){grid-column:3}
+.v5 .hero2 .tri b:nth-of-type(2),.v5 .hero2 .tri b:nth-of-type(5){grid-column:4}
+.v5 .hero2 .tri s:nth-of-type(2),.v5 .hero2 .tri s:nth-of-type(4){grid-column:5}
+.v5 .hero2 .tri b:nth-of-type(3),.v5 .hero2 .tri b:nth-of-type(6){grid-column:6}
+
+/* Heading block: subtitle in brand blue, centered under "made SIMPLE" */
+.v5 .hero2 .h-title{display:flex;flex-direction:column;align-items:center;gap:12px}
+.v5 .hero2 .h-title .lead{color:var(--blue);font-weight:600;margin:0}
+@media (min-width:1000px){
+  .v5 .hero2 .hero-in>.h-title{display:inline-flex;max-width:none}
+  .v5 .hero2 .h-title .lead{white-space:nowrap;font-size:clamp(1.05rem,1.35vw,1.25rem)}
+  /* Four chips as two even rows */
+  .v5 .hero2 .chips{display:grid;grid-template-columns:repeat(2,max-content);max-width:none}
+}
+/* Phones: All-in rates and Pay upon arrival share their own row */
+.v5 .hero2 .chips .brk{flex-basis:100%;height:0;margin-top:-10px}
+@media (min-width:1000px){.v5 .hero2 .chips .brk{display:none}}
