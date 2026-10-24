@@ -78,8 +78,10 @@ export default function HomePage() {
         <div className="h2-photo" role="img" aria-label="KargoDoor PH truck at the port with a container ship and a plane" />
         <div className="h2-wash" />
         <div className="wrap hero-in">
-          <span className="pill"><i />SOURCE · SHIP · RECEIVE</span>
-          <span className="zh" lang="zh">采购 · 运输 · 收货</span>
+          <div className="tri">
+            <span className="pill" aria-label="SOURCE · SHIP · RECEIVE"><i /><b>SOURCE</b><s>·</s><b>SHIP</b><s>·</s><b>RECEIVE</b></span>
+            <span className="zh" lang="zh" aria-label="采购 · 运输 · 收货"><b>采购</b><s>·</s><b>运输</b><s>·</s><b>收货</b></span>
+          </div>
           <h1 id="hero-title"><span className="l1">China to PH,</span><span className="l2">made SIMPLE</span></h1>
           <p className="lead">Simple, reliable, and affordable shipping from China to the Philippines.</p>
           <div className="ctas">

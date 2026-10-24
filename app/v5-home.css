@@ -219,8 +219,20 @@ html:has(.v5){font-size:17px}
   .v5 .h2-wash{background:
     linear-gradient(0deg,rgb(var(--hw)) 0,rgb(var(--hw)) var(--rh),rgb(var(--hw) / 0) calc(var(--rh) + 70px)),
     linear-gradient(90deg,rgb(var(--hw) / .97) 0%,rgb(var(--hw) / .9) 34%,rgb(var(--hw) / .35) 50%,rgb(var(--hw) / 0) 60%)}
-  .v5 .h2-spacer{height:clamp(30px,3vw,50px)}
+  .v5 .h2-spacer{height:clamp(50px,calc(150px - 6vw),90px)}
 }
 .v5 .hero2{--rh:clamp(76px,7vw,100px)}
 .v5 .h2-route{bottom:clamp(8px,1vw,16px)}
 .v5 .q-blue .qbar{margin-top:8px}
+
+/* Hero: Chinese words sit under their English words, subtitle on one line */
+.v5 .hero2 .tri{display:inline-grid;grid-template-columns:repeat(6,auto);row-gap:12px;animation:v5-up .8s both}
+.v5 .hero2 .tri .pill,.v5 .hero2 .tri .zh{grid-column:1/-1;display:grid;grid-template-columns:subgrid;column-gap:12px;align-items:center;margin:0;letter-spacing:0}
+.v5 .hero2 .tri b{font-weight:inherit;text-align:center;letter-spacing:.2em;padding-left:.2em}
+.v5 .hero2 .tri s{text-decoration:none;text-align:center}
+.v5 .hero2 .tri .zh b{letter-spacing:.25em;padding-left:.25em}
+.v5 .hero2 .tri .zh{padding-inline:20px}
+.v5 .hero2 .tri .zh::before{content:"";grid-column:1}
+.v5 .hero2 .tri .zh b:first-of-type{grid-column:2}
+@media (min-width:1000px){.v5 .hero2 .hero-in>.lead{max-width:none;white-space:nowrap;font-size:clamp(.98rem,1.25vw,1.12rem)}}
+.v5 .hero2 .tri .zh s{font-family:var(--f-b);font-weight:800}
