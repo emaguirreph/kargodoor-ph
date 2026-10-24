@@ -369,6 +369,7 @@ export default async function CustomerPage() {
         AND i.status != 'Void'
 
       WHERE s.customer_id = ?
+        AND s.archived_at IS NULL
 
       ORDER BY s.created_at DESC
     `,

@@ -79,6 +79,7 @@ export async function GET(request: Request) {
             updated_at
           FROM shipments
           WHERE tracking_number = ?
+            AND archived_at IS NULL
           LIMIT 1
           `,
         )
