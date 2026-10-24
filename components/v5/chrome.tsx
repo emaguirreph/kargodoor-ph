@@ -121,7 +121,9 @@ export function Footer() {
 
       <div className="fab">
         <MessengerLink target="_blank" rel="noopener noreferrer" aria-label="Message KargoDoor PH" analyticsEvent="contact">
-          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.4 2 2 6.1 2 11.5c0 2.9 1.3 5.4 3.4 7.2V22l3.1-1.7c1.1.3 2.3.5 3.5.5 5.6 0 10-4.1 10-9.5S17.6 2 12 2zm1 12.8-2.5-2.7-5 2.7 5.5-5.8 2.6 2.7 4.9-2.7z" /></svg>
+          <video autoPlay loop muted playsInline preload="metadata" aria-hidden="true">
+            <source src="/assets/kargodoor-message-us-approved.webm" type="video/webm" />
+          </video>
         </MessengerLink>
       </div>
       <div className="mbar">

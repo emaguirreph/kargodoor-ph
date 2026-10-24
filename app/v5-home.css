@@ -1,4 +1,4 @@
-/* Homepage additions to the v5 design: light photo hero, blue quick calculator, story photo, colored social icons. */
+/* Additions to the v5 design (round 2): light photo hero, blue quick calculator, story photo, social colors, smaller type, flip cards, real map. */
 .v5{--hw:244 247 252}
 @media (prefers-color-scheme:dark){.v5{--hw:6 16 31}}
 
@@ -66,3 +66,119 @@
 .v5 .soc a[aria-label*="TikTok"]{background:#000}
 .v5 .soc a[aria-label*="TikTok"] svg{filter:drop-shadow(-1.5px -1px 0 #25f4ee) drop-shadow(1.5px 1px 0 #fe2c55)}
 .v5 .soc a:hover{filter:brightness(1.08)}
+
+/* Floating Message Us button: the original animated kargador, in a circle */
+.v5 .fab a{width:96px;height:96px;padding:0;background:#fff;overflow:hidden;box-shadow:0 0 0 3px #fff,0 0 0 5px var(--green),0 16px 30px -12px rgba(0,59,157,.55);animation:none}
+.v5 .fab video{display:block;width:100%;height:100%;object-fit:cover;transform:scale(1.12)}
+.v5 .fab a:hover{transform:translateY(-3px)}
+@media (max-width:760px){.v5 .fab a{width:62px;height:62px}}
+
+/* ---------- Sitewide: thinner header, smaller type ---------- */
+html:has(.v5){font-size:17px}
+@media (max-width:600px){html:has(.v5){font-size:16px}}
+.v5 .nav{min-height:64px}
+.v5 .logo img{height:42px}
+.v5 .site-hdr.scrolled .logo img{height:38px}
+.v5 h1{font-size:clamp(2.2rem,5.2vw,3.9rem)}
+.v5 h2{font-size:clamp(1.6rem,3.2vw,2.4rem)}
+.v5 .lead{font-size:clamp(1rem,1.4vw,1.12rem)}
+.v5 .phero{padding:clamp(40px,5vw,64px) 0 clamp(64px,7vw,88px)}
+.v5 .phero h1{font-size:clamp(2rem,4.4vw,3.2rem)}
+.v5 .phero .wrap{gap:12px}
+.v5 .phero::after{height:40px}
+
+/* ---------- Homepage hero: photo, route and calculator fit the first screen ---------- */
+.v5 .hero2{padding-top:clamp(24px,2.6vw,36px);--rh:clamp(64px,6vw,92px)}
+.v5 .hero2 .hero-in{gap:12px}
+.v5 .hero2 .pill{padding:10px 20px;font-size:clamp(.8rem,1vw,.92rem)}
+.v5 .hero2 .zh{font-size:clamp(1rem,1.4vw,1.15rem)}
+.v5 .hero2 h1{font-size:clamp(2.2rem,4.6vw,3.6rem);max-width:none}
+.v5 .hero2 .btn{padding:14px 24px}
+.v5 .hero2 .chips span{padding:7px 14px;font-size:.82rem}
+.v5 .h2-photo{background-position:64% 100%}
+
+.v5 .h2-spacer{height:clamp(90px,8vw,120px)}
+.v5 .h2-route{bottom:28px}
+.v5 .h2-route svg{width:min(940px,100%)}
+@media (max-width:700px){.v5 .h2-photo{background-size:cover}.v5 .h2-spacer{height:170px}.v5 .h2-route{bottom:56px}}
+
+/* ---------- How It Works: compact three steps with a scroll-linked green line ---------- */
+.v5 .band.steps-top{padding-block:8px 0}
+.v5 .hsteps.mini::before,.v5 .hsteps.mini .bar{top:38px}
+.v5 .hsteps.mini .bar{width:calc(68% * var(--p,0));transition:width .15s linear}
+.v5 .hsteps.mini .hstep{text-decoration:none;color:inherit;gap:8px}
+.v5 .hsteps.mini .hstep .c{width:76px;height:76px;border-width:3px;transition:border-color .3s,transform .3s}
+.v5 .hsteps.mini .hstep .c svg{width:30px;height:30px}
+.v5 .hsteps.mini .hstep .c b{width:30px;height:30px;font-size:.75rem;top:-4px;right:-4px}
+.v5 .hsteps.mini .hstep h3{font-size:1.15rem}
+.v5 .hsteps.mini .hstep p{font-size:.92rem}
+.v5 .hsteps.mini .hstep:nth-of-type(1) .c,
+.v5 .hsteps.mini[data-step="2"] .hstep:nth-of-type(2) .c,
+.v5 .hsteps.mini[data-step="3"] .hstep:nth-of-type(-n+3) .c{border-color:var(--green);transform:scale(1.06)}
+.v5 .hsteps.mini[data-step="3"] .hstep:nth-of-type(2) .c{border-color:var(--green)}
+.v5 .tl .fillv{animation:none!important;transform:scaleY(var(--p,0));transition:transform .15s linear}
+.v5 .trow .num{width:92px;height:92px;border-width:4px}
+.v5 .trow .num svg{width:38px;height:38px}
+.v5 .trow{grid-template-columns:1fr 92px 1fr}
+.v5 .trow .tc h2{font-size:1.4rem}
+@media (max-width:860px){.v5 .trow{grid-template-columns:70px 1fr}.v5 .trow .num{width:70px;height:70px}.v5 .trow .num svg{width:30px;height:30px}.v5 .tl::before,.v5 .tl .fillv{left:35px}}
+@media (max-width:760px){.v5 .hsteps.mini{grid-template-columns:repeat(3,1fr);gap:10px}
+  .v5 .hsteps.mini::before,.v5 .hsteps.mini .bar{display:block;top:30px}
+  .v5 .hsteps.mini .hstep .c{width:60px;height:60px}
+  .v5 .hsteps.mini .hstep .c svg{width:24px;height:24px}
+  .v5 .hsteps.mini .hstep h3{font-size:.95rem}
+  .v5 .hsteps.mini .hstep p{display:none}}
+
+/* ---------- Services: flip cards (version three layout) ---------- */
+.v5 .flips{align-items:stretch}
+.v5 .flip{perspective:1200px;min-height:300px;outline:none;cursor:pointer}
+.v5 .flip-in{position:relative;height:100%;min-height:300px;transition:transform .7s cubic-bezier(.3,.7,.2,1);transform-style:preserve-3d}
+.v5 .flip:hover .flip-in,.v5 .flip:focus-within .flip-in,.v5 .flip:focus .flip-in{transform:rotateY(180deg)}
+.v5 .flip:focus-visible .face{box-shadow:0 0 0 3px var(--brand-2)}
+.v5 .face{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:28px;display:flex;flex-direction:column;gap:12px;box-shadow:var(--shadow-s)}
+.v5 .face.back{transform:rotateY(180deg);background:linear-gradient(160deg,var(--surface),var(--surface-2));border-color:color-mix(in srgb,var(--green) 45%,var(--line))}
+.v5 .face h2{font-size:1.45rem;color:var(--blue)}
+.v5 .face p{color:var(--muted)}
+.v5 .face ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px;color:var(--muted)}
+.v5 .face li{display:flex;gap:10px}
+.v5 .face li::before{content:"";flex-shrink:0;width:8px;height:8px;margin-top:9px;border-radius:50%;background:var(--green)}
+.v5 .face .eta{margin-top:auto}
+.v5 .fico{width:60px;height:60px;border-radius:18px;display:grid;place-items:center;background:var(--surface-2);color:var(--blue)}
+.v5 .fico svg{width:32px;height:32px}
+.v5 .fico.i-sea svg{animation:v5-rock 3s ease-in-out infinite}
+.v5 .fico.i-air svg{animation:v5-hover 2.6s ease-in-out infinite}
+.v5 .fico.i-road svg{animation:v5-hover 1.4s ease-in-out infinite}
+@keyframes v5-rock{50%{transform:rotate(-6deg)}}
+@keyframes v5-hover{50%{transform:translateY(-3px)}}
+.v5 .flip-dots{display:flex;gap:6px;margin-top:auto}
+.v5 .face .eta+.flip-dots{margin-top:4px}
+.v5 .flip-dots i{width:18px;height:4px;border-radius:4px;background:var(--green)}
+.v5 .flip-dots i+i{background:var(--line)}
+.v5 .which.split{max-width:none;display:grid;grid-template-columns:1fr auto;text-align:left;align-items:center;gap:30px}
+.v5 .which.split .ctas{margin-top:0;justify-content:flex-end}
+@media (max-width:800px){.v5 .which.split{grid-template-columns:1fr;text-align:center}.v5 .which.split .ctas{justify-content:center}}
+
+/* ---------- Real warehouse map ---------- */
+.v5 .map{padding:12px}
+.v5 .map svg{display:block;width:100%;height:auto}
+.v5 .map .sea{fill:#e6f0fc}
+.v5 .map .land{stroke-width:1;stroke-linejoin:round}
+.v5 .map .other{fill:#f5f8fd;stroke:#d6e1f1}
+.v5 .map .cn{fill:#fff;stroke:#a9bfe2}
+.v5 .map .ph{fill:#e7f5de;stroke:#55a430}
+.v5 .map .country{font:800 15px var(--f-b);letter-spacing:4px;fill:#8aa0c4}
+.v5 .map .country.ph{fill:#3f8a1f}
+.v5 .map .pinlabel{font:800 12px var(--f-b);letter-spacing:.5px;fill:#0b1f45;paint-order:stroke;stroke:#fff;stroke-width:4px;stroke-linejoin:round}
+.v5 .map .pin{opacity:.55;transition:opacity .3s}
+.v5 .map .pin.on{opacity:1}
+@media (prefers-color-scheme:dark){.v5 .map .sea{fill:#0d2142}.v5 .map .other{fill:#12284d;stroke:#1f355f}.v5 .map .cn{fill:#1b3561;stroke:#3b5b93}.v5 .map .ph{fill:#173a22}.v5 .map .pinlabel{fill:#eaf0fb;stroke:#0c1a33}}
+
+/* ---------- Rates: "Starts at" and Full Container ---------- */
+.v5 .tier .from,.v5 .xread .from,.v5 .airc .from{font:800 .72rem/1 var(--f-b);letter-spacing:.12em;text-transform:uppercase;color:var(--green)}
+.v5 .tier .from{margin-top:2px;margin-bottom:-4px}
+.v5 .fcl{margin-top:20px;display:grid;grid-template-columns:auto 1fr auto;gap:24px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:28px;padding:24px 30px;box-shadow:var(--shadow-s)}
+.v5 .fcl .cont{width:96px;color:var(--brand-2)}
+.v5 .fcl p{color:var(--muted)}
+@media (max-width:700px){.v5 .fcl{grid-template-columns:1fr;text-align:center}.v5 .fcl .cont{margin-inline:auto}}
+.v5 .face>*{flex-shrink:0}
+.v5 .flip,.v5 .flip-in{min-height:330px}

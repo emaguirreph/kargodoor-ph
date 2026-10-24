@@ -1,5 +1,6 @@
 "use client";
 
+import { MAP_CHINA, MAP_H, MAP_OTHER, MAP_PH, MAP_POINTS, MAP_TAIWAN, MAP_W } from "@/components/v5/map-data";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
@@ -66,49 +67,55 @@ export function WhenVisible({ className, children }: { className: string; childr
   return <div ref={ref} className={`${className}${seen ? " go" : ""}`}>{children}</div>;
 }
 
-const warehouses: Array<[string, number, number]> = [
-  ["Guangzhou", 150, 150],
-  ["Yiwu", 228, 70],
-  ["Shishi", 250, 112],
-  ["Hong Kong", 168, 178],
-  ["Taiwan", 328, 150],
-];
+const warehouses = ["Guangzhou", "Yiwu", "Shishi", "Hong Kong", "Taiwan"] as const;
 
-/** Map of the China warehouses with a route to Malabon that cycles through each one. */
+/** Real map of southeast China, Taiwan and the Philippines, with a route from each China warehouse to Malabon. */
 export function WarehouseMap() {
   const [active, setActive] = useState(0);
   const [auto, setAuto] = useState(true);
 
   useEffect(() => {
     if (!auto || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const timer = window.setInterval(() => setActive((i) => (i + 1) % warehouses.length), 2600);
+    const timer = window.setInterval(() => setActive((i) => (i + 1) % warehouses.length), 3200);
     return () => window.clearInterval(timer);
   }, [auto]);
 
-  const [, x, y] = warehouses[active];
-  const route = `M${x} ${y} Q ${(x + 332) / 2 + 40} ${(y + 262) / 2 - 30} 332 262`;
+  const [x, y] = MAP_POINTS[warehouses[active]];
+  const [mx, my] = MAP_POINTS.Malabon;
+  const route = `M${x} ${y} Q ${mx - 70} ${(y + my) / 2 + 40} ${mx} ${my}`;
 
   return (
     <div className="wh">
       <div className="map rv">
-        <svg viewBox="0 0 420 340" role="img" aria-label="KargoDoor warehouses in Guangzhou, Yiwu, Shishi, Hong Kong, and Taiwan">
-          <path d="M20 30 Q120 0 230 30 Q300 60 300 120 Q290 170 230 200 Q170 222 110 196 Q50 170 30 110 Q16 70 20 30Z" fill="var(--surface-2)" stroke="var(--line)" strokeWidth="2" />
-          <path d="M318 146 q14 -10 22 6 q6 22 -6 36 q-14 6 -18 -14z" fill="var(--surface-2)" stroke="var(--line)" strokeWidth="2" />
-          <path d="M318 236 q24 -14 34 10 q10 30 -8 54 q-20 12 -28 -16 q-6 -26 2 -48z" fill="var(--green-soft)" stroke="var(--green)" strokeWidth="2" />
+        <svg viewBox={`0 0 ${MAP_W} ${MAP_H}`} role="img" aria-label="Map of KargoDoor warehouses in Guangzhou, Yiwu, Shishi, Hong Kong, and Taiwan, shipping to our Malabon Warehouse in the Philippines">
+          <rect width={MAP_W} height={MAP_H} rx="18" className="sea" />
+          <path d={MAP_OTHER} className="land other" />
+          <path d={MAP_CHINA} className="land cn" />
+          <path d={MAP_TAIWAN} className="land cn" />
+          <path d={MAP_PH} className="land ph" />
+          <text x="70" y="120" className="country">CHINA</text>
+          <text x="432" y="292" textAnchor="end" className="country ph">PHILIPPINES</text>
           <path className="mapline" d={route} stroke="var(--green)" strokeWidth="3" fill="none" />
-          {warehouses.map(([name, px, py]) => (
-            <g key={name}>
-              <circle cx={px} cy={py} r="8" fill="var(--green)" className="pulse-ring" />
-              <circle cx={px} cy={py} r="7" fill="var(--green)" stroke="#fff" strokeWidth="2" />
-            </g>
-          ))}
-          <circle cx="332" cy="262" r="10" fill="var(--brand)" />
-          <circle cx="332" cy="262" r="10" fill="var(--brand)" className="pulse-ring" />
-          <text x="332" y="326" textAnchor="middle" fontFamily="Plus Jakarta Sans,sans-serif" fontSize="13" fontWeight="800" fill="var(--fg)" letterSpacing="1">MALABON WAREHOUSE</text>
+          <circle r="6" fill="var(--brand)" key={active}>
+            <animateMotion dur="2.6s" repeatCount="indefinite" path={route} />
+          </circle>
+          {warehouses.map((name, i) => {
+            const [px, py] = MAP_POINTS[name];
+            return (
+              <g key={name} className={i === active ? "pin on" : "pin"}>
+                <circle cx={px} cy={py} r="8" fill="var(--green)" className="pulse-ring" />
+                <circle cx={px} cy={py} r="6.5" fill="var(--green)" stroke="#fff" strokeWidth="2" />
+              </g>
+            );
+          })}
+          <text x={x - 12} y={y - 12} textAnchor="end" className="pinlabel">{warehouses[active]}</text>
+          <circle cx={mx} cy={my} r="9" fill="var(--brand)" stroke="#fff" strokeWidth="2" />
+          <circle cx={mx} cy={my} r="9" fill="var(--brand)" className="pulse-ring" />
+          <text x={mx} y={my + 26} textAnchor="middle" className="pinlabel">MALABON WAREHOUSE</text>
         </svg>
       </div>
       <div className="whlist rv">
-        {warehouses.map(([name], i) => (
+        {warehouses.map((name, i) => (
           <button type="button" key={name} aria-pressed={i === active} onClick={() => { setActive(i); setAuto(false); }}>
             <i />{name}
           </button>
@@ -156,4 +163,43 @@ export function SupportDial() {
       <circle cx="60" cy="60" r="5" fill="var(--blue)" />
     </svg>
   );
+}
+
+/**
+ * Sets --p (0 to 1) on its element as the page scrolls, for scroll-linked progress lines.
+ * "page": progress over the first screen of scrolling. "view": progress of the element through the viewport.
+ */
+export function ScrollFill({ className, mode, children }: { className: string; mode: "page" | "view"; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const vh = window.innerHeight;
+      let p: number;
+      if (mode === "page") {
+        p = window.scrollY / (vh * 0.55);
+      } else {
+        const rect = el.getBoundingClientRect();
+        p = (vh * 0.6 - rect.top) / rect.height;
+      }
+      p = Math.min(1, Math.max(0, p));
+      el.style.setProperty("--p", p.toFixed(3));
+      el.dataset.step = String(p >= 0.98 ? 3 : p >= 0.48 ? 2 : 1);
+    };
+    const onScroll = () => { if (!frame) frame = requestAnimationFrame(update); };
+    update();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [mode]);
+
+  return <div ref={ref} className={className}>{children}</div>;
 }

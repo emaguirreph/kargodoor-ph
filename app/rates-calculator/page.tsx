@@ -362,6 +362,7 @@ export default function RatesCalculatorPage() {
               <div className="xread">
                 <div>
                   <div className="k">{size === "you" ? "CBM (CUBIC METER)" : pickedTier?.name.toUpperCase()}</div>
+                  {size !== "you" && pickedTier?.from && <div className="from">{pickedTier.from}</div>}
                   <div className="big">
                     {size === "you" ? `${yourCbm} CBM` : <>{pickedTier?.price}{pickedTier?.unit && <small>{pickedTier.unit}</small>}</>}
                   </div>
@@ -382,11 +383,23 @@ export default function RatesCalculatorPage() {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true" className="planef"><path d="M2 14l20-7-6 13-4-5-5 3 1-5z" /></svg>
             <div className="stack">
               <h2 style={{ fontSize: "clamp(1.5rem,3vw,2rem)" }}>Air Freight</h2>
+              <span className="from">Starts at</span>
               <span className="big">₱500</span>
               <p>Air Freight is charged at <b>₱500 per kilogram</b>.</p>
               <p>Charges are based on whichever is higher: <b>Actual Weight or Volumetric Weight</b>.</p>
               <span className="formula">Volumetric Weight (kg) = Length (cm) × Width (cm) × Height (cm) ÷ 6,000</span>
             </div>
+          </div>
+
+          <div className="fcl rv">
+            <svg viewBox="0 0 64 40" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" aria-hidden="true" className="cont"><rect x="3" y="5" width="58" height="30" rx="2" /><path d="M13 9v22M23 9v22M33 9v22M43 9v22M53 9v22" /></svg>
+            <div className="stack">
+              <h2 style={{ fontSize: "clamp(1.5rem,3vw,2rem)" }}>Full Container</h2>
+              <p>Please contact KargoDoor PH.</p>
+            </div>
+            <MessengerLink className="btn btn-green" target="_blank" rel="noopener noreferrer" analyticsEvent="generate_lead">
+              GET A QUOTE <span className="arr">→</span>
+            </MessengerLink>
           </div>
         </div>
       </section>

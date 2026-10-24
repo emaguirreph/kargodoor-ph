@@ -2,6 +2,7 @@ import { PageHero, SiteShell } from "@/components/v5/chrome";
 import { Scene, type SceneKind } from "@/components/v5/art";
 import { stepIcons } from "@/components/v5/icons";
 import { MessengerLink } from "@/components/messenger-link";
+import { ScrollFill } from "@/components/v5/widgets";
 import { pageMetadata } from "@/lib/seo";
 
 export const metadata = pageMetadata(
@@ -61,12 +62,27 @@ export default function HowItWorksPage() {
         </p>
       </PageHero>
 
-      <section className="band" style={{ paddingTop: 40 }} aria-labelledby="process-title">
+      <section className="band steps-top" aria-label="SOURCE · SHIP · RECEIVE">
         <div className="wrap">
-          <div className="tl">
+          <ScrollFill className="hsteps mini" mode="page">
+            <span className="bar" />
+            {processSteps.map((step) => (
+              <a className="hstep" href={`#step-${step.number}`} key={step.number}>
+                <div className="c">{stepIcons[step.title as keyof typeof stepIcons]}<b>{step.number}</b></div>
+                <h3>{step.title}</h3>
+                <p>{step.introduction}</p>
+              </a>
+            ))}
+          </ScrollFill>
+        </div>
+      </section>
+
+      <section className="band" style={{ paddingTop: 20 }} aria-labelledby="process-title">
+        <div className="wrap">
+          <ScrollFill className="tl" mode="view">
             <span className="fillv" />
             {processSteps.map((step) => (
-              <article className="trow rv" key={step.number}>
+              <article className="trow rv" id={`step-${step.number}`} key={step.number}>
                 <div className="num">{stepIcons[step.title as keyof typeof stepIcons]}<b>{step.number}</b></div>
                 <div className="tc">
                   <h2 className="h3">{step.title}</h2>
@@ -88,7 +104,7 @@ export default function HowItWorksPage() {
                 </div>
               </article>
             ))}
-          </div>
+          </ScrollFill>
         </div>
       </section>
 
