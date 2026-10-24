@@ -1,5 +1,6 @@
-import Link from "next/link";
-import { Footer, Header } from "@/components/site-chrome";
+import { PageHero, SiteShell } from "@/components/v5/chrome";
+import { Scene, type SceneKind } from "@/components/v5/art";
+import { stepIcons } from "@/components/v5/icons";
 import { MessengerLink } from "@/components/messenger-link";
 import { pageMetadata } from "@/lib/seo";
 
@@ -42,56 +43,66 @@ const processSteps = [
   },
 ];
 
+const art: Record<string, { kind: SceneKind; background?: string }> = {
+  SOURCE: { kind: "source" },
+  SHIP: { kind: "sea", background: "linear-gradient(#cfe3ff,#eaf3ff)" },
+  RECEIVE: { kind: "road", background: "linear-gradient(#dff3d2,#f3fbee)" },
+};
+
 export default function HowItWorksPage() {
   return (
-    <div className="kd-site-shell">
-      <Header />
+    <SiteShell>
+      <PageHero>
+        <span className="pill"><i />SOURCE · SHIP · RECEIVE</span>
+        <h1 id="process-title">HOW IT WORKS?</h1>
+        <p className="lead">Shipping from China to the Philippines doesn’t have to be complicated.</p>
+        <p className="lead hi">
+          With KargoDoor PH, it’s as simple as <strong>SOURCE · SHIP · RECEIVE</strong>
+        </p>
+      </PageHero>
 
-      <main>
-        <section className="kd-process" aria-labelledby="process-title">
-          <div className="kd-container kd-process-container">
-            <div className="kd-process-heading">
-              <h1 id="process-title">HOW IT WORKS?</h1>
-              <p>Shipping from China to the Philippines doesn’t have to be complicated.</p>
-              <p>
-                With KargoDoor PH, it’s as simple as <strong>SOURCE · SHIP · RECEIVE</strong>
-              </p>
-            </div>
-
-            <div className="kd-process-list">
-              {processSteps.map((step) => (
-                <article className="kd-process-card" key={step.number}>
-                  <header className="kd-process-card-title">
-                    <span>{step.number}</span>
-                    <span aria-hidden="true">—</span>
-                    <h2>{step.title}</h2>
-                  </header>
-                  <p className="kd-process-introduction">{step.introduction}</p>
+      <section className="band" style={{ paddingTop: 40 }} aria-labelledby="process-title">
+        <div className="wrap">
+          <div className="tl">
+            <span className="fillv" />
+            {processSteps.map((step) => (
+              <article className="trow rv" key={step.number}>
+                <div className="num">{stepIcons[step.title as keyof typeof stepIcons]}<b>{step.number}</b></div>
+                <div className="tc">
+                  <h2 className="h3">{step.title}</h2>
+                  <p className="intro">{step.introduction}</p>
                   <ul>
                     {step.points.map((point) => (
                       <li key={point}>{point}</li>
                     ))}
                   </ul>
-                </article>
-              ))}
-            </div>
+                  {step.title === "SHIP" && (
+                    <div className="label" aria-hidden="true">
+                      <div><small>SEA FREIGHT</small>KDOOR XXXX</div>
+                      <div><small>AIR FREIGHT</small>AIR KDOOR XXXX</div>
+                    </div>
+                  )}
+                </div>
+                <div className="art">
+                  <Scene kind={art[step.title].kind} className="fscene" style={{ width: "100%", maxWidth: 420, background: art[step.title].background }} />
+                </div>
+              </article>
+            ))}
           </div>
-        </section>
+        </div>
+      </section>
 
-        <section className="kd-ready" aria-labelledby="ready-title">
-          <div className="kd-container kd-ready-inner">
-            <div className="kd-ready-copy">
-              <h2 id="ready-title">READY TO SHIP?</h2>
-              <p>From China to the Philippines, we make cargo simple.</p>
-            </div>
-            <MessengerLink className="kd-button kd-button-green kd-ready-button" target="_blank" rel="noopener noreferrer" analyticsEvent="generate_lead">
-              GET A QUOTE
+      <section className="band" style={{ paddingTop: 0 }} aria-labelledby="ready-title">
+        <div className="wrap">
+          <div className="cta rv">
+            <h2 id="ready-title">READY TO SHIP?</h2>
+            <p>From China to the Philippines, we make cargo simple.</p>
+            <MessengerLink className="btn btn-green glow" target="_blank" rel="noopener noreferrer" analyticsEvent="generate_lead">
+              GET A QUOTE <span className="arr">→</span>
             </MessengerLink>
           </div>
-        </section>
-      </main>
-
-      <Footer />
-    </div>
+        </div>
+      </section>
+    </SiteShell>
   );
 }

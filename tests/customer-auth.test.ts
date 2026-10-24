@@ -301,7 +301,7 @@ test(
     );
 
     const header = readFileSync(
-      "components/site-chrome.tsx",
+      "components/v5/chrome.tsx",
       "utf8",
     );
 
@@ -341,16 +341,16 @@ test(
 
     assert.ok(
       header.indexOf(
-        'className="kd-header-login" href="/customer/login"',
+        'className="btn btn-outline" href="/customer/login">LOGIN</Link>',
       ) <
-        header.indexOf(
-          'className="kd-header-quote"',
+        header.lastIndexOf(
+          'GET A QUOTE',
         ),
     );
 
     assert.match(
       header,
-      /<Link href="\/customer\/login" onClick=\{\(\) => setMobileMenuOpen\(false\)\}>LOGIN<\/Link>/,
+      /<Link className="btn btn-outline" href="\/customer\/login" onClick=\{close\}>LOGIN<\/Link>/,
     );
   },
 );

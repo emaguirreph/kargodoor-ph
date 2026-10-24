@@ -9,7 +9,7 @@ import {
   useState,
 } from "react";
 import { useSearchParams } from "next/navigation";
-import { Footer, Header } from "@/components/site-chrome";
+import { PageHero, SiteShell } from "@/components/v5/chrome";
 
 type Shipment = {
   tracking_number: string;
@@ -112,27 +112,19 @@ function TrackContent() {
   const stageIndex = shipment?.freight_type === "Sea Freight"
     ? seaStageIndex(shipment.current_status)
     : -1;
-  const progress = stageIndex >= 0
-    ? `${(stageIndex / (seaStages.length - 1)) * 100}%`
-    : "0%";
 
   return (
     <>
-      <header className="kd-track-heading">
+      <PageHero>
         <h1>TRACK YOUR SHIPMENT</h1>
-
-        <p>
+        <p className="lead">
           Enter your KargoDoor tracking number to check your latest shipment
           status.
         </p>
-      </header>
-
-      <form className="kd-track-form" onSubmit={handleSubmit}>
-        <label htmlFor="tracking-number">
+        <label htmlFor="tracking-number" className="tlab">
           TRACKING NUMBER
         </label>
-
-        <div className="kd-track-input-row">
+        <form className="tsearch" onSubmit={handleSubmit}>
           <input
             id="tracking-number"
             type="text"
@@ -141,127 +133,114 @@ function TrackContent() {
             placeholder="Example: KDSEA-482731"
             autoComplete="off"
           />
-
-          <button type="submit" disabled={loading}>
+          <button className="btn btn-green" type="submit" disabled={loading}>
             {loading ? "TRACKING..." : "TRACK SHIPMENT"}
           </button>
-        </div>
-      </form>
+        </form>
+      </PageHero>
 
-      {error && (
-        <div className="kd-track-error" role="alert">
-          {error}
-        </div>
-      )}
-
-      {shipment && (
-        <article className="kd-track-result">
-          <div className="kd-track-result-header">
-            <span>TRACKING NUMBER</span>
-
-            <h2>{shipment.tracking_number}</h2>
-          </div>
-
-          {stageIndex >= 0 && (
-            <section
-              className="kd-track-progress"
-              aria-label={`Shipment progress: ${shipment.current_status}`}
-              style={{ "--kd-track-progress": progress } as CSSProperties}
-            >
-              <span>SHIPMENT PROGRESS</span>
-              <ol>
-                {seaStages.map((stage, index) => (
-                  <li
-                    className={index <= stageIndex ? "is-complete" : ""}
-                    key={stage}
-                  >
-                    <i aria-hidden="true" />
-                    <small>{stage}</small>
-                  </li>
-                ))}
-              </ol>
-            </section>
-          )}
-
-          <div className="kd-track-details">
-            <div>
-              <span>FREIGHT TYPE</span>
-              <strong>{shipment.freight_type}</strong>
-            </div>
-
-            <div>
-              <span>ORIGIN WAREHOUSE</span>
-              <strong>
-                {shipment.origin_warehouse || "—"}
-              </strong>
-            </div>
-
-            <div>
-              <span>CHINA WAREHOUSE RECEIVED</span>
-              <strong>
-                {shipment.warehouse_received_date || "—"}
-              </strong>
-            </div>
-
-            <div>
-              <span>STANDARD TRANSIT</span>
-              <strong>{shipment.standard_transit}</strong>
-            </div>
-          </div>
-
-          <div className="kd-track-remarks">
-            <div className="kd-track-current-status">
-              <span>CURRENT STATUS</span>
-              <strong>{shipment.current_status}</strong>
-            </div>
-
-            {shipment.status_message && (
-              <>
-              <span>STATUS UPDATE</span>
-              <p>{shipment.status_message}</p>
-              </>
-            )}
-          </div>
-
-          {shipment.remarks && (
-            <div className="kd-track-remarks">
-              <span>LATEST UPDATE</span>
-              <p>{shipment.remarks}</p>
+      <section className="band" style={{ paddingTop: 20 }}>
+        <div className="wrap lift">
+          {error && (
+            <div className="terr">
+              <div className="err" role="alert">{error}</div>
             </div>
           )}
 
-          <p className="kd-track-updated">
-            Last updated: {shipment.last_updated}
-          </p>
-        </article>
-      )}
+          {shipment && (
+            <article className="tcard">
+              <div className="thead">
+                <div>
+                  <div className="k">TRACKING NUMBER</div>
+                  <h2 className="code">{shipment.tracking_number}</h2>
+                </div>
+                <span className="status"><i />{shipment.current_status}</span>
+              </div>
+
+              {stageIndex >= 0 && (
+                <section aria-label={`Shipment progress: ${shipment.current_status}`}>
+                  <div className="k" style={{ marginTop: 26 }}>SHIPMENT PROGRESS</div>
+                  <div className="tmap" aria-hidden="true">
+                    <svg viewBox="0 0 1000 90" preserveAspectRatio="none">
+                      <path d="M40 60 Q500 0 960 60" stroke="var(--line)" strokeWidth="4" fill="none" strokeDasharray="10 10" />
+                      <path className="tdone" d="M40 60 Q500 0 960 60" stroke="var(--green)" strokeWidth="5" fill="none" pathLength={1} strokeDasharray="1" style={{ "--to": 1 - stageIndex / (seaStages.length - 1) } as CSSProperties} />
+                    </svg>
+                  </div>
+                  <ol className="tsteps">
+                    {seaStages.map((stage, index) => (
+                      <li
+                        className={`${index <= stageIndex ? "done" : ""} ${index === stageIndex ? "now" : ""}`}
+                        key={stage}
+                      >
+                        <i aria-hidden="true">{index < stageIndex ? "✓" : index + 1}</i>
+                        <span>{stage}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+              )}
+
+              <dl className="tdetails">
+                <div>
+                  <dt>FREIGHT TYPE</dt>
+                  <dd>{shipment.freight_type}</dd>
+                </div>
+                <div>
+                  <dt>ORIGIN WAREHOUSE</dt>
+                  <dd>{shipment.origin_warehouse || "—"}</dd>
+                </div>
+                <div>
+                  <dt>CHINA WAREHOUSE RECEIVED</dt>
+                  <dd>{shipment.warehouse_received_date || "—"}</dd>
+                </div>
+                <div>
+                  <dt>STANDARD TRANSIT</dt>
+                  <dd>{shipment.standard_transit}</dd>
+                </div>
+              </dl>
+
+              <div className="tnote">
+                <div className="k">CURRENT STATUS</div>
+                <strong>{shipment.current_status}</strong>
+                {shipment.status_message && (
+                  <>
+                    <div className="k">STATUS UPDATE</div>
+                    <p>{shipment.status_message}</p>
+                  </>
+                )}
+              </div>
+
+              {shipment.remarks && (
+                <div className="tnote">
+                  <div className="k">LATEST UPDATE</div>
+                  <p>{shipment.remarks}</p>
+                </div>
+              )}
+
+              <p className="tupdated">
+                Last updated: {shipment.last_updated}
+              </p>
+            </article>
+          )}
+        </div>
+      </section>
     </>
   );
 }
 
 export default function TrackPage() {
   return (
-    <div className="kd-site-shell">
-      <Header />
-
-      <main className="kd-track-page">
-        <section className="kd-track-section">
-          <div className="kd-container">
-            <Suspense
-              fallback={
-                <header className="kd-track-heading">
-                  <h1>TRACK YOUR SHIPMENT</h1>
-                  <p>Loading tracking...</p>
-                </header>
-              }
-            >
-              <TrackContent />
-            </Suspense>
-          </div>
-        </section>
-      </main>
-
-      <Footer />
-    </div>
+    <SiteShell>
+      <Suspense
+        fallback={
+          <PageHero>
+            <h1>TRACK YOUR SHIPMENT</h1>
+            <p className="lead">Loading tracking...</p>
+          </PageHero>
+        }
+      >
+        <TrackContent />
+      </Suspense>
+    </SiteShell>
   );
 }

@@ -1,6 +1,18 @@
 import type { Metadata } from "next";
 import Script from "next/script";
 import "./globals.css";
+import "@fontsource/poppins/latin-600.css";
+import "@fontsource/poppins/latin-700.css";
+import "@fontsource/poppins/latin-800.css";
+import "@fontsource/poppins/latin-700-italic.css";
+import "@fontsource/poppins/latin-800-italic.css";
+import "@fontsource/poppins/latin-900-italic.css";
+import "@fontsource/plus-jakarta-sans/latin-400.css";
+import "@fontsource/plus-jakarta-sans/latin-500.css";
+import "@fontsource/plus-jakarta-sans/latin-600.css";
+import "@fontsource/plus-jakarta-sans/latin-700.css";
+import "@fontsource/plus-jakarta-sans/latin-800.css";
+import "./v5.css";
 import { AnalyticsPageViews } from "@/components/analytics-pageviews";
 import { pageMetadata, siteUrl } from "@/lib/seo";
 

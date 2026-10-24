@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { Footer, Header } from "@/components/site-chrome";
-import { ShipmentTable, type CustomerShipment } from "@/app/customer/page";
+import { SiteShell } from "@/components/v5/chrome";
+import { CustomerDashboard, type CustomerShipment } from "@/app/customer/page";
 import { AdminError, authenticate, type AdminEnv } from "@/lib/admin/security";
 
 export const dynamic = "force-dynamic";
@@ -18,5 +18,21 @@ export default async function CustomerPreview({ searchParams }: { searchParams: 
   const shipments = result.results ?? [];
   const active = shipments.filter((shipment) => shipment.status !== "Delivered" && shipment.status !== "Cancelled");
   const history = shipments.filter((shipment) => shipment.status === "Delivered" || shipment.status === "Cancelled");
-  return <div className="kd-site-shell"><Header/><main className="kd-customer-page"><section className="kd-customer-card"><p className="kd-customer-error"><strong>Admin preview only.</strong> This matches the customer dashboard. Customer actions are disabled.</p><a href={`/admin/customers?id=${encodeURIComponent(customer.id)}`}>← Back to customer</a></section><section className="kd-customer-card kd-customer-dashboard"><div className="kd-customer-dashboard-heading"><h1>MY KargoDoorPH</h1><p>Welcome, {customer.full_name}</p><p className="kd-customer-account-code">Account / Cargo Code: <strong>{customer.customer_code}</strong></p></div><section className="kd-customer-dashboard-section"><h2>My Shipments</h2><ShipmentTable shipments={active} emptyMessage="You have no active shipments." customer={customer}/></section><section className="kd-customer-dashboard-section"><h2>Shipment History</h2><ShipmentTable shipments={history} emptyMessage="No shipment history yet." customer={customer}/></section><div className="kd-customer-dashboard-actions"><span>CONTACT KARGODOOR</span><button type="button" disabled>CHANGE PASSWORD</button><button type="button" disabled>LOG OUT</button></div></section></main><Footer/></div>;
+  return (
+    <SiteShell>
+      <CustomerDashboard
+        customer={customer}
+        activeShipments={active}
+        shipmentHistory={history}
+        notice={<p className="err"><strong>Admin preview only.</strong> This matches the customer dashboard. Customer actions are disabled. <a href={`/admin/customers?id=${encodeURIComponent(customer.id)}`}>← Back to customer</a></p>}
+        actions={
+          <>
+            <span className="btn btn-green">CONTACT KARGODOOR</span>
+            <button className="btn btn-line" type="button" disabled>CHANGE PASSWORD</button>
+            <button className="btn btn-line" type="button" disabled>LOG OUT</button>
+          </>
+        }
+      />
+    </SiteShell>
+  );
 }
