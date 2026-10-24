@@ -99,7 +99,8 @@ export function Footer() {
               <Link key={item.href} href={item.href}>{item.label}</Link>
             ))}
             <Link href="/insights">INSIGHTS</Link>
-            <Link href="/admin" prefetch={false}>ADMIN</Link>
+            {/* Plain link: /admin sits behind Cloudflare Access, so it needs a full page load, not client-side navigation. */}
+            <a href="https://kargodoorph.com/admin">ADMIN</a>
           </nav>
           <div>
             <h2 className="fh">FOLLOW US</h2>
