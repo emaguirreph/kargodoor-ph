@@ -202,3 +202,36 @@ export function ScrollFill({ className, mode, children }: { className: string; m
 
   return <div ref={ref} className={className}>{children}</div>;
 }
+
+/**
+ * Home hero China to Philippines route. The ship and plane are moved along their
+ * paths with script, because SVG animateMotion did not run in every browser and
+ * left both icons stuck at the top left corner.
+ */
+export function HeroRoute({ html }: { html: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const root = ref.current;
+    if (!root || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const movers = Array.from(root.querySelectorAll<SVGGElement>(".mover")).flatMap((el) => {
+      const path = root.querySelector<SVGPathElement>(`#${el.dataset.path}`);
+      return path ? [{ el, path, length: path.getTotalLength(), dur: Number(el.dataset.dur) || 4000 }] : [];
+    });
+    let frame = 0;
+    const tick = (time: number) => {
+      for (const { el, path, length, dur } of movers) {
+        const at = ((time % dur) / dur) * length;
+        const p = path.getPointAtLength(at);
+        const q = path.getPointAtLength(Math.min(at + 1, length));
+        const angle = (Math.atan2(q.y - p.y, q.x - p.x) * 180) / Math.PI;
+        el.setAttribute("transform", `translate(${p.x},${p.y}) rotate(${angle})`);
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  return <div ref={ref} className="wrap h2-route" dangerouslySetInnerHTML={{ __html: html }} />;
+}

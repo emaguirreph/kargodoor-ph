@@ -42,8 +42,8 @@ export const HERO_ROUTE = `<svg viewBox="0 0 1200 170" overflow="visible" aria-h
         <rect class="lb" x="15" y="80" width="150" height="40" rx="20" fill="#fff" stroke="#dce5f2"/><text class="tc" x="90" y="108" fill="#3f8a1f">CHINA</text>
         <rect class="lb" x="1005" y="70" width="210" height="40" rx="20" fill="#fff" stroke="#dce5f2"/><text class="tp" x="1110" y="98" fill="#003b9d">PHILIPPINES</text>
       </g>
-      <g><g transform="translate(-22,-26)"><path d="M4 18h40l-6 10H10z" fill="#003b9d"/><rect x="12" y="8" width="10" height="10" fill="#55a430"/><rect x="23" y="4" width="10" height="14" fill="#d39a55"/><rect x="34" y="10" width="6" height="8" fill="#1356c9"/></g><animateMotion dur="5s" repeatCount="indefinite" rotate="auto"><mpath href="#seaP"/></animateMotion></g>
-      <g><g transform="translate(-18,-12)"><path d="M0 12 L30 8 L40 12 L30 16Z" fill="#1356c9"/><path d="M14 11 L22 0 L26 0 L22 11Z M14 13 L22 24 L26 24 L22 13Z" fill="#7fa6e6"/></g><animateMotion dur="3s" repeatCount="indefinite" rotate="auto"><mpath href="#airP"/></animateMotion></g>
+      <g class="mover" data-path="seaP" data-dur="5000" transform="translate(90,140)"><g transform="translate(-22,-26)"><path d="M4 18h40l-6 10H10z" fill="#003b9d"/><rect x="12" y="8" width="10" height="10" fill="#55a430"/><rect x="23" y="4" width="10" height="14" fill="#d39a55"/><rect x="34" y="10" width="6" height="8" fill="#1356c9"/></g></g>
+      <g class="mover" data-path="airP" data-dur="3000" transform="translate(90,140)"><g transform="translate(-18,-12)"><path d="M0 12 L30 8 L40 12 L30 16Z" fill="#1356c9"/><path d="M14 11 L22 0 L26 0 L22 11Z M14 13 L22 24 L26 24 L22 13Z" fill="#7fa6e6"/></g></g>
       </svg>`;
 
 
