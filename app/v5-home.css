@@ -236,3 +236,27 @@ html:has(.v5){font-size:17px}
 .v5 .hero2 .tri .zh b:first-of-type{grid-column:2}
 @media (min-width:1000px){.v5 .hero2 .hero-in>.lead{max-width:none;white-space:nowrap;font-size:clamp(.98rem,1.25vw,1.12rem)}}
 .v5 .hero2 .tri .zh s{font-family:var(--f-b);font-weight:800}
+
+/* ---------- Round 4 (after launch) ---------- */
+/* Tighter, more connected sections */
+.v5 section.band{padding-block:clamp(40px,5vw,72px)}
+.v5 .head{margin-bottom:clamp(24px,3vw,36px);gap:12px}
+.v5 .band.steps-top{padding-top:clamp(28px,3.5vw,48px)}
+/* Hero subtitle: keep one line but clear of the truck */
+@media (min-width:1000px){.v5 .hero2 .hero-in>.lead{font-size:clamp(.95rem,1.08vw,1.06rem)}}
+
+/* Services: all-in shipping card under the map */
+.v5 .allin-card{margin-top:clamp(28px,3.5vw,44px);background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow-s);padding:clamp(22px,3vw,36px);text-align:center}
+.v5 .allin-card h2{font-size:clamp(1.3rem,2.2vw,1.8rem);color:var(--blue)}
+.v5 .allin-sub{margin:6px 0 0;color:var(--muted);font-weight:700}
+.v5 .allin-grid{list-style:none;margin:clamp(20px,2.5vw,30px) 0 0;padding:0;display:grid;grid-template-columns:repeat(6,minmax(0,1fr))}
+.v5 .allin-grid li{display:flex;flex-direction:column;align-items:center;gap:8px;padding:6px 14px;min-width:0}
+.v5 .allin-grid li+li{border-left:1px solid var(--line)}
+.v5 .allin-ico{width:56px;height:56px;border-radius:50%;display:grid;place-items:center;background:var(--surface-2);color:var(--blue);transition:transform .3s,background .3s,color .3s}
+.v5 .allin-ico svg{width:28px;height:28px}
+.v5 .allin-grid li:hover .allin-ico{transform:translateY(-3px);background:var(--blue);color:#fff}
+.v5 .allin-grid h3{margin:4px 0 0;font:800 .82rem/1.25 var(--f-b);letter-spacing:.04em;text-transform:uppercase;color:var(--blue)}
+.v5 .allin-grid p{margin:0;font-size:.86rem;line-height:1.5;color:var(--muted)}
+.v5 .allin-foot{margin:clamp(18px,2.4vw,26px) 0 0;font-weight:800;color:var(--green)}
+@media (max-width:1000px){.v5 .allin-grid{grid-template-columns:repeat(3,minmax(0,1fr));row-gap:22px}.v5 .allin-grid li:nth-child(3n+1){border-left:0}}
+@media (max-width:560px){.v5 .allin-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.v5 .allin-grid li{border-left:0!important;padding:4px 6px}}

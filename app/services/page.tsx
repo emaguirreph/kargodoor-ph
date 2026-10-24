@@ -53,13 +53,17 @@ const serviceIcons = {
   road: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M2 6h11v10H2zM13 9h4l4 4v3h-8z" /><circle cx="6" cy="18" r="2" /><circle cx="17" cy="18" r="2" /></svg>,
 };
 
+const svg = (d: string) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
+);
+
 const inclusions = [
-  "International shipping",
-  "Customs clearance",
-  "Taxes and duties",
-  "Processing and handling",
-  "Warehouse receiving",
-  "Shipment coordination",
+  { title: "International Shipping", body: "Transport from our assigned warehouse to the Philippines.", icon: svg("M3 17l2 4h14l2-4H3zM6 17V9h12v8M12 9V4M9 12h2M13 12h2") },
+  { title: "Customs Clearance", body: "We handle the customs clearance process for your shipment.", icon: svg("M9 4h6v3H9zM7 5H5v16h14V5h-2M8.5 12l2 2 4-4M8.5 17h7") },
+  { title: "Taxes & Duties", body: "Applicable import taxes and duties are included in the shipping rate.", icon: svg("M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h7") },
+  { title: "Processing & Handling", body: "Shipment processing and handling throughout the shipping process.", icon: svg("M12 3l8 4.5v9L12 21l-8-4.5v-9zM4 7.5l8 4.5 8-4.5M12 12v9") },
+  { title: "Warehouse Receiving", body: "We receive and identify your packages using your unique KargoDoor Cargo Code.", icon: svg("M3 10l9-6 9 6v11H3zM7 21v-7h10v7M7 17h10") },
+  { title: "Shipment Coordination", body: "Our team helps coordinate your shipment from warehouse receiving through arrival in the Philippines.", icon: svg("M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0") },
 ];
 
 export default function ServicesPage() {
@@ -117,12 +121,20 @@ export default function ServicesPage() {
       <section className="band tint" aria-label="Warehouses and all-in shipping inclusions">
         <div className="wrap">
           <WarehouseMap />
-          <ul
-            className="allin rv-g"
-            aria-label="All-in shipping includes international shipping, customs clearance, taxes and duties, processing and handling, warehouse receiving, and shipment coordination"
-          >
-            {inclusions.map((item) => <li key={item}>{item}</li>)}
-          </ul>
+          <div className="allin-card rv">
+            <h2 id="allin-title">ALL-IN SHIPPING / WHAT’S INCLUDED</h2>
+            <p className="allin-sub">One simple rate. We handle the complicated parts.</p>
+            <ul className="allin-grid rv-g" aria-labelledby="allin-title">
+              {inclusions.map((item) => (
+                <li key={item.title}>
+                  <span className="allin-ico">{item.icon}</span>
+                  <h3>{item.title}</h3>
+                  <p>{item.body}</p>
+                </li>
+              ))}
+            </ul>
+            <p className="allin-foot">One all-in shipping rate. No surprise customs or processing fees.</p>
+          </div>
         </div>
       </section>
 
