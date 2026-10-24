@@ -38,10 +38,7 @@ export function Header() {
     <header className={`site-hdr${scrolled ? " scrolled" : ""}`}>
       <div className="wrap nav">
         <Link className="logo" href="/" aria-label="KargoDoor PH home">
-          <picture>
-            <source srcSet="/assets/kargodoor-logo-tagline-dark.png" media="(prefers-color-scheme: dark)" />
-            <img src="/assets/kargodoor-logo-tagline-transparent.png" alt="KargoDoor PH — China to PH, made SIMPLE" width="800" height="256" />
-          </picture>
+          <img src="/assets/kargodoor-logo-tagline-transparent.png" alt="KargoDoor PH — China to PH, made SIMPLE" width="812" height="268" />
         </Link>
 
         <nav className={`links${open ? " open" : ""}`} id="kd-navigation" aria-label="Primary navigation">
