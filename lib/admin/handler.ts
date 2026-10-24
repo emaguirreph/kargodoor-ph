@@ -200,7 +200,7 @@ export async function handleAdmin(
         i.delivery_charge AS invoice_delivery_charge,i.status AS invoice_status,i.total AS invoice_total,i.other_charge AS invoice_other_charge,
         COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.invoice_id=i.id AND p.customer_id=s.customer_id),0) AS payments_total
         FROM shipments s LEFT JOIN invoices i ON i.shipment_id=s.id AND i.customer_id=s.customer_id AND i.status!='Void'
-        WHERE s.customer_id=? ORDER BY s.created_at DESC`).bind(customerId).all<RecordData>()).results;
+        WHERE s.customer_id=? AND s.archived_at IS NULL ORDER BY s.created_at DESC`).bind(customerId).all<RecordData>()).results;
       const row = (shipment: RecordData) => {
         const invoiceDue = Number(shipment.invoice_total ?? 0) + Number(shipment.invoice_other_charge ?? 0);
         const paid = shipment.invoice_status === "Paid" && Number(shipment.payments_total ?? 0) >= invoiceDue;
