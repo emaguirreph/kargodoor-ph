@@ -1,7 +1,9 @@
+import type { CSSProperties, ReactNode } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { Footer, Header } from "@/components/site-chrome";
+import { SiteShell } from "@/components/v5/chrome";
+import { CopyCode } from "@/components/v5/copy-code";
 import { MessengerLink } from "@/components/messenger-link";
 import { shipmentShippingInstructions, warehouseAddress } from "@/lib/admin/shipping-instructions";
 import {
@@ -68,7 +70,18 @@ function deliveryCharge(shipment: CustomerShipment) {
   return shipment.shipment_delivery_charge;
 }
 
-function ShipmentRow({
+const stages = [
+  "Awaiting Supplier Dispatch",
+  "China Warehouse",
+  "China Port",
+  "Sea Transit",
+  "Manila Port",
+  "Gatepass",
+  "Malabon Warehouse",
+  "Delivered",
+];
+
+function ShipmentCard({
   shipment,
   customer,
 }: {
@@ -102,6 +115,13 @@ function ShipmentRow({
           })} kg`
         : "—";
 
+  const declaredCbm = shipment.cbm > 0
+    ? `${shipment.cbm.toLocaleString("en-PH", { maximumFractionDigits: 3 })} CBM`
+    : "—";
+  const declaredWeight = shipment.weight_kg > 0
+    ? `${shipment.weight_kg.toLocaleString("en-PH", { maximumFractionDigits: 2 })} kg`
+    : "—";
+
   const instructions = shipmentShippingInstructions({
     name: customer.full_name,
     customerCode: customer.customer_code,
@@ -110,89 +130,89 @@ function ShipmentRow({
   });
   const chinaReceivedDate = shipment.warehouse_received_date || "Pending warehouse receipt";
   const phWarehouseReceivedDate = shipment.actual_arrival || "—";
+  const payment = paymentLabel(shipment);
+  const stage = stages.indexOf(shipment.status);
 
   return (
-    <>
-      <tr>
-        <td>
-          <a
-            className="kd-customer-track"
-            href={`/track?tracking=${encodeURIComponent(
-              shipment.tracking_number,
-            )}`}
-          >
-            <strong>{shipment.tracking_number}</strong>
+    <article className="ship">
+      <div className="st">
+        <div>
+          <a className="tn" href={`/track?tracking=${encodeURIComponent(shipment.tracking_number)}`}>
+            {shipment.tracking_number}
           </a>
-        </td>
+          <div className="item">{shipment.item || "—"}</div>
+        </div>
+        <span className={`pay ${payment === "PAID" ? "paid" : "unpaid"}`}>{payment}</span>
+      </div>
 
-        <td>{shipment.item || "—"}</td>
+      <div className="stbar">
+        <div className="row">
+          <span>{shipment.status}</span>
+          {stage >= 0 && <span>{stage + 1} / {stages.length}</span>}
+        </div>
+        {stage >= 0 && (
+          <div className="prog" aria-hidden="true">
+            <i style={{ "--w": `${Math.round((stage / (stages.length - 1)) * 100)}%` } as CSSProperties} />
+          </div>
+        )}
+      </div>
 
-        <td>{shipment.status}</td>
+      <dl className="sdl">
+        <div><dt>Service</dt><dd>{shipment.service_type}</dd></div>
+        <div><dt>CN Warehouse</dt><dd>{shipment.china_warehouse || "—"}</dd></div>
+        <div><dt>Declared CBM</dt><dd>{declaredCbm}</dd></div>
+        <div><dt>Declared Weight</dt><dd>{declaredWeight}</dd></div>
+        <div>
+          <dt>CBM / Weight</dt>
+          <dd>
+            {measurement}
+            {hasVerifiedMeasurements ? <small>Warehouse verified</small> : null}
+          </dd>
+        </div>
+        <div><dt>Freight</dt><dd>{formatMoney(shipment.shipping_charge)}</dd></div>
+        <div><dt>Delivery</dt><dd>{formatMoney(deliveryCharge(shipment))}</dd></div>
+      </dl>
 
-        <td>{shipment.service_type}</td>
-
-        <td>
-          {measurement}
-          {hasVerifiedMeasurements ? (
-            <small className="kd-customer-verified-measurement">
-              Warehouse verified
-            </small>
-          ) : null}
-        </td>
-
-        <td>{formatMoney(shipment.shipping_charge)}</td>
-
-        <td>{formatMoney(deliveryCharge(shipment))}</td>
-
-        <td>
-          <strong>{paymentLabel(shipment)}</strong>
-        </td>
-
-      </tr>
-      <tr className="kd-customer-instruction-row">
-        <td colSpan={8}>
-          <details className="kd-customer-instructions">
-            <summary>Shipping instructions for this package</summary>
-            <p className="kd-customer-code-note">
-              <strong>Account / Cargo Code: {customer.customer_code}</strong> — use this on every supplier label so KargoDoor can identify your cargo. <strong>Tracking Number: {shipment.tracking_number}</strong> — this is the unique KargoDoor reference for this specific package and is different from your account/cargo code.
-            </p>
-            <dl className="kd-customer-shipment-dates">
-              <div>
-                <dt>China received date</dt>
-                <dd>{chinaReceivedDate}</dd>
-              </div>
-              <div>
-                <dt>PH warehouse received date</dt>
-                <dd>{phWarehouseReceivedDate}</dd>
-              </div>
-            </dl>
-            <pre>{instructions}</pre>
-          </details>
-          {paymentLabel(shipment) !== "PAID" ? (
-            <details className="kd-customer-payment-instructions">
-              <summary>Payment instructions</summary>
-              <div className="kd-customer-payment-grid">
-                <section>
-                  <h3>Bank Account Information</h3>
-                  <dl>
-                    <div><dt>Bank</dt><dd>UnionBank of the Philippines</dd></div>
-                    <div><dt>Account Name</dt><dd>KargoDoor Cargo Forwarding</dd></div>
-                    <div><dt>Account Number</dt><dd>002170017106</dd></div>
-                  </dl>
-                </section>
-                <section>
-                  <h3>GCash</h3>
-                  <dl>
-                    <div><dt>GCash Number</dt><dd>0917 157 7370</dd></div>
-                    <div><dt>Account Name</dt><dd>EMMARUTH GALLARDO</dd></div>
-                  </dl>
-                </section>
-              </div>
-            </details>
-          ) : null}
-        </td>
-      </tr>
-    </>
+      <details>
+        <summary>Shipping instructions for this package</summary>
+        <p className="cnote">
+          <strong>Account / Cargo Code: {customer.customer_code}</strong> — use this on every supplier label so KargoDoor can identify your cargo. <strong>Tracking Number: {shipment.tracking_number}</strong> — this is the unique KargoDoor reference for this specific package and is different from your account/cargo code.
+        </p>
+        <dl className="dates">
+          <div>
+            <dt>China received date</dt>
+            <dd>{chinaReceivedDate}</dd>
+          </div>
+          <div>
+            <dt>PH warehouse received date</dt>
+            <dd>{phWarehouseReceivedDate}</dd>
+          </div>
+        </dl>
+        <pre>{instructions}</pre>
+      </details>
+      {payment !== "PAID" ? (
+        <details>
+          <summary>Payment instructions</summary>
+          <div className="paygrid">
+            <section>
+              <h3>Bank Account Information</h3>
+              <dl>
+                <div><dt>Bank</dt><dd>UnionBank of the Philippines</dd></div>
+                <div><dt>Account Name</dt><dd>KargoDoor Cargo Forwarding</dd></div>
+                <div><dt>Account Number</dt><dd>002170017106</dd></div>
+              </dl>
+            </section>
+            <section>
+              <h3>GCash</h3>
+              <dl>
+                <div><dt>GCash Number</dt><dd>0917 157 7370</dd></div>
+                <div><dt>Account Name</dt><dd>EMMARUTH GALLARDO</dd></div>
+              </dl>
+            </section>
+          </div>
+        </details>
+      ) : null}
+    </article>
   );
 }
 
@@ -207,39 +227,77 @@ export function ShipmentTable({
 }) {
   if (shipments.length === 0) {
     return (
-      <p className="kd-customer-empty">
+      <p className="dempty">
         {emptyMessage}
       </p>
     );
   }
 
   return (
-    <div className="kd-customer-table-wrap">
-      <table className="kd-customer-table">
-        <thead>
-          <tr>
-            <th>Tracking No.</th>
-            <th>Item</th>
-            <th>Status</th>
-            <th>Service</th>
-            <th>CBM / Weight</th>
-            <th>Freight</th>
-            <th>Delivery</th>
-            <th>Payment</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {shipments.map((shipment) => (
-            <ShipmentRow
-              key={shipment.id}
-              shipment={shipment}
-              customer={customer}
-            />
-          ))}
-        </tbody>
-      </table>
+    <div className="ships">
+      {shipments.map((shipment) => (
+        <ShipmentCard
+          key={shipment.id}
+          shipment={shipment}
+          customer={customer}
+        />
+      ))}
     </div>
+  );
+}
+
+/** The dashboard header and both shipment lists, shared with the admin customer preview. */
+export function CustomerDashboard({
+  customer,
+  activeShipments,
+  shipmentHistory,
+  actions,
+  notice,
+}: {
+  customer: { full_name: string; customer_code: string };
+  activeShipments: CustomerShipment[];
+  shipmentHistory: CustomerShipment[];
+  actions: ReactNode;
+  notice?: ReactNode;
+}) {
+  return (
+    <>
+      <div className="dhead">
+        <div className="grid-bg" />
+        <div className="wrap">
+          <div>
+            <h1>MY KargoDoorPH</h1>
+            <p className="welcome">Welcome, {customer.full_name}</p>
+            <p className="code-chip">
+              Account / Cargo Code: <strong>{customer.customer_code}</strong>
+              <CopyCode code={customer.customer_code} />
+            </p>
+          </div>
+          <div className="dacts">{actions}</div>
+        </div>
+      </div>
+
+      <div className="wrap dbody">
+        {notice}
+        <section className="dsec">
+          <h2>My Shipments <span className="cnt">{activeShipments.length}</span></h2>
+          <ShipmentTable
+            shipments={activeShipments}
+            emptyMessage="You have no active shipments."
+            customer={customer}
+          />
+        </section>
+
+        <section className="dsec">
+          <h2>Shipment History <span className="cnt">{shipmentHistory.length}</span></h2>
+          <ShipmentTable
+            shipments={shipmentHistory}
+            emptyMessage="No shipment history yet."
+            customer={customer}
+          />
+        </section>
+      </div>
+    </>
   );
 }
 
@@ -331,61 +389,27 @@ export default async function CustomerPage() {
   );
 
   return (
-    <div className="kd-site-shell">
-      <Header />
-
-      <main className="kd-customer-page">
-        <section className="kd-customer-card kd-customer-dashboard">
-          <div className="kd-customer-dashboard-heading">
-            <h1>MY KargoDoorPH</h1>
-            <p>Welcome, {customer.full_name}</p>
-            <p className="kd-customer-account-code">
-              Account / Cargo Code: <strong>{customer.customer_code}</strong>
-            </p>
-          </div>
-
-          <section className="kd-customer-dashboard-section">
-            <h2>My Shipments</h2>
-
-            <ShipmentTable
-              shipments={activeShipments}
-              emptyMessage="You have no active shipments."
-              customer={customer}
-            />
-          </section>
-
-          <section className="kd-customer-dashboard-section">
-            <h2>Shipment History</h2>
-
-            <ShipmentTable
-              shipments={shipmentHistory}
-              emptyMessage="No shipment history yet."
-              customer={customer}
-            />
-          </section>
-
-          <div className="kd-customer-dashboard-actions">
-            <MessengerLink
-              target="_blank"
-              rel="noopener noreferrer"
-            >
+    <SiteShell>
+      <CustomerDashboard
+        customer={customer}
+        activeShipments={activeShipments}
+        shipmentHistory={shipmentHistory}
+        actions={
+          <>
+            <MessengerLink className="btn btn-green" target="_blank" rel="noopener noreferrer">
               CONTACT KARGODOOR
             </MessengerLink>
-
-            <a href="/customer/change-password">
+            <a className="btn btn-line" href="/customer/change-password">
               CHANGE PASSWORD
             </a>
-
             <form action="/customer/logout" method="post">
-              <button type="submit">
+              <button className="btn btn-line" type="submit">
                 LOG OUT
               </button>
             </form>
-          </div>
-        </section>
-      </main>
-
-      <Footer />
-    </div>
+          </>
+        }
+      />
+    </SiteShell>
   );
 }

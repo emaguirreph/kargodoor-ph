@@ -1,5 +1,8 @@
 import Link from "next/link";
-import { Footer, Header } from "@/components/site-chrome";
+import { PageHero, SiteShell } from "@/components/v5/chrome";
+import { Scene } from "@/components/v5/art";
+import { WarehouseMap, WhenVisible } from "@/components/v5/widgets";
+import { stepIcons } from "@/components/v5/icons";
 import { MessengerLink } from "@/components/messenger-link";
 import { pageMetadata } from "@/lib/seo";
 
@@ -24,7 +27,7 @@ const benefits = [
   },
 ];
 
-const steps = [
+const steps: Array<{ number: string; title: keyof typeof stepIcons; body: string }> = [
   {
     number: "01",
     title: "SOURCE",
@@ -42,158 +45,125 @@ const steps = [
   },
 ];
 
+const benefitScenes = ["sea", "air", "road"] as const;
+
 export default function ShippingFromChinaToPhilippinesPage() {
   return (
-    <div className="kd-site-shell">
-      <Header />
+    <SiteShell>
+      <PageHero>
+        <span className="pill"><i />SOURCE · SHIP · RECEIVE</span>
+        <h1 id="china-ph-title">Shipping from China to the Philippines</h1>
+        <p className="lead hi">
+          KargoDoor PH helps businesses and individuals ship cargo from
+          China to the Philippines by sea or air with a simple,
+          coordinated process.
+        </p>
+        <p className="lead">
+          Source from your preferred supplier, send your goods to the
+          assigned KargoDoor warehouse, and let our team coordinate the
+          international shipping, customs clearance, processing, and cargo
+          handling.
+        </p>
+        <div className="ctas">
+          <MessengerLink className="btn btn-green glow" target="_blank" rel="noopener noreferrer" analyticsEvent="generate_lead">
+            GET A QUOTE <span className="arr">→</span>
+          </MessengerLink>
+          <Link className="btn btn-line" href="/rates-calculator">CALCULATOR</Link>
+        </div>
+      </PageHero>
 
-      <main>
-        <section className="kd-section" aria-labelledby="china-ph-title">
-          <div className="kd-container">
-            <h1 id="china-ph-title">Shipping from China to the Philippines</h1>
-
-            <p className="kd-section-lead">
-              KargoDoor PH helps businesses and individuals ship cargo from
-              China to the Philippines by sea or air with a simple,
-              coordinated process.
-            </p>
-
-            <p>
-              Source from your preferred supplier, send your goods to the
-              assigned KargoDoor warehouse, and let our team coordinate the
-              international shipping, customs clearance, processing, and cargo
-              handling.
-            </p>
-
-            <div className="kd-hero-actions">
-              <MessengerLink
-                className="kd-button kd-button-green"
-                target="_blank"
-                rel="noopener noreferrer"
-                analyticsEvent="generate_lead"
-              >
-                GET A QUOTE
-              </MessengerLink>
-
-              <Link
-                className="kd-button kd-button-white"
-                href="/rates-calculator"
-              >
-                CALCULATOR
-              </Link>
-            </div>
-          </div>
-        </section>
-
-        <section className="kd-section" aria-labelledby="shipping-options-title">
-          <div className="kd-container">
-            <h2 id="shipping-options-title">
-              China to Philippines Shipping Options
-            </h2>
-
-            <p className="kd-section-lead">
+      <section className="band" style={{ paddingTop: 40 }} aria-labelledby="shipping-options-title">
+        <div className="wrap">
+          <div className="head rv">
+            <h2 id="shipping-options-title">China to Philippines Shipping Options</h2>
+            <p className="lead">
               Choose the shipping method that best fits your cargo, budget, and
               timeline.
             </p>
-
-            <div className="kd-why-grid">
-              {benefits.map((benefit) => (
-                <article className="kd-info-card" key={benefit.title}>
-                  <h3>{benefit.title}</h3>
-                  <p>{benefit.body}</p>
-                </article>
-              ))}
-            </div>
           </div>
-        </section>
-
-        <section className="kd-section" aria-labelledby="process-title">
-          <div className="kd-container">
-            <h2 id="process-title">
-              How Shipping from China to the Philippines Works
-            </h2>
-
-            <p className="kd-section-lead">
-              KargoDoor keeps the process simple: SOURCE · SHIP · RECEIVE.
-            </p>
-
-            <div className="kd-steps-grid">
-              {steps.map((step) => (
-                <article className="kd-step-card" key={step.number}>
-                  <span>{step.number}</span>
-                  <h3>{step.title}</h3>
-                  <p>{step.body}</p>
-                </article>
-              ))}
-            </div>
-
-            <Link className="kd-text-link" href="/how-it-works">
-              VIEW THE FULL SHIPPING PROCESS →
-            </Link>
+          <div className="grid g3 rv-g">
+            {benefits.map((benefit, i) => (
+              <article className="card svc" key={benefit.title}>
+                <Scene kind={benefitScenes[i]} className={`scene ${benefitScenes[i]}`} />
+                <div className="txt"><h3>{benefit.title}</h3><p>{benefit.body}</p></div>
+              </article>
+            ))}
           </div>
-        </section>
+        </div>
+      </section>
 
-        <section className="kd-section" aria-labelledby="warehouse-title">
-          <div className="kd-container">
+      <section className="band tint" aria-labelledby="process-title">
+        <div className="wrap">
+          <div className="head rv">
+            <h2 id="process-title">How Shipping from China to the Philippines Works</h2>
+            <p className="lead">KargoDoor keeps the process simple: SOURCE · SHIP · RECEIVE.</p>
+          </div>
+          <WhenVisible className="hsteps">
+            <span className="bar" />
+            {steps.map((step) => (
+              <article className="hstep" key={step.number}>
+                <div className="c">{stepIcons[step.title]}<b>{step.number}</b></div>
+                <h3>{step.title}</h3>
+                <p>{step.body}</p>
+              </article>
+            ))}
+          </WhenVisible>
+          <p className="center" style={{ marginTop: 44 }}>
+            <Link className="btn btn-blue" href="/how-it-works">VIEW THE FULL SHIPPING PROCESS <span className="arr">→</span></Link>
+          </p>
+        </div>
+      </section>
+
+      <section className="band" aria-labelledby="warehouse-title">
+        <div className="wrap">
+          <div className="head rv">
             <h2 id="warehouse-title">KargoDoor China Warehouse Network</h2>
-
-            <p className="kd-section-lead">
+            <p className="lead">
               Your supplier can send cargo to the warehouse assigned for your
               shipment.
             </p>
-
-            <p>
+            <p className="muted">
               Available warehouse locations include Guangzhou, Yiwu, Shishi,
               Hong Kong, and Taiwan. KargoDoor will confirm the appropriate
               warehouse and provide your unique Cargo Code before your supplier
               ships.
             </p>
           </div>
-        </section>
+          <WarehouseMap />
+        </div>
+      </section>
 
-        <section className="kd-section" aria-labelledby="rates-title">
-          <div className="kd-container">
+      <section className="band tint" aria-labelledby="rates-title">
+        <div className="wrap">
+          <div className="which rv">
             <h2 id="rates-title">China to Philippines Shipping Rates</h2>
-
-            <p className="kd-section-lead">
+            <p className="q">
               Shipping cost depends on cargo size, weight, service type, and
               other shipment requirements.
             </p>
-
-            <p>
+            <p className="lead">
               Use the KargoDoor shipping calculator for an estimate, or send us
               your cargo dimensions, weight, quantity, and item details for a
               quotation.
             </p>
-
-            <Link className="kd-text-link" href="/rates-calculator">
-              CHECK SHIPPING RATES →
-            </Link>
-          </div>
-        </section>
-
-        <section className="kd-ready" aria-labelledby="ready-title">
-          <div className="kd-container kd-ready-inner">
-            <div className="kd-ready-copy">
-              <h2 id="ready-title">READY TO SHIP FROM CHINA?</h2>
-              <p>
-                Tell us about your cargo and we’ll help you get started.
-              </p>
+            <div className="ctas">
+              <Link className="btn btn-blue" href="/rates-calculator">CHECK SHIPPING RATES <span className="arr">→</span></Link>
             </div>
+          </div>
+        </div>
+      </section>
 
-            <MessengerLink
-              className="kd-button kd-button-green kd-ready-button"
-              target="_blank"
-              rel="noopener noreferrer"
-              analyticsEvent="generate_lead"
-            >
-              GET A QUOTE
+      <section className="band" aria-labelledby="ready-title">
+        <div className="wrap">
+          <div className="cta rv">
+            <h2 id="ready-title">READY TO SHIP FROM CHINA?</h2>
+            <p>Tell us about your cargo and we’ll help you get started.</p>
+            <MessengerLink className="btn btn-green glow" target="_blank" rel="noopener noreferrer" analyticsEvent="generate_lead">
+              GET A QUOTE <span className="arr">→</span>
             </MessengerLink>
           </div>
-        </section>
-      </main>
-
-      <Footer />
-    </div>
+        </div>
+      </section>
+    </SiteShell>
   );
 }

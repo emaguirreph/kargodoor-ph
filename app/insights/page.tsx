@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { ClipboardList, Clock3, PackageOpen, Ship } from "lucide-react";
-import { Footer, Header } from "@/components/site-chrome";
+import { PageHero, SiteShell } from "@/components/v5/chrome";
+import { InsightArt } from "@/components/v5/insight-art";
 import { insights } from "@/lib/insights";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { AdminEnv } from "@/lib/admin/security";
@@ -13,70 +13,44 @@ export const metadata = pageMetadata(
   "/insights",
 );
 
-const icons = {
-  package: PackageOpen,
-  ship: Ship,
-  clock: Clock3,
-  clipboard: ClipboardList,
-};
-
 export const dynamic = "force-dynamic";
 
 export default async function InsightsPage() {
   const { env: cf } = await getCloudflareContext();
   const managed = await publishedInsights((cf as unknown as AdminEnv).ADMIN_DB);
-  return (
-    <div className="kd-site-shell">
-      <Header />
-      <main className="kd-insights-page">
-        <section className="kd-insights-hero" aria-labelledby="insights-title">
-          <div className="kd-container">
-            <p className="kd-eyebrow">KARGODOOR PH</p>
-            <h1 id="insights-title">Insights</h1>
-            <p>
-              Easy-to-understand guides tungkol sa importing from China to the
-              Philippines, cargo preparation, at shipping options.
-            </p>
-          </div>
-        </section>
+  const cards = [
+    ...insights.map((insight) => ({ slug: insight.slug, title: insight.title, text: insight.description, icon: insight.icon, cover: undefined as string | undefined })),
+    ...managed.map((insight) => ({ slug: insight.slug, title: insight.title, text: excerpt(insight.body), icon: "package" as const, cover: insight.coverImageKey ? `/api/insights/images/${insight.coverImageKey}` : undefined })),
+  ];
 
-        <section className="kd-insights-list" aria-label="KargoDoor PH guides">
-          <div className="kd-container">
-            {insights.map((insight) => {
-              const Icon = icons[insight.icon];
-              return (
-                <article className="kd-insight-card" key={insight.slug}>
-                  <div className="kd-insight-card-copy">
-                    <p className="kd-insight-card-label">INSIGHTS GUIDE</p>
-                    <h2>
-                      <Link href={`/insights/${insight.slug}`}>{insight.title}</Link>
-                    </h2>
-                    <p>{insight.description}</p>
-                    <Link className="kd-text-link kd-insight-read-more" href={`/insights/${insight.slug}`}>
-                      READ THE GUIDE →
-                    </Link>
-                  </div>
-                  <div className={`kd-insight-art kd-insight-art-${insight.icon}`} aria-hidden="true">
-                    <Icon />
-                  </div>
-                </article>
-              );
-            })}
-            {managed.map((insight) => (
-              <article className="kd-insight-card" key={insight.slug}>
-                <div className="kd-insight-card-copy">
-                  <p className="kd-insight-card-label">INSIGHTS GUIDE</p>
-                  <h2><Link href={`/insights/${insight.slug}`}>{insight.title}</Link></h2>
-                  <p>{excerpt(insight.body)}</p>
-                  <Link className="kd-text-link kd-insight-read-more" href={`/insights/${insight.slug}`}>READ THE GUIDE →</Link>
+  return (
+    <SiteShell>
+      <PageHero>
+        <span className="pill"><i />KARGODOOR PH</span>
+        <h1 id="insights-title">Insights</h1>
+        <p className="lead">
+          Easy-to-understand guides tungkol sa importing from China to the
+          Philippines, cargo preparation, at shipping options.
+        </p>
+      </PageHero>
+
+      <section className="band" style={{ paddingTop: 30 }} aria-label="KargoDoor PH guides">
+        <div className="wrap">
+          <div className="igrid rv-g">
+            {cards.map((card, i) => (
+              <Link className={`icard${i === 0 ? " feat" : ""}`} href={`/insights/${card.slug}`} key={card.slug}>
+                <InsightArt icon={card.icon} cover={card.cover} />
+                <div className="icopy">
+                  <span className="ilabel">INSIGHTS GUIDE</span>
+                  <h2>{card.title}</h2>
+                  <p>{card.text}</p>
+                  <span className="link-arr">READ THE GUIDE <span className="arr">→</span></span>
                 </div>
-                {insight.coverImageKey ? <img className="kd-insight-cover" src={`/api/insights/images/${insight.coverImageKey}`} alt="" /> : <div className="kd-insight-art" aria-hidden="true">KARGO<br />DOOR</div>}
-              </article>
+              </Link>
             ))}
           </div>
-        </section>
-      </main>
-      <Footer />
-    </div>
+        </div>
+      </section>
+    </SiteShell>
   );
 }
