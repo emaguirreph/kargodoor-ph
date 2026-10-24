@@ -23,7 +23,7 @@
 .v5 .h2-floor{height:var(--rh)}
 .v5 .h2-route{position:absolute;left:0;right:0;bottom:44px}
 .v5 .h2-route svg{display:block;width:min(1100px,100%);height:auto;margin:0 auto;overflow:visible}
-.v5 .h2-route .arc{stroke-dasharray:8 10;animation:v5-dash 1.4s linear infinite}
+.v5 .h2-route .arc{stroke-dasharray:8 10;animation:v5-dash .8s linear infinite}
 @media (max-width:700px){
   .v5 .hero2{--rh:96px}
   .v5 .h2-photo{background-position:70% 100%}

@@ -121,8 +121,8 @@ export function Footer() {
 
       <div className="fab">
         <MessengerLink target="_blank" rel="noopener noreferrer" aria-label="Message KargoDoor PH" analyticsEvent="contact">
-          <video autoPlay loop muted playsInline preload="metadata" aria-hidden="true">
-            <source src="/assets/kargodoor-message-us-approved.webm" type="video/webm" />
+          <video autoPlay loop muted playsInline preload="auto" poster="/assets/kargodoor-message-us-poster.webp" aria-hidden="true">
+            <source src="/assets/kargodoor-message-us-small.webm" type="video/webm" />
           </video>
         </MessengerLink>
       </div>
