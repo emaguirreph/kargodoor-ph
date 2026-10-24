@@ -39,6 +39,7 @@ import { createPortal, disablePortal, portalFor, portalStatus, resetPortal } fro
 import { copyButton, copyScript, customerAccountCreatedMessage, customerPortalAccessMessage, customerShippingInstructions, shipmentShippingInstructions, warehouseAddress, warehouseNames } from "./shipping-instructions";
 import { leadsPage } from "./leads";
 import { syncVerifiedFreightToInvoice, verifiedShipmentFreight } from "./shipment-verified-pricing";
+import { cargoCategory, cargoCategorySql, cargoItemSql, shipmentCargo, type ShipmentCargo } from "./shipment-cargo";
 
 const labels: Record<string, string> = {
   nihao_cost: "Ni Hao freight cost",
@@ -54,6 +55,8 @@ const labels: Record<string, string> = {
   notes: "Notes",
 
   tracking_number: "Tracking number",
+  cargo_item: "Cargo / Item",
+  cargo_category: "Category",
   service_type: "Service type",
   warehouse_received_date: "Warehouse received date",
   departure_date: "Departure date",
@@ -558,6 +561,7 @@ export async function handleAdmin(
       ) === "1";
 
     let record: RecordData = {};
+    let cargoInfo: ShipmentCargo | null = null;
 
     if (id) {
       if (
@@ -587,6 +591,7 @@ export async function handleAdmin(
 
       record =
         found;
+      if (entity === "shipments") cargoInfo = await shipmentCargo(db, id);
     }
 
     const title =
@@ -1132,6 +1137,8 @@ export async function handleAdmin(
                   "",
               )}
 
+              ${entity === "shipments" && cargoInfo ? `<p class="notice shipment-cargo-note"><strong>Cargo / Item:</strong> ${esc(cargoInfo.item) || "—"} · <strong>Category:</strong> ${esc(cargoInfo.category) || "—"}${cargoInfo.quotationId ? ` · From quotation <a href="/admin/quotations?id=${esc(cargoInfo.quotationId)}">${esc(cargoInfo.quotationNumber) || "View quotation"}</a>. To change the item or category, edit the quotation.` : ""}</p>` : ""}
+
               <div class="grid">
                 ${fields}
               </div>
@@ -1385,6 +1392,11 @@ export async function handleAdmin(
 
         const shipment = [
           shipmentDetail("Tracking number", esc(record.tracking_number) || "—"),
+          shipmentDetail("Cargo / Item", esc(cargoInfo?.item) || "—"),
+          shipmentDetail("Category", esc(cargoInfo?.category) || "—"),
+          ...(cargoInfo?.quotationId
+            ? [shipmentDetail("Quotation", `<a href="/admin/quotations?id=${esc(cargoInfo.quotationId)}">${esc(cargoInfo.quotationNumber) || "View quotation"}</a>`)]
+            : []),
           shipmentDetail("Service type", esc(record.service_type) || "—"),
           shipmentDetail("Declared CBM", esc(record.cbm) || "—"),
           shipmentDetail("Declared weight (kg)", esc(record.weight_kg) || "—"),
@@ -1937,6 +1949,9 @@ export async function handleAdmin(
                 s.id,
                 s.tracking_number,
                 c.full_name,
+                ${cargoItemSql} AS cargo_item,
+                ${cargoCategorySql.item} AS cargo_category_item,
+                ${cargoCategorySql.group} AS cargo_category_group,
                 s.status,
                 s.cbm,
                 s.weight_kg
@@ -1944,6 +1959,8 @@ export async function handleAdmin(
               JOIN customers c
                 ON c.id =
                    s.customer_id
+              LEFT JOIN quotations q
+                ON q.id = s.source_quotation_id
               WHERE
                 s.archived_at IS NULL
                 AND (
@@ -2004,10 +2021,15 @@ export async function handleAdmin(
         : [
             "tracking_number",
             "full_name",
+            "cargo_item",
+            "cargo_category",
             "status",
             "cbm",
             "weight_kg",
           ];
+    if (entity === "shipments") {
+      for (const row of rows) row.cargo_category = cargoCategory(row.cargo_category_item, row.cargo_category_group);
+    }
 
     const table =
       rows.length
