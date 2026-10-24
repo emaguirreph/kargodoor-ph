@@ -83,7 +83,7 @@ export default function HomePage() {
             <span className="zh" lang="zh" aria-label="采购 · 运输 · 收货"><b>采购</b><s>·</s><b>运输</b><s>·</s><b>收货</b></span>
           </div>
           <h1 id="hero-title"><span className="l1">China to PH,</span><span className="l2">made SIMPLE</span></h1>
-          <p className="lead">Simple, reliable, and affordable shipping from China to the Philippines.</p>
+          <p className="lead">Reliable and affordable shipping from China to the Philippines.</p>
           <div className="ctas">
             <MessengerLink className="btn btn-green glow" target="_blank" rel="noopener noreferrer" analyticsEvent="generate_lead">
               GET A QUOTE <span className="arr">→</span>

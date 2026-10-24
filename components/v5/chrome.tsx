@@ -99,7 +99,8 @@ export function Footer() {
               <Link key={item.href} href={item.href}>{item.label}</Link>
             ))}
             <Link href="/insights">INSIGHTS</Link>
-            <Link href="/admin" prefetch={false}>ADMIN</Link>
+            {/* Plain link: /admin sits behind Cloudflare Access, so it needs a full page load, not client-side navigation. */}
+            <a href="https://kargodoorph.com/admin">ADMIN</a>
           </nav>
           <div>
             <h2 className="fh">FOLLOW US</h2>
@@ -121,8 +122,8 @@ export function Footer() {
 
       <div className="fab">
         <MessengerLink target="_blank" rel="noopener noreferrer" aria-label="Message KargoDoor PH" analyticsEvent="contact">
-          <video autoPlay loop muted playsInline preload="metadata" aria-hidden="true">
-            <source src="/assets/kargodoor-message-us-approved.webm" type="video/webm" />
+          <video autoPlay loop muted playsInline preload="auto" poster="/assets/kargodoor-message-us-poster.webp" aria-hidden="true">
+            <source src="/assets/kargodoor-message-us-small.webm" type="video/webm" />
           </video>
         </MessengerLink>
       </div>
