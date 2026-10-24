@@ -83,7 +83,7 @@ export default function HomePage() {
             <span className="zh" lang="zh" aria-label="采购 · 运输 · 收货"><b>采购</b><s>·</s><b>运输</b><s>·</s><b>收货</b></span>
           </div>
           <h1 id="hero-title"><span className="l1">China to PH,</span><span className="l2">made SIMPLE</span></h1>
-          <p className="lead">Reliable and affordable shipping from China to the Philippines.</p>
+          <p className="lead">Reliable and affordable shipping.</p>
           <div className="ctas">
             <MessengerLink className="btn btn-green glow" target="_blank" rel="noopener noreferrer" analyticsEvent="generate_lead">
               GET A QUOTE <span className="arr">→</span>
@@ -93,7 +93,7 @@ export default function HomePage() {
           <div className="chips">
             <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M3 17l2 4h14l2-4H3zM6 17V9h12v8M12 9V4" /></svg>Sea Freight — 3–5 weeks</span>
             <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M2 14l20-7-6 13-4-5-5 3 1-5z" /></svg>Air Freight — 5–7 days</span>
-            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden="true"><path d="M5 12l5 5L20 7" /></svg>No hidden fees.</span>
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden="true"><path d="M5 12l5 5L20 7" /></svg>All-in rates and pay upon arrival.</span>
           </div>
         </div>
         <div className="h2-spacer" />
