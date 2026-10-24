@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "kargodoor-ph",
-  "main": ".open-next/worker.js",
+  "main": "custom-worker.ts",
   "compatibility_date": "2025-03-01",
   "compatibility_flags": [
     "nodejs_compat",
@@ -18,6 +18,13 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
+
+  "send_email": [
+    {
+      "name": "LEAD_EMAIL",
+      "destination_address": "kargodoorph@gmail.com"
+    }
+  ],
 
   "services": [
     {
