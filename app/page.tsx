@@ -2,7 +2,7 @@ import Link from "next/link";
 import { SiteShell } from "@/components/v5/chrome";
 import { HERO_ROUTE, Scene } from "@/components/v5/art";
 import { TierGrid } from "@/components/v5/sizes";
-import { QuickCalculator, WhenVisible } from "@/components/v5/widgets";
+import { HeroRoute, QuickCalculator, WhenVisible } from "@/components/v5/widgets";
 import { MessengerLink } from "@/components/messenger-link";
 import { faqs } from "@/lib/faq-content";
 import { pageMetadata } from "@/lib/seo";
@@ -98,7 +98,7 @@ export default function HomePage() {
         </div>
         <div className="h2-spacer" />
         <div className="h2-floor" />
-        <div className="wrap h2-route" dangerouslySetInnerHTML={{ __html: HERO_ROUTE }} />
+        <HeroRoute html={HERO_ROUTE} />
       </section>
 
       <div className="wrap q-blue">
