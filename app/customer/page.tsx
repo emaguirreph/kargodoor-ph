@@ -6,6 +6,7 @@ import { SiteShell } from "@/components/v5/chrome";
 import { CopyCode } from "@/components/v5/copy-code";
 import { MessengerLink } from "@/components/messenger-link";
 import { shipmentShippingInstructions, warehouseAddress } from "@/lib/admin/shipping-instructions";
+import { cargoCategory, cargoCategorySql, cargoItemSql } from "@/lib/admin/shipment-cargo";
 import {
   customerSession,
   customerSessionCookie,
@@ -17,6 +18,8 @@ export type CustomerShipment = {
   id: string;
   tracking_number: string;
   item: string;
+  category_item: string | null;
+  category_group: string | null;
   service_type: "Sea Freight" | "Air Freight" | "FCL";
   cbm: number;
   weight_kg: number;
@@ -97,6 +100,7 @@ function ShipmentRow({
   const chinaReceivedDate = shipment.warehouse_received_date || "Pending warehouse receipt";
   const phWarehouseReceivedDate = shipment.actual_arrival || "—";
   const payment = paymentLabel(shipment);
+  const category = cargoCategory(shipment.category_item, shipment.category_group);
 
   return (
     <tbody>
@@ -110,6 +114,7 @@ function ShipmentRow({
             <span className="tn">—</span>
           )}
           {shipment.item && shipment.item !== "—" ? <span className="item">{shipment.item}</span> : null}
+          {category ? <span className="cat">{category}</span> : null}
         </td>
         <td data-label="Status">{shipment.status}</td>
         <td data-label="Service">{shipment.service_type}</td>
@@ -294,11 +299,9 @@ export default async function CustomerPage() {
       SELECT
         s.id,
         s.tracking_number,
-        CASE
-          WHEN s.tracking_remarks LIKE 'Item: %'
-            THEN substr(s.tracking_remarks, 7, instr(s.tracking_remarks || char(10), char(10)) - 7)
-          ELSE COALESCE(NULLIF(json_extract(q.cargo_snapshot, '$.item'), ''), '—')
-        END AS item,
+        COALESCE(${cargoItemSql}, '—') AS item,
+        ${cargoCategorySql.item} AS category_item,
+        ${cargoCategorySql.group} AS category_group,
         s.service_type,
         s.cbm,
         s.weight_kg,

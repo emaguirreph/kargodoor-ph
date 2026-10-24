@@ -735,3 +735,5 @@ html:has(.v5) body{background:#f4f7fc}
   .v5 .stable .srow td:first-child{grid-column:1/-1}
   .v5 .stable .sinfo td{padding:0 16px 6px}
 }
+.v5 .stable .item{color:var(--fg);font-weight:700}
+.v5 .stable .cat{display:block;color:var(--muted);font-size:.76rem;font-weight:600;margin-top:1px}
