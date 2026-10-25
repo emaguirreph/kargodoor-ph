@@ -283,3 +283,126 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
 
   return messages.map(([key, title, lines]) => [key, title, finishMessage(lines)]);
 }
+
+export type InvoiceMessageInput = {
+  customerName?: unknown;
+  cargoCode?: unknown;
+  invoiceNumber?: unknown;
+  tracking?: unknown;
+  /** Centavos. */
+  shippingFee?: unknown;
+  deliveryFee?: unknown;
+  otherCharge?: unknown;
+  total?: unknown;
+  paid?: unknown;
+  dueDate?: unknown;
+};
+
+/** [key, title, message] for invoice and payment updates. */
+export function invoiceMessages(input: InvoiceMessageInput): Array<[string, string, string]> {
+  const name = text(input.customerName) || "there";
+  const cargoCode = text(input.cargoCode);
+  const invoiceNumber = text(input.invoiceNumber);
+  const tracking = text(input.tracking);
+  const num = (value: unknown) => Number(value ?? 0) || 0;
+  const deliveryFee = num(input.deliveryFee);
+  const otherCharge = num(input.otherCharge);
+  const total = num(input.total);
+  const paid = num(input.paid);
+  const balance = Math.max(total - paid, 0);
+  const dueDate = text(input.dueDate);
+  const hi = `Hi ${name}! 😊`;
+  const details = [
+    "🧾 Invoice Details",
+    invoiceNumber && `Invoice No.: ${invoiceNumber}`,
+    tracking && `Tracking Number: ${tracking}`,
+    cargoCode && `Account/Cargo Code: ${cargoCode}`,
+  ];
+  const charges = [
+    "💰 Charges",
+    `Shipping Fee: ${peso(num(input.shippingFee))}`,
+    deliveryFee > 0 && `Delivery Fee: ${peso(deliveryFee)}`,
+    otherCharge > 0 && `Other Charges: ${peso(otherCharge)}`,
+    `Total Amount Due: ${peso(total)}`,
+    dueDate && `Due Date: ${dueDate}`,
+  ];
+  const release = "Kindly note that all outstanding shipping charges must be settled and verified before your cargo can be released for pickup or delivery.";
+  const portal = "You can also check your shipment and payment status in your KargoDoor customer portal: https://kargodoorph.com/customer/login";
+
+  const messages: Array<[string, string, Array<string | false>]> = [
+    ["invoice-issued", "Invoice Issued", [
+      hi,
+      "",
+      `Here’s your KargoDoor invoice${tracking ? ` for shipment ${tracking}` : ""}.`,
+      "",
+      ...details,
+      "",
+      ...charges,
+      "",
+      ...paymentInstructions,
+      "",
+      "Next Steps:",
+      release,
+      "",
+      portal,
+      "",
+      thanks,
+    ]],
+    ["payment-reminder", "Payment Reminder", [
+      hi,
+      "",
+      `Just a friendly reminder about your KargoDoor invoice${invoiceNumber ? ` ${invoiceNumber}` : ""}.`,
+      "",
+      ...details,
+      "",
+      "💰 Balance",
+      `Total Amount Due: ${peso(total)}`,
+      paid > 0 && `Amount Paid: ${peso(paid)}`,
+      `Remaining Balance: ${peso(balance)}`,
+      dueDate && `Due Date: ${dueDate}`,
+      "",
+      ...paymentInstructions,
+      "",
+      "Next Steps:",
+      release,
+      "",
+      "If you’ve already paid, please send us your payment receipt and we’ll update your account right away.",
+      "",
+      thanks,
+    ]],
+    ["partial-payment", "Partial Payment Received", [
+      hi,
+      "",
+      `Thank you! We’ve received your payment of ${peso(paid)}.`,
+      "",
+      ...details,
+      "",
+      "💰 Balance",
+      `Total Amount Due: ${peso(total)}`,
+      `Amount Paid: ${peso(paid)}`,
+      `Remaining Balance: ${peso(balance)}`,
+      "",
+      ...paymentInstructions,
+      "",
+      "Next Steps:",
+      "Please settle the remaining balance so we can arrange the release of your cargo for pickup or delivery.",
+      "",
+      thanks,
+    ]],
+    ["payment-received", "Payment Received (Fully Paid)", [
+      hi,
+      "",
+      "Good news! We’ve received your full payment. Your invoice is now fully paid. ✅",
+      "",
+      ...details,
+      `Amount Paid: ${peso(paid)}`,
+      "",
+      "Next Steps:",
+      "We’ll now arrange your pickup or delivery schedule and keep you updated.",
+      "",
+      thanks,
+    ]],
+  ];
+
+  return messages.map(([key, title, lines]) => [key, title, finishMessage(lines)]);
+}

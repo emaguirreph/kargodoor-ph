@@ -37,7 +37,7 @@ import { page, esc, pesos, input, select, hidden } from "./ui";
 import { dashboard, finance, activity, saveStaffFollowUp } from "./reports";
 import { createPortal, disablePortal, portalFor, portalStatus, resetPortal } from "./customer-portal";
 import { shipmentStatusMessages } from "./customer-messages";
-import { copyButton, copyScript, customerAccountCreatedMessage, customerPortalAccessMessage, customerShippingInstructions, shipmentShippingInstructions, warehouseAddress, warehouseNames } from "./shipping-instructions";
+import { copyButton, copyScript, customerPortalAccessMessage, customerWelcomeMessage, shipmentShippingInstructions, warehouseAddress, warehouseAddressBook } from "./shipping-instructions";
 import { leadsPage } from "./leads";
 import { syncVerifiedFreightToInvoice, verifiedShipmentFreight } from "./shipment-verified-pricing";
 import { cargoCategory, cargoCategorySql, cargoItemSql, shipmentCargo, type ShipmentCargo } from "./shipment-cargo";
@@ -337,7 +337,7 @@ export async function handleAdmin(
         const result = portalAction === "portal_create" ? await createPortal(db, customerId, customer.email, customer.mobile) : await resetPortal(db, customerId, portalAction === "portal_reenable");
         const portalMessageId = `portal-access-${customerId}`;
         const portalMessage = customerPortalAccessMessage({ name: customer.full_name, customerCode: customer.customer_code, login: result.login, loginLabel: result.loginLabel, temporaryPassword: result.password });
-        return page("Customer account created", `<section><h2>Customer account created.</h2><p><strong>Login ${esc(result.loginLabel)}:</strong> ${esc(result.login)}</p><p><strong>Temporary Password:</strong> <code>${esc(result.password)}</code></p><p class="muted">Copy the temporary password now. It is shown only once and the customer must change it after first login.</p></section><section><h2>Send Portal Access</h2><p class="muted">Copy this private message and send it directly to the customer. It contains their temporary password.</p><textarea id="${esc(portalMessageId)}" readonly aria-label="Portal access message">${esc(portalMessage)}</textarea><div class="actions">${copyButton(portalMessageId, "Copy portal access message")}</div>${copyScript()}</section>`, user.name);
+        return page("Customer account created", `<section><h2>Customer account created.</h2><p><strong>Login ${esc(result.loginLabel)}:</strong> ${esc(result.login)}</p><p><strong>Temporary Password:</strong> <code>${esc(result.password)}</code></p><p class="muted">Copy the temporary password now. It is shown only once and the customer must change it after first login.</p></section><section><h2>Send Account Setup</h2><p class="muted">Copy this private message and send it directly to the customer. It has their Account/Cargo Code, portal login and temporary password.</p><textarea id="${esc(portalMessageId)}" readonly aria-label="Account setup message" style="min-height:260px;white-space:pre-wrap">${esc(portalMessage)}</textarea><div class="actions">${copyButton(portalMessageId, "Copy account setup message")}</div>${copyScript()}</section>`, user.name);
       }
 
       if (!entity && view === undefined) {
@@ -1551,30 +1551,35 @@ export async function handleAdmin(
       const accountMessageId = `account-created-${id}`;
       const instructionId = `shipping-instructions-${id}`;
       const accountMessage = entity === "customers"
-        ? customerAccountCreatedMessage({ name: record.full_name, customerCode: record.customer_code })
-        : "";
-      const customerWarehouseMessages = entity === "customers"
-        ? Object.fromEntries(warehouseNames.map((warehouse) => [warehouse, customerShippingInstructions({
+        ? customerWelcomeMessage({
             name: record.full_name,
             customerCode: record.customer_code,
-            warehouse,
-            warehouseAddress: warehouseAddress(warehouse),
-          })]))
-        : {};
-      const instructionMessage = entity === "customers"
-        ? customerWarehouseMessages.Guangzhou
-        : shipmentShippingInstructions({
+            login: portal ? portal.login_mobile ?? portal.login_email : record.mobile || record.email,
+            loginLabel: (portal ? portal.login_mobile : record.mobile) ? "mobile number" : "email",
+            temporaryPassword: portal
+              ? "[Click Generate New Temporary Password above]"
+              : "[Click Create Customer Account above]",
+          })
+        : "";
+      const instructionMessage = entity === "shipments"
+        ? shipmentShippingInstructions({
             name: linkedCustomer?.full_name,
             customerCode: linkedCustomer?.customer_code,
             warehouse: record.china_warehouse,
             warehouseAddress: warehouseAddress(record.china_warehouse),
             supplierCourier: record.supplier_courier,
             supplierWaybill: record.supplier_waybill_number,
-          });
-      const warehouseMessageSelector = entity === "customers"
-        ? `<label>Select warehouse<select data-warehouse-message-selector data-target="${esc(instructionId)}" data-messages="${esc(JSON.stringify(customerWarehouseMessages))}">${warehouseNames.map((warehouse) => `<option>${esc(warehouse)}</option>`).join("")}</select></label><script>document.querySelectorAll("[data-warehouse-message-selector]").forEach(select=>select.addEventListener("change",()=>{try{const messages=JSON.parse(select.dataset.messages||"{}");const target=document.getElementById(select.dataset.target||"");if(target&&messages[select.value])target.value=messages[select.value];}catch{}}));</script>`
+          })
         : "";
-      const shippingInstructions = canWrite ? `${entity === "customers" ? `<section><h2>Send Account Setup</h2><p class="muted">Send this first so the customer knows their KargoDoor account number before their supplier ships any package.</p><textarea id="${accountMessageId}" readonly aria-label="Account setup message">${esc(accountMessage)}</textarea><div class="actions">${copyButton(accountMessageId, "Copy account setup message")}</div></section>` : ""}<section><h2>Send Warehouse Instructions</h2><p class="muted">Select the warehouse and its complete address is added automatically before you copy the message.</p>${warehouseMessageSelector}<textarea id="${instructionId}" readonly aria-label="Warehouse instructions">${esc(instructionMessage)}</textarea><div class="actions">${copyButton(instructionId, "Copy warehouse instructions")}</div>${copyScript()}</section>` : "";
+      const shippingInstructions = !canWrite ? "" : entity === "customers"
+        ? `<section><h2>Send Account Setup</h2><p class="muted">Send this first so the customer has their Account/Cargo Code and portal login before their supplier ships any package. Click Create Customer Account or Generate New Temporary Password above, and the same message appears with the temporary password filled in.</p><textarea id="${accountMessageId}" readonly aria-label="Account setup message" style="min-height:260px;white-space:pre-wrap">${esc(accountMessage)}</textarea><div class="actions">${copyButton(accountMessageId, "Copy account setup message")}</div>${copyScript()}</section>`
+        : `<section><h2>Send Warehouse Instructions</h2><p class="muted">The address of this shipment’s China warehouse is added automatically.</p><textarea id="${instructionId}" readonly aria-label="Warehouse instructions" style="min-height:260px;white-space:pre-wrap">${esc(instructionMessage)}</textarea><div class="actions">${copyButton(instructionId, "Copy warehouse instructions")}</div>${copyScript()}</section>`;
+      const warehouseAddresses = entity === "shipments" && canWrite
+        ? `<section><h2>China Warehouse Addresses</h2><p class="muted">Every KargoDoor China warehouse, ready to copy.</p>${warehouseAddressBook().map(([warehouse, address]) => {
+            const addressId = `warehouse-address-${id}-${warehouse.replace(/\W+/g, "-").toLowerCase()}`;
+            return `<details class="customer-notification"><summary>${esc(warehouse)}</summary><textarea id="${esc(addressId)}" readonly aria-label="${esc(warehouse)} warehouse address" style="min-height:200px;white-space:pre-wrap">${esc(address)}</textarea><div class="actions">${copyButton(addressId, `Copy ${warehouse} address`)}</div></details>`;
+          }).join("")}${copyScript()}</section>`
+        : "";
 
       const customerNotifications = entity === "shipments" && canWrite ? (() => {
         const messages = shipmentStatusMessages({
@@ -1658,6 +1663,7 @@ export async function handleAdmin(
           ${portalSection}
           ${shippingInstructions}
           ${customerNotifications}
+          ${warehouseAddresses}
         `,
         user.name,
         200,

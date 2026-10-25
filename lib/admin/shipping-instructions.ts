@@ -72,9 +72,13 @@ English translation:
 2. Include one packing list with each shipment, showing the detailed Chinese product name, material, quantity, weight, and sender’s phone number.
 3. Ensure all packaging is complete and undamaged before delivery. Reinforce fragile cargo. The warehouse will not accept cargo with damaged packaging.`;
 
-export function customerAccountCreatedMessage(customer: ShippingInstructionCustomer): string {
+/** Welcome message: Account/Cargo Code and customer portal login in one message. */
+export function customerWelcomeMessage(customer: PortalAccessMessage): string {
   const name = text(customer.name, "there");
   const code = text(customer.customerCode, "[account/cargo code]");
+  const login = text(customer.login, "[email or mobile number]");
+  const loginLabel = text(customer.loginLabel, "email or mobile number");
+  const password = text(customer.temporaryPassword, "[temporary password]");
   return finishMessage([
     `Hi ${name}! 😊`,
     "",
@@ -83,10 +87,17 @@ export function customerAccountCreatedMessage(customer: ShippingInstructionCusto
     "🔑 Your Account Details",
     `Account/Cargo Code: ${code}`,
     "",
-    "Next Steps:",
-    "Please use this Account/Cargo Code on your supplier’s shipping label so we can identify your packages when they arrive at our China warehouse.",
+    "💻 Your Customer Portal",
+    "Login page: https://kargodoorph.com/customer/login",
+    `Login ${loginLabel}: ${login}`,
+    `Temporary password: ${password}`,
     "",
-    "We’ll send your warehouse address and shipping instructions next.",
+    "Next Steps:",
+    "1. Please use your Account/Cargo Code on your supplier’s shipping label so we can identify your packages when they arrive at our China warehouse.",
+    "2. Sign in to the portal and change your password right away. Never share your temporary password with anyone.",
+    "3. We’ll send your warehouse address and shipping instructions next.",
+    "",
+    "You can use the portal to view your shipment and payment updates anytime.",
     "",
     "Thank you for choosing KargoDoor PH! 💚",
   ]);
@@ -121,29 +132,12 @@ export function customerShippingInstructions(customer: ShippingInstructionCustom
 }
 
 export function customerPortalAccessMessage(portal: PortalAccessMessage): string {
-  const name = text(portal.name, "there");
-  const customerCode = text(portal.customerCode, "[account/cargo code]");
-  const login = text(portal.login, "[email or mobile number]");
-  const loginLabel = text(portal.loginLabel, "email or mobile number");
-  const password = text(portal.temporaryPassword, "[temporary password]");
-  return finishMessage([
-    `Hi ${name}! 😊`,
-    "",
-    "Good news! Your KargoDoor customer portal account is ready.",
-    "",
-    "🔑 Your Login Details",
-    `Account/Cargo Code: ${customerCode}`,
-    `Login page: https://kargodoorph.com/customer/login`,
-    `Login ${loginLabel}: ${login}`,
-    `Temporary password: ${password}`,
-    "",
-    "Next Steps:",
-    "Please sign in and change your password right away. Never share your temporary password with anyone.",
-    "",
-    "You can use the portal to view your shipment and payment updates anytime.",
-    "",
-    "Thank you for trusting KargoDoor PH! 💚",
-  ]);
+  return customerWelcomeMessage(portal);
+}
+
+/** Every China warehouse with its full address, for the bottom of the shipment page. */
+export function warehouseAddressBook(): Array<[WarehouseName, string]> {
+  return warehouseNames.map((warehouse) => [warehouse, `${warehouse} Warehouse\n${warehouseAddress(warehouse)}`]);
 }
 
 export function shipmentShippingInstructions(shipment: ShippingInstructionShipment): string {
