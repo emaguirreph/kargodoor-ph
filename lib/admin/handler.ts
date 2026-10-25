@@ -36,7 +36,8 @@ import { saveRecord, archiveOrCancelRecord } from "./data";
 import { page, esc, pesos, input, select, hidden } from "./ui";
 import { dashboard, finance, activity, saveStaffFollowUp } from "./reports";
 import { createPortal, disablePortal, portalFor, portalStatus, resetPortal } from "./customer-portal";
-import { copyButton, copyScript, customerAccountCreatedMessage, customerPortalAccessMessage, customerShippingInstructions, shipmentShippingInstructions, warehouseAddress, warehouseNames } from "./shipping-instructions";
+import { shipmentStatusMessages } from "./customer-messages";
+import { copyButton, copyScript, customerPortalAccessMessage, customerWelcomeMessage, shipmentShippingInstructions, warehouseAddress, warehouseAddressBook } from "./shipping-instructions";
 import { leadsPage } from "./leads";
 import { syncVerifiedFreightToInvoice, verifiedShipmentFreight } from "./shipment-verified-pricing";
 import { cargoCategory, cargoCategorySql, cargoItemSql, shipmentCargo, type ShipmentCargo } from "./shipment-cargo";
@@ -336,7 +337,7 @@ export async function handleAdmin(
         const result = portalAction === "portal_create" ? await createPortal(db, customerId, customer.email, customer.mobile) : await resetPortal(db, customerId, portalAction === "portal_reenable");
         const portalMessageId = `portal-access-${customerId}`;
         const portalMessage = customerPortalAccessMessage({ name: customer.full_name, customerCode: customer.customer_code, login: result.login, loginLabel: result.loginLabel, temporaryPassword: result.password });
-        return page("Customer account created", `<section><h2>Customer account created.</h2><p><strong>Login ${esc(result.loginLabel)}:</strong> ${esc(result.login)}</p><p><strong>Temporary Password:</strong> <code>${esc(result.password)}</code></p><p class="muted">Copy the temporary password now. It is shown only once and the customer must change it after first login.</p></section><section><h2>Send Portal Access</h2><p class="muted">Copy this private message and send it directly to the customer. It contains their temporary password.</p><textarea id="${esc(portalMessageId)}" readonly aria-label="Portal access message">${esc(portalMessage)}</textarea><div class="actions">${copyButton(portalMessageId, "Copy portal access message")}</div>${copyScript()}</section>`, user.name);
+        return page("Customer account created", `<section><h2>Customer account created.</h2><p><strong>Login ${esc(result.loginLabel)}:</strong> ${esc(result.login)}</p><p><strong>Temporary Password:</strong> <code>${esc(result.password)}</code></p><p class="muted">Copy the temporary password now. It is shown only once and the customer must change it after first login.</p></section><section><h2>Send Account Setup</h2><p class="muted">Copy this private message and send it directly to the customer. It has their Account/Cargo Code, portal login and temporary password.</p><textarea id="${esc(portalMessageId)}" readonly aria-label="Account setup message" style="min-height:260px;white-space:pre-wrap">${esc(portalMessage)}</textarea><div class="actions">${copyButton(portalMessageId, "Copy account setup message")}</div>${copyScript()}</section>`, user.name);
       }
 
       if (!entity && view === undefined) {
@@ -1550,197 +1551,59 @@ export async function handleAdmin(
       const accountMessageId = `account-created-${id}`;
       const instructionId = `shipping-instructions-${id}`;
       const accountMessage = entity === "customers"
-        ? customerAccountCreatedMessage({ name: record.full_name, customerCode: record.customer_code })
-        : "";
-      const customerWarehouseMessages = entity === "customers"
-        ? Object.fromEntries(warehouseNames.map((warehouse) => [warehouse, customerShippingInstructions({
+        ? customerWelcomeMessage({
             name: record.full_name,
             customerCode: record.customer_code,
-            warehouse,
-            warehouseAddress: warehouseAddress(warehouse),
-          })]))
-        : {};
-      const instructionMessage = entity === "customers"
-        ? customerWarehouseMessages.Guangzhou
-        : shipmentShippingInstructions({
+            login: portal ? portal.login_mobile ?? portal.login_email : record.mobile || record.email,
+            loginLabel: (portal ? portal.login_mobile : record.mobile) ? "mobile number" : "email",
+            temporaryPassword: portal
+              ? "[Click Generate New Temporary Password above]"
+              : "[Click Create Customer Account above]",
+          })
+        : "";
+      const instructionMessage = entity === "shipments"
+        ? shipmentShippingInstructions({
             name: linkedCustomer?.full_name,
             customerCode: linkedCustomer?.customer_code,
             warehouse: record.china_warehouse,
             warehouseAddress: warehouseAddress(record.china_warehouse),
             supplierCourier: record.supplier_courier,
             supplierWaybill: record.supplier_waybill_number,
-          });
-      const warehouseMessageSelector = entity === "customers"
-        ? `<label>Select warehouse<select data-warehouse-message-selector data-target="${esc(instructionId)}" data-messages="${esc(JSON.stringify(customerWarehouseMessages))}">${warehouseNames.map((warehouse) => `<option>${esc(warehouse)}</option>`).join("")}</select></label><script>document.querySelectorAll("[data-warehouse-message-selector]").forEach(select=>select.addEventListener("change",()=>{try{const messages=JSON.parse(select.dataset.messages||"{}");const target=document.getElementById(select.dataset.target||"");if(target&&messages[select.value])target.value=messages[select.value];}catch{}}));</script>`
+          })
         : "";
-      const shippingInstructions = canWrite ? `${entity === "customers" ? `<section><h2>Send Account Setup</h2><p class="muted">Send this first so the customer knows their KargoDoor account number before their supplier ships any package.</p><textarea id="${accountMessageId}" readonly aria-label="Account setup message">${esc(accountMessage)}</textarea><div class="actions">${copyButton(accountMessageId, "Copy account setup message")}</div></section>` : ""}<section><h2>Send Warehouse Instructions</h2><p class="muted">Select the warehouse and its complete address is added automatically before you copy the message.</p>${warehouseMessageSelector}<textarea id="${instructionId}" readonly aria-label="Warehouse instructions">${esc(instructionMessage)}</textarea><div class="actions">${copyButton(instructionId, "Copy warehouse instructions")}</div>${copyScript()}</section>` : "";
+      const shippingInstructions = !canWrite ? "" : entity === "customers"
+        ? `<section><h2>Send Account Setup</h2><p class="muted">Send this first so the customer has their Account/Cargo Code and portal login before their supplier ships any package. Click Create Customer Account or Generate New Temporary Password above, and the same message appears with the temporary password filled in.</p><textarea id="${accountMessageId}" readonly aria-label="Account setup message" style="min-height:260px;white-space:pre-wrap">${esc(accountMessage)}</textarea><div class="actions">${copyButton(accountMessageId, "Copy account setup message")}</div>${copyScript()}</section>`
+        : `<section><h2>Send Warehouse Instructions</h2><p class="muted">The address of this shipment’s China warehouse is added automatically.</p><textarea id="${instructionId}" readonly aria-label="Warehouse instructions" style="min-height:260px;white-space:pre-wrap">${esc(instructionMessage)}</textarea><div class="actions">${copyButton(instructionId, "Copy warehouse instructions")}</div>${copyScript()}</section>`;
+      const warehouseAddresses = entity === "shipments" && canWrite
+        ? `<section><h2>China Warehouse Addresses</h2><p class="muted">Every KargoDoor China warehouse, ready to copy.</p>${warehouseAddressBook().map(([warehouse, address]) => {
+            const addressId = `warehouse-address-${id}-${warehouse.replace(/\W+/g, "-").toLowerCase()}`;
+            return `<details class="customer-notification"><summary>${esc(warehouse)}</summary><textarea id="${esc(addressId)}" readonly aria-label="${esc(warehouse)} warehouse address" style="min-height:200px;white-space:pre-wrap">${esc(address)}</textarea><div class="actions">${copyButton(addressId, `Copy ${warehouse} address`)}</div></details>`;
+          }).join("")}${copyScript()}</section>`
+        : "";
 
       const customerNotifications = entity === "shipments" && canWrite ? (() => {
-        const customerName = String(linkedCustomer?.full_name || "Customer");
-        const tracking = String(record.tracking_number || "");
-        const cargoCode = String(record.cargo_code || linkedCustomer?.customer_code || "");
-        const service = String(record.service_type || "");
-        const warehouse = String(record.china_warehouse || "");
-        const received = String(record.warehouse_received_date || "");
-        const arrival = String(record.actual_arrival || "");
-        const paymentStatus = String(record.payment_status || "");
-        const declaredCbm = String(record.cbm || "");
-        const declaredWeight = String(record.weight_kg || "");
-        const verifiedCbm = record.verified_cbm === null || record.verified_cbm === undefined || record.verified_cbm === "" ? "" : String(record.verified_cbm);
-        const verifiedWeight = record.verified_weight_kg === null || record.verified_weight_kg === undefined || record.verified_weight_kg === "" ? "" : String(record.verified_weight_kg);
-        const hasVerifiedMeasurements = Boolean(verifiedCbm && verifiedWeight);
-
-        const common = [
-          tracking ? `Tracking Number: ${tracking}` : "",
-          cargoCode ? `Cargo Code: ${cargoCode}` : "",
-        ].filter(Boolean).join("\n");
-
-        const messages: Array<[string, string, string[]]> = [
-          ["awaiting-supplier-dispatch", "Awaiting Supplier Dispatch", [
-            `Hi ${customerName}! We are currently waiting for your supplier to send your package to our China warehouse.`,
-            "",
-            common,
-            warehouse ? `China Warehouse: ${warehouse}` : "",
-            "",
-            "Once your package arrives at our consolidation hub, we’ll verify the cargo details and send you the next update."
-          ]],
-
-          ["china-warehouse", "China Warehouse", [
-            `Hi ${customerName}! 😊`,
-            `Good news! Your items have safely arrived at our main consolidation hub in ${warehouse ? `${warehouse}, China` : "China"}.`,
-            "",
-            "**Shipment Details**",
-            common,
-            received ? `Received: ${received}` : "",
-            "",
-            "**Declared Measurements:**",
-            declaredCbm ? `• CBM: ${declaredCbm}` : "",
-            declaredWeight ? `• Weight: ${declaredWeight} kg` : "",
-            "",
-            "**Warehouse-Verified Measurements:**",
-            hasVerifiedMeasurements ? `• CBM: ${verifiedCbm}` : "• CBM: Pending warehouse verification",
-            hasVerifiedMeasurements ? `• Weight: ${verifiedWeight} kg` : "• Weight: Pending warehouse verification",
-            "",
-            "📦 **Final Shipping Cost Calculation**",
-            "Your final shipping charge will be based on the **warehouse-verified measurements**, not the initially declared figures.",
-            "For sea freight, we calculate both the volume-based charge (CBM × applicable rate) and weight-based charge (kg × applicable rate). **Whichever amount is higher will be your final shipping cost**, subject to the applicable minimum charge and any additional charges disclosed in your quotation.",
-            hasVerifiedMeasurements
-              ? `For your shipment, we will use the verified **${verifiedCbm} CBM and ${verifiedWeight} kg** to calculate the final freight charge.`
-              : "We’ll use the warehouse-verified CBM and weight to calculate your final freight charge once verification is complete.",
-            "We’ll send you the updated shipping quotation and keep you informed of the next steps.",
-            "Thank you for trusting KargoDoor PH! 💚"
-          ]],
-
-          ["china-port", "China Port", [
-            `Hi ${customerName}! Your shipment has cleared Chinese customs and is waiting to board the vessel.`,
-            "",
-            common,
-            service ? `Service: ${service}` : "",
-            warehouse ? `Origin Warehouse: ${warehouse}` : "",
-            "",
-            "We’ll keep you updated once the vessel departs China."
-          ]],
-
-          ["sea-transit", "Sea Transit", [
-            `Hi ${customerName}! Your package is currently on the ocean, sailing toward the Philippines.`,
-            "",
-            common,
-            service ? `Service: ${service}` : "",
-            "",
-            "We’ll send another update once the ship docks in Manila.",
-            "Track here: https://www.kargodoorph.com/track"
-          ]],
-
-          ["shipment-in-transit", "Shipment In Transit", [
-            `Hi ${customerName}! Your KargoDoor shipment is currently in transit to the Philippines.`,
-            "",
-            common,
-            service ? `Service: ${service}` : "",
-            "",
-            "We’ll send you another update once your cargo arrives in the Philippines.",
-            "Track here: https://www.kargodoorph.com/track"
-          ]],
-
-          ["manila-port", "Manila Port", [
-            `Hi ${customerName}! The ship has docked, and your cargo is undergoing customs clearance in Manila.`,
-            "",
-            common,
-            "",
-            "We’ll notify you once clearance is complete and the truck has approval to leave the port."
-          ]],
-
-          ["gatepass", "Gatepass", [
-            `Hi ${customerName}! Customs clearance is complete, and the delivery truck has approval to leave the port.`,
-            "",
-            common,
-            "",
-            "Your cargo is now moving to our Malabon warehouse for final delivery or pickup."
-          ]],
-
-          ["payment-request", "Payment Request", [
-            `Hi ${customerName}! Your KargoDoor shipment is ready for payment processing.`,
-            "",
-            common,
-            paymentStatus ? `Current Payment Status: ${paymentStatus}` : "",
-            "",
-            "Please coordinate with us for your invoice and payment details. Once payment is confirmed, we’ll proceed with the next release or delivery step."
-          ]],
-
-          ["malabon-warehouse", "Malabon Warehouse", [
-            `Hi ${customerName}! Your items have arrived at our Malabon warehouse and are ready for final delivery or pickup.`,
-            "",
-            common,
-            "",
-            "Please coordinate with us before pickup, or wait for our delivery update."
-          ]],
-
-          ["out-for-delivery", "Out for Delivery", [
-            `Hi ${customerName}! Your KargoDoor shipment is now out for delivery.`,
-            "",
-            common,
-            "",
-            "Please make sure someone is available to receive the cargo. We’ll update you once delivery is completed."
-          ]],
-
-          ["delivered", "Shipment Delivered", [
-            `Hi ${customerName}! Your KargoDoor shipment has been delivered.`,
-            "",
-            common,
-            arrival ? `Delivery / Arrival Date: ${arrival}` : "",
-            "",
-            "Thank you for trusting KargoDoor PH with your shipment.",
-            "",
-            "SOURCE • SHIP • RECEIVE"
-          ]],
-
-          ["feedback", "Feedback / Referral", [
-            `Hi ${customerName}! Thank you for choosing KargoDoor PH.`,
-            "",
-            "We hope you had a smooth shipping experience with us. We’d love to hear your feedback.",
-            "",
-            "If you know a friend, business owner, online seller, or entrepreneur who imports from China, we’d also appreciate your referral.",
-            "",
-            "Thank you for supporting KargoDoor PH!"
-          ]]
-        ];
-
-        const footer = [
-          "",
-          "—",
-          "KargoDoor PH",
-          "China to PH, made SIMPLE.",
-          "",
-          "+63 917 157 7370 | +63 908 889 0664",
-          "support@kargodoorph.com",
-          "www.kargodoorph.com"
-        ];
+        const messages = shipmentStatusMessages({
+          customerName: linkedCustomer?.full_name,
+          tracking: record.tracking_number,
+          cargoCode: record.cargo_code || linkedCustomer?.customer_code,
+          service: record.service_type,
+          warehouse: record.china_warehouse,
+          received: record.warehouse_received_date,
+          arrival: record.actual_arrival,
+          paymentStatus: record.payment_status,
+          declaredCbm: record.cbm,
+          declaredWeight: record.weight_kg,
+          verifiedCbm: record.verified_cbm,
+          verifiedWeight: record.verified_weight_kg,
+          shippingCharge: record.shipping_charge,
+          deliveryCharge: record.delivery_charge,
+        });
 
         return `<section>
           <h2>Customer Notifications</h2>
           <p class="muted">Messages are personalized from this shipment. Review before sending. Copying a message does not change the shipment status.</p>
-          ${messages.map(([key,title,lines]) => {
+          ${messages.map(([key,title,body]) => {
             const messageId = `customer-notification-${id}-${key}`;
-            const body = [...lines.filter((line,index,all) => line !== "" || index === 0 || all[index-1] !== ""), ...footer].join("\n");
             return `<details class="customer-notification">
               <summary>${esc(title)}</summary>
               <textarea id="${esc(messageId)}" readonly aria-label="${esc(title)} customer message" style="min-height:260px;white-space:pre-wrap">${esc(body)}</textarea>
@@ -1800,6 +1663,7 @@ export async function handleAdmin(
           ${portalSection}
           ${shippingInstructions}
           ${customerNotifications}
+          ${warehouseAddresses}
         `,
         user.name,
         200,

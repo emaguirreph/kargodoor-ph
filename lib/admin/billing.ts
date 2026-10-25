@@ -22,6 +22,8 @@ import {
 
 import type { RecordData } from "./validation";
 import { esc, hidden, page, pesos } from "./ui";
+import { invoiceMessages } from "./customer-messages";
+import { copyButton, copyScript } from "./shipping-instructions";
 
 const route = "/admin/invoices";
 
@@ -1498,6 +1500,8 @@ async function detail(
         ${paymentHistory}
       </section>
 
+      ${canMutateAdmin(user) ? invoiceMessageSection(invoice, grand, paid) : ""}
+
       ${canMutateAdmin(user) ? issueForm(
         env,
         user.id,
@@ -1512,6 +1516,34 @@ async function detail(
     `,
     user.name, 200, {}, canMutateAdmin(user),
   );
+}
+
+function invoiceMessageSection(invoice: RecordData, grand: number, paid: number) {
+  const messages = invoiceMessages({
+    customerName: invoice.full_name,
+    cargoCode: invoice.customer_code,
+    invoiceNumber: invoice.invoice_number,
+    tracking: invoice.tracking_number,
+    shippingFee: invoice.subtotal,
+    deliveryFee: invoice.delivery_charge,
+    otherCharge: invoice.other_charge,
+    total: grand,
+    paid,
+    dueDate: invoice.due_at,
+  });
+  return `<section>
+    <h2>Invoice Messages</h2>
+    <p class="muted">Messages are personalized from this invoice. Review before sending. Copying a message does not change the invoice or record a payment.</p>
+    ${messages.map(([key, title, body]) => {
+      const messageId = `invoice-message-${String(invoice.id || "").replace(/[^\w-]/g, "")}-${key}`;
+      return `<details class="customer-notification">
+        <summary>${esc(title)}</summary>
+        <textarea id="${esc(messageId)}" readonly aria-label="${esc(title)} customer message" style="min-height:260px;white-space:pre-wrap">${esc(body)}</textarea>
+        <div class="actions">${copyButton(messageId, `Copy ${title}`)}</div>
+      </details>`;
+    }).join("")}
+    ${copyScript()}
+  </section>`;
 }
 
 async function createView(

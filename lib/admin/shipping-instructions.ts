@@ -1,3 +1,5 @@
+import { finishMessage } from "./customer-messages";
+
 export type ShippingInstructionCustomer = {
   name?: unknown;
   customerCode?: unknown;
@@ -70,18 +72,35 @@ English translation:
 2. Include one packing list with each shipment, showing the detailed Chinese product name, material, quantity, weight, and sender’s phone number.
 3. Ensure all packaging is complete and undamaged before delivery. Reinforce fragile cargo. The warehouse will not accept cargo with damaged packaging.`;
 
-export function customerAccountCreatedMessage(customer: ShippingInstructionCustomer): string {
+/** Welcome message: Account/Cargo Code and customer portal login in one message. */
+export function customerWelcomeMessage(customer: PortalAccessMessage): string {
   const name = text(customer.name, "there");
   const code = text(customer.customerCode, "[account/cargo code]");
-  return `Hi ${name}! Welcome to KargoDoor PH.
-
-Your KargoDoor Account Number is: ${code}
-
-Please use this account number or cargo code on your supplier’s shipping label so we can identify your packages when they arrive at our China warehouse.
-
-We’ll send your warehouse address and shipping instructions next.
-
-— KargoDoor PH`;
+  const login = text(customer.login, "[email or mobile number]");
+  const loginLabel = text(customer.loginLabel, "email or mobile number");
+  const password = text(customer.temporaryPassword, "[temporary password]");
+  return finishMessage([
+    `Hi ${name}! 😊`,
+    "",
+    "Welcome to KargoDoor PH! Your account is all set.",
+    "",
+    "🔑 Your Account Details",
+    `Account/Cargo Code: ${code}`,
+    "",
+    "💻 Your Customer Portal",
+    "Login page: https://kargodoorph.com/customer/login",
+    `Login ${loginLabel}: ${login}`,
+    `Temporary password: ${password}`,
+    "",
+    "Next Steps:",
+    "1. Please use your Account/Cargo Code on your supplier’s shipping label so we can identify your packages when they arrive at our China warehouse.",
+    "2. Sign in to the portal and change your password right away. Never share your temporary password with anyone.",
+    "3. We’ll send your warehouse address and shipping instructions next.",
+    "",
+    "You can use the portal to view your shipment and payment updates anytime.",
+    "",
+    "Thank you for choosing KargoDoor PH! 💚",
+  ]);
 }
 
 export function customerShippingInstructions(customer: ShippingInstructionCustomer): string {
@@ -89,43 +108,36 @@ export function customerShippingInstructions(customer: ShippingInstructionCustom
   const code = text(customer.customerCode, "[account/cargo code]");
   const warehouse = text(customer.warehouse, "[Confirm the assigned warehouse]");
   const address = text(customer.warehouseAddress || warehouseAddress(warehouse), "[Add warehouse address]");
-  return `Hi ${name}! Here are your KargoDoor China warehouse shipping instructions.
-
-Account/Cargo Code: ${code}
-Assigned Warehouse: ${warehouse}
-Warehouse Address:
-${address}
-
-Please ask your supplier to place ${code} clearly on every package label. This helps us receive, identify, and update your shipment correctly.
-
-${supplierRequirements}
-
-Once shipped, please send us the courier name, tracking/waybill number, and a receipt or package photo so we can monitor your cargo going to our warehouse.
-
-— KargoDoor PH`;
+  return finishMessage([
+    `Hi ${name}! 😊`,
+    "",
+    "Here are your KargoDoor China warehouse shipping instructions.",
+    "",
+    "📦 Your Details",
+    `Account/Cargo Code: ${code}`,
+    `Assigned Warehouse: ${warehouse}`,
+    "",
+    "📍 Warehouse Address",
+    address,
+    "",
+    "Next Steps:",
+    `1. Please ask your supplier to place ${code} clearly on every package label. This helps us receive, identify, and update your shipment correctly.`,
+    "2. Send your supplier the instructions below.",
+    "3. Once shipped, please send us the courier name, tracking/waybill number, and a receipt or package photo so we can monitor your cargo going to our warehouse.",
+    "",
+    supplierRequirements,
+    "",
+    "Thank you for trusting KargoDoor PH! 💚",
+  ]);
 }
 
 export function customerPortalAccessMessage(portal: PortalAccessMessage): string {
-  const name = text(portal.name, "there");
-  const customerCode = text(portal.customerCode, "[account/cargo code]");
-  const login = text(portal.login, "[email or mobile number]");
-  const loginLabel = text(portal.loginLabel, "email or mobile number");
-  const password = text(portal.temporaryPassword, "[temporary password]");
-  return `Hi ${name}!
+  return customerWelcomeMessage(portal);
+}
 
-Your KargoDoor customer portal account is ready.
-
-Here is your Account/Cargo Code: *${customerCode}*
-
-Login page: https://kargodoorph.com/customer/login
-Login ${loginLabel}: ${login}
-Temporary password: ${password}
-
-Please sign in and change your password right away. Never share your temporary password with anyone.
-
-You can use the portal to view your shipment and payment updates.
-
-— KargoDoor PH`;
+/** Every China warehouse with its full address, for the bottom of the shipment page. */
+export function warehouseAddressBook(): Array<[WarehouseName, string]> {
+  return warehouseNames.map((warehouse) => [warehouse, `${warehouse} Warehouse\n${warehouseAddress(warehouse)}`]);
 }
 
 export function shipmentShippingInstructions(shipment: ShippingInstructionShipment): string {
@@ -135,22 +147,32 @@ export function shipmentShippingInstructions(shipment: ShippingInstructionShipme
   const address = text(shipment.warehouseAddress || warehouseAddress(warehouse), "[Add warehouse address]");
   const courier = text(shipment.supplierCourier, "[courier name]");
   const waybill = text(shipment.supplierWaybill, "[tracking/waybill number]");
-  return `Hi ${name}! Here are the shipping instructions for your KargoDoor cargo.
-
-Account/Cargo Code: ${code}
-Assigned Warehouse: ${warehouse}
-Warehouse Address: ${address}
-
-Please ask your supplier to place ${code} clearly on every package before shipping.
-
-${supplierRequirements}
-
-Once shipped, please send us:
-• Courier: ${courier}
-• Tracking/Waybill number: ${waybill}
-• Receipt or package photo
-
-This helps us monitor your cargo going to our warehouse.`;
+  return finishMessage([
+    `Hi ${name}! 😊`,
+    "",
+    "Here are the shipping instructions for your KargoDoor cargo.",
+    "",
+    "📦 Your Details",
+    `Account/Cargo Code: ${code}`,
+    `Assigned Warehouse: ${warehouse}`,
+    "",
+    "📍 Warehouse Address",
+    address,
+    "",
+    "Next Steps:",
+    `Please ask your supplier to place ${code} clearly on every package before shipping, and send them the instructions below.`,
+    "",
+    supplierRequirements,
+    "",
+    "Once shipped, please send us:",
+    `• Courier: ${courier}`,
+    `• Tracking/Waybill number: ${waybill}`,
+    "• Receipt or package photo",
+    "",
+    "This helps us monitor your cargo going to our warehouse.",
+    "",
+    "Thank you for trusting KargoDoor PH! 💚",
+  ]);
 }
 
 export function copyButton(id: string, label = "Copy shipping instructions"): string {

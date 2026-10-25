@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { authenticate, AdminError, canMutateAdmin, checkCsrf, csrfToken, type AdminEnv } from "./security";
 import { esc, page, pesos } from "./ui";
 import { copyButton, copyScript } from "./shipping-instructions";
+import { finishMessage } from "./customer-messages";
 
 type Row = Record<string, unknown>;
 const contacted = ["No", "Yes", "Follow-up Needed"] as const;
@@ -15,14 +16,64 @@ const inlineSelect = (form: string, name: string, current: unknown, values: read
 
 function leadMessages(lead: Row) {
   const name = String(lead.full_name || "there");
-  const service = String(lead.service_type || "shipping");
-  const cbm = String(lead.cbm || "");
-  const weight = String(lead.weight_kg || "");
+  const service = String(lead.service_type || "");
+  const cbm = String(lead.cbm ?? "");
+  const weight = String(lead.weight_kg ?? "");
+  const estimate = lead.estimated_rate === null || lead.estimated_rate === undefined || lead.estimated_rate === "" ? "" : pesos(lead.estimated_rate);
   const id = String(lead.id || "lead");
+  const inquiry = [
+    "📦 Your Inquiry",
+    service && `Service: ${service}`,
+    cbm && `CBM: ${cbm}`,
+    weight && `Weight: ${weight} kg`,
+    estimate && `Estimated Rate: ${estimate}`,
+  ];
+  const needed = [
+    "• Item description and photo",
+    "• Quantity, dimensions or total CBM, and weight",
+    "• Supplier location in China",
+  ];
   const messages = [
-    ["initial", "Initial reply", `Hello po, ${name}! Thank you for contacting KargoDoor PH. We received your ${service} inquiry${cbm && weight ? ` for ${cbm} CBM and ${weight} kg` : ""}.\n\nWe’re reviewing the details and will be happy to help prepare your quotation. May we also confirm the item description, supplier location, and preferred warehouse?\n\nThank you po! :)`],
-    ["follow-up", "Follow-up", `Hello po, ${name}! Just following up on your ${service} inquiry with KargoDoor PH.\n\nWould you still like us to prepare a quotation for your cargo? Please send any updated item details, dimensions/CBM, and weight when ready.\n\nThank you po! :)`],
-    ["check-in", "Check-in", `Hello po, ${name}! We wanted to check if you still need assistance with shipping your cargo from China to the Philippines.\n\nIf you are ready, please share the item details, dimensions or total CBM, weight, and supplier location so we can assist you.\n\nThank you po! :)`],
+    ["initial", "Initial Reply", finishMessage([
+      `Hi ${name}! 😊`,
+      "",
+      `Thank you for contacting KargoDoor PH! We received your ${service ? `${service} ` : ""}inquiry from our website calculator.`,
+      "",
+      ...inquiry,
+      "",
+      "Next Steps:",
+      "To prepare your official quotation, please send us:",
+      ...needed,
+      "",
+      "The estimated rate is based on the details you entered. Your final rate will be confirmed in your quotation.",
+      "",
+      "Thank you for choosing KargoDoor PH! 💚",
+    ])],
+    ["follow-up", "Follow-Up", finishMessage([
+      `Hi ${name}! 😊`,
+      "",
+      `Just following up on your ${service ? `${service} ` : ""}inquiry with KargoDoor PH.`,
+      "",
+      ...inquiry,
+      "",
+      "Next Steps:",
+      "Would you still like us to prepare a quotation for your cargo? Just reply with your updated item details, dimensions or CBM, and weight when you’re ready.",
+      "",
+      "Thank you for choosing KargoDoor PH! 💚",
+    ])],
+    ["check-in", "Check-In", finishMessage([
+      `Hi ${name}! 😊`,
+      "",
+      "We wanted to check if you still need help shipping your cargo from China to the Philippines.",
+      "",
+      "Next Steps:",
+      "If you’re ready, please send us:",
+      ...needed,
+      "",
+      "We’ll prepare your quotation right away.",
+      "",
+      "Thank you for choosing KargoDoor PH! 💚",
+    ])],
   ] as const;
   return `<section><h2>Lead Messages</h2><p class="muted">Edit any message before copying it to Messenger, WhatsApp, Viber, or email.</p>${messages.map(([key, title, body]) => { const messageId = `lead-message-${id}-${key}`; return `<details class="customer-notification"><summary>${esc(title)}</summary><textarea id="${esc(messageId)}" aria-label="${esc(title)} lead message" style="min-height:220px;white-space:pre-wrap">${esc(body)}</textarea><div class="actions">${copyButton(messageId, `Copy ${title}`)}</div></details>`; }).join("")}${copyScript()}</section>`;
 }

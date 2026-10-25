@@ -14,6 +14,7 @@ import {
   type AdminEnv,
 } from "./security";
 import { esc, page, pesos } from "./ui";
+import { finishMessage } from "./customer-messages";
 import {
   airItems,
   airQuote,
@@ -141,21 +142,11 @@ async function number(db: D1Database) {
 function quotationCustomerMessage(q: Row) {
   const customer = snapshot(q.customer_snapshot).data;
   const cargo = snapshot(q.cargo_snapshot).data;
-  const name = String(customer.name || "Customer");
+  const name = String(customer.name || "there");
   const warehouse = String(cargo.originWarehouse || "");
   const quotationNumber = String(q.quotation_number || "");
   const validUntil = String(q.valid_until || "");
 
-  const footer = [
-    "",
-    "—",
-    "KargoDoor PH",
-    "China to PH, made SIMPLE.",
-    "",
-    "+63 917 157 7370 | +63 908 889 0664",
-    "support@kargodoorph.com",
-    "www.kargodoorph.com",
-  ];
   const supplierInstructions = [
     "Instructions to Suppliers",
     "Important reminders before shipping:",
@@ -189,55 +180,62 @@ function quotationCustomerMessage(q: Row) {
       "sent",
       "Quotation Sent",
       [
-        `Hi ${name}! Here’s your KargoDoor quotation.`,
+        `Hi ${name}! 😊`,
         "",
+        "Here’s your KargoDoor quotation.",
+        "",
+        "📄 Quotation Details",
         `Quotation No.: ${quotationNumber}`,
         `Estimated Amount: ${pesos(q.final_amount)}`,
         `Service: ${String(q.freight_type || "")}`,
         warehouse ? `Origin Warehouse: ${warehouse}` : "",
         validUntil ? `Valid Until: ${validUntil}` : "",
         "",
+        "Next Steps:",
         "Please review the cargo details and estimated all-in rate. If you have any questions or would like to proceed, just reply to this message and we’ll be happy to assist.",
         "",
         "Final charges may change if the actual dimensions, CBM, weight, quantity, cargo category, or warehouse inspection results differ from the quoted information.",
         "",
         ...supplierInstructions,
+        "",
+        "Thank you for choosing KargoDoor PH! 💚",
       ],
     ],
     [
       "follow-up",
       "Quotation Follow-Up",
       [
-        `Hi ${name}! Just following up on KargoDoor Quotation ${quotationNumber}.`,
+        `Hi ${name}! 😊`,
         "",
+        `Just following up on your KargoDoor Quotation ${quotationNumber}.`,
+        "",
+        "📄 Quotation Details",
         `Estimated Amount: ${pesos(q.final_amount)}`,
         `Service: ${String(q.freight_type || "")}`,
         "",
+        "Next Steps:",
         "Please let us know if you have any questions about the quotation or if you’re ready to proceed. We’ll be happy to guide you through the next step.",
+        "",
+        "Thank you for choosing KargoDoor PH! 💚",
       ],
     ],
     [
       "approved",
       "Quotation Approved — Next Steps",
       [
-        `Hi ${name}! Thank you for approving KargoDoor Quotation ${quotationNumber}.`,
+        `Hi ${name}! 😊`,
         "",
-        "We’re ready to proceed with your shipment.",
+        `Thank you for approving KargoDoor Quotation ${quotationNumber}! We’re ready to proceed with your shipment.`,
         "",
-        "We’ll create your shipment record and provide your KargoDoor cargo code and shipping instructions for your supplier.",
+        "Next Steps:",
+        "We’ll create your shipment record and send your KargoDoor Account/Cargo Code and shipping instructions for your supplier.",
         "",
         "Please make sure your supplier follows the shipping instructions before sending the cargo to our China warehouse.",
+        "",
+        "Thank you for trusting KargoDoor PH! 💚",
       ],
     ],
   ];
-  const warehouseInstructions: Record<string, [string, string[]]> = {
-    Shishi: ["Shishi Warehouse Receiving Instructions", ["Sea Cargo 海运", "", "Shishi Branch Address 通达国际物流（石狮）", "地址：福建省晋江市龙湖镇梧坑村逸海产业园4栋A1通达仓库（+客户唛头）", "邮编：362200", "联系人：张先生 13600719368; 0595-85293217", "高德导航搜索“泉海通达物流”", "Receiving Time: Monday to Sunday 8am to 6pm (except for holidays)"]],
-    Guangzhou: ["Guangzhou Warehouse Receiving Instructions", ["Sea Cargo 海运", "", "Guangzhou Branch Address 通达国际物流（广州）", "地址：广州市白云区江高镇沙溪东路18号166通达仓库（+客户唛头）", "邮编：510450", "联系人：伍先生 13924091288 / 13560372000", "固定电话：020-81997500", "高德导航搜索“广州通达仓库”", "Receiving Time: Monday to Sunday 8am to 6pm (except for holidays)"]],
-    Yiwu: ["Yiwu Warehouse Receiving Instructions", ["Sea Cargo 海运", "", "Yiwu Branch Address 通达国际物流（义乌）", "地址：浙江省义乌市苏溪镇好派路121号飞天制衣1楼通达仓库（+客户唛头）", "邮编：322009", "联系人：施先生 13867932099 / 18069956177", "固定电话：0579-85201593", "Receiving Time: Monday to Sunday 8am to 5pm (except for holidays)"]],
-    "Tongda Air Cargo": ["Tongda Air Cargo Receiving Instructions", ["TONGDA AIR CARGO 通达空运", "", "Label: AIR + customer cargo mark", "Recipient: 通达空运", "地址：福建泉州市晋江市龙湖梧坑逸海产业园4栋空运部（+客户唛头）", "Mobile: 13533392699", "Email: 1104931438@qq.com"]],
-  };
-  const selectedWarehouse = warehouseInstructions[warehouse];
-  if (selectedWarehouse) messages.push(["warehouse-instructions", selectedWarehouse[0], [...selectedWarehouse[1], "", ...supplierInstructions]]);
   messages.push(["formal-export", "Formal Export Request", ["Formal Export Request 出口报关", "", "For suppliers needing formal export through the supplier’s name, please contact via WeChat:", "出口报关请联系:", "Guangzhou 广州报关联系微信/电话：18150099580", "Yiwu 义乌报关联系微信/电话：18050882066"]]);
 
   return `<section>
@@ -246,13 +244,9 @@ function quotationCustomerMessage(q: Row) {
     ${messages
       .map(([key, title, lines]) => {
         const id = `quotation-message-${String(q.id || "").replace(/[^\w-]/g, "")}-${key}`;
-        const body = [
-          ...lines.filter(
-            (line, index, all) =>
-              line !== "" || index === 0 || all[index - 1] !== "",
-          ),
-          ...footer,
-        ].join("\n");
+        const body = key === "nihao-quote-request"
+          ? lines.join("\n")
+          : finishMessage(lines);
         return `<details class="customer-notification">
         <summary>${esc(title)}</summary>
         <textarea id="${esc(id)}" aria-label="${esc(title)} customer message" style="min-height:260px;white-space:pre-wrap">${esc(body)}</textarea>
