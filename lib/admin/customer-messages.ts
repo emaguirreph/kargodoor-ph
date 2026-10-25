@@ -8,9 +8,6 @@ export const messageFooter = [
   "—",
   "KargoDoor PH",
   "China to PH, Made SIMPLE.",
-  "",
-  "📞 +63 917 157 7370 | +63 908 889 0664",
-  "✉️ support@kargodoorph.com",
   "🌐 www.kargodoorph.com",
 ].join("\n");
 
@@ -37,7 +34,28 @@ export type ShipmentMessageInput = {
   declaredWeight?: unknown;
   verifiedCbm?: unknown;
   verifiedWeight?: unknown;
+  /** Centavos, as stored on the shipment. */
+  shippingCharge?: unknown;
+  deliveryCharge?: unknown;
 };
+
+const peso = (centavos: number) =>
+  new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" }).format(centavos / 100);
+
+/** Bank and GCash details, same as the customer portal. */
+export const paymentInstructions = [
+  "💳 Payment Instructions",
+  "Bank Transfer",
+  "Bank: UnionBank of the Philippines",
+  "Account Name: KargoDoor Cargo Forwarding",
+  "Account Number: 002170017106",
+  "",
+  "GCash",
+  "GCash Number: 0917 157 7370",
+  "Account Name: EMMARUTH GALLARDO",
+  "",
+  "Once paid, please send us a screenshot of your payment receipt so we can confirm it right away.",
+];
 
 const text = (value: unknown) => (value === null || value === undefined ? "" : String(value).trim());
 
@@ -56,6 +74,15 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
   const verifiedCbm = text(input.verifiedCbm);
   const verifiedWeight = text(input.verifiedWeight);
   const hasVerified = Boolean(verifiedCbm && verifiedWeight);
+  const amount = (value: unknown) => (value === null || value === undefined || value === "" ? null : Number(value));
+  const shippingCharge = amount(input.shippingCharge);
+  const deliveryCharge = amount(input.deliveryCharge) ?? 0;
+  const shippingCost = [
+    "💰 Shipping Cost",
+    `Shipping Fee: ${shippingCharge === null ? "To be confirmed" : peso(shippingCharge)}`,
+    deliveryCharge > 0 && `Delivery Fee: ${peso(deliveryCharge)}`,
+    shippingCharge !== null && `Total Amount Due: ${peso(shippingCharge + deliveryCharge)}`,
+  ];
   const isAir = /air/i.test(service);
   const trackLink = `https://www.kargodoorph.com/track${tracking ? `?tracking=${encodeURIComponent(tracking)}` : ""}`;
 
@@ -63,7 +90,7 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
   const details = (...extra: Array<string | false>) => [
     "📦 Shipment Details",
     tracking && `Tracking Number: ${tracking}`,
-    cargoCode && `Cargo Code: ${cargoCode}`,
+    cargoCode && `Account/Cargo Code: ${cargoCode}`,
     ...extra,
   ];
   const track = `📍 Track your shipment anytime: ${trackLink}`;
@@ -77,7 +104,7 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
       ...details(warehouse && `China Warehouse: ${warehouse}`),
       "",
       "Next Steps:",
-      `Please remind your supplier to put ${cargoCode ? `your cargo code ${cargoCode}` : "your cargo code"} on every package. Once it ships, send us the courier name and tracking number so we can watch for it.`,
+      `Please remind your supplier to put ${cargoCode ? `your Account/Cargo Code ${cargoCode}` : "your Account/Cargo Code"} on every package. Once it ships, send us the courier name and tracking number so we can watch for it.`,
       "",
       "As soon as your package arrives, we'll check it and send you the next update.",
       "",
@@ -132,27 +159,14 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
     ["sea-transit", "Sea Transit", [
       hi,
       "",
-      "Your shipment is now on the vessel, sailing to the Philippines. 🚢🌊",
+      isAir
+        ? "Your shipment is now on its flight to the Philippines. ✈️"
+        : "Your shipment is now on the vessel, sailing to the Philippines. 🚢🌊",
       "",
       ...details(service && `Service: ${service}`),
       "",
       "Next Steps:",
-      "No action needed from you. We'll send another update once the ship docks in Manila.",
-      "",
-      track,
-      "",
-      thanks,
-    ]],
-
-    ["shipment-in-transit", "Shipment In Transit", [
-      hi,
-      "",
-      `Your shipment is now on its way to the Philippines! ${isAir ? "✈️" : "🚢"}`,
-      "",
-      ...details(service && `Service: ${service}`),
-      "",
-      "Next Steps:",
-      "No action needed from you. We'll send another update once your cargo arrives in the Philippines.",
+      `No action needed from you. We'll send another update once ${isAir ? "your shipment lands in Manila" : "the ship docks in Manila"}.`,
       "",
       track,
       "",
@@ -194,10 +208,14 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
       "",
       ...details(paymentStatus && `Payment Status: ${paymentStatus}`),
       "",
-      "Next Steps:",
-      "Please settle your shipping charges. You can view your invoice in your KargoDoor customer portal: https://kargodoorph.com/customer/login",
+      ...shippingCost,
       "",
-      "You can also reply to this message and we'll send your invoice and payment details. Once your payment is confirmed, we'll schedule your pickup or delivery right away.",
+      ...paymentInstructions,
+      "",
+      "Next Steps:",
+      "Please settle your shipping charges. You can also view your invoice in your KargoDoor customer portal: https://kargodoorph.com/customer/login",
+      "",
+      "Once your payment is confirmed, we'll schedule your pickup or delivery right away.",
       "",
       thanks,
     ]],
@@ -213,6 +231,10 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
       "Please coordinate with our team to arrange your preferred pickup or delivery schedule.",
       "",
       "Kindly note that all outstanding shipping charges must be settled before your cargo can be released for pickup or delivery.",
+      "",
+      ...shippingCost,
+      "",
+      ...paymentInstructions,
       "",
       thanks,
     ]],

@@ -224,7 +224,7 @@ function quotationCustomerMessage(q: Row) {
         "",
         "We’re ready to proceed with your shipment.",
         "",
-        "We’ll create your shipment record and provide your KargoDoor cargo code and shipping instructions for your supplier.",
+        "We’ll create your shipment record and provide your KargoDoor Account/Cargo Code and shipping instructions for your supplier.",
         "",
         "Please make sure your supplier follows the shipping instructions before sending the cargo to our China warehouse.",
       ],

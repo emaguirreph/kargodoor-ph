@@ -1590,6 +1590,8 @@ export async function handleAdmin(
           declaredWeight: record.weight_kg,
           verifiedCbm: record.verified_cbm,
           verifiedWeight: record.verified_weight_kg,
+          shippingCharge: record.shipping_charge,
+          deliveryCharge: record.delivery_charge,
         });
 
         return `<section>
