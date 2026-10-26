@@ -375,55 +375,15 @@ export async function readFinanceSummary(
   };
 }
 
-export async function financeDashboard(
-  db: D1Database,
-  url: URL,
-  user: string,
-  now = new Date(),
-  canWrite = true,
-) {
-  const range = financeRange(url, now);
+type SimpleSummary = Awaited<ReturnType<typeof readSimpleSummary>>;
 
-  const summary =
-    await readFinanceSummary(
-      db,
-      range,
-      now,
-    );
-
-  const report =
-    await readFinanceReport(
-      db,
-      url,
-      now,
-      summary,
-    );
-  const collectionWatch = await db
-    .prepare(
-      `SELECT
-        i.invoice_number,
-        i.due_at,
-        c.full_name,
-        CAST(i.total + i.other_charge AS TEXT) AS total,
-        CAST(COALESCE(SUM(p.amount), 0) AS TEXT) AS paid
-      FROM invoices i
-      JOIN customers c ON c.id = i.customer_id
-      LEFT JOIN payments p ON p.invoice_id = i.id
-      WHERE i.status IN ('Unpaid', 'Partial')
-        AND i.archived_at IS NULL
-      GROUP BY i.id
-      HAVING i.total + i.other_charge > COALESCE(SUM(p.amount), 0)
-      ORDER BY CASE WHEN i.due_at IS NULL OR i.due_at = '' THEN 1 ELSE 0 END, i.due_at ASC, i.issued_at ASC
-      LIMIT 5`,
-    )
-    .all<{
-      invoice_number: string;
-      due_at: string | null;
-      full_name: string;
-      total: string;
-      paid: string;
-    }>();
-
+/**
+ * "Where the business stands today", whatever date range a page shows:
+ * cash now, money still coming in and going out, and profit to date plus
+ * the profit still to come from shipments not yet billed.
+ */
+export async function readSimpleSummary(db: D1Database, now = new Date()) {
+  const allTime = await readFinanceSummary(db, { from: "", to: "" }, now);
   const unbilled = await db
     .prepare(
       `SELECT
@@ -475,19 +435,10 @@ export async function financeDashboard(
     }
   }
   const expectedProfit = expectedCharges - expectedCosts;
-  // The summary answers "where are we today", whatever range is selected.
-  const current =
-    summary.asOf === philippineToday(now)
-      ? summary
-      : await readFinanceSummary(db, { from: "", to: "" }, now);
-  const allTime =
-    current.asOf === philippineToday(now) && !range.from && !range.to
-      ? current
-      : await readFinanceSummary(db, { from: "", to: "" }, now);
   // Profit so far (billed work minus its Ni Hao cost and every expense)
   // plus the profit still to come from shipments not yet billed.
   const overallProfit = allTime.profit + expectedProfit;
-  const toCollect = current.receivable;
+  const toCollect = allTime.receivable;
   const comingIn = unbilledTotal + toCollect;
 
   // Ni Hao is paid after the fact: a shipment's cost is still owed until a
@@ -514,45 +465,85 @@ export async function financeDashboard(
   const goingOutEstimated = BigInt(owed?.estimated ?? "0");
   const goingOutUnknown = Number(owed?.uncosted ?? 0);
 
-  const notices = [
-    summary.uncostedInvoices
-      ? `${summary.uncostedInvoices} invoices in this range are for shipments with no Ni Hao cost. Net Profit counts no freight cost for them until the cost is added to the shipment.`
-      : "",
+  return {
+    cash: allTime.cash.total,
+    allTimeProfit: allTime.profit,
+    allTimeExpenses: allTime.operating,
+    unbilled,
+    unbilledTotal,
+    toCollect,
+    comingIn,
+    goingOut,
+    goingOutEstimated,
+    goingOutUnknown,
+    expectedCharges,
+    expectedCosts,
+    expectedProfit,
+    uncostedCount,
+    uncostedCharges,
+    overallProfit,
+  };
+}
 
-    summary.uncosted > zero
-      ? `${summary.uncosted} shipments in this range have no Ni Hao cost. Freight Margin excludes them.`
-      : "",
+const simpleSummaryCss = `<style>
+        .finance-simple-cards {
+          grid-template-columns: repeat(5, minmax(0, 1fr));
+        }
 
-    summary.undatedInvoices
-      ? `${summary.undatedInvoices} non-Draft/non-Void invoices lack valid issue dates and are excluded from Revenue and Accounts Receivable. These metrics may be incomplete.`
-      : "",
+        @media (max-width: 1300px) {
+          .finance-simple-cards {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+          }
+        }
 
-    summary.undatedPayments
-      ? `${summary.undatedPayments} payments lack valid payment dates and are excluded from collections and receivable deductions. These metrics may be incomplete.`
-      : "",
+        .finance-simple-cards .card strong.finance-negative {
+          color: #9a5b00;
+        }
 
-    summary.undatedExpenses
-      ? `${summary.undatedExpenses} operating expenses lack valid dates and are excluded. Operating Expenses and Net Profit may be incomplete.`
-      : "",
-  ].filter(Boolean);
+        .finance-simple-cards .card strong {
+          display: block;
+          font-size: 1.8rem;
+          white-space: nowrap;
+        }
 
-  const freightLink =
-    `/admin/finance?report=freight&${new URLSearchParams(
-      range,
-    )}`;
+        .finance-simple-cards small {
+          display: block;
+          margin-top: .4rem;
+          line-height: 1.45;
+        }
 
-  const totalExpenses =
-    summary.costOfSales + summary.operating;
+        .finance-simple-cards small strong.finance-warn {
+          display: inline;
+          font-size: inherit;
+          white-space: normal;
+          color: #9a5b00;
+        }
+        @media(max-width:760px) {
+          .finance-simple-cards {
+            grid-template-columns: 1fr;
+          }
+        }
+      </style>`;
 
-  const simpleSummary = `
+export function simpleSummarySection(
+  simple: SimpleSummary,
+  heading = "Simple Summary",
+  subtitle = "Where the business stands today. The detailed numbers are below.",
+) {
+  const {
+    cash, allTimeProfit, allTimeExpenses, unbilledTotal, toCollect, comingIn,
+    goingOut, goingOutEstimated, goingOutUnknown, expectedCharges, expectedCosts,
+    expectedProfit, uncostedCount, uncostedCharges, overallProfit,
+  } = simple;
+  return `
     <section class="finance-simple">
-      <h2>Simple Summary</h2>
-      <p class="muted">Where the business stands today. The detailed numbers are below.</p>
+      <h2>${esc(heading)}</h2>
+      <p class="muted">${esc(subtitle)}</p>
 
       <div class="cards finance-simple-cards">
         <div class="card">
           <span class="muted">Money we have now</span>
-          <strong>${esc(financePesos(current.cash.total))}</strong>
+          <strong>${esc(financePesos(cash))}</strong>
           <small>Cash on Hand: opening cash plus money received, minus expenses paid.</small>
         </div>
 
@@ -592,20 +583,105 @@ export async function financeDashboard(
           <span class="muted">Overall profit after expenses</span>
           <strong class="${overallProfit < zero ? "finance-negative" : ""}">${esc(financePesos(overallProfit))}</strong>
           <small>${esc(
-            `${financePesos(allTime.profit)} profit so far (after ${financePesos(allTime.operating)} expenses) + ${financePesos(expectedProfit)} expected.`,
+            `${financePesos(allTimeProfit)} profit so far (after ${financePesos(allTimeExpenses)} expenses) + ${financePesos(expectedProfit)} expected.`,
           )} ${overallProfit < zero ? "Below zero: not yet earned back what we have spent, including startup costs." : "Above zero: everything we have spent is earned back."}</small>
         </div>
       </div>
 
       <p class="muted">
         After everything is collected and Ni Hao is paid:
-        ${esc(financePesos(current.cash.total))} + ${esc(financePesos(comingIn))} − ${esc(financePesos(goingOut))} =
-        <strong>${esc(financePesos(current.cash.total + comingIn - goingOut))}</strong>${goingOutUnknown ? ", less the Ni Hao costs not entered yet" : ""}.
+        ${esc(financePesos(cash))} + ${esc(financePesos(comingIn))} − ${esc(financePesos(goingOut))} =
+        <strong>${esc(financePesos(cash + comingIn - goingOut))}</strong>${goingOutUnknown ? ", less the Ni Hao costs not entered yet" : ""}.
         When you pay Ni Hao, add it under Expenses as Freight / Ni Hao Cost with the tracking number, so it moves out of Money going out and into Money we have now.
       </p>
 
     </section>
-  `;
+  ${simpleSummaryCss}`;
+}
+
+export async function financeDashboard(
+  db: D1Database,
+  url: URL,
+  user: string,
+  now = new Date(),
+  canWrite = true,
+) {
+  const range = financeRange(url, now);
+
+  const summary =
+    await readFinanceSummary(
+      db,
+      range,
+      now,
+    );
+
+  const report =
+    await readFinanceReport(
+      db,
+      url,
+      now,
+      summary,
+    );
+  const collectionWatch = await db
+    .prepare(
+      `SELECT
+        i.invoice_number,
+        i.due_at,
+        c.full_name,
+        CAST(i.total + i.other_charge AS TEXT) AS total,
+        CAST(COALESCE(SUM(p.amount), 0) AS TEXT) AS paid
+      FROM invoices i
+      JOIN customers c ON c.id = i.customer_id
+      LEFT JOIN payments p ON p.invoice_id = i.id
+      WHERE i.status IN ('Unpaid', 'Partial')
+        AND i.archived_at IS NULL
+      GROUP BY i.id
+      HAVING i.total + i.other_charge > COALESCE(SUM(p.amount), 0)
+      ORDER BY CASE WHEN i.due_at IS NULL OR i.due_at = '' THEN 1 ELSE 0 END, i.due_at ASC, i.issued_at ASC
+      LIMIT 5`,
+    )
+    .all<{
+      invoice_number: string;
+      due_at: string | null;
+      full_name: string;
+      total: string;
+      paid: string;
+    }>();
+
+  const simple = await readSimpleSummary(db, now);
+  const { unbilled, unbilledTotal } = simple;
+
+  const notices = [
+    summary.uncostedInvoices
+      ? `${summary.uncostedInvoices} invoices in this range are for shipments with no Ni Hao cost. Net Profit counts no freight cost for them until the cost is added to the shipment.`
+      : "",
+
+    summary.uncosted > zero
+      ? `${summary.uncosted} shipments in this range have no Ni Hao cost. Freight Margin excludes them.`
+      : "",
+
+    summary.undatedInvoices
+      ? `${summary.undatedInvoices} non-Draft/non-Void invoices lack valid issue dates and are excluded from Revenue and Accounts Receivable. These metrics may be incomplete.`
+      : "",
+
+    summary.undatedPayments
+      ? `${summary.undatedPayments} payments lack valid payment dates and are excluded from collections and receivable deductions. These metrics may be incomplete.`
+      : "",
+
+    summary.undatedExpenses
+      ? `${summary.undatedExpenses} operating expenses lack valid dates and are excluded. Operating Expenses and Net Profit may be incomplete.`
+      : "",
+  ].filter(Boolean);
+
+  const freightLink =
+    `/admin/finance?report=freight&${new URLSearchParams(
+      range,
+    )}`;
+
+  const totalExpenses =
+    summary.costOfSales + summary.operating;
+
+  const simpleSummary = simpleSummarySection(simple);
 
   const summaryCards = `
     <section>
@@ -703,7 +779,7 @@ export async function financeDashboard(
   `;
 
   const unbilledSection = `
-    <section>
+    <section id="finance-unbilled">
       <div class="actions">
         <h2>Shipments to Bill</h2>
         <strong>Total: ${esc(financePesos(unbilledTotal))}</strong>
@@ -1258,39 +1334,6 @@ export async function financeDashboard(
           grid-template-columns: repeat(4, minmax(0, 1fr));
         }
 
-        .finance-simple-cards {
-          grid-template-columns: repeat(5, minmax(0, 1fr));
-        }
-
-        @media (max-width: 1300px) {
-          .finance-simple-cards {
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-          }
-        }
-
-        .finance-simple-cards .card strong.finance-negative {
-          color: #9a5b00;
-        }
-
-        .finance-simple-cards .card strong {
-          display: block;
-          font-size: 1.8rem;
-          white-space: nowrap;
-        }
-
-        .finance-simple-cards small {
-          display: block;
-          margin-top: .4rem;
-          line-height: 1.45;
-        }
-
-        .finance-simple-cards small strong.finance-warn {
-          display: inline;
-          font-size: inherit;
-          white-space: normal;
-          color: #9a5b00;
-        }
-
         .finance-summary-cards .card strong,
         .finance-shipping-cards .card strong {
           white-space: nowrap;
@@ -1319,10 +1362,6 @@ export async function financeDashboard(
           .finance-summary-cards,
           .finance-shipping-cards {
             grid-template-columns: repeat(2, minmax(0, 1fr));
-          }
-
-          .finance-simple-cards {
-            grid-template-columns: 1fr;
           }
         }
 

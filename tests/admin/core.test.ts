@@ -546,7 +546,9 @@ test("dashboard attention and shared follow-up note preserve role boundaries", a
   const admin = { id: user, name: "Admin", email: "admin@example.test", role: "admin" as const };
   let html = await (await dashboard(db, admin, "csrf", true)).text();
   assert.match(html, /No staff communication has been added yet/);
-  assert.match(html, /Business Snapshot/);
+  assert.match(html, /Needs Attention/);
+  assert.match(html, /All caught up/);
+  assert.match(html, /href="\/admin\/quotations\?new=1"/);
   const customerId = await saveRecord(db, "customers", customer, user, "", "");
   const shipmentId = await saveRecord(db, "shipments", shipment(customerId), user, "", "");
   const invoiceId = randomUUID();
@@ -555,9 +557,13 @@ test("dashboard attention and shared follow-up note preserve role boundaries", a
   sql.prepare("INSERT INTO payments VALUES (?,?,?,?,?,?,?,?,?)").run(randomUUID(), invoiceId, customerId, 25000, "Cash", null, "2026-09-02", null, "2026-09-02");
   html = await (await dashboard(db, admin, "csrf", true)).text();
   assert.match(html, /New Leads/);
-  assert.match(html, /Finance Overview/);
+  assert.match(html, /<h2>Money<\/h2>/);
+  assert.match(html, /Money we have now/);
+  assert.match(html, /Overall profit after expenses/);
+  assert.match(html, /1 invoice not fully paid · ₱750\.00/);
+  assert.match(html, /1 is past the due date/);
   assert.match(html, /Recent Invoices &amp; Payments/);
-  assert.match(html, /<span>Expenses<\/span>/);
+  assert.doesNotMatch(html, /Finance Overview/);
   assert.doesNotMatch(html, /<h2>Expenses<\/h2>/);
   assert.doesNotMatch(html, /href="\/admin\/finance\/expenses\?new=1"/);
   assert.match(html, new RegExp(`/admin/invoices\\?id=${invoiceId}`));
@@ -575,6 +581,7 @@ test("dashboard attention and shared follow-up note preserve role boundaries", a
   assert.match(html, /Updated priority/);
   assert.ok(!html.includes("Save follow-up"));
   assert.ok(!html.includes("Shipments missing Nihao cost"));
+  assert.ok(!html.includes('href="/admin/quotations?new=1"'));
 });
 test("required fields, dates, enum, numeric precision and overposting are validated", () => {
   assert.throws(() => customerSchema.parse({ ...customer, full_name: " " }));

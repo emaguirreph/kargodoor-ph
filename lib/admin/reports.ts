@@ -1,4 +1,4 @@
-import { financeRange, shipmentBusinessDateSql, type FinanceRange } from "./finance-dates";
+import { financeRange, philippineToday, shipmentBusinessDateSql, type FinanceRange } from "./finance-dates";
 import type { D1Database } from "@cloudflare/workers-types";
 import { AdminError, type AdminUser } from "./security";
 import { randomUUID } from "node:crypto";
@@ -131,21 +131,52 @@ export async function dashboard(
   csrf: string,
   canWrite = true,
 ) {
+  const today = philippineToday();
   const summary = await db
     .prepare(
       `SELECT
       (SELECT COUNT(*) FROM customers) AS customers,
       (SELECT COUNT(*) FROM shipments WHERE status NOT IN ('Delivered','Cancelled') AND archived_at IS NULL) AS active,
-      (SELECT COUNT(*) FROM leads WHERE archived_at IS NULL AND contacted_status='No') AS new_leads`,
+      (SELECT COUNT(*) FROM leads WHERE archived_at IS NULL AND contacted_status='No') AS new_leads,
+      (SELECT COUNT(*) FROM shipments WHERE nihao_cost_source='estimate' AND status != 'Cancelled' AND archived_at IS NULL) AS estimated_costs,
+      (SELECT COUNT(*) FROM shipments WHERE status IN ('Malabon Warehouse','Ready for Release') AND archived_at IS NULL) AS at_malabon`,
     )
     .first<RecordData>();
 
-  const { readFinanceSummary, financePesos } = await import("./finance-summary");
-  const financeSummary = await readFinanceSummary(
-    db,
-    financeRange(new URL("https://dashboard.local/admin/finance")),
-    new Date(),
+  // Issued invoices the customer has not fully paid yet.
+  const unpaid = await db
+    .prepare(
+      `SELECT
+        COUNT(*) AS n,
+        COALESCE(SUM(CASE WHEN due_at IS NOT NULL AND due_at < ? THEN 1 ELSE 0 END), 0) AS overdue,
+        CAST(COALESCE(SUM(balance), 0) AS TEXT) AS amount
+      FROM (
+        SELECT
+          i.due_at,
+          i.total + i.other_charge - COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.invoice_id = i.id), 0) AS balance
+        FROM invoices i
+        WHERE i.status NOT IN ('Draft','Void')
+          AND i.archived_at IS NULL
+      )
+      WHERE balance > 0`,
+    )
+    .bind(today)
+    .first<{ n: number; overdue: number; amount: string }>();
+
+  const statusCounts = new Map(
+    (
+      await db
+        .prepare(
+          `SELECT status, COUNT(*) AS n FROM shipments
+          WHERE archived_at IS NULL AND status != 'Cancelled'
+          GROUP BY status`,
+        )
+        .all<{ status: string; n: number }>()
+    ).results.map((row) => [row.status, Number(row.n)]),
   );
+
+  const { readSimpleSummary, simpleSummarySection, financePesos } = await import("./finance-summary");
+  const simple = await readSimpleSummary(db);
 
   const recent = (
     await db
@@ -204,6 +235,85 @@ export async function dashboard(
     return String(row.status || "Unpaid");
   };
 
+  const count = (value: unknown) => Number(value ?? 0);
+  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  const statusLink = (status: string) =>
+    `/admin/shipments?status=${encodeURIComponent(status)}`;
+
+  const attention = [
+    {
+      show: count(summary?.new_leads) > 0,
+      label: `${plural(count(summary?.new_leads), "new lead", "new leads")} to contact`,
+      detail: "Reply and send a quotation.",
+      href: "/admin/leads",
+      action: "Open Leads",
+    },
+    {
+      show: simple.unbilled.results.length > 0,
+      label: `${plural(simple.unbilled.results.length, "shipment", "shipments")} to bill · ${financePesos(simple.unbilledTotal)}`,
+      detail: "No invoice issued yet.",
+      href: "/admin/finance#finance-unbilled",
+      action: "Create Invoices",
+    },
+    {
+      show: count(unpaid?.n) > 0,
+      label: `${plural(count(unpaid?.n), "invoice", "invoices")} not fully paid · ${financePesos(BigInt(unpaid?.amount ?? "0"))}`,
+      detail: count(unpaid?.overdue) > 0
+        ? `${plural(count(unpaid?.overdue), "is", "are")} past the due date. Follow up with the customer.`
+        : "Waiting for the customer to pay.",
+      warn: count(unpaid?.overdue) > 0,
+      href: "/admin/invoices",
+      action: "Open Invoices",
+    },
+    {
+      show: simple.goingOut > BigInt(0),
+      label: `Ni Hao to pay · ${financePesos(simple.goingOut)}`,
+      detail: "When paid, add it under Expenses as Freight / Ni Hao Cost with the tracking number.",
+      href: "/admin/finance/expenses",
+      action: "Open Expenses",
+    },
+    {
+      show: simple.goingOutUnknown > 0,
+      label: `${plural(simple.goingOutUnknown, "shipment has", "shipments have")} no Ni Hao cost yet`,
+      detail: "Add the cost so profit is correct.",
+      warn: true,
+      href: "/admin/shipments",
+      action: "Open Shipments",
+    },
+    {
+      show: count(summary?.estimated_costs) > 0,
+      label: `${plural(count(summary?.estimated_costs), "shipment uses", "shipments use")} an estimated Ni Hao cost`,
+      detail: "Replace it with Ni Hao's actual quote once they send it.",
+      href: "/admin/shipments",
+      action: "Open Shipments",
+    },
+    {
+      show: count(summary?.at_malabon) > 0,
+      label: `${plural(count(summary?.at_malabon), "shipment", "shipments")} at Malabon waiting for delivery`,
+      detail: "Arrange release or delivery to the customer.",
+      href: statusLink("Malabon Warehouse"),
+      action: "View",
+    },
+  ].filter((item) => item.show);
+
+  const pipeline = [
+    { label: "Waiting in China", statuses: ["Awaiting Supplier Dispatch", "Pending Warehouse Receipt", "China Warehouse", "Received at Warehouse", "China Port"] },
+    { label: "On the way", statuses: ["Sea Transit", "In Transit"] },
+    { label: "Arrived in PH", statuses: ["Manila Port", "Gatepass", "Arrived in Philippines"] },
+    { label: "At Malabon", statuses: ["Malabon Warehouse", "Ready for Release"] },
+    { label: "Delivered", statuses: ["Delivered"] },
+  ].map((stage) => {
+    const parts = stage.statuses
+      .map((status) => ({ status, n: statusCounts.get(status) ?? 0 }))
+      .filter((part) => part.n > 0);
+    return {
+      label: stage.label,
+      total: parts.reduce((sum, part) => sum + part.n, 0),
+      parts,
+      href: statusLink(parts[0]?.status ?? stage.statuses[0]),
+    };
+  });
+
   return page(
     "Dashboard",
     `
@@ -234,12 +344,6 @@ export async function dashboard(
         .dashboard-snapshot{
           display:grid;
           grid-template-columns:repeat(3,minmax(0,1fr));
-          gap:14px;
-          margin-bottom:22px
-        }
-        .dashboard-finance{
-          display:grid;
-          grid-template-columns:repeat(5,minmax(0,1fr));
           gap:14px;
           margin-bottom:22px
         }
@@ -382,12 +486,94 @@ export async function dashboard(
           font-size:.78rem;
           white-space:nowrap
         }
+        .dashboard-attention{
+          margin-bottom:20px
+        }
+        .attention-list{
+          list-style:none;
+          margin:0;
+          padding:0;
+          display:grid;
+          gap:10px
+        }
+        .attention-list li{
+          display:flex;
+          align-items:center;
+          justify-content:space-between;
+          gap:16px;
+          padding:12px 14px;
+          border:1px solid #dbe5ec;
+          border-left:4px solid #1356c9;
+          border-radius:10px;
+          background:#f8fbfd
+        }
+        .attention-list li.attention-warn{
+          border-left-color:#b45309;
+          background:#fffaf0
+        }
+        .attention-list strong{
+          display:block;
+          color:#0b1f45
+        }
+        .attention-list span{
+          display:block;
+          color:#64748b;
+          font-size:.9rem;
+          margin-top:2px
+        }
+        .attention-list .button{
+          white-space:nowrap;
+          flex:0 0 auto
+        }
+        .dashboard-money{
+          margin:20px 0
+        }
+        .dashboard-money .finance-simple{
+          margin-bottom:6px
+        }
+        .dashboard-pipeline{
+          display:grid;
+          grid-template-columns:repeat(5,minmax(0,1fr));
+          gap:14px;
+          margin-bottom:22px
+        }
+        .pipeline-stage{
+          display:block;
+          background:#fff;
+          border:1px solid #dbe5ec;
+          border-radius:12px;
+          padding:16px;
+          min-width:0;
+          text-decoration:none;
+          color:inherit
+        }
+        .pipeline-stage:hover{
+          border-color:#1356c9
+        }
+        .pipeline-stage span{
+          display:block;
+          color:#64748b;
+          font-size:.88rem;
+          margin-bottom:6px
+        }
+        .pipeline-stage strong{
+          display:block;
+          color:#154876;
+          font-size:1.55rem;
+          line-height:1.1
+        }
+        .pipeline-stage small{
+          display:block;
+          color:#64748b;
+          margin-top:6px;
+          font-size:.78rem
+        }
         @media(max-width:1000px){
           .dashboard-snapshot{
             grid-template-columns:repeat(2,minmax(0,1fr))
           }
-          .dashboard-finance{
-            grid-template-columns:repeat(2,minmax(0,1fr))
+          .dashboard-pipeline{
+            grid-template-columns:repeat(3,minmax(0,1fr))
           }
           .dashboard-middle,
           .dashboard-bottom{
@@ -404,10 +590,17 @@ export async function dashboard(
           .dashboard-snapshot{
             grid-template-columns:1fr 1fr
           }
+          .dashboard-pipeline{
+            grid-template-columns:1fr 1fr
+          }
+          .attention-list li{
+            flex-direction:column;
+            align-items:stretch
+          }
         }
         @media(max-width:480px){
           .dashboard-snapshot,
-          .dashboard-finance{
+          .dashboard-pipeline{
             grid-template-columns:1fr
           }
         }
@@ -419,7 +612,39 @@ export async function dashboard(
             Welcome back, ${esc(user.name)}.
           </p>
         </div>
+        ${
+          canWrite
+            ? `<div class="dashboard-actions">
+                <a class="button" href="/admin/quotations?new=1">+ New Quotation</a>
+                <a class="button" href="/admin/shipments?new=1">+ Add Shipment</a>
+                <a class="button" href="/admin/invoices?new=1">+ Create Invoice</a>
+                <a class="button" href="/admin/invoices">Record Payment</a>
+              </div>`
+            : ""
+        }
       </div>
+
+      <section class="dashboard-panel dashboard-attention">
+        <div class="dashboard-panel-header">
+          <h2>Needs Attention</h2>
+        </div>
+        ${
+          attention.length
+            ? `<ul class="attention-list">${attention
+                .map(
+                  (item) => `
+                    <li class="${"warn" in item && item.warn ? "attention-warn" : ""}">
+                      <div>
+                        <strong>${esc(item.label)}</strong>
+                        <span>${esc(item.detail)}</span>
+                      </div>
+                      <a class="button" href="${esc(item.href)}">${esc(item.action)}</a>
+                    </li>`,
+                )
+                .join("")}</ul>`
+            : `<p class="muted">All caught up. Nothing needs attention right now.</p>`
+        }
+      </section>
 
       <section class="dashboard-panel">
         <div class="dashboard-panel-header">
@@ -487,7 +712,12 @@ export async function dashboard(
         }
       </section>
 
-      <h2 class="dashboard-heading">Business Snapshot</h2>
+      <div class="dashboard-money">
+        ${simpleSummarySection(simple, "Money", "Where the business stands today.")}
+        <p><a class="panel-link" href="/admin/finance">View Finance →</a></p>
+      </div>
+
+      <h2 class="dashboard-heading">Shipments</h2>
 
       <div class="dashboard-snapshot">
         <div class="dashboard-stat dashboard-stat-new-leads">
@@ -506,22 +736,18 @@ export async function dashboard(
         </div>
       </div>
 
-      <section class="dashboard-panel">
-        <div class="dashboard-panel-header">
-          <h2>Finance Overview</h2>
-          <a class="panel-link" href="/admin/finance">View Finance →</a>
-        </div>
-
-        <div class="dashboard-finance">
-          <div class="dashboard-stat"><span>Revenue</span><strong>${esc(financePesos(financeSummary.revenue))}</strong></div>
-          <div class="dashboard-stat"><span>Expenses</span><strong>${esc(financePesos(financeSummary.costs + financeSummary.operating))}</strong></div>
-          <div class="dashboard-stat"><span>Net Profit / Loss</span><strong>${esc(financePesos(financeSummary.profit))}</strong></div>
-          <div class="dashboard-stat"><span>Cash Received</span><strong>${esc(financePesos(financeSummary.received))}</strong></div>
-          <div class="dashboard-stat"><span>Accounts Receivable</span><strong>${esc(financePesos(financeSummary.receivable))}</strong></div>
-        </div>
-
-        <p class="muted">Expenses include Ni Hao Freight Cost and Operating Expenses.</p>
-      </section>
+      <div class="dashboard-pipeline">
+        ${pipeline
+          .map(
+            (stage) => `
+              <a class="pipeline-stage" href="${esc(stage.href)}">
+                <span>${esc(stage.label)}</span>
+                <strong>${esc(stage.total)}</strong>
+                <small>${stage.parts.length ? esc(stage.parts.map((part) => `${part.n} ${part.status}`).join(" · ")) : "None"}</small>
+              </a>`,
+          )
+          .join("")}
+      </div>
 
       <div class="dashboard-bottom">
         <section class="dashboard-panel">
