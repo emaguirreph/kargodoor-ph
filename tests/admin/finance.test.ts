@@ -386,9 +386,10 @@ test("overall profit after expenses adds expected profit to profit so far, after
   const html = await (await financeDashboard(f.db, new URL("https://test/admin/finance?preset=last-month"), "Admin", now)).text();
   const simple = html.slice(html.indexOf("Simple Summary"), html.indexOf("Finance Overview"));
   assert.match(simple, /Overall profit after expenses/);
-  assert.ok(simple.includes(`${financePesos(BigInt(-973000))} profit so far`), "all expenses count, whatever range is picked");
+  assert.ok(simple.includes(`${financePesos(BigInt(-973000))} profit so far (after ${financePesos(BigInt(973000))} expenses)`), "all expenses count, whatever range is picked");
   assert.ok(simple.includes(financePesos(BigInt(500500 - 973000))));
-  assert.match(simple, /has not yet earned back what it has spent/);
+  assert.match(simple, /not yet earned back what we have spent/);
+  assert.match(simple, /class="finance-negative">-₱4,725\.00</, "its own card, in the warning color");
 });
 
 test("money going out shows how much of the Ni Hao cost is an estimate", async () => {

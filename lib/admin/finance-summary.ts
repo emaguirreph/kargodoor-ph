@@ -587,6 +587,14 @@ export async function financeDashboard(
               : ""
           }</small>
         </div>
+
+        <div class="card">
+          <span class="muted">Overall profit after expenses</span>
+          <strong class="${overallProfit < zero ? "finance-negative" : ""}">${esc(financePesos(overallProfit))}</strong>
+          <small>${esc(
+            `${financePesos(allTime.profit)} profit so far (after ${financePesos(allTime.operating)} expenses) + ${financePesos(expectedProfit)} expected.`,
+          )} ${overallProfit < zero ? "Below zero: not yet earned back what we have spent, including startup costs." : "Above zero: everything we have spent is earned back."}</small>
+        </div>
       </div>
 
       <p class="muted">
@@ -596,12 +604,6 @@ export async function financeDashboard(
         When you pay Ni Hao, add it under Expenses as Freight / Ni Hao Cost with the tracking number, so it moves out of Money going out and into Money we have now.
       </p>
 
-      <p class="muted">
-        Overall profit after expenses:
-        ${esc(financePesos(allTime.profit))} profit so far (billed work − Ni Hao cost − ${esc(financePesos(allTime.operating))} expenses) + ${esc(financePesos(expectedProfit))} expected =
-        <strong class="${overallProfit < zero ? "finance-warn" : ""}">${esc(financePesos(overallProfit))}</strong>.
-        ${overallProfit < zero ? "Below zero means the business has not yet earned back what it has spent, including startup costs." : "Above zero means the business has earned back everything it has spent."}
-      </p>
     </section>
   `;
 
@@ -1257,7 +1259,17 @@ export async function financeDashboard(
         }
 
         .finance-simple-cards {
-          grid-template-columns: repeat(4, minmax(0, 1fr));
+          grid-template-columns: repeat(5, minmax(0, 1fr));
+        }
+
+        @media (max-width: 1300px) {
+          .finance-simple-cards {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+          }
+        }
+
+        .finance-simple-cards .card strong.finance-negative {
+          color: #9a5b00;
         }
 
         .finance-simple-cards .card strong {
