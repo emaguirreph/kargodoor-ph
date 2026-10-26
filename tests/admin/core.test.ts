@@ -18,6 +18,7 @@ import {
 import { marginSummarySql, finance, activity, dashboard, saveStaffFollowUp } from "../../lib/admin/reports";
 import { saveRecord } from "../../lib/admin/data";
 import { createShipmentFromApprovedQuotation } from "../../lib/admin/quotation-shipment";
+import { shipmentNiHaoEstimate } from "../../lib/admin/nihao-estimate";
 import { syncVerifiedFreightToInvoice, verifiedShipmentFreight } from "../../lib/admin/shipment-verified-pricing";
 import { archiveInvoice, createInvoice, issueInvoice, recordPayment, voidInvoice } from "../../lib/admin/billing";
 import {
@@ -67,6 +68,7 @@ function database(includePhase1 = true) {
     sql.exec(readFileSync("migrations/admin/0026_bulk_quotation_shipments.sql", "utf8"));
     sql.exec(readFileSync("migrations/admin/0028_invoice_reissue_after_void.sql", "utf8"));
   }
+  sql.exec(readFileSync("migrations/admin/0029_nihao_cost_source.sql", "utf8"));
   const user = randomUUID();
   sql
     .prepare("INSERT INTO admin_users VALUES (?,?,?,?,?,?)")
@@ -344,6 +346,25 @@ test("approved quotations create one pending, unpaid shipment with a safe custom
   assert.equal(log.admin_user_id, user);
   assert.equal(JSON.parse(String(log.new_value)).source_quotation_id, quotationId);
   await assert.rejects(createShipmentFromApprovedQuotation(db, user, quotationId), /already exists/);
+});
+test("shipments get a Ni Hao cost estimate from the Ni Hao rates unless Ni Hao's actual cost is known", async () => {
+  const { sql, db, user } = database();
+  const estimated = await createShipmentFromApprovedQuotation(db, user, insertQuotation(sql));
+  const row = sql.prepare("SELECT nihao_cost, nihao_cost_source FROM shipments WHERE id = ?").get(estimated.shipmentId)!;
+  assert.equal(row.nihao_cost, 875000, "1.25 CBM of Bags × ₱7,000");
+  assert.equal(row.nihao_cost_source, "estimate");
+
+  const quotedId = insertQuotation(sql, { cargo: { item: "Bags", category: "LOW VALUE GOODS", cbm: "1", weight: "100", originWarehouse: "Guangzhou" } });
+  sql.prepare("UPDATE quotations SET backend_cost = 650000, backend_cost_source = 'actual' WHERE id = ?").run(quotedId);
+  const quoted = await createShipmentFromApprovedQuotation(db, user, quotedId);
+  assert.deepEqual({ ...sql.prepare("SELECT nihao_cost, nihao_cost_source FROM shipments WHERE id = ?").get(quoted.shipmentId) }, { nihao_cost: 650000, nihao_cost_source: "actual" });
+
+  const verified = await shipmentNiHaoEstimate(db, estimated.shipmentId, { service_type: "Sea Freight", cbm: 1.25, weight_kg: 425, verified_cbm: 1, verified_weight_kg: 600 });
+  assert.equal(verified?.cost, 840000, "verified size is used; 600 kg/CBM is over 500, so 600 kg × ₱14");
+
+  const manual = await shipmentNiHaoEstimate(db, "", { service_type: "Air Freight", cbm: 0.0381, weight_kg: 7.5, tracking_remarks: "Item: Ordinary Items" });
+  assert.equal(manual?.cost, 280000, "hand-added shipments use the Item line in their remarks");
+  assert.equal(await shipmentNiHaoEstimate(db, "", { service_type: "FCL", cbm: 30, weight_kg: 1000 }), null);
 });
 test("verified warehouse measurements recalculate Sea and Air freight and refresh only eligible invoices", async () => {
   const { sql, db, user } = database();
@@ -1356,6 +1377,7 @@ test("expense filters and search combine with exact integer totals and clear res
 
 import "./finance.test";
 import "./finance-phase4.test";
+import "./nihao-pricing.test";
 import "../messenger.test";
 
 import "./quotation-renderer.test";

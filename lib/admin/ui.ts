@@ -13,6 +13,13 @@ export const pesos = (v: unknown) =>
   new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" }).format(
     Number(v ?? 0) / 100,
   );
+/** Small label saying whether a Ni Hao cost is the system estimate or Ni Hao's actual quote. */
+export const niHaoSourceTag = (source: unknown) =>
+  source === "estimate"
+    ? `<span class="nihao-tag nihao-tag-estimate" style="display:inline-block;font-size:.75rem;padding:1px 8px;border-radius:999px;background:#fff4d6;color:#9a5b00">Estimate</span>`
+    : source === "actual"
+      ? `<span class="nihao-tag nihao-tag-actual" style="display:inline-block;font-size:.75rem;padding:1px 8px;border-radius:999px;background:#e3f5ea;color:#1d6b3a">Ni Hao actual</span>`
+      : "";
 export function page(
   title: string,
   body: string,

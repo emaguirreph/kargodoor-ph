@@ -1,3 +1,4 @@
+import { estimateNiHaoCost } from "./nihao-estimate";
 import { airItems, airQuote, itemCategories, seaQuote, seaRates, type AirItem, type SeaCategory } from "./quotation-pricing";
 
 const numeric = (value: unknown, label: string, required = true) => {
@@ -9,6 +10,11 @@ const numeric = (value: unknown, label: string, required = true) => {
   return parsed;
 };
 
+const niHao = (estimate: ReturnType<typeof estimateNiHaoCost>) => ({
+  niHaoEstimate: estimate ? estimate.cost / 100 : null,
+  niHaoBasis: estimate?.basis ?? "",
+});
+
 export function calculateAdminSeaQuote(input: Record<string, unknown>) {
   if (input.freightType !== "Sea Freight") throw new Error("Live calculation is available for Sea Freight only.");
   const item = String(input.item ?? "");
@@ -19,7 +25,9 @@ export function calculateAdminSeaQuote(input: Record<string, unknown>) {
   const weight = numeric(input.weight, "actual weight");
   const units = numeric(input.units, "units", false);
   const calculation = seaQuote(category, cbm, weight, units);
+  const packageCount = numeric(input.packageQuantity, "quantity of packages", false) || 1;
   return {
+    ...niHao(estimateNiHaoCost({ serviceType: "Sea Freight", category, cbm, weight, packageCount })),
     item,
     category,
     cbm,
@@ -39,7 +47,7 @@ export function calculateAdminAirQuote(input: Record<string, unknown>) {
   const weight = numeric(input.weight, "actual weight");
   const quantity = numeric(input.quantity, "quantity");
   const calculation = airQuote(item, cbm, weight, quantity);
-  return { item, airCategory: item, cbm, weight, quantity, ...calculation };
+  return { item, airCategory: item, cbm, weight, quantity, ...calculation, ...niHao(estimateNiHaoCost({ serviceType: "Air Freight", item, cbm, weight, quantity })) };
 }
 
 export function calculateAdminQuote(input: Record<string, unknown>) {

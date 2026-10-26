@@ -41,6 +41,7 @@ function quotationDatabase() {
   sql.exec(readFileSync("migrations/admin/0022_full_container_quotations.sql", "utf8"));
   sql.exec(readFileSync("migrations/admin/0023_fcl_shipments.sql", "utf8"));
   sql.exec(readFileSync("migrations/admin/0025_sea_freight_tracking_statuses.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0029_nihao_cost_source.sql", "utf8"));
 
   const user = randomUUID();
   sql.prepare("INSERT INTO admin_users VALUES (?,?,?,?,?,?)").run(
