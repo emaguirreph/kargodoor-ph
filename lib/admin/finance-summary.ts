@@ -480,6 +480,13 @@ export async function financeDashboard(
     summary.asOf === philippineToday(now)
       ? summary
       : await readFinanceSummary(db, { from: "", to: "" }, now);
+  const allTime =
+    current.asOf === philippineToday(now) && !range.from && !range.to
+      ? current
+      : await readFinanceSummary(db, { from: "", to: "" }, now);
+  // Profit so far (billed work minus its Ni Hao cost and every expense)
+  // plus the profit still to come from shipments not yet billed.
+  const overallProfit = allTime.profit + expectedProfit;
   const toCollect = current.receivable;
   const comingIn = unbilledTotal + toCollect;
 
@@ -587,6 +594,13 @@ export async function financeDashboard(
         ${esc(financePesos(current.cash.total))} + ${esc(financePesos(comingIn))} − ${esc(financePesos(goingOut))} =
         <strong>${esc(financePesos(current.cash.total + comingIn - goingOut))}</strong>${goingOutUnknown ? ", less the Ni Hao costs not entered yet" : ""}.
         When you pay Ni Hao, add it under Expenses as Freight / Ni Hao Cost with the tracking number, so it moves out of Money going out and into Money we have now.
+      </p>
+
+      <p class="muted">
+        Overall profit after expenses:
+        ${esc(financePesos(allTime.profit))} profit so far (billed work − Ni Hao cost − ${esc(financePesos(allTime.operating))} expenses) + ${esc(financePesos(expectedProfit))} expected =
+        <strong class="${overallProfit < zero ? "finance-warn" : ""}">${esc(financePesos(overallProfit))}</strong>.
+        ${overallProfit < zero ? "Below zero means the business has not yet earned back what it has spent, including startup costs." : "Above zero means the business has earned back everything it has spent."}
       </p>
     </section>
   `;

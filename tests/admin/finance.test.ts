@@ -379,6 +379,18 @@ test("simple summary answers cash now, money coming in and expected profit witho
   assert.match(after, /Money going out<\/span>\s*<strong>₱0\.00<\/strong>/, "a recorded Ni Hao expense is no longer owed");
 });
 
+test("overall profit after expenses adds expected profit to profit so far, after every expense", async () => {
+  const f = fixture();
+  f.shipment(BigInt(3522500), BigInt(3022000));
+  f.expense(BigInt(973000), "Marketing / Advertising", "2026-09-15");
+  const html = await (await financeDashboard(f.db, new URL("https://test/admin/finance?preset=last-month"), "Admin", now)).text();
+  const simple = html.slice(html.indexOf("Simple Summary"), html.indexOf("Finance Overview"));
+  assert.match(simple, /Overall profit after expenses/);
+  assert.ok(simple.includes(`${financePesos(BigInt(-973000))} profit so far`), "all expenses count, whatever range is picked");
+  assert.ok(simple.includes(financePesos(BigInt(500500 - 973000))));
+  assert.match(simple, /has not yet earned back what it has spent/);
+});
+
 test("money going out shows how much of the Ni Hao cost is an estimate", async () => {
   const f = fixture();
   f.shipment(BigInt(342000), BigInt(280500));
