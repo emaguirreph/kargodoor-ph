@@ -95,14 +95,16 @@ export async function syncVerifiedFreightToInvoice(
   shipmentId: string,
   shippingCharge: number,
   adminUserId: string,
+  note = "Invoice freight updated from verified warehouse measurements.",
 ) {
   const invoices = (await db.prepare(
     `SELECT id, subtotal, delivery_charge, total, other_charge, status
      FROM invoices
      WHERE shipment_id = ?
        AND archived_at IS NULL
-       AND status IN ('Draft', 'Unpaid')`,
-  ).bind(shipmentId).all<Row>()).results;
+       AND status IN ('Draft', 'Unpaid')
+       AND subtotal != ?`,
+  ).bind(shipmentId, shippingCharge).all<Row>()).results;
 
   if (!invoices.length) return 0;
 
@@ -131,7 +133,7 @@ export async function syncVerifiedFreightToInvoice(
         invoice.id,
         JSON.stringify({ subtotal: invoice.subtotal, total: invoice.total }),
         JSON.stringify(next),
-        "Invoice freight updated from verified warehouse measurements.",
+        note,
         timestamp,
       ),
     );

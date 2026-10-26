@@ -203,7 +203,7 @@ export async function handleAdmin(
       const shipmentRows = (await db.prepare(`SELECT s.tracking_number,s.service_type,s.cbm,s.weight_kg,s.status,s.shipping_charge,s.delivery_charge,
         i.delivery_charge AS invoice_delivery_charge,i.status AS invoice_status,i.total AS invoice_total,i.other_charge AS invoice_other_charge,
         COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.invoice_id=i.id AND p.customer_id=s.customer_id),0) AS payments_total
-        FROM shipments s LEFT JOIN invoices i ON i.shipment_id=s.id AND i.customer_id=s.customer_id AND i.status!='Void'
+        FROM shipments s LEFT JOIN invoices i ON i.shipment_id=s.id AND i.customer_id=s.customer_id AND i.status!='Void' AND i.archived_at IS NULL
         WHERE s.customer_id=? AND s.archived_at IS NULL ORDER BY s.created_at DESC`).bind(customerId).all<RecordData>()).results;
       const row = (shipment: RecordData) => {
         const invoiceDue = Number(shipment.invoice_total ?? 0) + Number(shipment.invoice_other_charge ?? 0);
@@ -488,6 +488,19 @@ export async function handleAdmin(
           recordId,
           verifiedFreight.shippingCharge,
           user.id,
+        );
+      } else if (
+        entity === "shipments" &&
+        id &&
+        Number.isSafeInteger(shipmentValues.shipping_charge)
+      ) {
+        // Keep Draft and Unpaid invoices in step with a manually edited charge.
+        await syncVerifiedFreightToInvoice(
+          db,
+          recordId,
+          Number(shipmentValues.shipping_charge),
+          user.id,
+          "Invoice freight updated from the shipment's edited shipping charge.",
         );
       }
 

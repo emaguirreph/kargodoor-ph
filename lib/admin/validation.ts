@@ -467,6 +467,7 @@ export const expenseSchema = z.object({
   amount: money.refine((value) => value > 0, "Amount must be greater than zero"),
   payment_method: z.union([z.enum(expensePaymentMethods), z.literal("")]).transform((value) => value || null),
   reference_number: optional(160),
+  tracking_number: optional(40),
   notes: optional(4000),
 }).strict();
 

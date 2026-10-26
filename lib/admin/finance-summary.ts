@@ -9,13 +9,14 @@ import {
 } from "./finance-dates";
 import { readFinanceReport } from "./finance-report";
 import { esc, input, page } from "./ui";
-import { readManualCashSummary } from "./finance-cash";
+import { readCashOnHand, readManualCashSummary } from "./finance-cash";
 
 type Invoice = {
   id: string;
   issued_at: string | null;
   total: string;
   other_charge: string;
+  nihao_cost: string | null;
 };
 
 type Payment = {
@@ -27,7 +28,20 @@ type Payment = {
 type Expense = {
   expense_date: string;
   amount: string;
+  category: string;
+  linked_cost: number;
 };
+
+type UnbilledShipment = {
+  id: string;
+  tracking_number: string | null;
+  full_name: string;
+  status: string;
+  amount: string;
+  draft_invoice_id: string | null;
+};
+
+const freightExpenseCategory = "Freight / Ni Hao Cost";
 
 const zero = BigInt(0);
 
@@ -158,19 +172,23 @@ export async function readFinanceSummary(
   // Billing grand total is total + other_charge;
   // total already includes delivery.
   // All subsequent money arithmetic uses BigInt centavos.
+  // Cost of sales follows the invoice: a shipment's Ni Hao cost is
+  // counted on the same date its invoice is counted as revenue.
 
   const [invoices, payments, expenses, freight] =
     await Promise.all([
       db
         .prepare(
           `SELECT
-            id,
-            issued_at,
-            CAST(total AS TEXT) AS total,
-            CAST(other_charge AS TEXT) AS other_charge
-          FROM invoices
-          WHERE status NOT IN ('Draft', 'Void')
-            AND archived_at IS NULL`,
+            i.id,
+            i.issued_at,
+            CAST(i.total AS TEXT) AS total,
+            CAST(i.other_charge AS TEXT) AS other_charge,
+            CAST(s.nihao_cost AS TEXT) AS nihao_cost
+          FROM invoices i
+          LEFT JOIN shipments s ON s.id = i.shipment_id
+          WHERE i.status NOT IN ('Draft', 'Void')
+            AND i.archived_at IS NULL`,
         )
         .all<Invoice>(),
 
@@ -186,15 +204,24 @@ export async function readFinanceSummary(
         )
         .all<Payment>(),
 
+      // A Ni Hao expense tied to a shipment that already carries its
+      // Ni Hao cost would count twice; every other one is a real cost.
       db
         .prepare(
           `SELECT
-            expense_date,
-            CAST(amount AS TEXT) AS amount
-          FROM expenses
-          WHERE category != ?`,
+            e.expense_date,
+            CAST(e.amount AS TEXT) AS amount,
+            e.category,
+            CASE WHEN e.category = ? AND EXISTS (
+              SELECT 1 FROM shipments s
+              WHERE s.tracking_number = e.tracking_number
+                AND s.nihao_cost IS NOT NULL
+                AND s.status != 'Cancelled'
+                AND s.archived_at IS NULL
+            ) THEN 1 ELSE 0 END AS linked_cost
+          FROM expenses e`,
         )
-        .bind("Freight / Ni Hao Cost")
+        .bind(freightExpenseCategory)
         .all<Expense>(),
 
       freightSummary(db, range),
@@ -207,6 +234,10 @@ export async function readFinanceSummary(
   let received = zero;
   let receivable = zero;
   let operating = zero;
+  let invoicedCosts = zero;
+  let freightExpenses = zero;
+  let linkedFreightExpenses = zero;
+  let uncostedInvoices = 0;
 
   let undatedInvoices = 0;
   let undatedPayments = 0;
@@ -248,6 +279,12 @@ export async function readFinanceSummary(
 
     if (inFinanceRange(date, range)) {
       revenue += total;
+
+      if (invoice.nihao_cost === null) {
+        uncostedInvoices++;
+      } else {
+        invoicedCosts += BigInt(invoice.nihao_cost);
+      }
     }
 
     if (date <= asOf) {
@@ -267,8 +304,18 @@ export async function readFinanceSummary(
       continue;
     }
 
-    if (inFinanceRange(expense.expense_date, range)) {
-      operating += BigInt(expense.amount);
+    const amount = BigInt(expense.amount);
+
+    if (!inFinanceRange(expense.expense_date, range)) {
+      continue;
+    }
+
+    if (expense.category !== freightExpenseCategory) {
+      operating += amount;
+    } else if (expense.linked_cost) {
+      linkedFreightExpenses += amount;
+    } else {
+      freightExpenses += amount;
     }
   }
 
@@ -295,10 +342,13 @@ export async function readFinanceSummary(
     );
 
   const manual = await readManualCashSummary(db, asOf);
+  const costOfSales = invoicedCosts + freightExpenses;
+  const cash = await readCashOnHand(db, asOf);
   return {
     revenue,
     received,
     manualCash: manual.cash,
+    cash,
     receivable: receivable + manual.receivable,
     invoiceReceivable: receivable,
     manualReceivable: manual.receivable,
@@ -306,9 +356,14 @@ export async function readFinanceSummary(
     costs,
     margin,
     operating,
+    invoicedCosts,
+    freightExpenses,
+    linkedFreightExpenses,
+    costOfSales,
+    uncostedInvoices,
     profit:
       revenue -
-      costs -
+      costOfSales -
       operating,
     shipments,
     uncosted,
@@ -368,9 +423,47 @@ export async function financeDashboard(
       paid: string;
     }>();
 
+  const unbilled = await db
+    .prepare(
+      `SELECT
+        s.id,
+        s.tracking_number,
+        c.full_name,
+        s.status,
+        CAST(s.shipping_charge + s.delivery_charge AS TEXT) AS amount,
+        (
+          SELECT i.id FROM invoices i
+          WHERE i.shipment_id = s.id
+            AND i.status = 'Draft'
+            AND i.archived_at IS NULL
+          LIMIT 1
+        ) AS draft_invoice_id
+      FROM shipments s
+      JOIN customers c ON c.id = s.customer_id
+      WHERE s.status != 'Cancelled'
+        AND s.archived_at IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM invoices i
+          WHERE i.shipment_id = s.id
+            AND i.status NOT IN ('Draft', 'Void')
+            AND i.archived_at IS NULL
+        )
+      ORDER BY s.shipping_charge + s.delivery_charge DESC, s.created_at ASC`,
+    )
+    .all<UnbilledShipment>();
+
+  const unbilledTotal = unbilled.results.reduce(
+    (sum, row) => sum + BigInt(row.amount),
+    zero,
+  );
+
   const notices = [
+    summary.uncostedInvoices
+      ? `${summary.uncostedInvoices} invoices in this range are for shipments with no Ni Hao cost. Net Profit counts no freight cost for them until the cost is added to the shipment.`
+      : "",
+
     summary.uncosted > zero
-      ? `${summary.uncosted} shipments in this range have no Ni Hao cost. Freight Costs and Freight Margin exclude their missing costs; Net Profit uses recorded costs only.`
+      ? `${summary.uncosted} shipments in this range have no Ni Hao cost. Freight Margin excludes them.`
       : "",
 
     summary.undatedInvoices
@@ -392,7 +485,7 @@ export async function financeDashboard(
     )}`;
 
   const totalExpenses =
-    summary.costs + summary.operating;
+    summary.costOfSales + summary.operating;
 
   const summaryCards = `
     <section>
@@ -415,6 +508,11 @@ export async function financeDashboard(
         </div>
 
         <div class="card">
+          <span class="muted">Cash on Hand</span>
+          <strong>${esc(financePesos(summary.cash.total))}</strong>
+        </div>
+
+        <div class="card">
           <span class="muted">Cash Received</span>
           <strong>${esc(financePesos(summary.received))}</strong>
         </div>
@@ -423,10 +521,84 @@ export async function financeDashboard(
           <span class="muted">Accounts Receivable</span>
           <strong>${esc(financePesos(summary.receivable))}</strong>
         </div>
+
+        <div class="card">
+          <span class="muted">Unbilled Shipments</span>
+          <strong>${esc(financePesos(unbilledTotal))}</strong>
+        </div>
       </div>
 
       <p class="muted">
-        Expenses include Ni Hao Freight Cost and Operating Expenses.
+        Expenses = Ni Hao cost of invoiced shipments + Ni Hao expenses not already on a shipment + Operating Expenses.
+        Cash on Hand is as of ${esc(summary.asOf)}. Unbilled Shipments is as of today.
+      </p>
+    </section>
+  `;
+
+  const cash = summary.cash;
+  const cashSection = `
+    <section>
+      <div class="actions">
+        <h2>Cash on Hand</h2>
+        <a href="/admin/finance/cash">Cash Flow &amp; Customer Credits</a>
+      </div>
+
+      <div class="table">
+        <table>
+          <tbody>
+            <tr>
+              <td><strong>Opening Cash Balance</strong></td>
+              <td class="muted">${esc(cash.openingDate ? `Recorded ${cash.openingDate}. Only money in and out from this date on is added below.` : "No opening balance recorded. Add one under Cash Flow & Customer Credits.")}</td>
+              <td class="finance-number">${esc(financePesos(cash.opening))}</td>
+            </tr>
+            <tr>
+              <td><strong>+ Owner Funds &amp; Other Cash</strong></td>
+              <td class="muted">Owner contributions, other cash received, reimbursements collected, and adjustments.</td>
+              <td class="finance-number">${esc(financePesos(cash.ownerAndOther))}</td>
+            </tr>
+            <tr>
+              <td><strong>+ Customer Invoice Payments</strong></td>
+              <td class="muted">Payments recorded on invoices.</td>
+              <td class="finance-number">${esc(financePesos(cash.collections))}</td>
+            </tr>
+            <tr>
+              <td><strong>− Expenses Paid</strong></td>
+              <td class="muted">All recorded expenses, including Ni Hao payments entered as expenses.</td>
+              <td class="finance-number">${esc(financePesos(cash.expenses))}</td>
+            </tr>
+            <tr class="finance-emphasis">
+              <td><strong>Cash on Hand</strong></td>
+              <td class="muted">As of ${esc(summary.asOf)}.</td>
+              <td class="finance-number"><strong>${esc(financePesos(cash.total))}</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="muted">
+        Opening cash and owner contributions are not revenue, so they do not change Net Profit.
+        Ni Hao costs saved only on a shipment are not deducted until the payment is recorded as an expense.
+      </p>
+    </section>
+  `;
+
+  const unbilledSection = `
+    <section>
+      <div class="actions">
+        <h2>Shipments to Bill</h2>
+        <strong>Total: ${esc(financePesos(unbilledTotal))}</strong>
+      </div>
+      ${
+        unbilled.results.length
+          ? `<div class="table"><table><thead><tr><th>Tracking</th><th>Customer</th><th>Status</th><th>Invoice</th><th class="finance-number">Shipping + Delivery</th><th></th></tr></thead><tbody>${unbilled.results
+              .map(
+                (row) => `<tr><td>${esc(row.tracking_number || "No tracking yet")}</td><td>${esc(row.full_name)}</td><td>${esc(row.status)}</td><td>${esc(row.draft_invoice_id ? "Draft (not issued)" : "None")}</td><td class="finance-number"><strong>${esc(financePesos(BigInt(row.amount)))}</strong></td><td>${row.draft_invoice_id ? `<a href="/admin/invoices?id=${encodeURIComponent(row.draft_invoice_id)}">Issue invoice</a>` : canWrite ? `<a href="/admin/invoices?new=1&amp;shipment_id=${encodeURIComponent(row.id)}">Create invoice</a>` : ""}</td></tr>`,
+              )
+              .join("")}</tbody></table></div>`
+          : '<p class="muted">Every active shipment has an issued invoice.</p>'
+      }
+      <p class="muted">
+        Active shipments without an issued invoice. They are not in Revenue or Accounts Receivable until invoiced.
       </p>
     </section>
   `;
@@ -647,7 +819,7 @@ export async function financeDashboard(
                   <td class="finance-number">
                     ${esc(
                       financePesos(
-                        row.costs + row.operating,
+                        row.costOfSales + row.operating,
                       ),
                     )}
                   </td>
@@ -739,6 +911,10 @@ export async function financeDashboard(
         .join("")}
 
       ${summaryCards}
+
+      ${unbilledSection}
+
+      ${cashSection}
 
       <section>
         <div class="actions">
@@ -888,7 +1064,29 @@ export async function financeDashboard(
                   </strong>
                 </td>
                 <td class="muted">
-                  Revenue − Ni Hao Freight Cost − Operating Expenses
+                  Revenue − Cost of Sales − Operating Expenses
+                </td>
+              </tr>
+
+              <tr>
+                <td>
+                  <strong>
+                    Cost of Sales
+                  </strong>
+                </td>
+                <td class="muted">
+                  Ni Hao cost of shipments whose invoices are in Revenue (same date as the invoice) + Freight / Ni Hao Cost expenses not tied to a costed shipment
+                </td>
+              </tr>
+
+              <tr>
+                <td>
+                  <strong>
+                    Cash on Hand
+                  </strong>
+                </td>
+                <td class="muted">
+                  Opening Cash Balance + owner funds and other cash + invoice payments − expenses paid, from the opening balance date on
                 </td>
               </tr>
             </tbody>
@@ -902,9 +1100,9 @@ export async function financeDashboard(
         </p>
 
         <p class="muted">
-          Freight / Ni Hao Cost entered under Expenses is excluded from Operating Expenses
-          when the same backend freight cost is already recorded against shipments.
-          This prevents double counting.
+          A Freight / Ni Hao Cost expense is left out of profit only when its tracking number
+          matches a shipment that already has its Ni Hao cost recorded. This prevents double counting.
+          Any other Ni Hao expense, like a lump-sum payment, counts as Cost of Sales.
         </p>
       </section>
 
@@ -935,7 +1133,7 @@ export async function financeDashboard(
         }
 
         .finance-summary-cards {
-          grid-template-columns: repeat(3, minmax(0, 1fr));
+          grid-template-columns: repeat(4, minmax(0, 1fr));
         }
 
         .finance-summary-cards .card strong,

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { philippineToday } from "./finance-dates";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type {
   D1Database,
@@ -443,8 +444,7 @@ export async function createInvoice(
   const timestamp = new Date().toISOString();
 
   const number =
-    `INV-${timestamp
-      .slice(0, 10)
+    `INV-${philippineToday(new Date(timestamp))
       .replaceAll("-", "")}-${id
       .slice(0, 8)
       .toUpperCase()}`;
@@ -887,9 +887,13 @@ export async function voidInvoice(
 
   if (existing.updated_at !== revision) {
     throw new AdminError(
-      "Another admin changed this invoice. Reload it before deleting.",
+      "Another admin changed this invoice. Reload it before voiding.",
       409,
     );
+  }
+
+  if (existing.status === "Void" || existing.archived_at) {
+    throw new AdminError("This invoice is already voided or archived.", 409);
   }
 
   const timestamp = new Date().toISOString();
@@ -914,6 +918,9 @@ export async function archiveInvoice(
   const existing = await db.prepare("SELECT * FROM invoices WHERE id = ?").bind(id).first<RecordData>();
   if (!existing) throw new AdminError("Invoice not found.", 404);
   if (existing.updated_at !== revision) throw new AdminError("Another admin changed this invoice. Reload and try again.", 409);
+  // Archived invoices leave finance totals, so only invoices with no live money can be archived.
+  if (existing.status !== "Draft" && existing.status !== "Void")
+    throw new AdminError("Void this invoice before archiving it. Only Draft or Void invoices can be archived.", 409);
   const timestamp = new Date().toISOString();
   const next = { ...existing, archived_at: timestamp, updated_at: timestamp };
   const result = await db.batch([
@@ -1042,9 +1049,7 @@ function paymentForm(
     return "";
   }
 
-  const today = new Date()
-    .toISOString()
-    .slice(0, 10);
+  const today = philippineToday();
 
   return `
     <section>
@@ -1125,9 +1130,7 @@ function issueForm(
     return "";
   }
 
-  const today = new Date()
-    .toISOString()
-    .slice(0, 10);
+  const today = philippineToday();
 
   return `
     <section>
@@ -1184,7 +1187,7 @@ async function detail(
   },
   id: string,
   saved: string,
-  deleting: boolean,
+  confirming: "" | "archive" | "void",
 ) {
   if (!/^[\da-f-]{36}$/i.test(id)) {
     throw new AdminError(
@@ -1203,6 +1206,7 @@ async function detail(
         s.tracking_number,
         s.service_type,
         s.china_warehouse,
+        s.shipping_charge AS shipment_shipping_charge,
         COALESCE(SUM(p.amount),0) AS amount_paid
       FROM invoices i
       JOIN customers c
@@ -1225,25 +1229,33 @@ async function detail(
     );
   }
 
-  if (deleting) {
+  if (confirming) {
     requireAdminDelete(user);
+    const voiding = confirming === "void";
+    if (voiding ? invoice.status === "Void" : invoice.status !== "Draft" && invoice.status !== "Void") {
+      throw new AdminError(
+        voiding ? "This invoice is already void." : "Void this invoice before archiving it.",
+        409,
+      );
+    }
 
     return page(
-      `Archive Invoice ${invoice.invoice_number}`,
+      `${voiding ? "Void" : "Archive"} Invoice ${invoice.invoice_number}`,
       `
         <section>
-          <h2>Confirm archive</h2>
+          <h2>Confirm ${voiding ? "void" : "archive"}</h2>
 
           <p>
-            Are you sure you want to archive
+            Are you sure you want to ${voiding ? "void" : "archive"}
             <strong>${esc(
               invoice.invoice_number,
             )}</strong>?
           </p>
 
           <p class="muted">
-            The invoice will be removed from normal lists but retained
-            for audit history and payment records.
+            ${voiding
+              ? "A voided invoice no longer counts as revenue or receivable, and the shipment can be invoiced again. Payments already recorded stay in Cash Received; record any refund as an expense."
+              : "Archived invoices are hidden from lists and from all finance totals, including their payments. Use this only for test or duplicate records."}
           </p>
 
           <div class="actions">
@@ -1255,7 +1267,7 @@ async function detail(
                 "csrf",
                 csrfToken(env, user.id, route),
               )}
-              ${hidden("action", "archive")}
+              ${hidden("action", confirming)}
               ${hidden("id", id)}
               ${hidden(
                 "revision",
@@ -1264,7 +1276,7 @@ async function detail(
               ${hidden("confirm", "yes")}
 
               <button type="submit">
-                Archive invoice
+                ${voiding ? "Void invoice" : "Archive invoice"}
               </button>
             </form>
 
@@ -1312,9 +1324,19 @@ async function detail(
       .all<RecordData>()
   ).results;
 
-  const notice = saved
+  const outdated =
+    invoice.status !== "Void" &&
+    Number(invoice.subtotal) !== Number(invoice.shipment_shipping_charge);
+
+  const notice = (saved
     ? '<p class="notice" role="status">Changes saved.</p>'
-    : "";
+    : "") + (outdated
+    ? `<p class="notice" role="status">The shipment's shipping charge is now ${esc(pesos(invoice.shipment_shipping_charge))}, but this invoice shows ${esc(pesos(invoice.subtotal))}. ${
+        invoice.status === "Draft" || invoice.status === "Unpaid"
+          ? "Save the shipment again to update this invoice."
+          : "Payments are already recorded, so it was not changed automatically. Void it and create a new invoice if the customer should pay the new amount."
+      }</p>`
+    : "");
 
   const connectedRecords = `
     <div class="table">
@@ -1484,7 +1506,16 @@ async function detail(
             View invoice activity
           </a>
 
-          ${canDeleteAdmin(user) ? `<a
+          ${canDeleteAdmin(user) && invoice.status !== "Void" && !invoice.archived_at ? `<a
+            class="button"
+            href="${route}?id=${esc(
+              invoice.id,
+            )}&void=1"
+          >
+            Void invoice
+          </a>` : ""}
+
+          ${canDeleteAdmin(user) && (invoice.status === "Draft" || invoice.status === "Void") && !invoice.archived_at ? `<a
             class="button"
             href="${route}?id=${esc(
               invoice.id,
@@ -1588,6 +1619,8 @@ async function createView(
           ON c.id = s.customer_id
         LEFT JOIN invoices i
           ON i.shipment_id = s.id
+          AND i.status != 'Void'
+          AND i.archived_at IS NULL
         WHERE
           s.archived_at IS NULL
           AND c.archived_at IS NULL
@@ -1660,7 +1693,7 @@ async function createView(
         </form>
 
         <p class="muted">
-          Only shipments without an invoice appear.
+          Only shipments without an active invoice appear. A shipment whose invoice was voided can be invoiced again.
           Customer and shipment information comes
           from connected records.
         </p>
@@ -2148,7 +2181,7 @@ export async function handleBilling(
 
       const action = form.get("action");
 
-      if (action === "archive") {
+      if (action === "archive" || action === "void") {
         requireAdminDelete(user);
 
         const allowed = new Set([
@@ -2188,7 +2221,27 @@ export async function handleBilling(
 
         if (form.get("confirm") !== "yes") {
           throw new AdminError(
-            "Confirm the invoice archive.",
+            `Confirm the invoice ${action}.`,
+          );
+        }
+
+        if (action === "void") {
+          await voidInvoice(
+            db,
+            deleteId,
+            deleteRevision,
+            user.id,
+          );
+
+          return page(
+            "Invoice voided",
+            "",
+            user.name,
+            303,
+            {
+              Location:
+                `${route}?id=${encodeURIComponent(deleteId)}&saved=1`,
+            },
           );
         }
 
@@ -2304,7 +2357,11 @@ export async function handleBilling(
         user,
         id,
         url.searchParams.get("saved") ?? "",
-        url.searchParams.get("archive") === "1",
+        url.searchParams.get("void") === "1"
+          ? "void"
+          : url.searchParams.get("archive") === "1"
+            ? "archive"
+            : "",
       );
     }
 

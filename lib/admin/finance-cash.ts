@@ -3,6 +3,7 @@ import { z } from "zod";
 import { cashEntrySchema, cashEntryTypes, type RecordData } from "./validation";
 import { AdminError } from "./security";
 import { esc, hidden, input, page, pesos } from "./ui";
+import { philippineToday } from "./finance-dates";
 
 const path = "/admin/finance/cash";
 const cashTypes = new Set(["Opening Cash Balance", "Owner Contribution", "Other Cash Received", "Customer Payment Received", "Adjustment Increase"]);
@@ -59,7 +60,7 @@ export async function financeCashPage(db: D1Database, url: URL, user: string, cs
   const customerRows = await customers(db);
   if (add) {
     const selected = url.searchParams.get("type") ?? "";
-    const form: RecordData = { entry_type: cashEntryTypes.includes(selected as never) ? selected : "", entry_date: new Date().toISOString().slice(0, 10) };
+    const form: RecordData = { entry_type: cashEntryTypes.includes(selected as never) ? selected : "", entry_date: philippineToday() };
     return page("Add Cash or Customer Credit", `<section><p class="notice"><strong>How this works:</strong> Expenses record money KargoDoor pays out. Use <strong>Customer Reimbursement Due</strong> only after recording the expense; it tracks what the customer owes and does not count as cash or income until payment is received.</p>
       <form method="post" action="${path}">${hidden("csrf", csrf)}<div class="grid">
       ${selectField("entry_type", "Entry type *", cashEntryTypes, form.entry_type, "Select entry type")}
@@ -219,4 +220,53 @@ export async function readManualCashSummary(db: D1Database, asOf: string) {
   let receivable = BigInt(0);
   for (const [id, amount] of due) { const balance = amount - (paid.get(id) ?? BigInt(0)); if (balance > 0) receivable += balance; }
   return { cash, receivable };
+}
+
+export type CashOnHand = {
+  openingDate: string;
+  opening: bigint;
+  ownerAndOther: bigint;
+  collections: bigint;
+  expenses: bigint;
+  total: bigint;
+};
+
+// Starts from the latest Opening Cash Balance on or before asOf: that balance
+// already reflects everything paid or received before its date. Without one,
+// every recorded flow counts. Ni Hao costs saved only on shipments are not
+// cash out until they are recorded as expenses.
+export async function readCashOnHand(db: D1Database, asOf: string): Promise<CashOnHand> {
+  let entries: { entry_date: string; entry_type: string; amount: string }[] = [];
+  try {
+    ({ results: entries } = await db.prepare(`SELECT entry_date, entry_type, CAST(amount AS TEXT) AS amount
+      FROM finance_cash_entries WHERE entry_date <= ? ORDER BY entry_date DESC, created_at DESC`)
+      .bind(asOf).all<{ entry_date: string; entry_type: string; amount: string }>());
+  } catch (error) {
+    if (!(error instanceof Error && /no such table: finance_cash_entries/i.test(error.message))) throw error;
+  }
+  const openingEntry = entries.find((entry) => entry.entry_type === "Opening Cash Balance");
+  const start = openingEntry?.entry_date ?? "";
+  let ownerAndOther = BigInt(0);
+  for (const entry of entries) {
+    if (entry.entry_date < start || entry.entry_type === "Opening Cash Balance") continue;
+    if (cashTypes.has(entry.entry_type)) ownerAndOther += BigInt(entry.amount);
+    if (entry.entry_type === "Adjustment Decrease") ownerAndOther -= BigInt(entry.amount);
+  }
+  const sums = await db.prepare(`SELECT
+      (SELECT CAST(COALESCE(SUM(p.amount), 0) AS TEXT) FROM payments p JOIN invoices i ON i.id = p.invoice_id
+        WHERE i.archived_at IS NULL AND p.payment_date >= ? AND p.payment_date <= ?) AS collections,
+      (SELECT CAST(COALESCE(SUM(amount), 0) AS TEXT) FROM expenses
+        WHERE expense_date >= ? AND expense_date <= ?) AS expenses`)
+    .bind(start, asOf, start, asOf).first<{ collections: string; expenses: string }>();
+  const opening = BigInt(openingEntry?.amount ?? "0");
+  const collections = BigInt(sums?.collections ?? "0");
+  const expenses = BigInt(sums?.expenses ?? "0");
+  return {
+    openingDate: start,
+    opening,
+    ownerAndOther,
+    collections,
+    expenses,
+    total: opening + ownerAndOther + collections - expenses,
+  };
 }
