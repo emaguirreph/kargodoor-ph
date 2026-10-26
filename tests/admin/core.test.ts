@@ -19,7 +19,7 @@ import { marginSummarySql, finance, activity, dashboard, saveStaffFollowUp } fro
 import { saveRecord } from "../../lib/admin/data";
 import { createShipmentFromApprovedQuotation } from "../../lib/admin/quotation-shipment";
 import { syncVerifiedFreightToInvoice, verifiedShipmentFreight } from "../../lib/admin/shipment-verified-pricing";
-import { createInvoice, issueInvoice, recordPayment } from "../../lib/admin/billing";
+import { archiveInvoice, createInvoice, issueInvoice, recordPayment, voidInvoice } from "../../lib/admin/billing";
 import {
   validateJwt,
   csrfToken,
@@ -65,6 +65,7 @@ function database(includePhase1 = true) {
     sql.exec(readFileSync("migrations/admin/0023_fcl_shipments.sql", "utf8"));
     sql.exec(readFileSync("migrations/admin/0025_sea_freight_tracking_statuses.sql", "utf8"));
     sql.exec(readFileSync("migrations/admin/0026_bulk_quotation_shipments.sql", "utf8"));
+    sql.exec(readFileSync("migrations/admin/0028_invoice_reissue_after_void.sql", "utf8"));
   }
   const user = randomUUID();
   sql
@@ -1093,6 +1094,38 @@ test("invoice snapshots connected records and supports partial and multiple paym
   assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM activity_log WHERE entity_type IN ('invoices','payments')").get()!.n, 5);
 });
 
+test("only Draft or Void invoices can be archived, and a voided shipment can be invoiced again", async () => {
+  const { sql, db, user } = database();
+  const customerId = await saveRecord(db, "customers", customer, user, "", "");
+  const shipmentId = await saveRecord(db, "shipments", { ...shipment(customerId), shipping_charge: 100000 }, user, "", "");
+  const first = await createInvoice(db, { shipment_id: shipmentId, delivery_charge: "0", other_charge: "0", status: "Unpaid", issued_at: "2026-09-07", due_at: "" }, user);
+  await recordPayment(db, { invoice_id: first, amount: "300", payment_method: "Cash", reference_number: "", payment_date: "2026-09-08", notes: "" }, user);
+  const revision = () => String(sql.prepare("SELECT updated_at FROM invoices WHERE id=?").get(first)!.updated_at);
+  await assert.rejects(archiveInvoice(db, first, revision(), user), /Void this invoice before archiving/);
+  await voidInvoice(db, first, revision(), user);
+  assert.equal(sql.prepare("SELECT status FROM invoices WHERE id=?").get(first)!.status, "Void");
+  await assert.rejects(voidInvoice(db, first, revision(), user), /already voided/);
+  assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM payments WHERE invoice_id=?").get(first)!.n, 1);
+  const second = await createInvoice(db, { shipment_id: shipmentId, delivery_charge: "0", other_charge: "0", status: "Draft", issued_at: "", due_at: "" }, user);
+  assert.notEqual(second, first);
+  await assert.rejects(createInvoice(db, { shipment_id: shipmentId, delivery_charge: "0", other_charge: "0", status: "Draft", issued_at: "", due_at: "" }, user), /already has an invoice/);
+  await archiveInvoice(db, first, revision(), user);
+  assert.ok(sql.prepare("SELECT archived_at FROM invoices WHERE id=?").get(first)!.archived_at);
+});
+
+test("editing a shipment charge updates its Draft or Unpaid invoice once", async () => {
+  const { sql, db, user } = database();
+  const customerId = await saveRecord(db, "customers", customer, user, "", "");
+  const shipmentId = await saveRecord(db, "shipments", { ...shipment(customerId), shipping_charge: 100000 }, user, "", "");
+  const invoiceId = await createInvoice(db, { shipment_id: shipmentId, delivery_charge: "50", other_charge: "0", status: "Draft", issued_at: "", due_at: "" }, user);
+  assert.equal(await syncVerifiedFreightToInvoice(db, shipmentId, 100000, user, "Edited charge."), 0);
+  assert.equal(await syncVerifiedFreightToInvoice(db, shipmentId, 120000, user, "Edited charge."), 1);
+  const invoice = sql.prepare("SELECT subtotal, total FROM invoices WHERE id=?").get(invoiceId)!;
+  assert.equal(invoice.subtotal, 120000);
+  assert.equal(invoice.total, 125000);
+  assert.equal(sql.prepare("SELECT notes FROM activity_log WHERE action='update_verified_freight'").get()!.notes, "Edited charge.");
+});
+
 test("draft invoices require issuing and reject invalid charges, dates and overpayments", async () => {
   const { sql, db, user } = database();
   const customerId = await saveRecord(db, "customers", customer, user, "", "");
@@ -1177,12 +1210,13 @@ test("expense migration preserves existing records", () => {
 });
 
 
-test("expense form has exact controlled dropdowns and no tracking field", async () => {
+test("expense form has exact controlled dropdowns and an optional tracking field", async () => {
   const { db } = database();
   const response = await expensesPage(db, new URL("https://admin.test/admin/finance/expenses?new=1"), "Admin", "token");
   assert.equal(response.status, 200);
   const html = await response.text();
-  assert.doesNotMatch(html, /tracking_number|Tracking number/i);
+  assert.match(html, /name="tracking_number"/);
+  assert.doesNotMatch(html, /name="tracking_number"[^>]*required/);
   const categories = ["Freight / Ni Hao Cost", "Local Delivery / Trucking", "Marketing / Advertising",
     "Salaries / Wages", "Management / Administrative", "Office / Rent", "Website / Technology",
     "Permits / Government Fees", "Transportation / Fuel / Parking", "Supplies / Packaging",
@@ -1204,7 +1238,8 @@ test("expense form has exact controlled dropdowns and no tracking field", async 
   for (const category of ["Office", "Arbitrary", "office / rent"])
     assert.throws(() => parseExpenseForm(new URLSearchParams({ ...expenseInput, category })));
   assert.throws(() => parseExpenseForm(new URLSearchParams({ ...expenseInput, payment_method: "Arbitrary" })));
-  assert.throws(() => parseExpenseForm(new URLSearchParams({ ...expenseInput, tracking_number: "KDSEA000001" })));
+  assert.equal(parseExpenseForm(new URLSearchParams({ ...expenseInput, tracking_number: "KDSEA000001" })).tracking_number, "KDSEA000001");
+  assert.equal(parseExpenseForm(new URLSearchParams(expenseInput)).tracking_number, null);
 });
 
 test("historical expense categories display safely and stored tracking remains untouched", async () => {
@@ -1227,6 +1262,8 @@ test("historical expense categories display safely and stored tracking remains u
 
 test("expense edit preloads values, validates input and preserves immutable fields", async () => {
   const { db, sql } = database();
+  const editor = { id: "editor", name: "Editor", email: "editor@example.test", role: "admin" as const };
+  sql.prepare("INSERT INTO admin_users VALUES ('editor','Editor','editor@example.test','admin','2026-01-01','2026-01-01')").run();
   await saveExpense(db, parseExpenseForm(new URLSearchParams({ ...expenseInput, payee: "Old Payee", notes: "Old notes", payment_method: "GCash", reference_number: "REF" })));
   const original = sql.prepare("SELECT * FROM expenses").get()!;
   sql.prepare("UPDATE expenses SET tracking_number='KEEP' WHERE id=?").run(original.id as string);
@@ -1236,14 +1273,14 @@ test("expense edit preloads values, validates input and preserves immutable fiel
   assert.match(html, /Edit Expense/);
   assert.match(html, /value="Office \/ Rent" selected/);
   assert.match(html, /value="GCash" selected/);
-  for (const value of ["123.45", "Old Payee", "Old notes", "REF"]) assert.ok(html.includes(value));
-  assert.doesNotMatch(html, /tracking_number|Tracking number|created_at/);
-  const edit = { ...expenseInput, action: "edit", id: String(original.id), revision: String(original.updated_at), amount: "0.30", description: "Changed" };
+  for (const value of ["123.45", "Old Payee", "Old notes", "REF", 'name="tracking_number"', 'value="KEEP"']) assert.ok(html.includes(value));
+  assert.doesNotMatch(html, /created_at/);
+  const edit = { ...expenseInput, action: "edit", id: String(original.id), revision: String(original.updated_at), amount: "0.30", description: "Changed", tracking_number: "KEEP" };
   for (const amount of ["0", "-1", "1.001"])
     await assert.rejects(mutateExpense(db, new URLSearchParams({ ...edit, amount })));
   await assert.rejects(mutateExpense(db, new URLSearchParams({ ...edit, category: "Old category" })));
   await assert.rejects(mutateExpense(db, new URLSearchParams({ ...edit, created_at: "rewrite" })));
-  assert.equal(await mutateExpense(db, new URLSearchParams(edit)), "updated");
+  assert.equal(await mutateExpense(db, new URLSearchParams(edit), editor), "updated");
   const saved = sql.prepare("SELECT * FROM expenses").get()!;
   assert.equal(saved.id, original.id);
   assert.equal(saved.created_at, original.created_at);
@@ -1251,7 +1288,10 @@ test("expense edit preloads values, validates input and preserves immutable fiel
   assert.notEqual(saved.updated_at, original.updated_at);
   assert.equal(saved.amount, 30);
   assert.equal(saved.description, "Changed");
-  await assert.rejects(mutateExpense(db, new URLSearchParams(edit)), /changed or no longer exists/);
+  const log = sql.prepare("SELECT old_value, new_value FROM activity_log WHERE entity_type='expenses' AND action='update'").get()!;
+  assert.equal(JSON.parse(String(log.old_value)).amount, 12345);
+  assert.equal(JSON.parse(String(log.new_value)).amount, 30);
+  await assert.rejects(mutateExpense(db, new URLSearchParams(edit), editor), /changed or no longer exists/);
 });
 
 test("expense deletion requires confirmation, preserves other rows and rejects stale confirmation", async () => {
@@ -1261,6 +1301,7 @@ test("expense deletion requires confirmation, preserves other rows and rejects s
   const original = sql.prepare("SELECT * FROM expenses WHERE description=?").get(expenseInput.description)!;
   const owner = { id: "owner", name: "Owner", email: "owner@example.test", role: "owner" as const };
   const admin = { id: "admin", name: "Admin", email: "admin@example.test", role: "admin" as const };
+  sql.prepare("INSERT INTO admin_users VALUES ('owner','Owner','owner@example.test','owner','2026-01-01','2026-01-01')").run();
   const response = await expensesPage(db, new URL(`https://admin.test/admin/finance/expenses?delete=${original.id}`), owner, "token");
   const html = await response.text();
   assert.match(html, /Confirm Delete/);
@@ -1278,6 +1319,10 @@ test("expense deletion requires confirmation, preserves other rows and rejects s
   const remaining = sql.prepare("SELECT * FROM expenses").all();
   assert.equal(remaining.length, 1);
   assert.equal(remaining[0].description, "Keep this expense");
+  const log = sql.prepare("SELECT admin_user_id, old_value FROM activity_log WHERE entity_type='expenses' AND action='delete'").all();
+  assert.equal(log.length, 1);
+  assert.equal(log[0].admin_user_id, "owner");
+  assert.equal(JSON.parse(String(log[0].old_value)).description, expenseInput.description);
 });
 
 test("expense filters and search combine with exact integer totals and clear restores all rows", async () => {

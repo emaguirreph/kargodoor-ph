@@ -47,9 +47,9 @@ export function fixture() {
   function payment(id: string, amount: bigint, date = "2026-09-08") {
     sql.prepare("INSERT INTO payments VALUES (?,?,'c',?,'Cash',NULL,?,NULL,'2026-09-08')").run(randomUUID(), id, amount, date);
   }
-  function expense(amount: bigint, category = "Office / Rent", date = "2026-09-08") {
-    sql.prepare(`INSERT INTO expenses (id,category,description,amount,expense_date,created_at,updated_at) VALUES (?,?,'Test expense',?,?,'then','then')`)
-      .run(randomUUID(), category, amount, date);
+  function expense(amount: bigint, category = "Office / Rent", date = "2026-09-08", tracking: string | null = null) {
+    sql.prepare(`INSERT INTO expenses (id,category,description,amount,expense_date,tracking_number,created_at,updated_at) VALUES (?,?,'Test expense',?,?,?,'then','then')`)
+      .run(randomUUID(), category, amount, date, tracking);
   }
   return { sql, db, queries, shipment, invoice, payment, expense };
 }
@@ -92,7 +92,7 @@ test("finance dashboard scenarios A B C: revenue/cash separation, AR and no dupl
   const id = f.invoice(BigInt(1000000), "2026-09-08", "Partial", BigInt(0), sid);
   f.payment(id, BigInt(400000));
   f.expense(BigInt(100000));
-  f.expense(BigInt(700000), "Freight / Ni Hao Cost");
+  f.expense(BigInt(700000), "Freight / Ni Hao Cost", "2026-09-08", sid);
   const before = f.sql.prepare("SELECT total_changes() AS n").get()!.n;
   const s = await readFinanceSummary(f.db, all, now);
   assert.equal(s.revenue, BigInt(1000000));
@@ -113,7 +113,7 @@ test("finance overview tables, expense breakdown, actions and formulas use Phase
   const id = f.invoice(BigInt(1000000), "2026-09-08", "Partial", BigInt(0), sid);
   f.payment(id, BigInt(400000));
   f.expense(BigInt(200000), "Marketing / Advertising");
-  f.expense(BigInt(700000), "Freight / Ni Hao Cost");
+  f.expense(BigInt(700000), "Freight / Ni Hao Cost", "2026-09-08", sid);
   f.expense(BigInt(300000), "Utilities", "2026-08-31");
   const before = await readFinanceSummary(f.db, { from: "2026-09-01", to: "2026-09-30" }, now);
   const changes = f.sql.prepare("SELECT total_changes() AS n").get()!.n;
@@ -149,7 +149,7 @@ test("finance overview tables, expense breakdown, actions and formulas use Phase
   assert.equal((html.match(/Marketing \/ Advertising/g) ?? []).length, 1);
   for (const wording of ["Eligible Invoice Revenue", "Actual Payments Received",
     "Eligible Invoice Balance − Payments Applied", "KargoDoor Freight Charges − Ni Hao Freight Cost",
-    "Business Expenses − Freight / Ni Hao Cost category", "Revenue − Ni Hao Freight Cost − Operating Expenses",
+    "Business Expenses − Freight / Ni Hao Cost category", "Revenue − Cost of Sales − Operating Expenses",
     "Revenue and Payments Received are different", "This prevents double counting"]) assert.ok(html.includes(wording));
 });
 
@@ -275,7 +275,8 @@ test("finance dashboard large centavos and small fractions remain exact across S
   const s = await readFinanceSummary(f.db, all, now);
   assert.equal(s.revenue, huge + BigInt(30));
   assert.equal(s.margin, huge - BigInt(1));
-  assert.equal(s.profit, huge + BigInt(29));
+  // The costed shipment has no invoice yet, so its cost is not in profit.
+  assert.equal(s.profit, huge + BigInt(30));
   assert.equal(financePesos(s.revenue), "₱90,071,992,547,410.23");
   assert.equal(financePesos(BigInt(-1)), "-₱0.01");
 });
@@ -291,4 +292,70 @@ test("finance dashboard does not invent dates for legacy invoices and reports in
   const html = await (await financeDashboard(f.db, new URL("https://test/admin/finance"), "Admin", now)).text();
   assert.match(html, /lack valid issue dates/);
   assert.match(html, /may be incomplete/);
+});
+
+test("cost of sales follows the invoice date, and uninvoiced shipment costs stay out of profit", async () => {
+  const f = fixture();
+  const received = f.shipment(BigInt(500000), BigInt(300000), "2026-08-20");
+  f.invoice(BigInt(500000), "2026-09-05", "Unpaid", BigInt(0), received);
+  f.shipment(BigInt(900000), BigInt(600000), "2026-09-01");
+  const september = await readFinanceSummary(f.db, { from: "2026-09-01", to: "2026-09-30" }, now);
+  assert.equal(september.revenue, BigInt(500000));
+  assert.equal(september.invoicedCosts, BigInt(300000));
+  assert.equal(september.profit, BigInt(200000));
+  const august = await readFinanceSummary(f.db, { from: "2026-08-01", to: "2026-08-31" }, now);
+  assert.equal(august.costOfSales, BigInt(0));
+  assert.equal(august.profit, BigInt(0));
+});
+
+test("Ni Hao expenses count unless tied to a shipment that already carries the cost", async () => {
+  const f = fixture();
+  const costed = f.shipment(BigInt(500000), BigInt(300000));
+  f.expense(BigInt(300000), "Freight / Ni Hao Cost", "2026-09-08", costed);
+  f.expense(BigInt(800000), "Freight / Ni Hao Cost", "2026-09-08");
+  f.expense(BigInt(100000), "Freight / Ni Hao Cost", "2026-09-08", "NOT-A-SHIPMENT");
+  const s = await readFinanceSummary(f.db, all, now);
+  assert.equal(s.freightExpenses, BigInt(900000));
+  assert.equal(s.linkedFreightExpenses, BigInt(300000));
+  assert.equal(s.operating, BigInt(0));
+  assert.equal(s.profit, BigInt(-900000));
+});
+
+test("cash on hand starts at the latest opening balance and counts only later money in and out", async () => {
+  const f = fixture();
+  f.sql.exec(readFileSync("migrations/admin/0011_finance_cash_entries.sql", "utf8"));
+  const entry = (date: string, type: string, amount: number) => f.sql.prepare(`INSERT INTO finance_cash_entries
+    (id,entry_date,entry_type,amount,notes,created_at,updated_at) VALUES (?,?,?,?,'n','t','t')`).run(randomUUID(), date, type, amount);
+  f.expense(BigInt(500000), "Marketing / Advertising", "2026-08-15");
+  entry("2026-08-20", "Owner Contribution", 100000);
+  entry("2026-09-01", "Opening Cash Balance", 2500000);
+  f.expense(BigInt(200000), "Utilities", "2026-09-05");
+  entry("2026-09-06", "Owner Contribution", 300000);
+  f.payment(f.invoice(BigInt(400000), "2026-09-02", "Partial"), BigInt(150000), "2026-09-07");
+  f.expense(BigInt(999900), "Utilities", "2026-12-01");
+  const s = await readFinanceSummary(f.db, { from: "2026-09-01", to: "2026-09-30" }, now);
+  assert.equal(s.cash.openingDate, "2026-09-01");
+  assert.equal(s.cash.opening, BigInt(2500000));
+  assert.equal(s.cash.ownerAndOther, BigInt(300000));
+  assert.equal(s.cash.collections, BigInt(150000));
+  assert.equal(s.cash.expenses, BigInt(200000));
+  assert.equal(s.cash.total, BigInt(2750000));
+  assert.equal(s.profit, BigInt(400000 - 200000), "opening cash and owner funds are not revenue");
+});
+
+test("finance dashboard lists unbilled shipments, counts Draft invoices as unbilled and shows cash on hand", async () => {
+  const f = fixture();
+  const none = f.shipment(BigInt(2840500), null);
+  const draft = f.shipment(BigInt(100000), BigInt(70000));
+  f.invoice(BigInt(100000), null, "Draft", BigInt(0), draft);
+  const billed = f.shipment(BigInt(50000), null);
+  f.invoice(BigInt(50000), "2026-09-08", "Unpaid", BigInt(0), billed);
+  f.shipment(BigInt(77700), null, "2026-09-08", "Cancelled");
+  const html = await (await financeDashboard(f.db, new URL("https://test/admin/finance"), "Admin", now)).text();
+  assert.match(html, /<h2>Shipments to Bill<\/h2>/);
+  assert.ok(html.includes(financePesos(BigInt(2940500))), "unbilled total = no-invoice + draft shipments");
+  assert.ok(html.includes(`shipment_id=${none}`));
+  assert.ok(html.includes("Draft (not issued)"));
+  assert.ok(!html.includes(financePesos(BigInt(77700))), "cancelled shipments are not unbilled");
+  assert.match(html, /Cash on Hand/);
 });

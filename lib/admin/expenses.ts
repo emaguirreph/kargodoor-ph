@@ -3,6 +3,7 @@ import { z } from "zod";
 import { expenseSchema, expenseCategories, expensePaymentMethods, parseExpenseForm, type RecordData } from "./validation";
 import { AdminError, canDeleteAdmin, isRestrictedStaff, type AdminUser } from "./security";
 import { page, esc, pesos, input, hidden } from "./ui";
+import { philippineToday } from "./finance-dates";
 
 const path = "/admin/finance/expenses";
 const fields = [
@@ -16,12 +17,16 @@ export async function saveExpense(db: D1Database, values: z.infer<typeof expense
   const now = new Date().toISOString();
   await db.prepare(`INSERT INTO expenses
     (id, expense_date, category, payee, description, amount, payment_method,
-     reference_number, notes, created_by_admin_user_id, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+     reference_number, tracking_number, notes, created_by_admin_user_id, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(crypto.randomUUID(), values.expense_date, values.category, values.payee,
       values.description, values.amount, values.payment_method, values.reference_number,
-      values.notes, createdBy ?? null, now, now).run();
+      values.tracking_number, values.notes, createdBy ?? null, now, now).run();
 }
+
+const expenseJson = `json_object('expense_date', expense_date, 'category', category, 'payee', payee,
+  'description', description, 'amount', amount, 'payment_method', payment_method,
+  'reference_number', reference_number, 'tracking_number', tracking_number, 'notes', notes)`;
 
 const mutationSchema = z.object({
   action: z.enum(["edit", "delete"]),
@@ -48,8 +53,15 @@ export async function mutateExpense(db: D1Database, form: URLSearchParams, user:
   if (metadata.action === "delete") {
     if (!canDeleteAdmin(user)) throw new AdminError("Only the owner can delete expenses.", 403);
     if (form.get("confirm") !== "yes") throw new AdminError("Confirm the expense deletion.");
-    const result = await db.prepare("DELETE FROM expenses WHERE id = ? AND updated_at = ?")
-      .bind(metadata.id, metadata.revision).run();
+    // The log row keeps a copy of the deleted expense for the books.
+    const [, result] = await db.batch([
+      db.prepare(`INSERT INTO activity_log (id,admin_user_id,action,entity_type,entity_id,old_value,new_value,notes,created_at)
+        SELECT ?, ?, 'delete', 'expenses', id, ${expenseJson}, NULL, 'Expense deleted.', ?
+        FROM expenses WHERE id = ? AND updated_at = ?`)
+        .bind(crypto.randomUUID(), user.id, new Date().toISOString(), metadata.id, metadata.revision),
+      db.prepare("DELETE FROM expenses WHERE id = ? AND updated_at = ?")
+        .bind(metadata.id, metadata.revision),
+    ]);
     if (result.meta.changes !== 1) throw new AdminError("Expense changed or no longer exists. Reload Expenses before trying again.", 409);
     return "deleted";
   }
@@ -59,12 +71,19 @@ export async function mutateExpense(db: D1Database, form: URLSearchParams, user:
   // Ensure even two edits in the same millisecond receive different revisions.
   const previousTime = Date.parse(metadata.revision);
   const now = new Date(Math.max(Date.now(), Number.isFinite(previousTime) ? previousTime + 1 : 0)).toISOString();
-  const result = await db.prepare(`UPDATE expenses SET expense_date = ?, category = ?, payee = ?,
-    description = ?, amount = ?, payment_method = ?, reference_number = ?, notes = ?, updated_at = ?
-    WHERE id = ? AND updated_at = ?${isRestrictedStaff(user) ? " AND created_by_admin_user_id = ?" : ""}`)
-    .bind(values.expense_date, values.category, values.payee, values.description, values.amount,
-      values.payment_method, values.reference_number, values.notes, now, metadata.id, metadata.revision,
-      ...(isRestrictedStaff(user) ? [user.id] : [])).run();
+  const owned = isRestrictedStaff(user) ? " AND created_by_admin_user_id = ?" : "";
+  const scope = [metadata.id, metadata.revision, ...(isRestrictedStaff(user) ? [user.id] : [])];
+  const [, result] = await db.batch([
+    db.prepare(`INSERT INTO activity_log (id,admin_user_id,action,entity_type,entity_id,old_value,new_value,notes,created_at)
+      SELECT ?, ?, 'update', 'expenses', id, ${expenseJson}, ?, NULL, ?
+      FROM expenses WHERE id = ? AND updated_at = ?${owned}`)
+      .bind(crypto.randomUUID(), user.id, JSON.stringify(values), now, ...scope),
+    db.prepare(`UPDATE expenses SET expense_date = ?, category = ?, payee = ?,
+      description = ?, amount = ?, payment_method = ?, reference_number = ?, tracking_number = ?, notes = ?, updated_at = ?
+      WHERE id = ? AND updated_at = ?${owned}`)
+      .bind(values.expense_date, values.category, values.payee, values.description, values.amount,
+        values.payment_method, values.reference_number, values.tracking_number, values.notes, now, ...scope),
+  ]);
   if (result.meta.changes !== 1) throw new AdminError("Expense changed or no longer exists. Reload Expenses before trying again.", 409);
   return "updated";
 }
@@ -106,7 +125,7 @@ export async function expensesPage(db: D1Database, url: URL, user: AdminUser | s
   if (edit !== null || remove !== null) {
     const id = z.string().uuid().parse(edit ?? remove);
     const found = await db.prepare(`SELECT id, expense_date, category, payee, description, amount,
-      payment_method, reference_number, notes, updated_at FROM expenses WHERE id = ?${staff ? " AND created_by_admin_user_id = ?" : ""}`)
+      payment_method, reference_number, tracking_number, notes, created_at, updated_at FROM expenses WHERE id = ?${staff ? " AND created_by_admin_user_id = ?" : ""}`)
       .bind(id, ...(staff ? [actor.id] : [])).first<RecordData>();
     if (!found) throw new AdminError("Expense not found.", 404);
     record = found;
@@ -121,6 +140,7 @@ export async function expensesPage(db: D1Database, url: URL, user: AdminUser | s
       <a href="${path}">Cancel</a></div></form></section>`, actor.name, 200, {}, canWrite, staff);
   }
   if (add || edit !== null) {
+    if (add) record = { expense_date: philippineToday() };
     const historical = edit !== null && !expenseCategories.some((category) => category === record.category)
       ? `<p class="notice">Saved category: ${esc(record.category)}. Select an approved category to save changes.</p>` : "";
     const oldMethod = edit !== null && record.payment_method && !expensePaymentMethods.some((method) => method === record.payment_method)
@@ -132,10 +152,11 @@ export async function expensesPage(db: D1Database, url: URL, user: AdminUser | s
       + `<label>Amount (PHP) *<input name="amount" type="number" min="0.01" max="1000000000" step="0.01" required value="${record.amount === undefined ? "" : esc(`${BigInt(String(record.amount)) / BigInt(100)}.${(BigInt(String(record.amount)) % BigInt(100)).toString().padStart(2, "0")}`)}"></label>`
       + dropdown("payment_method", "Payment Method", expensePaymentMethods, record.payment_method, "Select payment method")
       + input("reference_number", "Reference number", record)
+      + input("tracking_number", "Tracking number (Ni Hao cost for one shipment)", record)
       + `<label class="wide">Notes<textarea name="notes" maxlength="4000">${esc(record.notes)}</textarea></label>`;
     return page(edit !== null ? "Edit Expense" : "Add Expense", `<section><p class="notice"><strong>Use this form when KargoDoor pays money out</strong> for a supplier, freight partner, package cost, or operating cost. This reduces cash. If the customer must reimburse a package cost, save the expense first, then record the amount owed in <a href="/admin/finance/cash?new=1&amp;type=Customer%20Reimbursement%20Due">Cash Flow &amp; Customer Credits</a>.</p>${historical}${oldMethod}<form method="post" action="${path}">
       ${hidden("csrf", csrf)}${edit !== null ? hidden("action", "edit") + hidden("id", record.id) + hidden("revision", record.updated_at) : ""}
-      <div class="grid">${form}</div><p class="muted">* Required.</p>
+      <div class="grid">${form}</div><p class="muted">* Required. For a Freight / Ni Hao Cost expense, enter the shipment's tracking number if its Ni Hao cost is already saved on the shipment, so it is not counted twice. Leave it blank for lump-sum Ni Hao payments.</p>
       <div class="actions"><button type="submit">Save expense</button><a href="${path}">Cancel</a></div>
       </form></section>`, actor.name, 200, {}, canWrite, staff);
   }

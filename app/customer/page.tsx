@@ -338,6 +338,7 @@ export default async function CustomerPage() {
         ON i.shipment_id = s.id
         AND i.customer_id = s.customer_id
         AND i.status != 'Void'
+        AND i.archived_at IS NULL
 
       WHERE s.customer_id = ?
         AND s.archived_at IS NULL
