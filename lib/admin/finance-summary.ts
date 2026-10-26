@@ -38,6 +38,7 @@ type UnbilledShipment = {
   full_name: string;
   status: string;
   amount: string;
+  nihao_cost: string | null;
   draft_invoice_id: string | null;
 };
 
@@ -431,6 +432,7 @@ export async function financeDashboard(
         c.full_name,
         s.status,
         CAST(s.shipping_charge + s.delivery_charge AS TEXT) AS amount,
+        CAST(s.nihao_cost AS TEXT) AS nihao_cost,
         (
           SELECT i.id FROM invoices i
           WHERE i.shipment_id = s.id
@@ -456,6 +458,52 @@ export async function financeDashboard(
     (sum, row) => sum + BigInt(row.amount),
     zero,
   );
+
+  // Expected profit covers only unbilled shipments whose Ni Hao cost is known;
+  // the rest are counted separately so a missing cost never looks like profit.
+  let expectedCharges = zero;
+  let expectedCosts = zero;
+  let uncostedCount = 0;
+  let uncostedCharges = zero;
+  for (const row of unbilled.results) {
+    if (row.nihao_cost === null) {
+      uncostedCount++;
+      uncostedCharges += BigInt(row.amount);
+    } else {
+      expectedCharges += BigInt(row.amount);
+      expectedCosts += BigInt(row.nihao_cost);
+    }
+  }
+  const expectedProfit = expectedCharges - expectedCosts;
+  // The summary answers "where are we today", whatever range is selected.
+  const current =
+    summary.asOf === philippineToday(now)
+      ? summary
+      : await readFinanceSummary(db, { from: "", to: "" }, now);
+  const toCollect = current.receivable;
+  const comingIn = unbilledTotal + toCollect;
+
+  // Ni Hao is paid after the fact: a shipment's cost is still owed until a
+  // Freight / Ni Hao Cost expense with its tracking number is recorded.
+  const owed = await db
+    .prepare(
+      `SELECT
+        CAST(COALESCE(SUM(s.nihao_cost), 0) AS TEXT) AS amount,
+        COUNT(s.nihao_cost) AS costed,
+        COUNT(*) - COUNT(s.nihao_cost) AS uncosted
+      FROM shipments s
+      WHERE s.status != 'Cancelled'
+        AND s.archived_at IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM expenses e
+          WHERE e.category = ?
+            AND e.tracking_number = s.tracking_number
+        )`,
+    )
+    .bind(freightExpenseCategory)
+    .first<{ amount: string; costed: number; uncosted: number }>();
+  const goingOut = BigInt(owed?.amount ?? "0");
+  const goingOutUnknown = Number(owed?.uncosted ?? 0);
 
   const notices = [
     summary.uncostedInvoices
@@ -486,6 +534,56 @@ export async function financeDashboard(
 
   const totalExpenses =
     summary.costOfSales + summary.operating;
+
+  const simpleSummary = `
+    <section class="finance-simple">
+      <h2>Simple Summary</h2>
+      <p class="muted">Where the business stands today. The detailed numbers are below.</p>
+
+      <div class="cards finance-simple-cards">
+        <div class="card">
+          <span class="muted">Money we have now</span>
+          <strong>${esc(financePesos(current.cash.total))}</strong>
+          <small>Cash on Hand: opening cash plus money received, minus expenses paid.</small>
+        </div>
+
+        <div class="card">
+          <span class="muted">Money coming in</span>
+          <strong>${esc(financePesos(comingIn))}</strong>
+          <small>${esc(financePesos(unbilledTotal))} still to bill + ${esc(financePesos(toCollect))} billed but not yet paid by customers.</small>
+        </div>
+
+        <div class="card">
+          <span class="muted">Money going out</span>
+          <strong>${esc(financePesos(goingOut))}</strong>
+          <small>Ni Hao costs still to pay on active shipments.${
+            goingOutUnknown
+              ? ` <strong class="finance-warn">${esc(`${goingOutUnknown} shipment${goingOutUnknown === 1 ? " has" : "s have"} no Ni Hao cost yet, so the real amount is higher.`)}</strong>`
+              : ""
+          }</small>
+        </div>
+
+        <div class="card">
+          <span class="muted">Expected profit once billed</span>
+          <strong>${esc(financePesos(expectedProfit))}</strong>
+          <small>${esc(
+            `${financePesos(expectedCharges)} charges − ${financePesos(expectedCosts)} Ni Hao cost on shipments not yet billed.`,
+          )}${
+            uncostedCount
+              ? ` <strong class="finance-warn">${esc(`${uncostedCount} shipment${uncostedCount === 1 ? "" : "s"} (${financePesos(uncostedCharges)}) ${uncostedCount === 1 ? "has" : "have"} no Ni Hao cost yet, so ${uncostedCount === 1 ? "its" : "their"} profit is not included.`)}</strong>`
+              : ""
+          }</small>
+        </div>
+      </div>
+
+      <p class="muted">
+        After everything is collected and Ni Hao is paid:
+        ${esc(financePesos(current.cash.total))} + ${esc(financePesos(comingIn))} − ${esc(financePesos(goingOut))} =
+        <strong>${esc(financePesos(current.cash.total + comingIn - goingOut))}</strong>${goingOutUnknown ? ", less the Ni Hao costs not entered yet" : ""}.
+        When you pay Ni Hao, add it under Expenses as Freight / Ni Hao Cost with the tracking number, so it moves out of Money going out and into Money we have now.
+      </p>
+    </section>
+  `;
 
   const summaryCards = `
     <section>
@@ -910,6 +1008,8 @@ export async function financeDashboard(
         )
         .join("")}
 
+      ${simpleSummary}
+
       ${summaryCards}
 
       ${unbilledSection}
@@ -1136,6 +1236,29 @@ export async function financeDashboard(
           grid-template-columns: repeat(4, minmax(0, 1fr));
         }
 
+        .finance-simple-cards {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .finance-simple-cards .card strong {
+          display: block;
+          font-size: 1.8rem;
+          white-space: nowrap;
+        }
+
+        .finance-simple-cards small {
+          display: block;
+          margin-top: .4rem;
+          line-height: 1.45;
+        }
+
+        .finance-simple-cards small strong.finance-warn {
+          display: inline;
+          font-size: inherit;
+          white-space: normal;
+          color: #9a5b00;
+        }
+
         .finance-summary-cards .card strong,
         .finance-shipping-cards .card strong {
           white-space: nowrap;
@@ -1164,6 +1287,10 @@ export async function financeDashboard(
           .finance-summary-cards,
           .finance-shipping-cards {
             grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .finance-simple-cards {
+            grid-template-columns: 1fr;
           }
         }
 

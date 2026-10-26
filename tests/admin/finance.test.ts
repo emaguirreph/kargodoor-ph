@@ -359,3 +359,21 @@ test("finance dashboard lists unbilled shipments, counts Draft invoices as unbil
   assert.ok(!html.includes(financePesos(BigInt(77700))), "cancelled shipments are not unbilled");
   assert.match(html, /Cash on Hand/);
 });
+
+test("simple summary answers cash now, money coming in and expected profit without counting missing costs", async () => {
+  const f = fixture();
+  f.shipment(BigInt(342000), BigInt(280500));
+  f.shipment(BigInt(2840500), null);
+  f.invoice(BigInt(50000), "2026-09-08", "Unpaid");
+  const html = await (await financeDashboard(f.db, new URL("https://test/admin/finance?preset=last-month"), "Admin", now)).text();
+  assert.match(html, /<h2>Simple Summary<\/h2>/);
+  const simple = html.slice(html.indexOf("Simple Summary"), html.indexOf("Finance Overview"));
+  assert.ok(simple.includes(financePesos(BigInt(342000 + 2840500 + 50000))), "coming in = unbilled + receivable as of today");
+  assert.ok(simple.includes(financePesos(BigInt(342000 - 280500))), "expected profit uses known costs only");
+  assert.ok(simple.includes("1 shipment (₱28,405.00) has no Ni Hao cost yet"));
+  assert.ok(simple.includes("Money going out") && simple.includes(financePesos(BigInt(280500))));
+  f.expense(BigInt(280500), "Freight / Ni Hao Cost", "2026-09-08", String(f.sql.prepare("SELECT tracking_number FROM shipments WHERE nihao_cost = 280500").get()!.tracking_number));
+  const paid = await (await financeDashboard(f.db, new URL("https://test/admin/finance"), "Admin", now)).text();
+  const after = paid.slice(paid.indexOf("Simple Summary"), paid.indexOf("Finance Overview"));
+  assert.match(after, /Money going out<\/span>\s*<strong>₱0\.00<\/strong>/, "a recorded Ni Hao expense is no longer owed");
+});
