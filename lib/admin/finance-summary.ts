@@ -1279,6 +1279,10 @@ export async function financeDashboard(
           color: #9a5b00;
         }
 
+        p strong.finance-warn {
+          color: #9a5b00;
+        }
+
         .finance-summary-cards .card strong,
         .finance-shipping-cards .card strong {
           white-space: nowrap;
