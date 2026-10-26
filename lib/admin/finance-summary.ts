@@ -489,6 +489,7 @@ export async function financeDashboard(
     .prepare(
       `SELECT
         CAST(COALESCE(SUM(s.nihao_cost), 0) AS TEXT) AS amount,
+        CAST(COALESCE(SUM(CASE WHEN s.nihao_cost_source = 'estimate' THEN s.nihao_cost END), 0) AS TEXT) AS estimated,
         COUNT(s.nihao_cost) AS costed,
         COUNT(*) - COUNT(s.nihao_cost) AS uncosted
       FROM shipments s
@@ -501,8 +502,9 @@ export async function financeDashboard(
         )`,
     )
     .bind(freightExpenseCategory)
-    .first<{ amount: string; costed: number; uncosted: number }>();
+    .first<{ amount: string; estimated: string; costed: number; uncosted: number }>();
   const goingOut = BigInt(owed?.amount ?? "0");
+  const goingOutEstimated = BigInt(owed?.estimated ?? "0");
   const goingOutUnknown = Number(owed?.uncosted ?? 0);
 
   const notices = [
@@ -557,6 +559,10 @@ export async function financeDashboard(
           <span class="muted">Money going out</span>
           <strong>${esc(financePesos(goingOut))}</strong>
           <small>Ni Hao costs still to pay on active shipments.${
+            goingOutEstimated > zero
+              ? ` ${esc(financePesos(goingOut - goingOutEstimated))} is Ni Hao's actual quote and ${esc(financePesos(goingOutEstimated))} is estimated from the Ni Hao rates.`
+              : ""
+          }${
             goingOutUnknown
               ? ` <strong class="finance-warn">${esc(`${goingOutUnknown} shipment${goingOutUnknown === 1 ? " has" : "s have"} no Ni Hao cost yet, so the real amount is higher.`)}</strong>`
               : ""

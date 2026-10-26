@@ -92,7 +92,6 @@
       cargoGrid.insertBefore(quotationQuantityLabel, cbm.closest("label").nextSibling);
       packageQuantity = quotationQuantityLabel.querySelector('input[name="package_quantity"]');
     }
-    const weightLabel = weight?.closest("label");
     if (weightLabel && packageQuantity) cargoGrid?.insertBefore(weightLabel, packageQuantity.closest("label"));
     const descriptionLabel = form.querySelector('[name="description"]')?.closest("label");
     if (descriptionLabel && cargoGrid) cargoGrid.prepend(descriptionLabel);
@@ -399,6 +398,7 @@
               cbm: cbm.value,
               weight: weight.value,
               units: units.value || "0",
+              packageQuantity: packageQuantity?.value || "1",
             }
           : {
               freightType: freight.value,
@@ -431,6 +431,7 @@
           } else {
             renderAir(body);
           }
+          form.dispatchEvent(new CustomEvent("nihao-estimate", { detail: body }));
         } catch (error) {
           console.error("Live quotation calculation failed:", error);
           const message = error instanceof Error ? error.message : "Unable to calculate quotation.";
@@ -476,7 +477,34 @@
     section.style.background = "#fff0f4";
     section.style.borderColor = "#efb6c8";
     section.dataset.quotationProfit = "";
-    section.innerHTML = `<h3>Internal cost & profit — Admin use only</h3><p class="muted">Enter the Ni Hao quotation once received. These figures never appear in the customer quotation or PDF.</p><div class="grid"><label>Ni Hao cost<input name="nihao_cost" type="number" min="0" step=".01" value="${saved}" placeholder="Enter supplier cost"></label><dl><dt>KargoDoor charge</dt><dd data-profit-charge>—</dd><dt>Gross profit</dt><dd data-profit-gross>—</dd><dt>Gross margin</dt><dd data-profit-margin>—</dd></dl></div>`;
+    const savedSource = form.querySelector("[data-existing-nihao-source]")?.value || "";
+    section.innerHTML = `<h3>Internal cost & profit — Admin use only</h3><p class="muted">Ni Hao cost fills in automatically from the Ni Hao rates. If Ni Hao quotes a different amount, type it in. Clear the box to go back to the estimate. These figures never appear in the customer quotation or PDF.</p><div class="grid"><label>Ni Hao cost <span data-nihao-tag></span><input name="nihao_cost" type="number" min="0" step=".01" value="${saved}" placeholder="Auto from Ni Hao rates"><small class="muted" data-nihao-basis></small></label><dl><dt>KargoDoor charge</dt><dd data-profit-charge>—</dd><dt>Gross profit</dt><dd data-profit-gross>—</dd><dt>Gross margin</dt><dd data-profit-margin>—</dd></dl></div>`;
+    const niHaoInput = section.querySelector('[name="nihao_cost"]');
+    const niHaoTag = section.querySelector("[data-nihao-tag]");
+    const niHaoBasis = section.querySelector("[data-nihao-basis]");
+    const tagStyle = "display:inline-block;font-size:.75rem;padding:1px 8px;border-radius:999px;";
+    const showTag = () => {
+      if (!niHaoInput.value.trim()) { niHaoTag.innerHTML = ""; return; }
+      niHaoTag.innerHTML = niHaoInput.dataset.auto === "1"
+        ? `<span style="${tagStyle}background:#fff4d6;color:#9a5b00">Estimate</span>`
+        : `<span style="${tagStyle}background:#e3f5ea;color:#1d6b3a">Ni Hao actual</span>`;
+    };
+    niHaoInput.dataset.auto = !saved || savedSource === "estimate" ? "1" : "";
+    niHaoInput.addEventListener("input", (event) => {
+      if (!event.isTrusted) return;
+      niHaoInput.dataset.auto = niHaoInput.value.trim() ? "" : "1";
+      showTag();
+    });
+    form.addEventListener("nihao-estimate", (event) => {
+      const estimate = event.detail?.niHaoEstimate;
+      niHaoBasis.textContent = estimate === null || estimate === undefined ? "" : `Auto from Ni Hao rates: ${money(estimate)} · ${event.detail.niHaoBasis}`;
+      if (niHaoInput.dataset.auto === "1") {
+        niHaoInput.value = estimate === null || estimate === undefined ? "" : Number(estimate).toFixed(2);
+        niHaoInput.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      showTag();
+    });
+    showTag();
     const seaPricing = form.querySelector("[data-sea-pricing]");
     const anchor = form.querySelector('[name="notes"]')?.closest("label");
     if (seaPricing) seaPricing.after(section);

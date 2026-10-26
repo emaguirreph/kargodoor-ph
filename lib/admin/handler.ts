@@ -33,7 +33,7 @@ import { financeCsv } from "./finance-report";
 import { expensesPage, mutateExpense } from "./expenses";
 import { financeCashPage, mutateFinanceCash } from "./finance-cash";
 import { saveRecord, archiveOrCancelRecord } from "./data";
-import { page, esc, pesos, input, select, hidden } from "./ui";
+import { page, esc, pesos, input, select, hidden, niHaoSourceTag } from "./ui";
 import { dashboard, finance, activity, saveStaffFollowUp } from "./reports";
 import { createPortal, disablePortal, portalFor, portalStatus, resetPortal } from "./customer-portal";
 import { shipmentStatusMessages } from "./customer-messages";
@@ -41,6 +41,17 @@ import { copyButton, copyScript, customerPortalAccessMessage, customerWelcomeMes
 import { leadsPage } from "./leads";
 import { syncVerifiedFreightToInvoice, verifiedShipmentFreight } from "./shipment-verified-pricing";
 import { cargoCategory, cargoCategorySql, cargoItemSql, shipmentCargo, type ShipmentCargo } from "./shipment-cargo";
+import { resolveNiHaoCost, shipmentNiHaoEstimate, type NiHaoEstimate } from "./nihao-estimate";
+
+/** Ni Hao cost input with the system estimate shown under it. Clearing the box saves the estimate. */
+const niHaoCostField = (record: RecordData, estimate: NiHaoEstimate | null) => {
+  const field = input("nihao_cost", "Ni Hao freight cost (PHP)", record, "text", false, 30);
+  const tag = record.nihao_cost === null || record.nihao_cost === undefined ? "" : niHaoSourceTag(record.nihao_cost_source);
+  const hint = estimate
+    ? `Auto from Ni Hao rates: ${pesos(estimate.cost)} · ${esc(estimate.basis)}. If Ni Hao quotes a different amount, type it in. Clear the box to go back to the estimate.`
+    : "No estimate yet: needs a sea category or air item (from the quotation, or an \"Item: ...\" line in tracking remarks). Type Ni Hao's cost if you have it.";
+  return field.replace("</label>", ` ${tag}<small class="muted" style="display:block">${hint}</small></label>`);
+};
 
 const labels: Record<string, string> = {
   nihao_cost: "Ni Hao freight cost",
@@ -470,6 +481,19 @@ export async function handleAdmin(
             shipping_charge: verifiedFreight.shippingCharge,
           };
         }
+      }
+
+      if (entity === "shipments") {
+        const current = values as RecordData;
+        const previous = id
+          ? await db.prepare("SELECT nihao_cost, nihao_cost_source FROM shipments WHERE id = ?").bind(id).first<RecordData>()
+          : null;
+        const niHao = resolveNiHaoCost(
+          current.nihao_cost === null || current.nihao_cost === undefined ? null : Number(current.nihao_cost),
+          previous ? { cost: previous.nihao_cost, source: previous.nihao_cost_source } : null,
+          await shipmentNiHaoEstimate(db, String(id), current),
+        );
+        values = { ...values, nihao_cost: niHao.cost, nihao_cost_source: niHao.source } as unknown as typeof values;
       }
 
       const recordId =
@@ -1010,13 +1034,9 @@ export async function handleAdmin(
             true,
             30,
           ) +
-          input(
-            "nihao_cost",
-            "Ni Hao freight cost (PHP; blank if unknown)",
+          niHaoCostField(
             record,
-            "text",
-            false,
-            30,
+            await shipmentNiHaoEstimate(db, String(record.id ?? ""), record),
           ) +
           select(
             "payment_status",
@@ -1429,7 +1449,7 @@ export async function handleAdmin(
 
         const finance = [
           shipmentDetail("KargoDoor freight charge", money("shipping_charge")),
-          shipmentDetail("Ni Hao freight cost", money("nihao_cost")),
+          shipmentDetail("Ni Hao freight cost", `${money("nihao_cost")} ${record.nihao_cost === null ? "" : niHaoSourceTag(record.nihao_cost_source)}`),
           shipmentDetail("Freight margin", marginValue),
           ...(Number(record.delivery_charge || 0) > 0
             ? [shipmentDetail("Delivery charge", money("delivery_charge"))]

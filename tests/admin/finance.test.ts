@@ -17,6 +17,7 @@ export function fixture() {
     sql.exec(readFileSync(`migrations/admin/${file}`, "utf8"));
   sql.exec("ALTER TABLE shipments ADD COLUMN archived_at TEXT");
   sql.exec("ALTER TABLE invoices ADD COLUMN archived_at TEXT");
+  sql.exec("ALTER TABLE shipments ADD COLUMN nihao_cost_source TEXT");
   sql.exec("INSERT INTO customers VALUES ('c','KDOOR0001','Test customer',NULL,'12345',NULL,NULL,NULL,'2026-01-01','2026-01-01')");
   const queries: string[] = [];
   const db = { prepare(query: string) {
@@ -376,4 +377,15 @@ test("simple summary answers cash now, money coming in and expected profit witho
   const paid = await (await financeDashboard(f.db, new URL("https://test/admin/finance"), "Admin", now)).text();
   const after = paid.slice(paid.indexOf("Simple Summary"), paid.indexOf("Finance Overview"));
   assert.match(after, /Money going out<\/span>\s*<strong>₱0\.00<\/strong>/, "a recorded Ni Hao expense is no longer owed");
+});
+
+test("money going out shows how much of the Ni Hao cost is an estimate", async () => {
+  const f = fixture();
+  f.shipment(BigInt(342000), BigInt(280500));
+  f.shipment(BigInt(2840500), BigInt(2000000));
+  f.sql.exec("UPDATE shipments SET nihao_cost_source = CASE WHEN nihao_cost = 2000000 THEN 'estimate' ELSE 'actual' END");
+  const html = await (await financeDashboard(f.db, new URL("https://test/admin/finance"), "Admin", now)).text();
+  const simple = html.slice(html.indexOf("Simple Summary"), html.indexOf("Finance Overview"));
+  assert.ok(simple.includes(financePesos(BigInt(2280500))), "estimates count toward money going out");
+  assert.ok(simple.includes(`${financePesos(BigInt(280500))} is Ni Hao's actual quote and ${financePesos(BigInt(2000000))} is estimated from the Ni Hao rates.`));
 });

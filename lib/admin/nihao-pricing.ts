@@ -1,4 +1,4 @@
-import type { SeaCategory } from "./quotation-pricing";
+import { airVolumetricFactor, roundAirBillableWeight, type AirItem, type SeaCategory } from "./quotation-pricing";
 
 export const niHaoDensityThreshold = 500;
 
@@ -40,4 +40,19 @@ export function niHaoSeaQuote(category: SeaCategory, cbm: number, weight: number
     final,
     pricingMethod: densityApplies && densityCharge > smallPackage.base ? "Density-Based" : smallPackage.tier === "Mini" || smallPackage.tier === "Lite" ? "Package-Based" : "CBM-Based",
   };
+}
+
+export const niHaoAirPerKgRates = { ordinary: 350, restricted: 450, medicine: 500 } as const;
+export const niHaoAirPieceRates: Partial<Record<AirItem, number>> = { "Mobile Phones": 800, Tablets: 1000, "Laptop Computers": 2000 };
+
+export function niHaoAirQuote(item: AirItem, cbm: number, weight: number, quantity: number) {
+  const pieceRate = niHaoAirPieceRates[item];
+  if (pieceRate !== undefined) {
+    if (!Number.isInteger(quantity) || quantity < 1) throw new Error("Invalid Ni Hao air pricing inputs.");
+    return { rate: pieceRate, rateBasis: "Per piece", billableWeight: 0, final: quantity * pieceRate };
+  }
+  if (!valid(cbm) || !valid(weight) || (cbm <= 0 && weight <= 0)) throw new Error("Invalid Ni Hao air pricing inputs.");
+  const rate = item === "Ordinary Items" ? niHaoAirPerKgRates.ordinary : item === "Medicine and Food Supplements" ? niHaoAirPerKgRates.medicine : niHaoAirPerKgRates.restricted;
+  const billableWeight = roundAirBillableWeight(Math.max(weight, cbm * airVolumetricFactor));
+  return { rate, rateBasis: "Per kg", billableWeight, final: billableWeight * rate };
 }

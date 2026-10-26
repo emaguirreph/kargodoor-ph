@@ -1,6 +1,6 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { airPerKgRates, airPieceRates, airVolumetricFactor, seaRates } from "./quotation-pricing";
-import { niHaoDensityThreshold, niHaoPackagePricing, niHaoSeaRates } from "./nihao-pricing";
+import { niHaoAirPerKgRates, niHaoAirPieceRates, niHaoDensityThreshold, niHaoPackagePricing, niHaoSeaRates } from "./nihao-pricing";
 import { authenticate, type AdminEnv } from "./security";
 import { kargoDoorPackageTiers } from "./rates-guide";
 import { esc, page } from "./ui";
@@ -23,12 +23,12 @@ export const niHaoPackageRates = [
 ] as const;
 export { niHaoPackagePricing };
 export const niHaoAirRates = [
-  ["Ordinary Items", "₱350 / kg", `${money(airPerKgRates.ordinary)} / kg`],
-  ["Liquid, Powder, Food, Computer Parts, Electronics", "₱450 / kg", `${money(airPerKgRates.restricted)} / kg`],
-  ["Medicine and Food Supplements", "₱500 / kg", `${money(airPerKgRates.medicine)} / kg`],
-  ["Mobile Phones", "₱800 / piece", `${money(airPieceRates["Mobile Phones"]!)} / piece`],
-  ["Tablets", "₱1,000 / piece", `${money(airPieceRates.Tablets!)} / piece`],
-  ["Laptop Computers", "₱2,000 / piece", `${money(airPieceRates["Laptop Computers"]!)} / piece`],
+  ["Ordinary Items", `${money(niHaoAirPerKgRates.ordinary)} / kg`, `${money(airPerKgRates.ordinary)} / kg`],
+  ["Liquid, Powder, Food, Computer Parts, Electronics", `${money(niHaoAirPerKgRates.restricted)} / kg`, `${money(airPerKgRates.restricted)} / kg`],
+  ["Medicine and Food Supplements", `${money(niHaoAirPerKgRates.medicine)} / kg`, `${money(airPerKgRates.medicine)} / kg`],
+  ["Mobile Phones", `${money(niHaoAirPieceRates["Mobile Phones"]!)} / piece`, `${money(airPieceRates["Mobile Phones"]!)} / piece`],
+  ["Tablets", `${money(niHaoAirPieceRates.Tablets!)} / piece`, `${money(airPieceRates.Tablets!)} / piece`],
+  ["Laptop Computers", `${money(niHaoAirPieceRates["Laptop Computers"]!)} / piece`, `${money(airPieceRates["Laptop Computers"]!)} / piece`],
 ] as const;
 
 export async function niHaoRatesPage(request: Request, envOverride?: AdminEnv): Promise<Response> {
