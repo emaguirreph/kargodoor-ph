@@ -161,6 +161,7 @@ test("shipping instructions include the customer account code and supplier detai
   assert.match(customerMessage, /广州市白云区江高镇沙溪东路18号166通达仓库/);
   assert.match(customerMessage, /发货前注意重要事项/);
   assert.match(customerMessage, /Important Reminders Before Shipping/);
+  assert.ok(customerMessage.includes("Cargo# KDOOR0007"));
   assert.match(customerMessage, /Packages without complete labels will not be accepted by the warehouse/);
 
   const addressMessage = customerWarehouseAddressMessage({ name: "Maria", customerCode: "KD-10025", warehouse: "Yiwu" });

@@ -76,9 +76,10 @@ Please ensure that every package has a shipping label (cargo mark) containing th
 - Philippine recipient’s contact number
 - Chinese sender’s contact number
 
-Ex: KDOOR-XXXX
+Cargo Label Example:
+Cargo# KDOOR0007
 09199323077
-Chinese Phone Number
+[Chinese Item Number]
 
 Packages without complete labels will not be accepted by the warehouse.
 
