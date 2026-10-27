@@ -27,7 +27,7 @@ export function customerInvoicePdf(invoice: Record<string, unknown>) {
     "Cargo release proceeds after payment is verified by KargoDoor.",
     "",
     "Thank you for doing business with KargoDoor PH.",
-    "Contact: +63 917 157 7370 / +63 908 889 0664",
+    "Contact: +63 919 932 3077 / +63 908 889 0664",
     "support@kargodoorph.com | www.kargodoorph.com",
   ];
   let stream = "BT\n/F1 11 Tf\n50 790 Td\n";

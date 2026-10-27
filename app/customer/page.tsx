@@ -161,7 +161,7 @@ function ShipmentRow({
                 <section>
                   <h3>GCash</h3>
                   <dl>
-                    <div><dt>GCash Number</dt><dd>0917 157 7370</dd></div>
+                    <div><dt>GCash Number</dt><dd>0919 932 3077</dd></div>
                     <div><dt>Account Name</dt><dd>EMMARUTH GALLARDO</dd></div>
                   </dl>
                 </section>

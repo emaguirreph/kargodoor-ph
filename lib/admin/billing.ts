@@ -1459,7 +1459,7 @@ async function detail(
     `
       ${notice}
 
-      <p class="notice">Payment must be settled and verified before KargoDoor can release the package or cargo. Thank you for doing business with KargoDoor PH. Contact: +63 917 157 7370 / +63 908 889 0664 · support@kargodoorph.com · kargodoorph.com</p>
+      <p class="notice">Payment must be settled and verified before KargoDoor can release the package or cargo. Thank you for doing business with KargoDoor PH. Contact: +63 919 932 3077 / +63 908 889 0664 · support@kargodoorph.com · kargodoorph.com</p>
 
       <div class="cards">
         <div class="card">

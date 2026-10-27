@@ -57,7 +57,7 @@ export default function ContactUsPage() {
               </div>
               <p>Chat with our Team for shipping inquiries and assistance.</p>
               <div className="phones">
-                <TrackedAnchor href="tel:+639171577370" analyticsEvent="click_phone">{phoneIcon}+63 917 157 7370</TrackedAnchor>
+                <TrackedAnchor href="tel:+639199323077" analyticsEvent="click_phone">{phoneIcon}+63 919 932 3077</TrackedAnchor>
                 <TrackedAnchor href="tel:+639088890664" analyticsEvent="click_phone">{phoneIcon}+63 908 889 0664</TrackedAnchor>
               </div>
               <div className="apps" aria-label="Messaging apps">
