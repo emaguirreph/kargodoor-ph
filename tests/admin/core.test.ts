@@ -35,7 +35,7 @@ import {
   requireAdminMutation,
 } from "../../lib/admin/security";
 import { expensesPage, saveExpense, mutateExpense } from "../../lib/admin/expenses";
-import { customerShippingInstructions, shipmentShippingInstructions, warehouseAddress } from "../../lib/admin/shipping-instructions";
+import { customerShippingInstructions, customerWarehouseAddressMessage, shipmentShippingInstructions, warehouseAddress } from "../../lib/admin/shipping-instructions";
 function database(includePhase1 = true) {
   const sql = new DatabaseSync(":memory:");
   sql.exec("PRAGMA foreign_keys=ON");
@@ -159,6 +159,13 @@ test("shipping instructions include the customer account code and supplier detai
   assert.match(customerMessage, /发货前注意重要事项/);
   assert.match(customerMessage, /English translation:/);
   assert.match(customerMessage, /Attach a cargo-mark label to every package/);
+
+  const addressMessage = customerWarehouseAddressMessage({ name: "Maria", customerCode: "KD-10025", warehouse: "Yiwu" });
+  assert.match(addressMessage, /Hi Maria/);
+  assert.match(addressMessage, /Account\/Cargo Code: KD-10025/);
+  assert.ok(addressMessage.includes(warehouseAddress("Yiwu")));
+  assert.doesNotMatch(addressMessage, /发货前注意重要事项/);
+  assert.match(customerWarehouseAddressMessage({ name: "Maria", warehouse: "Hong Kong" }), /\[Add warehouse address\]/);
 
   const shipmentMessage = shipmentShippingInstructions({
     name: "Maria",

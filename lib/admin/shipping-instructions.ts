@@ -131,6 +131,31 @@ export function customerShippingInstructions(customer: ShippingInstructionCustom
   ]);
 }
 
+/** Short message with only the assigned China warehouse address and the cargo code. */
+export function customerWarehouseAddressMessage(customer: ShippingInstructionCustomer): string {
+  const name = text(customer.name, "there");
+  const code = text(customer.customerCode, "[account/cargo code]");
+  const warehouse = text(customer.warehouse, "[Confirm the assigned warehouse]");
+  const address = text(customer.warehouseAddress || warehouseAddress(warehouse), "[Add warehouse address]");
+  return finishMessage([
+    `Hi ${name}! 😊`,
+    "",
+    "Here’s the KargoDoor China warehouse address for your cargo.",
+    "",
+    "📦 Your Details",
+    `Account/Cargo Code: ${code}`,
+    `Assigned Warehouse: ${warehouse}`,
+    "",
+    "📍 Warehouse Address",
+    address,
+    "",
+    "Next Steps:",
+    `Please share this address with your supplier and ask them to place ${code} clearly on every package so we can receive and identify your cargo.`,
+    "",
+    "Thank you for trusting KargoDoor PH! 💚",
+  ]);
+}
+
 export function customerPortalAccessMessage(portal: PortalAccessMessage): string {
   return customerWelcomeMessage(portal);
 }
