@@ -15,7 +15,7 @@ import {
 } from "./security";
 import { esc, niHaoSourceTag, page, pesos } from "./ui";
 import { finishMessage } from "./customer-messages";
-import { customerShippingInstructions, customerWarehouseAddressMessage } from "./shipping-instructions";
+import { customerShippingInstructions, customerWarehouseAddressMessage, supplierRequirements } from "./shipping-instructions";
 import {
   airItems,
   airQuote,
@@ -149,18 +149,7 @@ function quotationCustomerMessage(q: Row, accountNumber = "") {
   const quotationNumber = String(q.quotation_number || "");
   const validUntil = String(q.valid_until || "");
 
-  const supplierInstructions = [
-    "Instructions to Suppliers",
-    "Important reminders before shipping:",
-    "1. Attach a cargo-mark label to every package. It must include the customer code, Philippine recipient’s phone number, and China sender’s phone number; otherwise, the warehouse cannot receive the cargo.",
-    "2. Include one packing list with every shipment. It must state the detailed Chinese product name, material, quantity, weight, and shipper’s phone number.",
-    "3. Before delivery, ensure the packaging is complete and undamaged. Reinforce fragile cargo. The warehouse will not accept cargo with damaged packaging.",
-    "",
-    "发货前注意重要事项：",
-    "1. 请务必每件货物贴好唛头标签（包括客户代号，菲律宾收货人电话，中国寄件人电话），否则仓库无法收货入仓；",
-    "2. 请每票货随货附一张装箱单，包含详细中文品名，材质，件数，重量，发货人电话等；",
-    "3. 送货前请确保货物包装完整无破损，易碎货物加固包装，否则仓库不接收包装破损货物。",
-  ];
+  const supplierInstructions = supplierRequirements.split("\n");
 
   const messages: Array<[string, string, string[]]> = [
     [
