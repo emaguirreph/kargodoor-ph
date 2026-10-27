@@ -20,6 +20,7 @@ import { saveRecord } from "../../lib/admin/data";
 import { createShipmentFromApprovedQuotation } from "../../lib/admin/quotation-shipment";
 import { shipmentNiHaoEstimate } from "../../lib/admin/nihao-estimate";
 import { syncVerifiedFreightToInvoice, verifiedShipmentFreight } from "../../lib/admin/shipment-verified-pricing";
+import { shipmentCargo } from "../../lib/admin/shipment-cargo";
 import { archiveInvoice, createInvoice, issueInvoice, recordPayment, voidInvoice } from "../../lib/admin/billing";
 import {
   validateJwt,
@@ -69,6 +70,8 @@ function database(includePhase1 = true) {
     sql.exec(readFileSync("migrations/admin/0028_invoice_reissue_after_void.sql", "utf8"));
   }
   sql.exec(readFileSync("migrations/admin/0029_nihao_cost_source.sql", "utf8"));
+  if (includePhase1)
+    sql.exec(readFileSync("migrations/admin/0030_manual_shipment_cargo.sql", "utf8"));
   const user = randomUUID();
   sql
     .prepare("INSERT INTO admin_users VALUES (?,?,?,?,?,?)")
@@ -365,6 +368,42 @@ test("shipments get a Ni Hao cost estimate from the Ni Hao rates unless Ni Hao's
   const manual = await shipmentNiHaoEstimate(db, "", { service_type: "Air Freight", cbm: 0.0381, weight_kg: 7.5, tracking_remarks: "Item: Ordinary Items" });
   assert.equal(manual?.cost, 280000, "hand-added shipments use the Item line in their remarks");
   assert.equal(await shipmentNiHaoEstimate(db, "", { service_type: "FCL", cbm: 30, weight_kg: 1000 }), null);
+});
+test("shipments added by hand use their own item, category and pieces for display, Ni Hao estimate and verified freight", async () => {
+  const { sql, db, user } = database();
+  const customerId = await saveRecord(db, "customers", { ...customer, customer_code: "KD-MANUAL", email: "manual@example.test" }, user, "", "");
+  const { tracking_number: _t, cargo_code: _c, ...formInput } = shipmentInput(customerId);
+  const form = (values: Record<string, string>) => parseForm("shipments", new URLSearchParams(Object.entries({ ...formInput, ...values })));
+
+  assert.throws(() => form({ cargo_category: "Mobile Phones" }), /Sea Freight category/);
+  assert.throws(() => form({ service_type: "Air Freight", status: "In Transit", cargo_category: "COMMODITIES" }), /Air Freight item type/);
+  assert.throws(() => form({ cargo_quantity: "0" }));
+
+  const seaValues = form({ cargo_item: "LED lights", cargo_category: "COMMODITIES" });
+  assert.deepEqual([seaValues.cargo_item, seaValues.cargo_category, seaValues.cargo_quantity], ["LED lights", "COMMODITIES", null]);
+  const seaId = await saveRecord(db, "shipments", seaValues, user, "", "");
+  assert.deepEqual({ ...(await shipmentCargo(db, seaId)) }, { item: "LED lights", category: "Commodities", quotationId: null, quotationNumber: null });
+  const seaEstimate = await shipmentNiHaoEstimate(db, seaId, { ...seaValues });
+  assert.equal(seaEstimate?.cost, 1062500, "1.25 CBM of Commodities × ₱8,500");
+  assert.equal((await shipmentNiHaoEstimate(db, "", { service_type: "Sea Freight", cbm: 1, weight_kg: 100, cargo_item: "Bags" }))?.cost, 700000, "the category is looked up from a catalog item name when none is picked");
+  const seaVerified = await verifiedShipmentFreight(db, seaId, 1, 300);
+  assert.equal(seaVerified?.shippingCharge, 950000, "picked category recalculates the KargoDoor charge from the verified size");
+
+  const airValues = form({ service_type: "Air Freight", status: "In Transit", cargo_item: "Phones", cargo_category: "Mobile Phones", cargo_quantity: "3" });
+  const airId = await saveRecord(db, "shipments", airValues, user, "", "");
+  assert.equal((await shipmentNiHaoEstimate(db, airId, { ...airValues }))?.cost, 240000, "3 pcs × ₱800");
+  assert.equal((await verifiedShipmentFreight(db, airId, 0.01, 1))?.shippingCharge, 285000, "3 pcs × ₱950");
+  assert.equal((await verifiedShipmentFreight(db, airId, 0.01, 1, { ...airValues, cargo_quantity: 2 }))?.shippingCharge, 190000, "values being saved win over the stored ones");
+
+  const legacyId = randomUUID();
+  sql.prepare("INSERT INTO shipments (id, customer_id, tracking_number, service_type, china_warehouse, cbm, weight_kg, status, tracking_remarks, shipping_charge, delivery_charge, payment_status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+    .run(legacyId, customerId, "KDAIR-100001", "Air Freight", "Guangzhou", 0.0381, 7.5, "In Transit", "Item: Ordinary Items\nPacked in 2 boxes", 300000, 0, "Unpaid", "2026-10-01", "2026-10-01");
+  const migration = readFileSync("migrations/admin/0030_manual_shipment_cargo.sql", "utf8");
+  sql.exec(migration.slice(migration.indexOf("UPDATE shipments")));
+  assert.equal(sql.prepare("SELECT cargo_item FROM shipments WHERE id = ?").get(legacyId)!.cargo_item, "Ordinary Items", "migration copies the Item line");
+  assert.equal(sql.prepare("SELECT cargo_item FROM shipments WHERE id = ?").get(seaId)!.cargo_item, "LED lights");
+  assert.equal((await shipmentNiHaoEstimate(db, legacyId, { service_type: "Air Freight", cbm: 0.0381, weight_kg: 7.5 }))?.cost, 280000);
+  assert.equal(await verifiedShipmentFreight(db, legacyId, 0.0381, 7.5), null, "older hand-added shipments without a picked category keep their typed charge");
 });
 test("verified warehouse measurements recalculate Sea and Air freight and refresh only eligible invoices", async () => {
   const { sql, db, user } = database();

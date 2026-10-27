@@ -1,5 +1,7 @@
 import { z, ZodError } from "zod";
 
+import { airItems, seaRates, type SeaCategory } from "./quotation-pricing";
+
 export const warehouses = [
   "Guangzhou",
   "Yiwu",
@@ -30,6 +32,10 @@ const legacyShipmentStatuses = [
 ] as const;
 
 export const statuses = [...seaFreightStatuses, ...legacyShipmentStatuses] as const;
+
+/** Sea categories and air item types a hand-added shipment can be priced by. */
+export const seaCargoCategories = Object.keys(seaRates) as SeaCategory[];
+export const shipmentCargoCategories = [...seaCargoCategories, ...airItems] as string[] as [string, ...string[]];
 
 const required = (max: number) =>
   z
@@ -84,6 +90,14 @@ const optionalDecimal = (max: number, precision = 3) =>
         (Number.isFinite(value) && value <= max),
       "Number is too large",
     );
+
+const optionalWhole = (max: number) =>
+  z
+    .string()
+    .trim()
+    .refine((value) => !value || /^\d+$/.test(value), "Enter a whole number")
+    .transform((value) => (value ? Number(value) : null))
+    .refine((value) => value === null || (value >= 1 && value <= max), `Enter a whole number from 1 to ${max}`);
 
 const money = required(30)
   .regex(
@@ -244,6 +258,14 @@ const shipmentObjectSchema = z
     tracking_remarks:
       optional(2000),
 
+    // Hand-added shipments only; quotation-linked ones read these from the quotation.
+    cargo_item: optional(160).optional(),
+    cargo_category: z.union([
+      z.literal("").transform(() => null),
+      z.enum(shipmentCargoCategories),
+    ]).optional(),
+    cargo_quantity: optionalWhole(1000000).optional(),
+
     shipping_charge:
       money,
 
@@ -270,9 +292,22 @@ const shipmentObjectSchema = z
   })
   .strict();
 
+function checkCargoCategory(
+  values: { service_type: string; cargo_category?: string | null },
+  context: z.RefinementCtx,
+) {
+  const category = values.cargo_category;
+  if (!category) return;
+  if (values.service_type === "Sea Freight" && !(seaCargoCategories as string[]).includes(category))
+    context.addIssue({ code: "custom", path: ["cargo_category"], message: "Choose a Sea Freight category for a Sea Freight shipment." });
+  if (values.service_type === "Air Freight" && !(airItems as readonly string[]).includes(category))
+    context.addIssue({ code: "custom", path: ["cargo_category"], message: "Choose an Air Freight item type for an Air Freight shipment." });
+}
+
 export const shipmentSchema =
   shipmentObjectSchema.superRefine(
     (values, context) => {
+      checkCargoCategory(values, context);
       if (
         values.departure_date &&
         values.warehouse_received_date &&
@@ -363,6 +398,9 @@ export const schemaKeys: Record<
     "estimated_arrival",
     "actual_arrival",
     "tracking_remarks",
+    "cargo_item",
+    "cargo_category",
+    "cargo_quantity",
     "shipping_charge",
     "nihao_cost",
     "delivery_charge",
@@ -385,6 +423,7 @@ const customerFormSchema = customerSchema.omit({ customer_code: true });
 const shipmentFormSchema = shipmentObjectSchema
   .omit({ tracking_number: true, cargo_code: true })
   .superRefine((values, context) => {
+    checkCargoCategory(values, context);
     if (values.departure_date && values.warehouse_received_date && values.departure_date < values.warehouse_received_date)
       context.addIssue({ code: "custom", path: ["departure_date"], message: "Departure date cannot be before the warehouse received date" });
     if (values.actual_arrival && values.departure_date && values.actual_arrival < values.departure_date)
