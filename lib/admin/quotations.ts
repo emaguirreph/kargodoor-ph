@@ -15,6 +15,7 @@ import {
 } from "./security";
 import { esc, niHaoSourceTag, page, pesos } from "./ui";
 import { finishMessage } from "./customer-messages";
+import { customerShippingInstructions, customerWarehouseAddressMessage } from "./shipping-instructions";
 import {
   airItems,
   airQuote,
@@ -140,7 +141,7 @@ async function number(db: D1Database) {
   );
   return `KD-Q-${y}-${String(max + 1).padStart(3, "0")}`;
 }
-function quotationCustomerMessage(q: Row) {
+function quotationCustomerMessage(q: Row, accountNumber = "") {
   const customer = snapshot(q.customer_snapshot).data;
   const cargo = snapshot(q.cargo_snapshot).data;
   const name = String(customer.name || "there");
@@ -237,6 +238,9 @@ function quotationCustomerMessage(q: Row) {
       ],
     ],
   ];
+  const warehouseDetails = { name: customer.name, customerCode: accountNumber, warehouse };
+  messages.push(["shipping-instructions", "Shipping Instructions", []]);
+  messages.push(["warehouse-address", "Warehouse Address", []]);
   messages.push(["formal-export", "Formal Export Request", ["Formal Export Request 出口报关", "", "For suppliers needing formal export through the supplier’s name, please contact via WeChat:", "出口报关请联系:", "Guangzhou 广州报关联系微信/电话：18150099580", "Yiwu 义乌报关联系微信/电话：18050882066"]]);
 
   return `<section>
@@ -247,7 +251,11 @@ function quotationCustomerMessage(q: Row) {
         const id = `quotation-message-${String(q.id || "").replace(/[^\w-]/g, "")}-${key}`;
         const body = key === "nihao-quote-request"
           ? lines.join("\n")
-          : finishMessage(lines);
+          : key === "shipping-instructions"
+            ? customerShippingInstructions(warehouseDetails)
+            : key === "warehouse-address"
+              ? customerWarehouseAddressMessage(warehouseDetails)
+              : finishMessage(lines);
         return `<details class="customer-notification">
         <summary>${esc(title)}</summary>
         <textarea id="${esc(id)}" aria-label="${esc(title)} customer message" style="min-height:260px;white-space:pre-wrap">${esc(body)}</textarea>
@@ -923,7 +931,7 @@ export async function quotationsPage(
       const accountNumber = String(linkedCustomer?.customer_code ?? "");
       return page(
         "Quotation",
-        `<div class="actions"><a class="button" href="${path}?edit=${id}">Edit</a><a class="button" href="/admin/quotations/export?id=${id}">Download PDF</a><form method="post"><input type="hidden" name="csrf" value="${esc(csrfToken(env, user.id, path))}"><input type="hidden" name="action" value="duplicate"><input type="hidden" name="quotation_id" value="${esc(id)}"><button>Duplicate</button></form>${canDeleteAdmin(user) ? `<a class="button" href="${path}?id=${esc(id)}&archive=1">Archive quotation</a>` : ""}</div>${customerPreview(q, accountNumber)}${quotationCustomerMessage(q)}${quotationMessageCopyScript()}`,
+        `<div class="actions"><a class="button" href="${path}?edit=${id}">Edit</a><a class="button" href="/admin/quotations/export?id=${id}">Download PDF</a><form method="post"><input type="hidden" name="csrf" value="${esc(csrfToken(env, user.id, path))}"><input type="hidden" name="action" value="duplicate"><input type="hidden" name="quotation_id" value="${esc(id)}"><button>Duplicate</button></form>${canDeleteAdmin(user) ? `<a class="button" href="${path}?id=${esc(id)}&archive=1">Archive quotation</a>` : ""}</div>${customerPreview(q, accountNumber)}${quotationCustomerMessage(q, accountNumber)}${quotationMessageCopyScript()}`,
         user.name,
         200,
         {},
