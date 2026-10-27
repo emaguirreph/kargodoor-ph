@@ -1,4 +1,5 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import type { D1Database } from "@cloudflare/workers-types";
 import { ZodError } from "zod";
 
 import {
@@ -16,12 +17,14 @@ import {
   isRestrictedStaff,
   requireAdminMutation,
   requireOperationalAdmin,
+  secureHeaders,
 } from "./security";
 
 import {
   statuses,
   seaFreightStatuses,
   seaCargoItems,
+  shipmentCargoCategory,
   warehouses,
   schemaKeys,
   parseForm,
@@ -52,7 +55,10 @@ const niHaoCostField = (record: RecordData, estimate: NiHaoEstimate | null) => {
   const hint = estimate
     ? `Auto from Ni Hao rates: ${pesos(estimate.cost)} · ${esc(estimate.basis)}. If Ni Hao quotes a different amount, type it in. Clear the box to go back to the estimate.`
     : "No estimate yet: needs a sea category or air item (from the quotation, or the Item / Commodity above for a shipment added by hand). Type Ni Hao's cost if you have it.";
-  return field.replace("</label>", ` ${tag}<small class="muted" style="display:block">${hint}</small></label>`);
+  const auto = record.nihao_cost === null || record.nihao_cost === undefined || record.nihao_cost_source === "estimate";
+  return field
+    .replace('name="nihao_cost"', `name="nihao_cost" data-live-amount="nihao"${auto ? ` data-auto="${esc(record.nihao_cost === null || record.nihao_cost === undefined ? "" : (Number(record.nihao_cost) / 100).toFixed(2))}"` : ""}`)
+    .replace("</label>", ` ${tag}<small class="muted" style="display:block" data-live-hint="nihao">${hint}</small></label>`);
 };
 
 /** Cargo details for a shipment added by hand (no source quotation), laid out like the quotation's. */
@@ -60,10 +66,9 @@ const manualCargoFields = (record: RecordData) => {
   const item = String(record.cargo_item ?? "");
   const option = (value: string) => `<option value="${esc(value)}"${item === value ? " selected" : ""}>${esc(value)}</option>`;
   return `<label class="wide">Customer cargo description<input name="cargo_description" type="text" value="${esc(record.cargo_description)}" maxlength="200" placeholder="e.g. Kitchen organizers, 3 cartons"><small class="muted" style="display:block">Shown to the customer as the cargo, like on a quotation.</small></label>
-    <label>Item / Commodity<select name="cargo_item" data-shipment-cargo-item><option value="">Choose an item</option><optgroup label="Sea Freight" data-service="Sea Freight">${seaCargoItems.map(option).join("")}</optgroup><optgroup label="Air Freight" data-service="Air Freight">${airItems.map(option).join("")}</optgroup></select><small class="muted" style="display:block">Sets the category used for the KargoDoor charge and the Ni Hao estimate.</small></label>
+    <label>Item / Commodity<select name="cargo_item" data-shipment-cargo-item data-sea-categories="${esc(JSON.stringify(itemCategories))}"><option value="">Choose an item</option><optgroup label="Sea Freight" data-service="Sea Freight">${seaCargoItems.map(option).join("")}</optgroup><optgroup label="Air Freight" data-service="Air Freight">${airItems.map(option).join("")}</optgroup></select><small class="muted" style="display:block">Sets the category used for the KargoDoor charge and the Ni Hao estimate.</small></label>
     <label>Category<input data-shipment-cargo-category value="${esc(record.cargo_category)}" readonly></label>
-    <label>Units<input name="cargo_quantity" type="number" min="1" step="1" maxlength="10" value="${esc(record.cargo_quantity)}"><small class="muted" style="display:block">Applicable to Mobile Phones / Computers / Tablets.</small></label>
-    <script>document.addEventListener("DOMContentLoaded",()=>{const sea=${JSON.stringify(itemCategories).replaceAll("<", "\\u003c")};const item=document.querySelector("[data-shipment-cargo-item]"),out=document.querySelector("[data-shipment-cargo-category]"),service=document.querySelector('[name="service_type"]');if(!item||!out)return;const sync=()=>{const type=service?service.value:"";item.querySelectorAll("optgroup").forEach(g=>{const on=!type||g.dataset.service===type;g.disabled=!on;g.hidden=!on});const chosen=item.selectedOptions[0];if(chosen&&chosen.parentElement.disabled)item.value="";out.value=type==="Sea Freight"?(sea[item.value]||""):type==="Air Freight"?item.value:""};item.addEventListener("change",sync);service&&service.addEventListener("change",sync);sync()});</script>`;
+    <label>Units<input name="cargo_quantity" type="number" min="1" step="1" maxlength="10" value="${esc(record.cargo_quantity)}"><small class="muted" style="display:block">Applicable to Mobile Phones / Computers / Tablets.</small></label>`;
 };
 
 const chargeSourceTag = (source: unknown) =>
@@ -79,10 +84,55 @@ const shippingChargeField = (record: RecordData) => {
   const field = input("shipping_charge", "KargoDoor freight charge (PHP)", record, "text", false, 30);
   const rate = manualShipmentRate(record);
   const hint = rate
-    ? `From KargoDoor rates: ${pesos(rate.cost)} · ${esc(rate.basis)}. Leave blank to use the rate; it updates by itself when the size or item changes. Type an amount to override it.`
-    : "Leave blank and it is computed from the KargoDoor rates when you save (needs an Item / Commodity). Or type the charge.";
-  return field.replace("</label>", ` ${chargeSourceTag(record.shipping_charge_source)}<small class="muted" style="display:block">${hint}</small></label>`);
+    ? `From KargoDoor rates: ${pesos(rate.cost)} · ${esc(rate.basis)}. It updates by itself when the size or item changes. Type an amount to override it; clear the box to go back to the rate.`
+    : "Computed from the KargoDoor rates once an Item / Commodity, CBM and weight are filled in. Or type the charge.";
+  const auto = record.shipping_charge === null || record.shipping_charge === undefined || record.shipping_charge_source === "rate";
+  return field
+    .replace('name="shipping_charge"', `name="shipping_charge" data-live-amount="kargodoor"${auto ? ` data-auto="${esc(record.shipping_charge === null || record.shipping_charge === undefined ? "" : (Number(record.shipping_charge) / 100).toFixed(2))}"` : ""}`)
+    .replace("</label>", ` ${chargeSourceTag(record.shipping_charge_source)}<small class="muted" style="display:block" data-live-hint="kargodoor">${hint}</small></label>`);
 };
+
+/** Shipment form page: like the default admin policy, plus fetch to this origin for the live estimate. */
+const shipmentFormCsp =
+  "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
+
+/** JSON with the KargoDoor charge (hand-added shipments) and Ni Hao estimate for the values on the shipment form. */
+async function shipmentLiveEstimate(db: D1Database, params: URLSearchParams) {
+  const id = params.get("id") ?? "";
+  if (id && !/^[\da-f-]{36}$/i.test(id)) throw new AdminError("Invalid record ID.");
+  const saved = id
+    ? await db.prepare("SELECT source_quotation_id, tracking_remarks FROM shipments WHERE id = ?").bind(id).first<RecordData>()
+    : null;
+  if (id && !saved) throw new AdminError("Record not found.", 404);
+  const number = (key: string) => {
+    const value = (params.get(key) ?? "").trim().replaceAll(",", "");
+    return value && Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : null;
+  };
+  const serviceType = params.get("service_type") ?? "";
+  const cargoItem = params.get("cargo_item") || null;
+  const verifiedCbm = number("verified_cbm"), verifiedWeight = number("verified_weight_kg");
+  const measured = verifiedCbm !== null && verifiedWeight !== null;
+  const values: RecordData = {
+    service_type: serviceType,
+    cbm: number("cbm") ?? 0,
+    weight_kg: number("weight_kg") ?? 0,
+    verified_cbm: measured ? verifiedCbm : null,
+    verified_weight_kg: measured ? verifiedWeight : null,
+    tracking_remarks: params.get("tracking_remarks") ?? (saved ? saved.tracking_remarks : null),
+  };
+  if (!saved?.source_quotation_id) {
+    values.cargo_item = cargoItem;
+    values.cargo_category = shipmentCargoCategory(serviceType, cargoItem);
+    values.cargo_quantity = number("cargo_quantity");
+  }
+  const kargodoor = saved?.source_quotation_id ? null : manualShipmentRate(values);
+  const nihao = await shipmentNiHaoEstimate(db, id, values);
+  const amount = (estimate: { cost: number; basis: string } | null) =>
+    estimate ? { amount: (estimate.cost / 100).toFixed(2), label: `${pesos(estimate.cost)} · ${estimate.basis}` } : null;
+  return new Response(JSON.stringify({ kargodoor: amount(kargodoor), nihao: amount(nihao), category: values.cargo_category ?? null }), {
+    headers: { ...secureHeaders, "Content-Type": "application/json; charset=utf-8" },
+  });
+}
 
 const labels: Record<string, string> = {
   nihao_cost: "Ni Hao freight cost",
@@ -259,6 +309,12 @@ export async function handleAdmin(
       const history = shipmentRows.filter((shipment) => shipment.status === "Delivered" || shipment.status === "Cancelled");
       const table = (rows: RecordData[], empty: string) => rows.length ? `<div class="table"><table><thead><tr><th>Tracking No.</th><th>Status</th><th>Service</th><th>CBM / Weight</th><th>Freight</th><th>Delivery</th><th>Payment</th></tr></thead><tbody>${rows.map(row).join("")}</tbody></table></div>` : `<p class="muted">${esc(empty)}</p>`;
       return page("Customer Portal Preview", `<section><p class="notice"><strong>Admin preview only.</strong> This is the customer dashboard view for ${esc(customer.full_name)}. The customer is not signed in and cannot see this preview.</p><div class="actions"><a href="/admin/customers?id=${esc(customerId)}">← Back to customer</a></div></section><section><h2>MY KargoDoorPH</h2><p>Welcome, ${esc(customer.full_name)}</p><p><strong>Account / Cargo Code: ${esc(customer.customer_code)}</strong></p><h2>My Shipments</h2>${table(active, "You have no active shipments.")}<h2>Shipment History</h2>${table(history, "No shipment history yet.")}</section>`, user.name, 200, {}, canWrite, staff);
+    }
+
+    // Live KargoDoor charge and Ni Hao estimate for the shipment form, as the admin types.
+    if (view === "shipments" && request.method === "GET" && url.searchParams.get("estimate") === "1") {
+      requireAdminMutation(user);
+      return await shipmentLiveEstimate(db, url.searchParams);
     }
 
     /*
@@ -1244,11 +1300,12 @@ export async function handleAdmin(
                 </a>
               </div>
             </form>
+            ${entity === "shipments" ? '<script src="/admin-shipment-pricing.js" defer></script>' : ""}
           </section>
         `,
         user.name,
         200,
-        {},
+        entity === "shipments" ? { "Content-Security-Policy": shipmentFormCsp } : {},
         canWrite,
       );
     }
