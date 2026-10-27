@@ -61,16 +61,42 @@ export function warehouseAddress(warehouse: unknown): string {
     : "";
 }
 
-const supplierRequirements = `Instructions to Suppliers
-发货前注意重要事项：
-1. 请务必每件货物贴好唛头标签（包括客户代号，菲律宾收货人电话，中国寄件人电话），否则仓库无法收货入仓；
-2. 请每票货随货附一张装箱单，包含详细中文品名，材质，件数，重量，发货人电话等；
-3. 送货前请确保货物包装完整无破损，易碎货物加固包装，否则仓库不接收包装破损货物。
+export const supplierRequirements = `Important: Instructions to Suppliers
 
-English translation:
-1. Attach a cargo-mark label to every package. It must include the customer code, the Philippine recipient’s phone number, and the China sender’s phone number; otherwise, the warehouse cannot receive the cargo.
-2. Include one packing list with each shipment, showing the detailed Chinese product name, material, quantity, weight, and sender’s phone number.
-3. Ensure all packaging is complete and undamaged before delivery. Reinforce fragile cargo. The warehouse will not accept cargo with damaged packaging.`;
+发货前注意重要事项：
+1.请务必每件货物贴好唛头标签（包括客户代号，菲律宾收货人电话，中国寄件人电话），否则仓库无法收货入仓；
+2.请每票货随货附一张装箱单，包含详细中文品名，材质，件数，重量，发货人电话等；
+3.送货前请确保货物包装完整无破损，易碎货物加固包装，否则仓库不接收包装破损货物。
+
+Important Reminders Before Shipping
+
+1. Proper Cargo Labeling
+Please ensure that every package has a shipping label (cargo mark) containing the following information:
+- Customer cargo code
+- Philippine recipient’s contact number
+- Chinese sender’s contact number
+
+Ex: KDOOR-XXXX
+09199323077
+Chinese Phone Number
+
+Packages without complete labels will not be accepted by the warehouse.
+
+2. Packing List Required
+Every shipment must include a packing list containing:
+- Detailed product description in Chinese
+- Material or composition of the items
+- Number of pieces/packages
+- Weight
+- Sender’s contact number
+
+3. Proper and Secure Packaging
+Before delivery to the warehouse, please ensure that:
+- All packages are properly sealed and free from damage.
+- Fragile items have additional protective packaging and reinforcement.
+- Packaging is strong enough to withstand handling and transportation.
+
+The warehouse will not accept shipments with damaged packaging.`;
 
 /** Welcome message: Account/Cargo Code and customer portal login in one message. */
 export function customerWelcomeMessage(customer: PortalAccessMessage): string {

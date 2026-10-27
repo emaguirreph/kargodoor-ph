@@ -492,7 +492,7 @@ test("quotation detail uses the compact three-column layout and tolerates legacy
   assert.match(html, /Legacy Customer/);
   assert.match(html, /Quotation Sent/);
   assert.match(html, /Instructions to Suppliers/);
-  assert.match(html, /Attach a cargo-mark label to every package/);
+  assert.match(html, /Packages without complete labels will not be accepted by the warehouse/);
   assert.match(html, /发货前注意重要事项/);
   assert.doesNotMatch(html, /Dimensions: Not provided/);
   assert.doesNotMatch(html, /Quantity:/);
