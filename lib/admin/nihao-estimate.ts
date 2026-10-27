@@ -2,6 +2,7 @@ import type { D1Database } from "@cloudflare/workers-types";
 
 import { niHaoAirQuote, niHaoSeaQuote } from "./nihao-pricing";
 import { airItems, itemCategories, seaRates, type AirItem, type SeaCategory } from "./quotation-pricing";
+import { manualCargoPricing } from "./shipment-cargo";
 
 type Row = Record<string, unknown>;
 
@@ -88,8 +89,9 @@ export function quotationNiHaoEstimate(freightType: string, cargo: Row | null): 
 
 /**
  * Ni Hao estimate for a shipment. Uses the warehouse-verified size when there
- * is one, and the item/category from its source quotation (or the
- * "Category:" line bulk intake writes into the tracking remarks).
+ * is one. Quotation-linked shipments take the item/category from the quotation
+ * (bulk ones from the "Category:" line bulk intake writes into the remarks);
+ * shipments added by hand use their own Item, Category and Pieces fields.
  */
 export async function shipmentNiHaoEstimate(
   db: D1Database,
@@ -98,25 +100,41 @@ export async function shipmentNiHaoEstimate(
 ): Promise<NiHaoEstimate | null> {
   const shipment = shipmentId
     ? await db.prepare(
-      `SELECT s.tracking_remarks, q.cargo_snapshot
+      `SELECT s.tracking_remarks, s.source_quotation_id, s.cargo_item, s.cargo_category, s.cargo_quantity, q.cargo_snapshot
        FROM shipments s
        LEFT JOIN quotations q ON q.id = s.source_quotation_id
        WHERE s.id = ?`,
     ).bind(shipmentId).first<Row>() ?? {}
     : {};
-  const cargo = parseCargo(shipment.cargo_snapshot) ?? {};
-  const isBulk = Array.isArray(cargo.bulkPackages);
-  const remarks = String(values.tracking_remarks ?? shipment.tracking_remarks ?? "");
-  // Shipments added by hand carry "Item: ..." (and bulk intake "Category: ...") in their remarks.
-  const remarksItem = /^Item:\s*(.+)$/m.exec(remarks)?.[1]?.trim() ?? "";
-  const remarksCategory = /^Category:\s*(.+)$/m.exec(remarks)?.[1]?.trim() ?? itemCategories[remarksItem];
   const measured = values.verified_cbm !== null && values.verified_cbm !== undefined && values.verified_weight_kg !== null && values.verified_weight_kg !== undefined;
-  return estimateNiHaoCost({
+  const size = {
     serviceType: String(values.service_type ?? ""),
-    category: isBulk || !cargo.category ? remarksCategory ?? itemCategories[String(cargo.item ?? "")] : String(cargo.category),
-    item: String(cargo.item ?? remarksItem),
     cbm: Number(measured ? values.verified_cbm : values.cbm),
     weight: Number(measured ? values.verified_weight_kg : values.weight_kg),
+  };
+  const remarks = String(values.tracking_remarks ?? shipment.tracking_remarks ?? "");
+  // Submitted form values win over what is saved, so the estimate follows edits.
+  const field = (key: string) => (key in values ? values[key] : shipment[key]);
+
+  if (!shipment.source_quotation_id) {
+    const cargo = manualCargoPricing({ item: field("cargo_item"), category: field("cargo_category"), remarks });
+    return estimateNiHaoCost({
+      ...size,
+      category: cargo.seaCategory ?? "",
+      item: cargo.airItem ?? "",
+      packageCount: 1,
+      quantity: Number(field("cargo_quantity") ?? 1),
+    });
+  }
+
+  const cargo = parseCargo(shipment.cargo_snapshot) ?? {};
+  const isBulk = Array.isArray(cargo.bulkPackages);
+  const remarksItem = /^Item:\s*(.+)$/m.exec(remarks)?.[1]?.trim() ?? "";
+  const remarksCategory = /^Category:\s*(.+)$/m.exec(remarks)?.[1]?.trim() ?? itemCategories[remarksItem];
+  return estimateNiHaoCost({
+    ...size,
+    category: isBulk || !cargo.category ? remarksCategory ?? itemCategories[String(cargo.item ?? "")] : String(cargo.category),
+    item: String(cargo.item ?? remarksItem),
     packageCount: isBulk ? 1 : Number(cargo.packageQuantity ?? 1),
     quantity: Number(cargo.calculatorQuantity ?? cargo.packageQuantity ?? 1),
   });

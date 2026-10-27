@@ -21,6 +21,7 @@ import {
 import {
   statuses,
   seaFreightStatuses,
+  seaCargoCategories,
   warehouses,
   schemaKeys,
   parseForm,
@@ -39,7 +40,8 @@ import { createPortal, disablePortal, portalFor, portalStatus, resetPortal } fro
 import { shipmentStatusMessages } from "./customer-messages";
 import { copyButton, copyScript, customerPortalAccessMessage, customerWelcomeMessage, shipmentShippingInstructions, warehouseAddress, warehouseAddressBook } from "./shipping-instructions";
 import { leadsPage } from "./leads";
-import { syncVerifiedFreightToInvoice, verifiedShipmentFreight } from "./shipment-verified-pricing";
+import { manualShipmentFreight, syncVerifiedFreightToInvoice, verifiedShipmentFreight } from "./shipment-verified-pricing";
+import { airItems, itemCategories } from "./quotation-pricing";
 import { cargoCategory, cargoCategorySql, cargoItemSql, shipmentCargo, type ShipmentCargo } from "./shipment-cargo";
 import { resolveNiHaoCost, shipmentNiHaoEstimate, type NiHaoEstimate } from "./nihao-estimate";
 
@@ -49,8 +51,39 @@ const niHaoCostField = (record: RecordData, estimate: NiHaoEstimate | null) => {
   const tag = record.nihao_cost === null || record.nihao_cost === undefined ? "" : niHaoSourceTag(record.nihao_cost_source);
   const hint = estimate
     ? `Auto from Ni Hao rates: ${pesos(estimate.cost)} · ${esc(estimate.basis)}. If Ni Hao quotes a different amount, type it in. Clear the box to go back to the estimate.`
-    : "No estimate yet: needs a sea category or air item (from the quotation, or an \"Item: ...\" line in tracking remarks). Type Ni Hao's cost if you have it.";
+    : "No estimate yet: needs a sea category or air item (from the quotation, or the Category field above for a shipment added by hand). Type Ni Hao's cost if you have it.";
   return field.replace("</label>", ` ${tag}<small class="muted" style="display:block">${hint}</small></label>`);
+};
+
+/** Item, Category and Pieces inputs for a shipment added by hand (no source quotation). */
+const manualCargoFields = (record: RecordData) => {
+  const category = String(record.cargo_category ?? "");
+  const option = (value: string) => `<option value="${esc(value)}"${category === value ? " selected" : ""}>${esc(value)}</option>`;
+  return `<label>Item<input name="cargo_item" type="text" value="${esc(record.cargo_item)}" maxlength="160" list="shipment-cargo-items" placeholder="e.g. Bags, LED lights"><small class="muted" style="display:block">What the cargo is. Picking a listed item fills the category for you.</small></label>
+    <datalist id="shipment-cargo-items">${Object.keys(itemCategories).map((item) => `<option value="${esc(item)}"></option>`).join("")}</datalist>
+    <label>Category<select name="cargo_category"><option value="">Choose a category</option><optgroup label="Sea Freight">${seaCargoCategories.map(option).join("")}</optgroup><optgroup label="Air Freight">${airItems.map(option).join("")}</optgroup></select><small class="muted" style="display:block">Used for the Ni Hao estimate and the KargoDoor rate.</small></label>
+    ${input("cargo_quantity", "Pieces (for phones, tablets, laptops)", record, "number", false, 10, "1")}
+    <script>document.addEventListener("DOMContentLoaded",()=>{const map=${JSON.stringify(itemCategories).replaceAll("<", "\\u003c")};const air=${JSON.stringify(airItems)};const item=document.querySelector('[name="cargo_item"]'),category=document.querySelector('[name="cargo_category"]'),service=document.querySelector('[name="service_type"]');if(!item||!category)return;item.addEventListener("change",()=>{if(category.value)return;const sea=service&&service.value==="Sea Freight";const pick=sea?map[item.value]:air.find(v=>v.toLowerCase()===item.value.trim().toLowerCase());if(pick)category.value=pick})});</script>`;
+};
+
+/** KargoDoor freight charge input with the rate-based amount shown under it, for shipments added by hand. */
+const shippingChargeField = (record: RecordData) => {
+  const field = input("shipping_charge", "KargoDoor freight charge (PHP)", record, "text", true, 30);
+  if (record.source_quotation_id) return field;
+  const measured = record.verified_cbm !== null && record.verified_cbm !== undefined && record.verified_weight_kg !== null && record.verified_weight_kg !== undefined;
+  const rate = manualShipmentFreight({
+    serviceType: record.service_type,
+    item: record.cargo_item,
+    category: record.cargo_category,
+    quantity: record.cargo_quantity,
+    remarks: record.tracking_remarks,
+    cbm: Number(measured ? record.verified_cbm : record.cbm),
+    weight: Number(measured ? record.verified_weight_kg : record.weight_kg),
+  });
+  const hint = rate
+    ? `From KargoDoor rates: ${pesos(rate.shippingCharge)} · ${esc(rate.basis)} · ${measured ? "verified" : "declared"} size.${rate.categoryChosen ? " Once a verified size is saved, the charge is set to the rate automatically." : ""}`
+    : "Pick a Category above to see the KargoDoor rate for this shipment.";
+  return field.replace("</label>", `<small class="muted" style="display:block">${hint}</small></label>`);
 };
 
 const labels: Record<string, string> = {
@@ -76,6 +109,7 @@ const labels: Record<string, string> = {
   estimated_arrival: "Estimated arrival",
   actual_arrival: "Actual arrival",
   tracking_remarks: "Tracking remarks",
+  cargo_quantity: "Pieces",
   payment_status: "Payment status",
   cbm: "Declared CBM",
   weight_kg: "Declared weight (kg)",
@@ -474,6 +508,7 @@ export async function handleAdmin(
           String(id),
           Number(shipmentValues.verified_cbm),
           Number(shipmentValues.verified_weight_kg),
+          shipmentValues,
         );
         if (verifiedFreight) {
           values = {
@@ -916,6 +951,11 @@ export async function handleAdmin(
           );
 
         /*
+         * CARGO (hand-added shipments; quotation-linked ones use the quotation's)
+         */
+        if (!record.source_quotation_id) fields += manualCargoFields(record);
+
+        /*
          * TRACKING DATES
          */
         fields +=
@@ -1018,14 +1058,7 @@ export async function handleAdmin(
          * FINANCIAL DETAILS
          */
         fields +=
-          input(
-            "shipping_charge",
-            "KargoDoor freight charge (PHP)",
-            record,
-            "text",
-            true,
-            30,
-          ) +
+          shippingChargeField(record) +
           input(
             "delivery_charge",
             "Delivery charge (PHP)",
@@ -1171,7 +1204,7 @@ export async function handleAdmin(
                   "",
               )}
 
-              ${entity === "shipments" && cargoInfo ? `<p class="notice shipment-cargo-note"><strong>Cargo / Item:</strong> ${esc(cargoInfo.item) || "—"} · <strong>Category:</strong> ${esc(cargoInfo.category) || "—"}${cargoInfo.quotationId ? ` · From quotation <a href="/admin/quotations?id=${esc(cargoInfo.quotationId)}">${esc(cargoInfo.quotationNumber) || "View quotation"}</a>. To change the item or category, edit the quotation.` : ""}</p>` : ""}
+              ${entity === "shipments" && cargoInfo?.quotationId ? `<p class="notice shipment-cargo-note"><strong>Cargo / Item:</strong> ${esc(cargoInfo.item) || "—"} · <strong>Category:</strong> ${esc(cargoInfo.category) || "—"}${cargoInfo.quotationId ? ` · From quotation <a href="/admin/quotations?id=${esc(cargoInfo.quotationId)}">${esc(cargoInfo.quotationNumber) || "View quotation"}</a>. To change the item or category, edit the quotation.` : ""}</p>` : ""}
 
               <div class="grid">
                 ${fields}
@@ -1430,7 +1463,9 @@ export async function handleAdmin(
           shipmentDetail("Category", esc(cargoInfo?.category) || "—"),
           ...(cargoInfo?.quotationId
             ? [shipmentDetail("Quotation", `<a href="/admin/quotations?id=${esc(cargoInfo.quotationId)}">${esc(cargoInfo.quotationNumber) || "View quotation"}</a>`)]
-            : []),
+            : record.cargo_quantity
+              ? [shipmentDetail("Pieces", esc(record.cargo_quantity))]
+              : []),
           shipmentDetail("Service type", esc(record.service_type) || "—"),
           shipmentDetail("Declared CBM", esc(record.cbm) || "—"),
           shipmentDetail("Declared weight (kg)", esc(record.weight_kg) || "—"),

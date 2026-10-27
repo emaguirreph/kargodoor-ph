@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { D1Database, D1PreparedStatement } from "@cloudflare/workers-types";
 
 import { AdminError } from "./security";
+import { manualCargoPricing } from "./shipment-cargo";
 import {
   airItems,
   airQuote,
@@ -35,23 +36,69 @@ function bulkCategory(remarks: unknown) {
 }
 
 /**
+ * KargoDoor freight from the KargoDoor rates for a shipment added by hand.
+ * Returns null when the cargo is not enough to price (FCL, no category/item).
+ */
+export function manualShipmentFreight(input: {
+  serviceType: unknown;
+  item?: unknown;
+  category?: unknown;
+  quantity?: unknown;
+  remarks?: unknown;
+  cbm: number;
+  weight: number;
+}): (VerifiedFreightRecalculation & { basis: string; categoryChosen: boolean }) | null {
+  const cargo = manualCargoPricing(input);
+  const quantity = Number(input.quantity ?? 1) || 1;
+  try {
+    if (input.serviceType === "Sea Freight" && cargo.seaCategory) {
+      const calculation = seaQuote(cargo.seaCategory, input.cbm, input.weight, quantity);
+      return { shippingCharge: Math.round(calculation.final * 100), pricingMethod: calculation.pricingMethod, basis: `Sea · ${cargo.seaCategory}`, categoryChosen: cargo.categoryChosen };
+    }
+    if (input.serviceType === "Air Freight" && cargo.airItem) {
+      const calculation = airQuote(cargo.airItem, input.cbm, input.weight, quantity);
+      return { shippingCharge: Math.round(calculation.final * 100), pricingMethod: calculation.formula, basis: `Air · ${cargo.airItem}`, categoryChosen: cargo.categoryChosen };
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/**
  * Reuses the quotation pricing engine with measurements confirmed by the
- * China warehouse. Legacy/manual shipments without a source quotation keep
- * their manually entered charge because their item and pricing inputs are not
- * available to calculate safely.
+ * China warehouse. Shipments added by hand are recalculated only when an admin
+ * picked their Category on the shipment form (`submitted` holds the form
+ * values being saved); older ones without it keep their
+ * manually entered charge because their pricing inputs are not reliable.
  */
 export async function verifiedShipmentFreight(
   db: D1Database,
   shipmentId: string,
   verifiedCbm: number,
   verifiedWeight: number,
+  submitted: Row = {},
 ): Promise<VerifiedFreightRecalculation | null> {
   const shipment = await db.prepare(
-    `SELECT s.service_type, s.source_quotation_id, s.tracking_remarks, q.cargo_snapshot
+    `SELECT s.service_type, s.source_quotation_id, s.tracking_remarks, s.cargo_item, s.cargo_category, s.cargo_quantity, q.cargo_snapshot
      FROM shipments s
      LEFT JOIN quotations q ON q.id = s.source_quotation_id
      WHERE s.id = ?`,
   ).bind(shipmentId).first<Row>();
+
+  if (shipment && !shipment.source_quotation_id) {
+    // Values being saved win over what is stored, so a changed category counts.
+    const field = (key: string) => (key in submitted ? submitted[key] : shipment[key]);
+    const manual = manualShipmentFreight({
+      serviceType: field("service_type"),
+      item: field("cargo_item"),
+      category: field("cargo_category"),
+      quantity: field("cargo_quantity"),
+      cbm: verifiedCbm,
+      weight: verifiedWeight,
+    });
+    return manual?.categoryChosen ? { shippingCharge: manual.shippingCharge, pricingMethod: manual.pricingMethod } : null;
+  }
 
   if (!shipment || !shipment.source_quotation_id || !shipment.cargo_snapshot) return null;
 
