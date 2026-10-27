@@ -61,43 +61,34 @@ export function warehouseAddress(warehouse: unknown): string {
     : "";
 }
 
-export const supplierRequirements = `Important: Instructions to Suppliers
+export const supplierRequirements = `📦 KARGODOOR PH – INSTRUCTIONS TO SUPPLIER
+🇨🇳 中文 | 发货前注意重要事项
+1️⃣ 请务必每件货物贴好唛头标签（包括客户代号、菲律宾收货人电话、中国寄件人电话），否则仓库无法收货入仓。
+2️⃣ 请每票货随货附一张装箱单，包含详细中文品名、材质、件数、重量、发货人电话等。
+3️⃣ 送货前请确保货物包装完整无破损，易碎货物需加固包装，否则仓库不接收包装破损货物。
+━━━━━━━━━━━━━━
+🇬🇧 ENGLISH | IMPORTANT REMINDERS BEFORE SHIPPING
+1️⃣ Proper Cargo Labeling
+Every package must have a shipping label containing:
 
-发货前注意重要事项：
-1.请务必每件货物贴好唛头标签（包括客户代号，菲律宾收货人电话，中国寄件人电话），否则仓库无法收货入仓；
-2.请每票货随货附一张装箱单，包含详细中文品名，材质，件数，重量，发货人电话等；
-3.送货前请确保货物包装完整无破损，易碎货物加固包装，否则仓库不接收包装破损货物。
+• Customer Cargo Code: KDOOR-XXXX
+• Philippine recipient’s phone number
+• Chinese sender’s phone number
+2️⃣ Packing List
+Each shipment must include a packing list indicating:
 
-Important Reminders Before Shipping
+* Detailed product description in Chinese
+* Material or composition
+* Quantity
+* Weight
+* Sender's phone number
 
-1. Proper Cargo Labeling
-Please ensure that every package has a shipping label (cargo mark) containing the following information:
-- Customer cargo code
-- Philippine recipient’s contact number
-- Chinese sender’s contact number
-
-Cargo Label Example:
-Cargo# KDOOR0007
-09199323077
-[Chinese Item Number]
-
-Packages without complete labels will not be accepted by the warehouse.
-
-2. Packing List Required
-Every shipment must include a packing list containing:
-- Detailed product description in Chinese
-- Material or composition of the items
-- Number of pieces/packages
-- Weight
-- Sender’s contact number
-
-3. Proper and Secure Packaging
-Before delivery to the warehouse, please ensure that:
-- All packages are properly sealed and free from damage.
-- Fragile items have additional protective packaging and reinforcement.
-- Packaging is strong enough to withstand handling and transportation.
-
-The warehouse will not accept shipments with damaged packaging.`;
+3️⃣ Proper Packaging
+Ensure all packages are securely packed and undamaged. Fragile items must have additional protective packaging.
+⚠️ IMPORTANT: The warehouse will NOT accept packages with incomplete labels or damaged packaging.
+📲 Once shipped, please send us the tracking number and total number of packages.
+KargoDoor PH 💙💚
+China to PH, Made SIMPLE.`;
 
 /** Welcome message: Account/Cargo Code and customer portal login in one message. */
 export function customerWelcomeMessage(customer: PortalAccessMessage): string {
