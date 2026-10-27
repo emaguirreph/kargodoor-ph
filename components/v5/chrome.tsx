@@ -91,7 +91,7 @@ export function Footer() {
           </div>
           <div className="ci">
             <h2 className="fh">CONTACT INFORMATION</h2>
-            <TrackedAnchor href="tel:+639171577370" analyticsEvent="click_phone">+63 917 157 7370</TrackedAnchor>
+            <TrackedAnchor href="tel:+639199323077" analyticsEvent="click_phone">+63 919 932 3077</TrackedAnchor>
             <TrackedAnchor href="tel:+639088890664" analyticsEvent="click_phone">+63 908 889 0664</TrackedAnchor>
             <span>Email: <TrackedAnchor className="inl" href="mailto:support@kargodoorph.com" analyticsEvent="click_email">support@kargodoorph.com</TrackedAnchor></span>
             <span>Support: 8:00 AM–10:00 PM · 7 Days/Week</span>

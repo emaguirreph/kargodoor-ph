@@ -204,7 +204,7 @@ function customerQuotationPdf(q: QuotationPdfData, logoJpeg?: Uint8Array): Uint8
   lines.push(`${blue} RG 52 132 m 543 132 l S`);
   text("KARGODOOR PH", 52, 8, true, blue);
   text("China to PH, made SIMPLE.", 52, 7, false, blue);
-  text("+63 917 157 7370 | +63 908 889 0664", 52, 7, false, blue);
+  text("+63 919 932 3077 | +63 908 889 0664", 52, 7, false, blue);
   text("support@kargodoorph.com | www.kargodoorph.com | facebook.com/KargoDoorPH", 52, 7, false, blue);
   text("Instagram: @kargodoorph | SOURCE · SHIP · RECEIVE", 52, 7, false, blue);
   const stream = lines.join("\n");
