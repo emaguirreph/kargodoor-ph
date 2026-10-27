@@ -1,6 +1,6 @@
 import { z, ZodError } from "zod";
 
-import { airItems, seaRates, type SeaCategory } from "./quotation-pricing";
+import { airItems, itemCategories } from "./quotation-pricing";
 
 export const warehouses = [
   "Guangzhou",
@@ -33,9 +33,17 @@ const legacyShipmentStatuses = [
 
 export const statuses = [...seaFreightStatuses, ...legacyShipmentStatuses] as const;
 
-/** Sea categories and air item types a hand-added shipment can be priced by. */
-export const seaCargoCategories = Object.keys(seaRates) as SeaCategory[];
-export const shipmentCargoCategories = [...seaCargoCategories, ...airItems] as string[] as [string, ...string[]];
+/** Item / Commodity choices for a hand-added shipment, the same list quotations use. */
+export const seaCargoItems = Object.keys(itemCategories);
+export const shipmentCargoItems = [...seaCargoItems, ...airItems] as string[] as [string, ...string[]];
+
+/** Category for an Item / Commodity: the sea category group, or the air item itself. */
+export function shipmentCargoCategory(serviceType: string, item: string | null | undefined): string | null {
+  if (!item) return null;
+  if (serviceType === "Sea Freight") return Object.hasOwn(itemCategories, item) ? itemCategories[item] : null;
+  if (serviceType === "Air Freight") return (airItems as readonly string[]).includes(item) ? item : null;
+  return null;
+}
 
 const required = (max: number) =>
   z
@@ -259,10 +267,10 @@ const shipmentObjectSchema = z
       optional(2000),
 
     // Hand-added shipments only; quotation-linked ones read these from the quotation.
-    cargo_item: optional(160).optional(),
-    cargo_category: z.union([
+    cargo_description: optional(200).optional(),
+    cargo_item: z.union([
       z.literal("").transform(() => null),
-      z.enum(shipmentCargoCategories),
+      z.enum(shipmentCargoItems),
     ]).optional(),
     cargo_quantity: optionalWhole(1000000).optional(),
 
@@ -292,22 +300,30 @@ const shipmentObjectSchema = z
   })
   .strict();
 
-function checkCargoCategory(
-  values: { service_type: string; cargo_category?: string | null },
+function checkCargoItem(
+  values: { service_type: string; cargo_item?: string | null },
   context: z.RefinementCtx,
 ) {
-  const category = values.cargo_category;
-  if (!category) return;
-  if (values.service_type === "Sea Freight" && !(seaCargoCategories as string[]).includes(category))
-    context.addIssue({ code: "custom", path: ["cargo_category"], message: "Choose a Sea Freight category for a Sea Freight shipment." });
-  if (values.service_type === "Air Freight" && !(airItems as readonly string[]).includes(category))
-    context.addIssue({ code: "custom", path: ["cargo_category"], message: "Choose an Air Freight item type for an Air Freight shipment." });
+  const item = values.cargo_item;
+  if (!item || values.service_type === "FCL") return;
+  if (!shipmentCargoCategory(values.service_type, item))
+    context.addIssue({
+      code: "custom",
+      path: ["cargo_item"],
+      message: values.service_type === "Air Freight"
+        ? "Choose an Air Freight item for an Air Freight shipment."
+        : "Choose a Sea Freight item for a Sea Freight shipment.",
+    });
 }
+
+/** Adds the category that goes with the chosen Item / Commodity. */
+const withCargoCategory = <T extends { service_type: string; cargo_item?: string | null }>(values: T) =>
+  values.cargo_item === undefined ? values : { ...values, cargo_category: shipmentCargoCategory(values.service_type, values.cargo_item) };
 
 export const shipmentSchema =
   shipmentObjectSchema.superRefine(
     (values, context) => {
-      checkCargoCategory(values, context);
+      checkCargoItem(values, context);
       if (
         values.departure_date &&
         values.warehouse_received_date &&
@@ -355,7 +371,7 @@ export const shipmentSchema =
         });
       }
     },
-  );
+  ).transform(withCargoCategory);
 
 export const schemas = {
   customers: customerSchema,
@@ -398,8 +414,8 @@ export const schemaKeys: Record<
     "estimated_arrival",
     "actual_arrival",
     "tracking_remarks",
+    "cargo_description",
     "cargo_item",
-    "cargo_category",
     "cargo_quantity",
     "shipping_charge",
     "nihao_cost",
@@ -422,13 +438,16 @@ const formKeys: Record<Entity, readonly string[]> = {
 const customerFormSchema = customerSchema.omit({ customer_code: true });
 const shipmentFormSchema = shipmentObjectSchema
   .omit({ tracking_number: true, cargo_code: true })
+  // A blank charge on a hand-added shipment is filled from the KargoDoor rates when it is saved.
+  .extend({ shipping_charge: z.union([z.literal("").transform(() => null), money]) })
   .superRefine((values, context) => {
-    checkCargoCategory(values, context);
+    checkCargoItem(values, context);
     if (values.departure_date && values.warehouse_received_date && values.departure_date < values.warehouse_received_date)
       context.addIssue({ code: "custom", path: ["departure_date"], message: "Departure date cannot be before the warehouse received date" });
     if (values.actual_arrival && values.departure_date && values.actual_arrival < values.departure_date)
       context.addIssue({ code: "custom", path: ["actual_arrival"], message: "Actual arrival cannot be before the departure date" });
-  });
+  })
+  .transform(withCargoCategory);
 
 export function parseForm(
   entity: Entity,

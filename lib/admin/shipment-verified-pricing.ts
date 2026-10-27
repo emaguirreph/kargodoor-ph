@@ -3,6 +3,7 @@ import type { D1Database, D1PreparedStatement } from "@cloudflare/workers-types"
 
 import { AdminError } from "./security";
 import { manualCargoPricing } from "./shipment-cargo";
+import { resolveNiHaoCost } from "./nihao-estimate";
 import {
   airItems,
   airQuote,
@@ -47,17 +48,17 @@ export function manualShipmentFreight(input: {
   remarks?: unknown;
   cbm: number;
   weight: number;
-}): (VerifiedFreightRecalculation & { basis: string; categoryChosen: boolean }) | null {
+}): (VerifiedFreightRecalculation & { basis: string }) | null {
   const cargo = manualCargoPricing(input);
   const quantity = Number(input.quantity ?? 1) || 1;
   try {
     if (input.serviceType === "Sea Freight" && cargo.seaCategory) {
       const calculation = seaQuote(cargo.seaCategory, input.cbm, input.weight, quantity);
-      return { shippingCharge: Math.round(calculation.final * 100), pricingMethod: calculation.pricingMethod, basis: `Sea · ${cargo.seaCategory}`, categoryChosen: cargo.categoryChosen };
+      return { shippingCharge: Math.round(calculation.final * 100), pricingMethod: calculation.pricingMethod, basis: `Sea · ${cargo.seaCategory}` };
     }
     if (input.serviceType === "Air Freight" && cargo.airItem) {
       const calculation = airQuote(cargo.airItem, input.cbm, input.weight, quantity);
-      return { shippingCharge: Math.round(calculation.final * 100), pricingMethod: calculation.formula, basis: `Air · ${cargo.airItem}`, categoryChosen: cargo.categoryChosen };
+      return { shippingCharge: Math.round(calculation.final * 100), pricingMethod: calculation.formula, basis: `Air · ${cargo.airItem}` };
     }
   } catch {
     return null;
@@ -65,40 +66,60 @@ export function manualShipmentFreight(input: {
   return null;
 }
 
+/** KargoDoor freight from the rates for a hand-added shipment's saved or submitted values, using the verified size when there is one. */
+export function manualShipmentRate(values: Row): { cost: number; basis: string } | null {
+  const measured = values.verified_cbm !== null && values.verified_cbm !== undefined && values.verified_weight_kg !== null && values.verified_weight_kg !== undefined;
+  const rate = manualShipmentFreight({
+    serviceType: values.service_type,
+    item: values.cargo_item,
+    category: values.cargo_category,
+    quantity: values.cargo_quantity,
+    remarks: values.tracking_remarks,
+    cbm: Number(measured ? values.verified_cbm : values.cbm),
+    weight: Number(measured ? values.verified_weight_kg : values.weight_kg),
+  });
+  return rate ? { cost: rate.shippingCharge, basis: `${rate.basis} · ${measured ? "verified" : "declared"} size` } : null;
+}
+
+/**
+ * KargoDoor charge to save for a hand-added shipment. A blank charge, or one
+ * still holding the previous rate, follows the KargoDoor rates; a typed amount
+ * is kept as is.
+ */
+export function resolveManualShipmentCharge(
+  values: Row,
+  previous: Row | null,
+): { cost: number; source: "rate" | "manual" } {
+  const submitted = values.shipping_charge === null || values.shipping_charge === undefined ? null : Number(values.shipping_charge);
+  const charge = resolveNiHaoCost(
+    submitted,
+    previous ? { cost: previous.shipping_charge, source: previous.shipping_charge_source === "rate" ? "estimate" : "actual" } : null,
+    manualShipmentRate(values),
+  );
+  if (charge.cost === null) {
+    throw new AdminError("Choose an Item / Commodity so the KargoDoor charge can be computed, or type the charge.");
+  }
+  return { cost: charge.cost, source: charge.source === "estimate" ? "rate" : "manual" };
+}
+
 /**
  * Reuses the quotation pricing engine with measurements confirmed by the
- * China warehouse. Shipments added by hand are recalculated only when an admin
- * picked their Category on the shipment form (`submitted` holds the form
- * values being saved); older ones without it keep their
- * manually entered charge because their pricing inputs are not reliable.
+ * China warehouse. Shipments added by hand return null here: when their charge
+ * was filled from the rates, the save path refreshes it with
+ * manualShipmentFreight(), and a typed charge is kept.
  */
 export async function verifiedShipmentFreight(
   db: D1Database,
   shipmentId: string,
   verifiedCbm: number,
   verifiedWeight: number,
-  submitted: Row = {},
 ): Promise<VerifiedFreightRecalculation | null> {
   const shipment = await db.prepare(
-    `SELECT s.service_type, s.source_quotation_id, s.tracking_remarks, s.cargo_item, s.cargo_category, s.cargo_quantity, q.cargo_snapshot
+    `SELECT s.service_type, s.source_quotation_id, s.tracking_remarks, q.cargo_snapshot
      FROM shipments s
      LEFT JOIN quotations q ON q.id = s.source_quotation_id
      WHERE s.id = ?`,
   ).bind(shipmentId).first<Row>();
-
-  if (shipment && !shipment.source_quotation_id) {
-    // Values being saved win over what is stored, so a changed category counts.
-    const field = (key: string) => (key in submitted ? submitted[key] : shipment[key]);
-    const manual = manualShipmentFreight({
-      serviceType: field("service_type"),
-      item: field("cargo_item"),
-      category: field("cargo_category"),
-      quantity: field("cargo_quantity"),
-      cbm: verifiedCbm,
-      weight: verifiedWeight,
-    });
-    return manual?.categoryChosen ? { shippingCharge: manual.shippingCharge, pricingMethod: manual.pricingMethod } : null;
-  }
 
   if (!shipment || !shipment.source_quotation_id || !shipment.cargo_snapshot) return null;
 
