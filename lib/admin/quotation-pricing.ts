@@ -1,10 +1,11 @@
-export type SeaCategory = "LOW VALUE GOODS" | "VOLUME GOODS" | "COMMODITIES" | "HIGH VALUE" | "SENSITIVE GOODS" | "MOBILE / COMPUTERS / TABLETS";
+export type SeaCategory = "LOW VALUE GOODS" | "VOLUME GOODS" | "COMMODITIES" | "HIGH VALUE" | "SENSITIVE - BATTERIES" | "SENSITIVE - CHEMICALS" | "MOBILE / COMPUTERS / TABLETS";
 export const seaRates: Record<SeaCategory, { cbmRate: number; densityRate: number | null }> = {
   "LOW VALUE GOODS": { cbmRate: 7999, densityRate: 19 },
   "VOLUME GOODS": { cbmRate: 8500, densityRate: 20 },
   COMMODITIES: { cbmRate: 9500, densityRate: 22 },
   "HIGH VALUE": { cbmRate: 11000, densityRate: 26 },
-  "SENSITIVE GOODS": { cbmRate: 13000, densityRate: 31 },
+  "SENSITIVE - BATTERIES": { cbmRate: 16000, densityRate: 38 },
+  "SENSITIVE - CHEMICALS": { cbmRate: 13000, densityRate: 31 },
   "MOBILE / COMPUTERS / TABLETS": { cbmRate: 10500, densityRate: null },
 };
 export const itemCategories: Record<string, SeaCategory> = {
@@ -12,7 +13,7 @@ export const itemCategories: Record<string, SeaCategory> = {
   "Construction materials":"VOLUME GOODS","Daily necessities":"VOLUME GOODS","Eyeglasses":"VOLUME GOODS","Office & school supplies":"VOLUME GOODS","Pet supplies / grooming":"VOLUME GOODS","Umbrellas":"VOLUME GOODS",
   "Acrylic":"COMMODITIES","Bikes / accessories":"COMMODITIES","Cables / chargers":"COMMODITIES","Car / motor accessories":"COMMODITIES","Cosmetics":"COMMODITIES","Electrical appliances":"COMMODITIES","E-bikes / accessories":"COMMODITIES","Food ingredients":"COMMODITIES","Packaged non-alcoholic food":"COMMODITIES","Furniture":"COMMODITIES","Games / toys":"COMMODITIES","Hardware":"COMMODITIES","Home appliances except TV":"COMMODITIES","Keyboard / mouse / earphones":"COMMODITIES","LED lights":"COMMODITIES","Lighting / fixtures":"COMMODITIES","Medical supplies / tools":"COMMODITIES","Sanitary wares":"COMMODITIES","Solar panels":"COMMODITIES","Speakers":"COMMODITIES","Sports equipment":"COMMODITIES",
   "Medicines / health supplements":"HIGH VALUE","Machines":"HIGH VALUE","Motorized / electric tools & equipment":"HIGH VALUE","Novelty items":"HIGH VALUE","TV":"HIGH VALUE","USB":"HIGH VALUE","Watches":"HIGH VALUE",
-  "Batteries":"SENSITIVE GOODS","Chemicals":"SENSITIVE GOODS",
+  "Batteries":"SENSITIVE - BATTERIES","Chemicals":"SENSITIVE - CHEMICALS",
   "Mobile / computer parts & accessories":"MOBILE / COMPUTERS / TABLETS","Mobile phones":"MOBILE / COMPUTERS / TABLETS","Computers":"MOBILE / COMPUTERS / TABLETS","Tablets":"MOBILE / COMPUTERS / TABLETS",
 };
 export const airItems = ["Ordinary Items","Liquid, Powder, Food, Computer Parts, Electronics","Medicine and Food Supplements","Mobile Phones","Tablets","Laptop Computers"] as const;

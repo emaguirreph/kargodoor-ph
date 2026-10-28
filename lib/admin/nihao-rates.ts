@@ -12,7 +12,8 @@ export const niHaoSeaCategories = [
   ["VOLUME GOODS", "Construction materials, daily necessities, eyeglasses, office & school supplies, pet supplies/grooming, umbrellas", "VOLUME GOODS"],
   ["COMMODITIES", "Acrylic, bikes/accessories, cables/chargers, car/motor accessories, cosmetics, electrical appliances, e-bikes/accessories, food ingredients, packaged non-alcoholic food, furniture, games/toys, hardware, home appliances except TV, keyboard/mouse/earphones, LED lights, lighting/fixtures, medical supplies/tools, sanitary wares, solar panels, speakers, sports equipment", "COMMODITIES"],
   ["HIGH VALUE", "Medicines/health supplements, mobile/computer parts & accessories, machines, motorized/electric tools & equipment, novelty items, TV, USB, watches", "HIGH VALUE"],
-  ["SENSITIVE GOODS", "Batteries, chemicals", "SENSITIVE GOODS"],
+  ["SENSITIVE - BATTERIES", "Batteries", "SENSITIVE - BATTERIES"],
+  ["SENSITIVE - CHEMICALS", "Chemicals", "SENSITIVE - CHEMICALS"],
   ["MOBILE / COMPUTERS / TABLETS", "Mobile phones, computers, tablets", "MOBILE / COMPUTERS / TABLETS"],
 ] as const;
 export const niHaoPackageRates = [
