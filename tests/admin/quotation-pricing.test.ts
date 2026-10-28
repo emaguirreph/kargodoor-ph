@@ -11,6 +11,12 @@ test("sea package tiers and density rule preserve boundaries", () => {
   assert.equal(dense.packageTier, "KD Max"); assert.equal(dense.final, 11000);
   assert.equal(seaQuote("COMMODITIES", 1, 425).densityApplies, false);
 });
+test("batteries and chemicals have their own sensitive rates", () => {
+  assert.equal(itemCategories["Batteries"], "SENSITIVE - BATTERIES");
+  assert.equal(itemCategories["Chemicals"], "SENSITIVE - CHEMICALS");
+  assert.equal(seaQuote("SENSITIVE - BATTERIES", 1, 400).final, 16000);
+  assert.equal(seaQuote("SENSITIVE - CHEMICALS", 1, 400).final, 13000);
+});
 test("mobile sea is unit priced and never density priced", () => {
   const quote=seaQuote("MOBILE / COMPUTERS / TABLETS", .5, 500, 10);
   assert.equal(quote.final,7750); assert.equal(quote.densityCharge,0); assert.equal(quote.packageTier,"KD Standard");
