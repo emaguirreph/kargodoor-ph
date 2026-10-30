@@ -23,7 +23,20 @@ export const seaFreightStatuses = [
   "Cancelled",
 ] as const;
 
-const legacyShipmentStatuses = [
+/** Air Freight follows the same stages, with Air Transit in place of Sea Transit. */
+export const airFreightStatuses = [
+  "Awaiting Supplier Dispatch",
+  "China Warehouse",
+  "China Port",
+  "Air Transit",
+  "Manila Port",
+  "Gatepass",
+  "Malabon Warehouse",
+  "Delivered",
+  "Cancelled",
+] as const;
+
+export const legacyShipmentStatuses = [
   "Pending Warehouse Receipt",
   "Received at Warehouse",
   "In Transit",
@@ -31,7 +44,7 @@ const legacyShipmentStatuses = [
   "Ready for Release",
 ] as const;
 
-export const statuses = [...seaFreightStatuses, ...legacyShipmentStatuses] as const;
+export const statuses = [...seaFreightStatuses, "Air Transit", ...legacyShipmentStatuses] as const;
 
 /** Item / Commodity choices for a hand-added shipment, the same list quotations use. */
 export const seaCargoItems = Object.keys(itemCategories);
@@ -316,6 +329,17 @@ function checkCargoItem(
     });
 }
 
+/** Sea Transit is for sea cargo and Air Transit for air cargo. */
+function checkTransitStatus(
+  values: { service_type: string; status: string },
+  context: z.RefinementCtx,
+) {
+  if (values.status === "Air Transit" && values.service_type !== "Air Freight")
+    context.addIssue({ code: "custom", path: ["status"], message: "Air Transit is only for Air Freight shipments." });
+  if (values.status === "Sea Transit" && values.service_type === "Air Freight")
+    context.addIssue({ code: "custom", path: ["status"], message: "Use Air Transit for Air Freight shipments." });
+}
+
 /** Adds the category that goes with the chosen Item / Commodity. */
 const withCargoCategory = <T extends { service_type: string; cargo_item?: string | null }>(values: T) =>
   values.cargo_item === undefined ? values : { ...values, cargo_category: shipmentCargoCategory(values.service_type, values.cargo_item) };
@@ -370,6 +394,8 @@ export const shipmentSchema =
           message: "Choose a Sea Freight tracking status.",
         });
       }
+
+      checkTransitStatus(values, context);
     },
   ).transform(withCargoCategory);
 
@@ -442,6 +468,7 @@ const shipmentFormSchema = shipmentObjectSchema
   .extend({ shipping_charge: z.union([z.literal("").transform(() => null), money]) })
   .superRefine((values, context) => {
     checkCargoItem(values, context);
+    checkTransitStatus(values, context);
     if (values.departure_date && values.warehouse_received_date && values.departure_date < values.warehouse_received_date)
       context.addIssue({ code: "custom", path: ["departure_date"], message: "Departure date cannot be before the warehouse received date" });
     if (values.actual_arrival && values.departure_date && values.actual_arrival < values.departure_date)

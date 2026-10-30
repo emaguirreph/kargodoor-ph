@@ -37,6 +37,7 @@ import {
   requireAdminMutation,
 } from "../../lib/admin/security";
 import { expensesPage, saveExpense, mutateExpense } from "../../lib/admin/expenses";
+import { shipmentStatusMessages } from "../../lib/admin/customer-messages";
 import { customerShippingInstructions, customerWarehouseAddressMessage, shipmentShippingInstructions, warehouseAddress } from "../../lib/admin/shipping-instructions";
 function database(includePhase1 = true) {
   const sql = new DatabaseSync(":memory:");
@@ -75,6 +76,8 @@ function database(includePhase1 = true) {
     sql.exec(readFileSync("migrations/admin/0030_manual_shipment_cargo.sql", "utf8"));
   if (includePhase1)
     sql.exec(readFileSync("migrations/admin/0031_manual_shipment_description_and_auto_charge.sql", "utf8"));
+  if (includePhase1)
+    sql.exec(readFileSync("migrations/admin/0033_air_transit_status.sql", "utf8"));
   const user = randomUUID();
   sql
     .prepare("INSERT INTO admin_users VALUES (?,?,?,?,?,?)")
@@ -380,6 +383,29 @@ test("shipments get a Ni Hao cost estimate from the Ni Hao rates unless Ni Hao's
   assert.equal(manual?.cost, 280000, "hand-added shipments use the Item line in their remarks");
   assert.equal(await shipmentNiHaoEstimate(db, "", { service_type: "FCL", cbm: 30, weight_kg: 1000 }), null);
 });
+test("air shipments get an Air Transit notification with the flight date", () => {
+  const air = shipmentStatusMessages({ customerName: "Ana", tracking: "KDAIR-123456", service: "Air Freight", flightDate: "2026-10-30" });
+  const keys = air.map(([key]) => key);
+  assert.ok(keys.includes("air-transit") && !keys.includes("sea-transit"));
+  const message = air.find(([key]) => key === "air-transit")![2];
+  assert.match(message, /on its flight to the Philippines/);
+  assert.match(message, /Flight Date: 2026-10-30/);
+  const sea = shipmentStatusMessages({ customerName: "Ana", tracking: "KDSEA-123456", service: "Sea Freight", flightDate: "2026-10-30" });
+  assert.ok(sea.some(([key]) => key === "sea-transit") && !sea.some(([key]) => key === "air-transit"));
+  assert.doesNotMatch(sea.map(([, , body]) => body).join("\n"), /Flight Date/);
+});
+test("migration 0033 moves Air Freight shipments on Sea Transit to Air Transit", async () => {
+  const { sql, db, user } = database();
+  const customerId = await saveRecord(db, "customers", { ...customer, customer_code: "KD-AIRMIG", email: "airmig@example.test" }, user, "", "");
+  const insert = sql.prepare("INSERT INTO shipments (id, customer_id, tracking_number, service_type, china_warehouse, cbm, weight_kg, status, shipping_charge, delivery_charge, payment_status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)");
+  insert.run("air", customerId, "KDAIR-200001", "Air Freight", "Guangzhou", 0, 5, "Sea Transit", 0, 0, "Unpaid", "2026-10-01", "2026-10-01");
+  insert.run("sea", customerId, "KDSEA-200002", "Sea Freight", "Guangzhou", 1, 5, "Sea Transit", 0, 0, "Unpaid", "2026-10-01", "2026-10-01");
+  const migration = readFileSync("migrations/admin/0033_air_transit_status.sql", "utf8");
+  // The test database already has 0033, so run it again under another temporary column name.
+  sql.exec(migration.replaceAll("status_next", "status_again"));
+  assert.deepEqual(sql.prepare("SELECT id, status FROM shipments ORDER BY id").all().map((row) => [row.id, row.status]), [["air", "Air Transit"], ["sea", "Sea Transit"]]);
+  assert.throws(() => sql.exec("UPDATE shipments SET status = 'Flying'"), /CHECK/);
+});
 test("shipments added by hand carry their own cargo details and compute the KargoDoor charge and Ni Hao cost automatically", async () => {
   const { sql, db, user } = database();
   const customerId = await saveRecord(db, "customers", { ...customer, customer_code: "KD-MANUAL", email: "manual@example.test" }, user, "", "");
@@ -417,6 +443,13 @@ test("shipments added by hand carry their own cargo details and compute the Karg
   assert.equal(air.cargo_category, "Mobile Phones");
   assert.deepEqual(resolveManualShipmentCharge(air, null), { cost: 285000, source: "rate" }, "3 units × ₱950");
   assert.equal((await shipmentNiHaoEstimate(db, "", air))?.cost, 240000, "3 units × ₱800");
+
+  // Air Freight uses Air Transit with a flight date; Sea Transit stays sea-only.
+  const airTransit = form({ service_type: "Air Freight", status: "Air Transit", cargo_item: "Mobile Phones", cargo_quantity: "3", departure_date: "2026-10-30" });
+  assert.deepEqual([airTransit.status, airTransit.departure_date], ["Air Transit", "2026-10-30"]);
+  assert.throws(() => form({ service_type: "Air Freight", status: "Sea Transit", cargo_item: "Mobile Phones" }), /Use Air Transit/);
+  assert.throws(() => form({ status: "Air Transit", cargo_item: "LED lights" }), /only for Air Freight/);
+  assert.equal(form({ status: "Sea Transit", cargo_item: "LED lights" }).status, "Sea Transit");
 
   // Older hand-added shipments with only an "Item:" remarks line still get a Ni Hao estimate.
   const legacyId = randomUUID();
