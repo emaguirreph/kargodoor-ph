@@ -28,6 +28,8 @@ export type ShipmentMessageInput = {
   service?: unknown;
   warehouse?: unknown;
   received?: unknown;
+  /** Air Freight flight date (the shipment's departure date). */
+  flightDate?: unknown;
   arrival?: unknown;
   paymentStatus?: unknown;
   declaredCbm?: unknown;
@@ -67,6 +69,7 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
   const service = text(input.service);
   const warehouse = text(input.warehouse);
   const received = text(input.received);
+  const flightDate = text(input.flightDate);
   const arrival = text(input.arrival);
   const paymentStatus = text(input.paymentStatus);
   const declaredCbm = text(input.declaredCbm);
@@ -146,7 +149,7 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
         ? "Good news! Your shipment has cleared customs in China and is now waiting to board its flight to the Philippines. ✈️"
         : "Good news! Your shipment has cleared customs in China and is now at the port, waiting to board the vessel to the Philippines. 🚢",
       "",
-      ...details(service && `Service: ${service}`, warehouse && `Origin Warehouse: ${warehouse}`),
+      ...details(service && `Service: ${service}`, warehouse && `Origin Warehouse: ${warehouse}`, isAir && flightDate && `Flight Date: ${flightDate}`),
       "",
       "Next Steps:",
       `No action needed from you. We'll update you once your shipment ${isAir ? "takes off" : "departs China"}.`,
@@ -156,22 +159,35 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
       thanks,
     ]],
 
-    ["sea-transit", "Sea Transit", [
-      hi,
-      "",
-      isAir
-        ? "Your shipment is now on its flight to the Philippines. ✈️"
-        : "Your shipment is now on the vessel, sailing to the Philippines. 🚢🌊",
-      "",
-      ...details(service && `Service: ${service}`),
-      "",
-      "Next Steps:",
-      `No action needed from you. We'll send another update once ${isAir ? "your shipment lands in Manila" : "the ship docks in Manila"}.`,
-      "",
-      track,
-      "",
-      thanks,
-    ]],
+    isAir
+      ? ["air-transit", "Air Transit", [
+        hi,
+        "",
+        "Your shipment is now on its flight to the Philippines. ✈️",
+        "",
+        ...details(service && `Service: ${service}`, flightDate && `Flight Date: ${flightDate}`),
+        "",
+        "Next Steps:",
+        "No action needed from you. We'll send another update once your shipment lands in Manila.",
+        "",
+        track,
+        "",
+        thanks,
+      ]]
+      : ["sea-transit", "Sea Transit", [
+        hi,
+        "",
+        "Your shipment is now on the vessel, sailing to the Philippines. 🚢🌊",
+        "",
+        ...details(service && `Service: ${service}`),
+        "",
+        "Next Steps:",
+        "No action needed from you. We'll send another update once the ship docks in Manila.",
+        "",
+        track,
+        "",
+        thanks,
+      ]],
 
     ["manila-port", "Manila Port", [
       hi,
