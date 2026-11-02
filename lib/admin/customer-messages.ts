@@ -28,6 +28,8 @@ export type ShipmentMessageInput = {
   service?: unknown;
   warehouse?: unknown;
   received?: unknown;
+  departure?: unknown;
+  eta?: unknown;
   arrival?: unknown;
   paymentStatus?: unknown;
   declaredCbm?: unknown;
@@ -59,6 +61,28 @@ export const paymentInstructions = [
 
 const text = (value: unknown) => (value === null || value === undefined ? "" : String(value).trim());
 
+/** The notification tab for a shipment status; air shipments in transit open Air Transit. */
+export function notificationKeyFor(status: unknown, service: unknown): string | undefined {
+  const key = notificationKeyForStatus[String(status ?? "")];
+  return key === "sea-transit" && /air/i.test(String(service ?? "")) ? "air-transit" : key;
+}
+
+/** Which notification tab matches each shipment status, so the page opens on the right one. */
+export const notificationKeyForStatus: Record<string, string> = {
+  "Awaiting Supplier Dispatch": "awaiting-supplier-dispatch",
+  "Pending Warehouse Receipt": "awaiting-supplier-dispatch",
+  "China Warehouse": "china-warehouse",
+  "Received at Warehouse": "china-warehouse",
+  "China Port": "china-port",
+  "Sea Transit": "sea-transit",
+  "In Transit": "sea-transit",
+  "Manila Port": "manila-port",
+  "Arrived in Philippines": "manila-port",
+  Gatepass: "gatepass",
+  "Malabon Warehouse": "malabon-warehouse",
+  Delivered: "delivered",
+};
+
 /** [key, title, message] for every shipment status update, in status order. */
 export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[string, string, string]> {
   const name = text(input.customerName) || "there";
@@ -67,6 +91,7 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
   const service = text(input.service);
   const warehouse = text(input.warehouse);
   const received = text(input.received);
+  const eta = text(input.eta);
   const arrival = text(input.arrival);
   const paymentStatus = text(input.paymentStatus);
   const declaredCbm = text(input.declaredCbm);
@@ -96,7 +121,7 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
   const track = `📍 Track your shipment anytime: ${trackLink}`;
 
   const messages: Array<[string, string, Array<string | false>]> = [
-    ["awaiting-supplier-dispatch", "Awaiting Supplier Dispatch", [
+    ["awaiting-supplier-dispatch", "Awaiting Supplier Package", [
       hi,
       "",
       `Your KargoDoor shipment is all set! We're now waiting for your supplier to send your package to our ${warehouse ? `${warehouse} warehouse` : "warehouse"} in China.`,
@@ -159,14 +184,27 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
     ["sea-transit", "Sea Transit", [
       hi,
       "",
-      isAir
-        ? "Your shipment is now on its flight to the Philippines. ✈️"
-        : "Your shipment is now on the vessel, sailing to the Philippines. 🚢🌊",
+      "Your shipment is now on the vessel, sailing to the Philippines. 🚢🌊",
       "",
-      ...details(service && `Service: ${service}`),
+      ...details(service && `Service: ${service}`, eta && `Estimated Arrival: ${eta}`),
       "",
       "Next Steps:",
-      `No action needed from you. We'll send another update once ${isAir ? "your shipment lands in Manila" : "the ship docks in Manila"}.`,
+      "No action needed from you. We'll send another update once the ship docks in Manila.",
+      "",
+      track,
+      "",
+      thanks,
+    ]],
+
+    ["air-transit", "Air Transit", [
+      hi,
+      "",
+      "Your shipment is now on its flight to the Philippines. ✈️",
+      "",
+      ...details(service && `Service: ${service}`, eta && `Estimated Arrival: ${eta}`),
+      "",
+      "Next Steps:",
+      "No action needed from you. We'll send another update once your shipment lands in Manila.",
       "",
       track,
       "",
@@ -201,25 +239,6 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
       thanks,
     ]],
 
-    ["payment-request", "Payment Request", [
-      hi,
-      "",
-      "Your shipment is almost ready for release! Just one more step before we can arrange your pickup or delivery.",
-      "",
-      ...details(paymentStatus && `Payment Status: ${paymentStatus}`),
-      "",
-      ...shippingCost,
-      "",
-      ...paymentInstructions,
-      "",
-      "Next Steps:",
-      "Please settle your shipping charges. You can also view your invoice in your KargoDoor customer portal: https://kargodoorph.com/customer/login",
-      "",
-      "Once your payment is confirmed, we'll schedule your pickup or delivery right away.",
-      "",
-      thanks,
-    ]],
-
     ["malabon-warehouse", "Malabon Warehouse", [
       hi,
       "",
@@ -239,6 +258,25 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
       thanks,
     ]],
 
+    ["payment-request", "Payment Instructions Reminder", [
+      hi,
+      "",
+      "Your shipment is almost ready for release! Just one more step before we can arrange your pickup or delivery.",
+      "",
+      ...details(paymentStatus && `Payment Status: ${paymentStatus}`),
+      "",
+      ...shippingCost,
+      "",
+      ...paymentInstructions,
+      "",
+      "Next Steps:",
+      "Please settle your shipping charges. You can also view your invoice in your KargoDoor customer portal: https://kargodoorph.com/customer/login",
+      "",
+      "Once your payment is confirmed, we'll schedule your pickup or delivery right away.",
+      "",
+      thanks,
+    ]],
+
     ["out-for-delivery", "Out for Delivery", [
       hi,
       "",
@@ -254,7 +292,7 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
       thanks,
     ]],
 
-    ["delivered", "Shipment Delivered", [
+    ["delivered", "Delivered", [
       hi,
       "",
       "Your KargoDoor shipment has been delivered! 🎉",
@@ -281,7 +319,73 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
     ]],
   ];
 
-  return messages.map(([key, title, lines]) => [key, title, finishMessage(lines)]);
+  const finished: Array<[string, string, string]> = messages.map(([key, title, lines]) => [key, title, finishMessage(lines)]);
+  const pickupAt = finished.findIndex(([key]) => key === "malabon-warehouse") + 1;
+  finished.splice(pickupAt, 0, ["pickup-instructions", "Pickup Instructions", pickupInstructionsMessage(text(input.customerName) || "there")]);
+  return finished;
+}
+
+/**
+ * Malabon warehouse pickup steps, worded by Em (2026-11-02). Plain text:
+ * Messenger shows **bold** markers literally, so they are left out.
+ */
+export function pickupInstructionsMessage(customerName: string): string {
+  return [
+    "📦 KARGODOOR PH – WAREHOUSE PICKUP INSTRUCTIONS",
+    "",
+    `Hi ${customerName}! 😊`,
+    "",
+    "Your shipment is ready for pickup! Please follow the instructions below for a smooth release.",
+    "",
+    "📍 PICKUP LOCATION",
+    "36 Rivera St., Brgy. Tañong, Malabon City",
+    "",
+    "━━━━━━━━━━━━━━",
+    "",
+    "📋 PICKUP PROCEDURE",
+    "",
+    "1️⃣ Proceed to Window 1",
+    "Upon arrival, fill out the Pickup Form with:",
+    "",
+    "• Date",
+    "• Representative's Full Name",
+    "• Vehicle Plate Number",
+    "• Customer/Cargo Code",
+    "• Number of Packages",
+    "",
+    "2️⃣ Submit Your Documents",
+    "Submit the completed form to the Front Desk together with two (2) valid government-issued IDs of the pickup representative.",
+    "",
+    "3️⃣ Wait for Verification",
+    "After verification, proceed to the designated waiting area and wait for your name or queue number to be called.",
+    "",
+    "4️⃣ Cargo Release",
+    "When called, proceed to the releasing area to collect your packages.",
+    "",
+    "━━━━━━━━━━━━━━",
+    "",
+    "🕒 PICKUP SCHEDULE & VEHICLE RESTRICTIONS",
+    "",
+    "✅ Recommended Off-Peak Hours",
+    "• 7:00 AM – 8:00 AM",
+    "• 4:00 PM – 7:00 PM",
+    "",
+    "🚚 Vehicles Over 16 Feet",
+    "Not allowed during peak hours: 9:00 AM – 4:00 PM.",
+    "",
+    "🚛 Wingvan Trucks",
+    "Allowed only from 10:00 PM – 2:00 AM.",
+    "",
+    "━━━━━━━━━━━━━━",
+    "",
+    "⚠️ IMPORTANT REMINDERS",
+    "",
+    "• Shipping charges must be fully settled before cargo release.",
+    "• Pickup representatives must bring two valid government-issued IDs.",
+    "• Please coordinate your pickup schedule with our team in advance.",
+    "",
+    "Thank you for trusting KargoDoorPH.com! 💚",
+  ].join("\n");
 }
 
 export type InvoiceMessageInput = {

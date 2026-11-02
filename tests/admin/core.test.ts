@@ -37,7 +37,8 @@ import {
   requireAdminMutation,
 } from "../../lib/admin/security";
 import { expensesPage, saveExpense, mutateExpense } from "../../lib/admin/expenses";
-import { customerShippingInstructions, customerWarehouseAddressMessage, shipmentShippingInstructions, warehouseAddress } from "../../lib/admin/shipping-instructions";
+import { customerShippingInstructions, customerWarehouseAddressMessage, nihaoAddressBook, shipmentShippingInstructions, warehouseAddress } from "../../lib/admin/shipping-instructions";
+import { notificationKeyFor, shipmentStatusMessages } from "../../lib/admin/customer-messages";
 function database(includePhase1 = true) {
   const sql = new DatabaseSync(":memory:");
   sql.exec("PRAGMA foreign_keys=ON");
@@ -157,34 +158,39 @@ const shipmentInput = (id: string) =>
 const shipment = (id: string) => shipmentSchema.parse(shipmentInput(id));
 
 test("shipping instructions include the customer account code and supplier details", () => {
-  const customerMessage = customerShippingInstructions({ name: "Maria", customerCode: "KD-10025", warehouse: "Guangzhou" });
+  const customerMessage = customerShippingInstructions({ name: "Maria", customerCode: "KD-10025", service: "Air Freight", warehouse: "Guangzhou" });
   assert.match(customerMessage, /Hi Maria/);
-  assert.match(customerMessage, /Account\/Cargo Code: KD-10025/);
-  assert.match(customerMessage, /place KD-10025 clearly on every package/);
+  assert.match(customerMessage, /Cargo Code: KD-10025/);
+  assert.match(customerMessage, /Shipping Method: Air Freight ✈️/);
+  assert.match(customerMessage, /Assigned Warehouse: Guangzhou/);
   assert.match(customerMessage, /广州市白云区江高镇沙溪东路18号166通达仓库/);
-  assert.match(customerMessage, /发货前注意重要事项/);
-  assert.match(customerMessage, /IMPORTANT REMINDERS BEFORE SHIPPING/);
-  assert.ok(customerMessage.includes("Customer Cargo Code: KDOOR-XXXX"));
-  assert.match(customerMessage, /will NOT accept packages with incomplete labels/);
+  assert.match(customerMessage, /中文说明（请转发供应商）/);
+  assert.match(customerMessage, /ENGLISH – SHIPPING REMINDERS/);
+  assert.ok(customerMessage.includes("SEA KD-10025"));
+  assert.ok(customerMessage.includes("AIR KD-10025"));
+  assert.match(customerMessage, /will NOT be accepted by the warehouse/);
+  assert.match(customerMessage, /ONCE SHIPPED, PLEASE SEND US/);
+  assert.match(customerMessage, /Thank you for trusting KargoDoorPH\.com! 💚$/);
 
   const addressMessage = customerWarehouseAddressMessage({ name: "Maria", customerCode: "KD-10025", warehouse: "Yiwu" });
   assert.match(addressMessage, /Hi Maria/);
   assert.match(addressMessage, /Account\/Cargo Code: KD-10025/);
   assert.ok(addressMessage.includes(warehouseAddress("Yiwu")));
-  assert.doesNotMatch(addressMessage, /发货前注意重要事项/);
-  assert.match(customerWarehouseAddressMessage({ name: "Maria", warehouse: "Hong Kong" }), /\[Add warehouse address\]/);
+  assert.doesNotMatch(addressMessage, /中文说明/);
+  assert.match(customerWarehouseAddressMessage({ name: "Maria", warehouse: "Taiwan" }), /\[Add warehouse address\]/);
+  assert.match(warehouseAddress("Hong Kong"), /香港新界葵涌贷柜码头路51-63号葵顺工业中心9楼E室/);
 
   const shipmentMessage = shipmentShippingInstructions({
     name: "Maria",
     customerCode: "KD-10025",
+    service: "Sea Freight",
     warehouse: "Guangzhou",
-    supplierCourier: "SF Express",
-    supplierWaybill: "SF123456",
   });
+  assert.match(shipmentMessage, /Shipping Method: Sea Freight 🚢/);
   assert.match(shipmentMessage, /Assigned Warehouse: Guangzhou/);
   assert.match(shipmentMessage, /广州市白云区江高镇沙溪东路18号166通达仓库/);
   assert.match(shipmentMessage, /Courier: SF Express/);
-  assert.match(shipmentMessage, /Tracking\/Waybill number: SF123456/);
+  assert.match(shipmentMessage, /Tracking\/Waybill No\.: SF123456789/);
   assert.match(shipmentMessage, /Packing List/);
   assert.match(warehouseAddress("Tongda Air Cargo"), /TONGDA AIR CARGO/);
 });
@@ -1467,4 +1473,29 @@ test("quotation shipments recalculate the KargoDoor charge from the verified siz
   assert.deepEqual(resolveQuotationShipmentCharge(null, { shipping_charge: 1000000, shipping_charge_source: "manual" }, 960000), { cost: 960000, source: "rate" });
   // A rate-following charge moves when the verified size changes again.
   assert.deepEqual(resolveQuotationShipmentCharge(950000, { shipping_charge: 950000, shipping_charge_source: "rate" }, 990000), { cost: 990000, source: "rate" });
+});
+
+test("shipment notifications include warehouse pickup instructions after Malabon Warehouse", () => {
+  const messages = shipmentStatusMessages({ customerName: "Maria", tracking: "KDSEA-123456" });
+  const keys = messages.map(([key]) => key);
+  assert.equal(keys.indexOf("pickup-instructions"), keys.indexOf("malabon-warehouse") + 1);
+  const body = messages.find(([key]) => key === "pickup-instructions")![2];
+  assert.match(body, /^📦 KARGODOOR PH – WAREHOUSE PICKUP INSTRUCTIONS\n\nHi Maria! 😊/);
+  assert.match(body, /36 Rivera St\., Brgy\. Tañong, Malabon City/);
+  assert.match(body, /Wingvan Trucks\nAllowed only from 10:00 PM – 2:00 AM\./);
+  assert.doesNotMatch(body, /\*\*/);
+  assert.match(body, /Thank you for trusting KargoDoorPH\.com! 💚$/);
+});
+
+test("shipment status notifications follow Em's order and Nihao addresses end with Malabon", () => {
+  const titles = shipmentStatusMessages({ customerName: "Maria" }).map(([, title]) => title);
+  assert.deepEqual(titles, [
+    "Awaiting Supplier Package", "China Warehouse", "China Port", "Sea Transit", "Air Transit", "Manila Port",
+    "Gatepass", "Malabon Warehouse", "Pickup Instructions", "Payment Instructions Reminder", "Out for Delivery",
+    "Delivered", "Feedback / Referral",
+  ]);
+  assert.equal(notificationKeyFor("Sea Transit", "Air Freight"), "air-transit");
+  assert.equal(notificationKeyFor("Sea Transit", "Sea Freight"), "sea-transit");
+  const book = nihaoAddressBook().map(([name]) => name);
+  assert.deepEqual(book, ["Guangzhou", "Yiwu", "Shishi", "Tongda Air Cargo", "Hong Kong", "Malabon Warehouse"]);
 });
