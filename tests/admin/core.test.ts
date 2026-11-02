@@ -1471,7 +1471,7 @@ test("expense filters and search combine with exact integer totals and clear res
     const response = await expensesPage(db, new URL(`https://admin.test/admin/finance/expenses?${query}`), "Admin", "token");
     assert.equal(response.status, 200);
     const html = await response.text();
-    for (const [i, row] of seed.entries()) assert.equal(html.includes(`<td>${row.description}</td>`), expected.includes(i), query);
+    for (const [i, row] of seed.entries()) assert.equal(html.includes(`<td class="exp-wide">${row.description}</td>`), expected.includes(i), query);
     assert.ok(html.includes(`<strong>₱${total}</strong>`), query + " total");
     assert.match(html, /href="\/admin\/finance\/expenses">Clear Filters/);
   }
