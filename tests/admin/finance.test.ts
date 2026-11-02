@@ -18,6 +18,7 @@ export function fixture() {
   sql.exec("ALTER TABLE shipments ADD COLUMN archived_at TEXT");
   sql.exec("ALTER TABLE invoices ADD COLUMN archived_at TEXT");
   sql.exec("ALTER TABLE shipments ADD COLUMN nihao_cost_source TEXT");
+  sql.exec(readFileSync("migrations/admin/0033_transfer_fee_collected.sql", "utf8"));
   sql.exec("INSERT INTO customers VALUES ('c','KDOOR0001','Test customer',NULL,'12345',NULL,NULL,NULL,'2026-01-01','2026-01-01')");
   const queries: string[] = [];
   const db = { prepare(query: string) {

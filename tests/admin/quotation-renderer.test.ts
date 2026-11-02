@@ -346,7 +346,7 @@ test("Sea Freight Solar Panels persists exact pricing and Edit renderer stays cl
   assert.equal(pricing.densityCharge, 74800);
   assert.equal(pricing.densityApplies, false);
   assert.equal(pricing.pricingMethod, "CBM-Based");
-  assert.equal(pricing.final, 79705);
+  assert.equal(pricing.final, 79735);
   assert.equal(row.backend_cost, 123456);
 
   const rehydratedEdit = await quotationsPage(
@@ -358,8 +358,8 @@ test("Sea Freight Solar Panels persists exact pricing and Edit renderer stays cl
   assert.match(editHtml, /data-existing-nihao-cost value="1234\.56"/);
   assert.match(readFileSync("public/admin-quotation-cargo.js", "utf8"), /name="nihao_cost"[^>]*value="\$\{saved\}"/);
 
-  assert.equal(row.calculated_amount, 7_970_500);
-  assert.equal(row.final_amount, 7_970_500);
+  assert.equal(row.calculated_amount, 7_973_500);
+  assert.equal(row.final_amount, 7_973_500);
 
   const edit = await quotationsPage(
     new Request(`http://localhost:3000/admin/quotations?edit=${row.id}`, {
@@ -437,9 +437,9 @@ test("Sea Freight Solar Panels persists exact pricing and Edit renderer stays cl
   assert.equal(updatedPricing.densityCharge, 74800);
   assert.equal(updatedPricing.densityApplies, false);
   assert.equal(updatedPricing.pricingMethod, "CBM-Based");
-  assert.equal(updatedPricing.final, 79800);
+  assert.equal(updatedPricing.final, 79830);
 
-  assert.equal(updated.calculated_amount, 7_980_000);
+  assert.equal(updated.calculated_amount, 7_983_000);
   assert.equal(updated.override_amount, 8_100_000);
   assert.equal(updated.override_reason, "Approved customer adjustment");
   assert.equal(updated.final_amount, 8_100_000);

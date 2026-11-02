@@ -21,6 +21,7 @@ export type ShipmentStatement = {
   payments: StatementPayment[];
   niHaoPayments: StatementPayment[];
   transferFees: number;
+  transferFeeCollected: number;
   profitAfterFees: number | null;
   billed: number;
   collected: number;
@@ -55,6 +56,8 @@ function summarize(shipment: Row, invoice: Row | null, payments: StatementPaymen
     profit,
     marginPercent: profit === null || charge === 0 ? null : (profit / charge) * 100,
     transferFees,
+    // The flat transfer fee included in the freight charge (internal label only).
+    transferFeeCollected: num(shipment.transfer_fee_collected),
     profitAfterFees: profit === null ? null : profit - transferFees,
   };
 }
@@ -197,6 +200,9 @@ export function shipmentStatementPdf(statement: ShipmentStatement, today = phili
       : row("Freight charge - Ni Hao cost",
         `${peso(statement.profit)}  |  ${(statement.marginPercent ?? 0).toFixed(1)}% margin${(statement.marginPercent ?? 0) < marginTarget ? `  (below ${marginTarget}% target)` : ""}`,
         (statement.marginPercent ?? 0) < marginTarget),
+    ...(statement.transferFeeCollected
+      ? [row("Transfer fee collected (in freight charge)", peso(statement.transferFeeCollected))]
+      : []),
     ...(statement.transferFees
       ? [row("Bank transfer fees", peso(statement.transferFees)),
         row("Profit after transfer fees", statement.profitAfterFees === null ? "-" : peso(statement.profitAfterFees))]
@@ -250,7 +256,7 @@ export async function shipmentsLedgerCsv(db: D1Database, today = philippineToday
     "China Received", "Arrived PH", "Verified CBM", "Verified kg", "Invoice No.", "Invoice Status", "KD Billed PHP",
     "Client Paid PHP", "Last Client Payment", "Balance Due PHP", "Ni Hao Cost PHP", "Ni Hao Cost Source",
     "Ni Hao Paid PHP", "Ni Hao Paid Date", "Ni Hao Reference", "Owed to Ni Hao PHP", "Freight Profit PHP", "Margin %",
-    "Transfer Fees PHP", "Profit After Fees PHP"];
+    "Transfer Fees PHP", "Profit After Fees PHP", "Transfer Fee Collected PHP"];
   const lines = shipments.map((shipment) => {
     const invoice = invoiceByShipment.get(String(shipment.id)) ?? null;
     const paid = (invoice ? paymentsByInvoice.get(String(invoice.id)) ?? [] : [])
@@ -267,7 +273,7 @@ export async function shipmentsLedgerCsv(db: D1Database, today = philippineToday
       sum.niHaoCost === null ? "" : shipment.nihao_cost_source === "estimate" ? "Estimate" : "Actual",
       php(sum.niHaoPaid), last?.date, niHaoPaid.map((p) => p.reference).filter(Boolean).join("; "),
       php(sum.niHaoOwed), php(sum.profit), sum.marginPercent === null ? "" : sum.marginPercent.toFixed(1),
-      php(sum.transferFees), php(sum.profitAfterFees),
+      php(sum.transferFees), php(sum.profitAfterFees), php(sum.transferFeeCollected),
     ].map(csvCell).join(",");
   });
   return new Response(`﻿${[columns.join(","), ...lines].join("\r\n")}\r\n`, {

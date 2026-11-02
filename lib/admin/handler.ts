@@ -48,7 +48,7 @@ import { manualShipmentRate, resolveManualShipmentCharge, resolveQuotationShipme
 import { airItems, itemCategories } from "./quotation-pricing";
 import { cargoCategory, cargoCategorySql, cargoItemSql, shipmentCargo, type ShipmentCargo } from "./shipment-cargo";
 import { resolveNiHaoCost, shipmentNiHaoEstimate, type NiHaoEstimate } from "./nihao-estimate";
-import { niHaoExpenseCategory, niHaoPaymentSection, readNiHaoPayment, recordNiHaoPayment } from "./nihao-payment";
+import { lastNiHaoTransferFee, niHaoExpenseCategory, niHaoPaymentSection, readNiHaoPayment, recordNiHaoPayment } from "./nihao-payment";
 import { readShipmentStatement, shipmentStatementPdf, shipmentsLedgerCsv, statementFilename } from "./shipment-statement";
 import { autoDraftInvoice } from "./billing";
 import { readShipmentBilling, recordShipmentPayment, shipmentPaymentSection } from "./shipment-payment";
@@ -1580,6 +1580,9 @@ export async function handleAdmin(
 
         const finance = [
           shipmentDetail("KargoDoor freight charge", `${money("shipping_charge")} ${chargeSourceTag(record.shipping_charge_source)}`),
+          ...(Number(record.transfer_fee_collected || 0) > 0
+            ? [shipmentDetail("Transfer fee (internal)", `${pesos(record.transfer_fee_collected)} <small class="muted">included in the freight charge; the customer sees one shipping fee</small>`)]
+            : []),
           shipmentDetail("Ni Hao freight cost", `${money("nihao_cost")} ${record.nihao_cost === null ? "" : niHaoSourceTag(record.nihao_cost_source)}`),
           shipmentDetail("Freight margin", marginValue),
           ...(Number(record.delivery_charge || 0) > 0
@@ -1762,6 +1765,7 @@ export async function handleAdmin(
             payment: await readNiHaoPayment(db, record.tracking_number),
             canWrite,
             justPaid: url.searchParams.get("nihao_paid") === "1",
+            suggestedFee: canWrite ? await lastNiHaoTransferFee(db) : null,
           })
         : "";
       const customerNotifications = entity === "shipments" && canWrite ? (() => {

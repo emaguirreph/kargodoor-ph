@@ -76,6 +76,7 @@ function database(includePhase1 = true) {
     sql.exec(readFileSync("migrations/admin/0030_manual_shipment_cargo.sql", "utf8"));
   if (includePhase1)
     sql.exec(readFileSync("migrations/admin/0031_manual_shipment_description_and_auto_charge.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0033_transfer_fee_collected.sql", "utf8"));
   const user = randomUUID();
   sql
     .prepare("INSERT INTO admin_users VALUES (?,?,?,?,?,?)")
@@ -253,7 +254,7 @@ test("live admin Air calculation delegates to the authoritative pricing engine",
   assert.equal(ordinary.rate, 500);
   assert.equal(ordinary.volumetricWeight, 16.7);
   assert.equal(ordinary.billableWeight, 17);
-  assert.equal(ordinary.final, 8500);
+  assert.equal(ordinary.final, 8530);
   const actualWeight = calculateAdminAirQuote({ freightType: "Air Freight", item: "Ordinary Items", cbm: "0.01", weight: "20.1", quantity: "1" });
   assert.equal(actualWeight.billableWeight, 21);
   assert.equal(calculateAdminAirQuote({ freightType: "Air Freight", item: "Liquid, Powder, Food, Computer Parts, Electronics", cbm: "0.01", weight: "1", quantity: "1" }).rate, 600);
@@ -261,7 +262,7 @@ test("live admin Air calculation delegates to the authoritative pricing engine",
   for (const [item, rate] of [["Mobile Phones", 950], ["Tablets", 1200], ["Laptop Computers", 2800]] as const) {
     const result = calculateAdminAirQuote({ freightType: "Air Freight", item, cbm: "0", weight: "0", quantity: "2" });
     assert.equal(result.rateBasis, "Per piece");
-    assert.equal(result.final, rate * 2);
+    assert.equal(result.final, rate * 2 + 30);
   }
 });
 test("live admin Sea calculation delegates to the authoritative pricing engine", () => {
@@ -270,14 +271,14 @@ test("live admin Sea calculation delegates to the authoritative pricing engine",
   assert.equal(solar.cbmRate, 9500);
   assert.equal(solar.packageTier, "KD Standard");
   assert.equal(solar.densityApplies, false);
-  assert.equal(solar.final.toFixed(2), "79666.34");
+  assert.equal(solar.final.toFixed(2), "79696.34");
   const denseSolar = calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Solar panels", cbm: "0.126", weight: "1000", units: "0" });
   assert.equal(denseSolar.category, "COMMODITIES");
   assert.equal(denseSolar.packageTier, "KD Max");
   assert.equal(denseSolar.densityApplies, true);
   assert.equal(denseSolar.base, 1700);
   assert.equal(denseSolar.densityCharge, 22000);
-  assert.equal(denseSolar.final, 22000);
+  assert.equal(denseSolar.final, 22030);
   assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Bags", cbm: "0.01", weight: "1", units: "0" }).packageTier, "KD Mini");
   assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Bags", cbm: "0.05", weight: "1", units: "0" }).packageTier, "KD Lite");
   assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Bags", cbm: "0.125", weight: "1", units: "0" }).packageTier, "KD Plus");
@@ -285,7 +286,7 @@ test("live admin Sea calculation delegates to the authoritative pricing engine",
   assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Bags", cbm: "1", weight: "500", units: "0" }).packageTier, "KD Max");
   assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Bags", cbm: "0.01", weight: "100", units: "0" }).packageTier, "KD Max");
   for (const item of ["Mobile phones", "Computers", "Tablets"])
-    assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item, cbm: "1", weight: "1", units: "1" }).final, 10750);
+    assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item, cbm: "1", weight: "1", units: "1" }).final, 10780);
   assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Mobile / computer parts & accessories", cbm: "1", weight: "1", units: "1" }).category, "MOBILE / COMPUTERS / TABLETS");
 });
 test("admin quotation density uses the strict 425 kg/CBM threshold", () => {
@@ -402,26 +403,26 @@ test("shipments added by hand carry their own cargo details and compute the Karg
   const sea = form({ cargo_description: "Kitchen organizers", cargo_item: "LED lights", shipping_charge: "" });
   assert.deepEqual([sea.cargo_description, sea.cargo_item, sea.cargo_category, sea.shipping_charge], ["Kitchen organizers", "LED lights", "COMMODITIES", null]);
   const seaCharge = resolveManualShipmentCharge(sea, null);
-  assert.deepEqual(seaCharge, { cost: 1187500, source: "rate" }, "1.25 CBM of Commodities × ₱9,500");
+  assert.deepEqual(seaCharge, { cost: 1190500, source: "rate" }, "1.25 CBM of Commodities × ₱9,500");
   const seaId = await saveRecord(db, "shipments", { ...sea, shipping_charge: seaCharge.cost, shipping_charge_source: seaCharge.source }, user, "", "");
   assert.deepEqual({ ...(await shipmentCargo(db, seaId)) }, { item: "Kitchen organizers", category: "LED lights (Commodities)", quotationId: null, quotationNumber: null });
   assert.equal((await shipmentNiHaoEstimate(db, seaId, sea))?.cost, 1062500, "1.25 CBM of Commodities × ₱8,500");
 
   // Saving the verified size with the charge untouched moves the charge to the new rate.
   const saved = sql.prepare("SELECT shipping_charge, shipping_charge_source FROM shipments WHERE id = ?").get(seaId)!;
-  const verified = form({ cargo_item: "LED lights", shipping_charge: "11875.00", verified_cbm: "1", verified_weight_kg: "300" });
-  assert.deepEqual(resolveManualShipmentCharge(verified, saved), { cost: 950000, source: "rate" });
+  const verified = form({ cargo_item: "LED lights", shipping_charge: "11905.00", verified_cbm: "1", verified_weight_kg: "300" });
+  assert.deepEqual(resolveManualShipmentCharge(verified, saved), { cost: 953000, source: "rate" });
   // A typed charge is kept, also after the size changes.
   assert.deepEqual(resolveManualShipmentCharge(form({ cargo_item: "LED lights", shipping_charge: "5000" }), saved), { cost: 500000, source: "manual" });
-  assert.deepEqual(resolveManualShipmentCharge(verified, { shipping_charge: 1187500, shipping_charge_source: "manual" }), { cost: 1187500, source: "manual" });
+  assert.deepEqual(resolveManualShipmentCharge(verified, { shipping_charge: 1190500, shipping_charge_source: "manual" }), { cost: 1190500, source: "manual" });
   // Clearing the box goes back to the rate; nothing to price and no charge is an error.
-  assert.deepEqual(resolveManualShipmentCharge({ ...verified, shipping_charge: null }, { shipping_charge: 500000, shipping_charge_source: "manual" }), { cost: 950000, source: "rate" });
+  assert.deepEqual(resolveManualShipmentCharge({ ...verified, shipping_charge: null }, { shipping_charge: 500000, shipping_charge_source: "manual" }), { cost: 953000, source: "rate" });
   assert.throws(() => resolveManualShipmentCharge(form({ shipping_charge: "" }), null), /Item \/ Commodity/);
 
   // Air piece items use Units.
   const air = form({ service_type: "Air Freight", status: "In Transit", cargo_item: "Mobile Phones", cargo_quantity: "3", shipping_charge: "" });
   assert.equal(air.cargo_category, "Mobile Phones");
-  assert.deepEqual(resolveManualShipmentCharge(air, null), { cost: 285000, source: "rate" }, "3 units × ₱950");
+  assert.deepEqual(resolveManualShipmentCharge(air, null), { cost: 288000, source: "rate" }, "3 units × ₱950");
   assert.equal((await shipmentNiHaoEstimate(db, "", air))?.cost, 240000, "3 units × ₱800");
 
   // Older hand-added shipments with only an "Item:" remarks line still get a Ni Hao estimate.
@@ -456,11 +457,11 @@ test("verified warehouse measurements recalculate Sea and Air freight and refres
     due_at: "",
   }, user);
   const sea = await verifiedShipmentFreight(db, seaShipment.shipmentId, 1, 500);
-  assert.deepEqual(sea, { shippingCharge: 950000, pricingMethod: "Density-Based" });
+  assert.deepEqual(sea, { shippingCharge: 953000, pricingMethod: "Density-Based" });
   await syncVerifiedFreightToInvoice(db, seaShipment.shipmentId, sea!.shippingCharge, user);
   const verifiedInvoice = sql.prepare("SELECT subtotal,total FROM invoices WHERE id=?").get(seaInvoice)!;
-  assert.equal(verifiedInvoice.subtotal, 950000);
-  assert.equal(verifiedInvoice.total, 960000);
+  assert.equal(verifiedInvoice.subtotal, 953000);
+  assert.equal(verifiedInvoice.total, 963000);
 
   const airQuotationId = insertQuotation(sql, {
     freightType: "Air Freight",
@@ -477,15 +478,15 @@ test("verified warehouse measurements recalculate Sea and Air freight and refres
   const airShipment = await createShipmentFromApprovedQuotation(db, user, airQuotationId);
   const air = await verifiedShipmentFreight(db, airShipment.shipmentId, 0.009, 1.02);
   assert.deepEqual(air, {
-    shippingCharge: 100000,
+    shippingCharge: 103000,
     pricingMethod: "CEILING(MAX(Declared Weight, CBM × 167)) × rate",
   });
 
   sql.prepare("UPDATE invoices SET status='Paid' WHERE id=?").run(seaInvoice);
   await syncVerifiedFreightToInvoice(db, seaShipment.shipmentId, 123400, user);
   const paidInvoice = sql.prepare("SELECT subtotal,total FROM invoices WHERE id=?").get(seaInvoice)!;
-  assert.equal(paidInvoice.subtotal, 950000);
-  assert.equal(paidInvoice.total, 960000);
+  assert.equal(paidInvoice.subtotal, 953000);
+  assert.equal(paidInvoice.total, 963000);
 });
 test("approved FCL quotations create an FCL shipment and invoice-ready manual rate", async () => {
   const { sql, db, user } = database();
@@ -1717,4 +1718,42 @@ test("Record payment on the shipment page makes and issues the invoice, records 
   assert.match(shipmentPaymentSection({ path: "/admin/shipments", csrf: "t", shipmentId, billing, canWrite: true }), /<strong>Paid<\/strong>/);
   await assert.rejects(recordShipmentPayment(db, pay("1.00"), actor), /already fully paid/);
   await assert.rejects(recordShipmentPayment(db, new URLSearchParams({ ...Object.fromEntries(pay("1")), extra: "x" }), actor), /Unexpected/);
+});
+
+test("₱30 transfer fee is inside every new shipping fee, shown only inside the admin, and reported as collected vs paid", async () => {
+  const { db, sql, user } = database();
+  const { transferFeePesos, seaQuote, airQuote } = await import("../../lib/admin/quotation-pricing");
+  const { getSeaEstimate, getAirEstimate } = await import("../../lib/shipping-estimate.mjs");
+  const { financeDashboard } = await import("../../lib/admin/finance-summary");
+  const { lastNiHaoTransferFee, niHaoPaymentSection } = await import("../../lib/admin/nihao-payment");
+  assert.equal(transferFeePesos, 30);
+  assert.equal(seaQuote("LOW VALUE GOODS", 0.01, 1).final, 280, "KD Mini ₱250 + ₱30");
+  assert.equal(airQuote("Mobile Phones", 0, 0, 1).final, 980, "1 phone ₱950 + ₱30");
+  assert.equal(getSeaEstimate(0.01, 1).amount, 280);
+  assert.equal(getAirEstimate(1).amount, 530);
+
+  // Existing shipments stay at 0; new ones get ₱30 (3000 centavos) by default.
+  const customerId = randomUUID();
+  const shipmentId = randomUUID();
+  sql.prepare("INSERT INTO customers (id, customer_code, full_name, mobile, created_at, updated_at) VALUES (?,?,?,?,?,?)")
+    .run(customerId, "KD-FEE", "Fee Tester", "+639170000004", "2026-10-01", "2026-10-01");
+  sql.prepare("INSERT INTO shipments (id, customer_id, tracking_number, service_type, china_warehouse, cbm, weight_kg, status, shipping_charge, delivery_charge, payment_status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)")
+    .run(shipmentId, customerId, "KDSEA900004", "Sea Freight", "Guangzhou", 0.01, 1, "China Warehouse", 28000, 0, "Unpaid", "2026-11-02", "2026-11-02");
+  assert.equal(sql.prepare("SELECT transfer_fee_collected AS fee FROM shipments WHERE id = ?").get(shipmentId)!.fee, 3000);
+
+  // Invoice it and record a ₱10 bank fee: Reports shows ₱30 collected, ₱10 paid, ₱20 left over.
+  sql.prepare("INSERT INTO invoices (id, invoice_number, customer_id, shipment_id, subtotal, delivery_charge, total, status, issued_at, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)")
+    .run(randomUUID(), "INV-FEE-1", customerId, shipmentId, 28000, 0, 28000, "Unpaid", "2026-11-02", "2026-11-02", "2026-11-02");
+  sql.prepare("INSERT INTO expenses (id, expense_date, category, payee, description, amount, payment_method, tracking_number, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)")
+    .run(randomUUID(), "2026-11-02", "Bank / Payment Fees", "GCash", "Transfer fee", 1000, "GCash", "KDSEA900004", "2026-11-02", "2026-11-02");
+  const reports = await (await financeDashboard(db, new URL("https://admin.local/admin/finance/reports?preset=all"), user, new Date("2026-11-02T08:00:00Z"), true, "reports")).text();
+  const section = reports.slice(reports.indexOf("<h2>Transfer fees</h2>"));
+  assert.match(section, /Collected[^<]*<\/span><strong>₱30\.00/);
+  assert.match(section, /Paid[^<]*<\/span><strong>₱10\.00/);
+  assert.match(section, /Left over<\/span><strong>₱20\.00/);
+
+  // The fee box on Mark Ni Hao paid is filled in from the last transfer.
+  assert.equal(await lastNiHaoTransferFee(db), 1000);
+  const form = niHaoPaymentSection({ path: "/admin/shipments", csrf: "t", shipmentId, trackingNumber: "KDSEA900004", nihaoCost: 20000, payment: null, canWrite: true, suggestedFee: 1000 });
+  assert.match(form, /name="transfer_fee"[^>]*value="10\.00"/);
 });
