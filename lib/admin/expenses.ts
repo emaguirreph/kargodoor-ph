@@ -176,9 +176,9 @@ export async function expensesPage(db: D1Database, url: URL, user: AdminUser | s
       filters.payment_method, filters.payment_method, filters.q, filters.q, filters.q, filters.q, filters.q)
     .all<RecordData>();
   const table = results.length ? `<div class="table"><table><thead><tr>
-    ${fields.map(([, label]) => `<th>${label}</th>`).join("")}${canWrite ? "<th>Actions</th>" : ""}</tr></thead><tbody>
-    ${results.map((row) => `<tr>${fields.map(([key]) => `<td>${key === "amount" ? esc(pesos(row[key])) : esc(row[key]) || "—"}</td>`).join("")}
-      ${canWrite ? `<td><a href="${path}?edit=${esc(encodeURIComponent(String(row.id)))}">Edit</a>${canDelete ? ` <a href="${path}?delete=${esc(encodeURIComponent(String(row.id)))}">Delete</a>` : ""}</td>` : ""}</tr>`).join("")}
+    ${canWrite ? "<th>Actions</th>" : ""}${fields.map(([, label]) => `<th>${label}</th>`).join("")}</tr></thead><tbody>
+    ${results.map((row) => `<tr>${canWrite ? `<td><a href="${path}?edit=${esc(encodeURIComponent(String(row.id)))}">Edit</a>${canDelete ? ` <a href="${path}?delete=${esc(encodeURIComponent(String(row.id)))}">Delete</a>` : ""}</td>` : ""}
+      ${fields.map(([key]) => `<td>${key === "amount" ? esc(pesos(row[key])) : esc(row[key]) || "—"}</td>`).join("")}</tr>`).join("")}
     </tbody></table></div>` : "<p>No expenses found.</p>";
   const notice = url.searchParams.get("deleted") === "1" ? "Expense deleted." : url.searchParams.get("updated") === "1" ? "Expense updated." : url.searchParams.get("saved") === "1" ? "Expense saved." : "";
   return page("Expenses", `${notice ? `<p class="notice" role="status">${notice}</p>` : ""}
