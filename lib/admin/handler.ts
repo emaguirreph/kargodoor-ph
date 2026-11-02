@@ -48,6 +48,7 @@ import { manualShipmentRate, resolveManualShipmentCharge, resolveQuotationShipme
 import { airItems, itemCategories } from "./quotation-pricing";
 import { cargoCategory, cargoCategorySql, cargoItemSql, shipmentCargo, type ShipmentCargo } from "./shipment-cargo";
 import { resolveNiHaoCost, shipmentNiHaoEstimate, type NiHaoEstimate } from "./nihao-estimate";
+import { niHaoPaymentSection, readNiHaoPayment, recordNiHaoPayment } from "./nihao-payment";
 
 /** Ni Hao cost input with the system estimate shown under it. Clearing the box saves the estimate. */
 const niHaoCostField = (record: RecordData, estimate: NiHaoEstimate | null) => {
@@ -478,6 +479,11 @@ export async function handleAdmin(
       }
 
       const action = form.get("action") ?? "";
+
+      if (entity === "shipments" && action === "nihao_paid") {
+        await recordNiHaoPayment(db, form, user);
+        return page("Saved", "", user.name, 303, { Location: `${path}?id=${encodeURIComponent(form.get("id") ?? "")}&nihao_paid=1` });
+      }
 
       if (action === "archive") {
         requireAdminDelete(user);
@@ -1708,6 +1714,18 @@ export async function handleAdmin(
       const shippingInstructions = !canWrite ? "" : entity === "customers"
         ? `<section><h2>Send Account Setup</h2><p class="muted">Send this first so the customer has their Account/Cargo Code and portal login before their supplier ships any package. Click Create Customer Account or Generate New Temporary Password above, and the same message appears with the temporary password filled in.</p><textarea id="${accountMessageId}" readonly aria-label="Account setup message" style="min-height:260px;white-space:pre-wrap">${esc(accountMessage)}</textarea><div class="actions">${copyButton(accountMessageId, "Copy account setup message")}</div>${copyScript()}</section>`
         : entity === "shipments" ? "" : `<section><h2>Send Warehouse Instructions</h2><p class="muted">The address of this shipment’s China warehouse is added automatically.</p><textarea id="${instructionId}" readonly aria-label="Warehouse instructions" style="min-height:260px;white-space:pre-wrap">${esc(instructionMessage)}</textarea><div class="actions">${copyButton(instructionId, "Copy warehouse instructions")}</div>${copyScript()}</section>`;
+      const niHaoPayment = entity === "shipments" && !record.archived_at && record.status !== "Cancelled"
+        ? niHaoPaymentSection({
+            path,
+            csrf: csrfToken(env, user.id, path),
+            shipmentId: id,
+            trackingNumber: record.tracking_number,
+            nihaoCost: record.nihao_cost,
+            payment: await readNiHaoPayment(db, record.tracking_number),
+            canWrite,
+            justPaid: url.searchParams.get("nihao_paid") === "1",
+          })
+        : "";
       const customerNotifications = entity === "shipments" && canWrite ? (() => {
         const messages = shipmentStatusMessages({
           customerName: linkedCustomer?.full_name,
@@ -1815,6 +1833,7 @@ export async function handleAdmin(
             </div>
           </section>
           ${portalSection}
+          ${niHaoPayment}
           ${shippingInstructions}
           ${customerNotifications}
         `,
