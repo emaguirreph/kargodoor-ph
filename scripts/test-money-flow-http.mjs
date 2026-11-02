@@ -198,7 +198,7 @@ try {
   html = await (await get(`/admin/shipments?id=${sid}`)).text();
   assert.ok(!html.includes('name="paid_from"') && !html.includes('action" value="nihao_paid"'), "shipment page has no payment forms");
   assert.ok(html.includes("Ni Hao payment") && html.includes("Not paid") && html.includes("Record in Edit shipment"));
-  assert.ok(html.includes('<details class="customer-notification"') && html.includes("Copy Message"), "messages listed like the quotation");
+  assert.ok(html.includes('<details class="customer-notification"') && !html.includes("Copy Message"), "messages listed like the quotation, no copy buttons");
   html = await (await get(`/admin/shipments?id=${sid}&edit=1`)).text();
   assert.ok(html.includes("shipment-money-kd") && html.includes("shipment-money-nh") && html.includes("Mark Ni Hao paid"));
   assert.ok(html.includes('form="nihao-payment-form" name="paid_from"') && html.includes('<form id="nihao-payment-form"'));
