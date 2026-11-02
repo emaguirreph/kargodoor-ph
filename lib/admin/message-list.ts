@@ -2,8 +2,8 @@ import { esc } from "./ui";
 
 /**
  * Copy-ready messages as a list, one row per message, like Quotation
- * Notifications: click a row to open it, then Copy Message. Uses <details>,
- * so it needs no inline script (the copy button uses /admin-copy.js).
+ * Notifications: click a row to open it, then select the text and copy it.
+ * No copy button (Em's choice). Uses <details>, so it needs no script.
  */
 export function messageList(options: {
   groupId: string;
@@ -24,7 +24,6 @@ export function messageList(options: {
       return `<details class="customer-notification"${isOpen ? " open" : ""}>
         <summary>${esc(title)}${marker}</summary>
         <textarea id="${esc(id)}" aria-label="${esc(title)} ${esc(ariaLabelSuffix)}" style="min-height:260px;white-space:pre-wrap">${esc(body)}</textarea>
-        <div class="actions"><button type="button" class="copy-shipment-message" data-copy-source="${esc(id)}">Copy Message</button></div>
       </details>`;
     })
     .join("");

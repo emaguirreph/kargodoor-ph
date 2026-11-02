@@ -1906,7 +1906,6 @@ export async function handleAdmin(
             openLabel: "assigned",
             ariaLabelSuffix: "warehouse address",
           }))}
-          ${copyScript()}
         </section>`;
       })() : "";
 
