@@ -3,6 +3,7 @@ import { expenseSchema } from "./validation";
 import { AdminError, type AdminUser } from "./security";
 import { esc, hidden, pesos } from "./ui";
 import { philippineToday } from "./finance-dates";
+import { bankAccountSelect, nihaoBankAccounts } from "./bank-accounts";
 
 /**
  * Paying Ni Hao for one shipment, from the shipment page.
@@ -20,6 +21,8 @@ export const transferFeeCategory = "Bank / Payment Fees";
 /** Where KargoDoor sent the money from, and the payment method it is saved as. */
 export const paidFromAccounts = { UnionBank: "Bank Transfer", GCash: "GCash", Cash: "Cash", Other: "Other" } as const;
 type PaidFrom = keyof typeof paidFromAccounts;
+/** The Bank Accounts page tags the expense with these KargoDoor accounts. */
+const paidFromBankAccount: Partial<Record<PaidFrom, string>> = { UnionBank: "kd-unionbank", GCash: "kd-gcash" };
 
 export type NiHaoPayment = {
   count: number;
@@ -47,7 +50,7 @@ export async function readNiHaoPayment(db: D1Database, trackingNumber: unknown):
   return { count: Number(row.count), amount: Number(row.amount), lastDate: String(row.last_date ?? ""), lastId: String(row.last_id ?? ""), fees: Number(fees?.amount ?? 0) };
 }
 
-const allowedFields = ["csrf", "action", "id", "expense_date", "amount", "payment_method", "paid_from", "transfer_fee", "reference_number", "notes"];
+const allowedFields = ["csrf", "action", "id", "expense_date", "amount", "payment_method", "paid_from", "paid_to_account", "transfer_fee", "reference_number", "notes"];
 
 /**
  * Records the Ni Hao payment for a shipment as a linked expense. The amount
@@ -80,6 +83,8 @@ export async function recordNiHaoPayment(db: D1Database, form: URLSearchParams, 
     reference_number: form.get("reference_number") ?? "",
     tracking_number: shipment.tracking_number,
     notes: form.get("notes") ?? "",
+    paid_from_account: (paidFrom && paidFromBankAccount[paidFrom]) ?? "",
+    paid_to_account: form.get("paid_to_account") ?? "",
   });
   // The bank's transfer fee is a business expense of its own, linked to the
   // same tracking number so the shipment statement can show it.
@@ -95,6 +100,8 @@ export async function recordNiHaoPayment(db: D1Database, form: URLSearchParams, 
       reference_number: values.reference_number ?? "",
       tracking_number: shipment.tracking_number,
       notes: "",
+      paid_from_account: values.paid_from_account ?? "",
+      paid_to_account: "",
     })
     : null;
 
@@ -105,11 +112,12 @@ export async function recordNiHaoPayment(db: D1Database, form: URLSearchParams, 
     // or two tabs cannot pay the same shipment twice.
     db.prepare(`INSERT INTO expenses
       (id, expense_date, category, payee, description, amount, payment_method,
-       reference_number, tracking_number, notes, created_by_admin_user_id, created_at, updated_at)
-      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+       reference_number, tracking_number, notes, paid_from_account, paid_to_account, created_by_admin_user_id, created_at, updated_at)
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       WHERE NOT EXISTS (SELECT 1 FROM expenses WHERE category = ? AND tracking_number = ? COLLATE NOCASE)`)
       .bind(expenseId, values.expense_date, values.category, values.payee, values.description, values.amount,
-        values.payment_method, values.reference_number, values.tracking_number, values.notes, user.id || null, now, now,
+        values.payment_method, values.reference_number, values.tracking_number, values.notes,
+        values.paid_from_account ?? null, values.paid_to_account ?? null, user.id || null, now, now,
         niHaoExpenseCategory, shipment.tracking_number),
     db.prepare(`UPDATE shipments SET nihao_cost = ?, nihao_cost_source = 'actual', updated_at = ?
       WHERE id = ? AND EXISTS (SELECT 1 FROM expenses WHERE id = ?)`)
@@ -123,11 +131,11 @@ export async function recordNiHaoPayment(db: D1Database, form: URLSearchParams, 
     ...(fee
       ? [db.prepare(`INSERT INTO expenses
           (id, expense_date, category, payee, description, amount, payment_method,
-           reference_number, tracking_number, notes, created_by_admin_user_id, created_at, updated_at)
-          SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+           reference_number, tracking_number, notes, paid_from_account, created_by_admin_user_id, created_at, updated_at)
+          SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
           WHERE EXISTS (SELECT 1 FROM expenses WHERE id = ?)`)
         .bind(crypto.randomUUID(), fee.expense_date, fee.category, fee.payee, fee.description, fee.amount,
-          fee.payment_method, fee.reference_number, fee.tracking_number, fee.notes, user.id || null, now, now, expenseId)]
+          fee.payment_method, fee.reference_number, fee.tracking_number, fee.notes, fee.paid_from_account ?? null, user.id || null, now, now, expenseId)]
       : []),
   ]);
   if (insert.meta.changes !== 1)
@@ -180,6 +188,7 @@ export function niHaoPaymentSection(options: {
         <label>Date paid *<input name="expense_date" type="date" required value="${esc(philippineToday())}"></label>
         <label>Amount paid (PHP) *<input name="amount" type="number" min="0.01" max="1000000000" step="0.01" required value="${esc(amountValue)}"></label>
         <label>Paid from<select name="paid_from">${accounts}</select></label>
+        ${bankAccountSelect("paid_to_account", "Paid to (Ni Hao account)", nihaoBankAccounts, "", "Not recorded")}
         <label>Transfer fee (PHP)<input name="transfer_fee" type="number" min="0" max="1000000" step="0.01" placeholder="e.g. 10.00" value="${options.suggestedFee ? esc((options.suggestedFee / 100).toFixed(2)) : ""}"><small class="muted" style="display:block">${options.suggestedFee ? "Filled in from your last transfer. Change it or clear it if there was no fee." : "Bank or GCash fee for this transfer, if any."}</small></label>
         <label>Reference / receipt no.<input name="reference_number" maxlength="160"></label>
         <label class="wide">Notes<textarea name="notes" maxlength="4000" placeholder="e.g. Ni Hao SOA number or Drive location"></textarea></label>

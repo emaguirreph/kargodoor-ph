@@ -38,6 +38,7 @@ import { financeDashboard } from "./finance-summary";
 import { financeCsv } from "./finance-report";
 import { expensesPage, mutateExpense } from "./expenses";
 import { financeCashPage, mutateFinanceCash } from "./finance-cash";
+import { financeAccountsPage } from "./finance-accounts";
 import { saveRecord, archiveOrCancelRecord } from "./data";
 import { page, esc, pesos, input, select, hidden, niHaoSourceTag } from "./ui";
 import { dashboard, finance, activity, saveStaffFollowUp } from "./reports";
@@ -255,7 +256,7 @@ function validateFormOrigin(
 
 export async function handleAdmin(
   request: Request,
-  view?: Entity | "finance" | "finance/expenses" | "finance/cash" | "finance/export" | "finance/reports" | "activity" | "leads" | "customer-preview",
+  view?: Entity | "finance" | "finance/expenses" | "finance/cash" | "finance/export" | "finance/reports" | "finance/accounts" | "activity" | "leads" | "customer-preview",
 ) {
   let localChallenge = false;
 
@@ -677,6 +678,9 @@ export async function handleAdmin(
     }
     if (view === "finance/cash") {
       return await financeCashPage(db, url, user.name, csrfToken(env, user.id, path), canWrite);
+    }
+    if (view === "finance/accounts") {
+      return await financeAccountsPage(db, url, user.name, canWrite);
     }
 
     if (view === "finance/export") {

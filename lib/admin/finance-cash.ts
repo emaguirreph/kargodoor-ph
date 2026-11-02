@@ -4,13 +4,14 @@ import { cashEntrySchema, cashEntryTypes, type RecordData } from "./validation";
 import { AdminError } from "./security";
 import { esc, hidden, input, page, pesos } from "./ui";
 import { philippineToday } from "./finance-dates";
+import { bankAccountLabel, bankAccountSelect, kargodoorBankAccounts } from "./bank-accounts";
 
 const path = "/admin/finance/cash";
-const cashTypes = new Set(["Opening Cash Balance", "Owner Contribution", "Other Cash Received", "Customer Payment Received", "Adjustment Increase"]);
+export const cashTypes = new Set(["Opening Cash Balance", "Owner Contribution", "Other Cash Received", "Customer Payment Received", "Adjustment Increase"]);
 const receivableType = "Customer Reimbursement Due";
 
 type Customer = { id: string; customer_code: string; full_name: string };
-type CashEntry = RecordData & { id: string; entry_date: string; entry_type: string; amount: number; customer_name: string | null; customer_code: string | null };
+type CashEntry = RecordData & { id: string; entry_date: string; entry_type: string; amount: number; bank_account: string | null; customer_name: string | null; customer_code: string | null };
 
 type AutomaticPayment = {
   payment_date: string;
@@ -42,7 +43,7 @@ function customerSelect(rows: Customer[], value: unknown) {
 }
 
 async function saveCashEntry(db: D1Database, form: URLSearchParams) {
-  const allowed = ["entry_date", "entry_type", "customer_id", "related_entry_id", "amount", "reference_number", "notes", "csrf"];
+  const allowed = ["entry_date", "entry_type", "customer_id", "related_entry_id", "amount", "reference_number", "notes", "bank_account", "csrf"];
   for (const key of form.keys()) if (!allowed.includes(key) || form.getAll(key).length !== 1) throw new AdminError("Unexpected or repeated cash entry field.");
   const values = cashEntrySchema.parse(Object.fromEntries(allowed.filter((key) => key !== "csrf").map((key) => [key, form.get(key) ?? ""])));
   if (values.related_entry_id) {
@@ -50,9 +51,9 @@ async function saveCashEntry(db: D1Database, form: URLSearchParams) {
     if (!related || related.entry_type !== receivableType || related.customer_id !== values.customer_id) throw new AdminError("Choose an outstanding balance due for this customer payment.");
   }
   const now = new Date().toISOString();
-  await db.prepare(`INSERT INTO finance_cash_entries (id, entry_date, entry_type, customer_id, related_entry_id, amount, reference_number, notes, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .bind(crypto.randomUUID(), values.entry_date, values.entry_type, values.customer_id, values.related_entry_id, values.amount, values.reference_number, values.notes, now, now).run();
+  await db.prepare(`INSERT INTO finance_cash_entries (id, entry_date, entry_type, customer_id, related_entry_id, amount, reference_number, notes, bank_account, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(crypto.randomUUID(), values.entry_date, values.entry_type, values.customer_id, values.related_entry_id, values.amount, values.reference_number, values.notes, values.bank_account, now, now).run();
 }
 
 export async function financeCashPage(db: D1Database, url: URL, user: string, csrf: string, canWrite = true) {
@@ -60,19 +61,25 @@ export async function financeCashPage(db: D1Database, url: URL, user: string, cs
   const customerRows = await customers(db);
   if (add) {
     const selected = url.searchParams.get("type") ?? "";
-    const form: RecordData = { entry_type: cashEntryTypes.includes(selected as never) ? selected : "", entry_date: philippineToday() };
+    const account = url.searchParams.get("bank_account") ?? "";
+    const form: RecordData = {
+      entry_type: cashEntryTypes.includes(selected as never) ? selected : "",
+      entry_date: philippineToday(),
+      bank_account: kargodoorBankAccounts.some((option) => option.id === account) ? account : "",
+    };
     return page("Add Cash or Customer Credit", `<section><p class="notice"><strong>How this works:</strong> Expenses record money KargoDoor pays out. Use <strong>Customer Reimbursement Due</strong> only after recording the expense; it tracks what the customer owes and does not count as cash or income until payment is received.</p>
       <form method="post" action="${path}">${hidden("csrf", csrf)}<div class="grid">
       ${selectField("entry_type", "Entry type *", cashEntryTypes, form.entry_type, "Select entry type")}
       ${input("entry_date", "Date", form, "date", true)}
       ${customerSelect(customerRows, form.customer_id)}
+      ${bankAccountSelect("bank_account", "KargoDoor account", kargodoorBankAccounts, form.bank_account, "Not recorded / cash")}
       <label>Balance due being paid (optional)<input name="related_entry_id" maxlength="36" placeholder="Enter the reimbursement record ID when settling it"></label>
       ${amountInput(form)}${input("reference_number", "Reference number", form)}
       <label class="wide">Notes *<textarea name="notes" required maxlength="4000"></textarea></label></div>
-      <p class="muted">Opening Cash Balance: starting cash only. Owner Contribution: business funds added by the owner. Adjustment: correction only—state why in Notes. Customer Payment Received: cash received and, when applicable, link the reimbursement record it settles.</p>
+      <p class="muted">KargoDoor account: where the money went in (or, for Adjustment Decrease, came out). Leave it blank for cash or a Customer Reimbursement Due. Opening Cash Balance: starting cash only. Owner Contribution: business funds added by the owner. Adjustment: correction only—state why in Notes. Customer Payment Received: cash received and, when applicable, link the reimbursement record it settles.</p>
       <div class="actions"><button type="submit">Save entry</button><a href="${path}">Cancel</a></div></form></section>`, user, 200, {}, canWrite);
   }
-  const { results } = await db.prepare(`SELECT e.id, e.entry_date, e.entry_type, e.amount, e.reference_number, e.notes, c.full_name AS customer_name, c.customer_code
+  const { results } = await db.prepare(`SELECT e.id, e.entry_date, e.entry_type, e.amount, e.bank_account, e.reference_number, e.notes, c.full_name AS customer_name, c.customer_code
     FROM finance_cash_entries e LEFT JOIN customers c ON c.id = e.customer_id ORDER BY e.entry_date DESC, e.created_at DESC`).all<CashEntry>();
   const { results: automaticPayments } = await db.prepare(`
     SELECT
@@ -124,7 +131,7 @@ export async function financeCashPage(db: D1Database, url: URL, user: string, cs
     .join("") ||
     `<tr><td colspan="6">No invoice payments recorded yet.</td></tr>`;
 
-  const rows = results.map((entry) => `<tr><td>${esc(entry.entry_date)}</td><td><strong>${esc(entry.entry_type)}</strong></td><td>${esc(entry.customer_name ? `${entry.customer_name} (${entry.customer_code})` : "—")}</td><td>${esc(pesos(entry.amount))}</td><td>${esc(entry.reference_number) || "—"}</td><td>${esc(entry.notes)}</td><td><code>${esc(entry.id)}</code></td></tr>`).join("") || `<tr><td colspan="7">No manual cash or customer-credit records yet.</td></tr>`;
+  const rows = results.map((entry) => `<tr><td>${esc(entry.entry_date)}</td><td><strong>${esc(entry.entry_type)}</strong></td><td>${esc(entry.customer_name ? `${entry.customer_name} (${entry.customer_code})` : "—")}</td><td>${esc(pesos(entry.amount))}</td><td>${esc(bankAccountLabel(entry.bank_account)) || "—"}</td><td>${esc(entry.reference_number) || "—"}</td><td>${esc(entry.notes)}</td><td><code>${esc(entry.id)}</code></td></tr>`).join("") || `<tr><td colspan="8">No manual cash or customer-credit records yet.</td></tr>`;
   return page("Cash Flow & Customer Credits", `
     <section>
       <p class="notice">
@@ -137,6 +144,7 @@ export async function financeCashPage(db: D1Database, url: URL, user: string, cs
         ${canWrite ? `<a class="button" href="${path}?new=1">+ Add Manual Record</a>` : ""}
         <a href="/admin/finance">Finance Dashboard</a>
         <a href="/admin/finance/expenses">Expenses</a>
+        <a href="/admin/finance/accounts">Bank Accounts</a>
       </div>
     </section>
 
@@ -183,6 +191,7 @@ export async function financeCashPage(db: D1Database, url: URL, user: string, cs
               <th>Type</th>
               <th>Customer</th>
               <th>Amount</th>
+              <th>Account</th>
               <th>Reference</th>
               <th>Notes</th>
               <th>Record ID</th>
