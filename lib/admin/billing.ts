@@ -610,12 +610,7 @@ export async function recordPayment(
     );
   }
 
-  if (invoice.status === "Draft") {
-    throw new AdminError(
-      "Issue the invoice before recording a payment.",
-      409,
-    );
-  }
+  const issuingDraft = invoice.status === "Draft";
 
   if (invoice.status === "Paid") {
     throw new AdminError(
@@ -648,7 +643,68 @@ export async function recordPayment(
     customer_id: invoice.customer_id,
   };
 
+  /*
+   * A payment on a Draft invoice issues it first, dated on the payment
+   * date, so the admin does not have to issue it in a separate step.
+   */
+  const issueStatements = issuingDraft
+    ? [
+        db
+          .prepare(
+            `
+            UPDATE invoices
+            SET
+              status = 'Unpaid',
+              issued_at = COALESCE(issued_at, ?),
+              updated_at = ?
+            WHERE
+              id = ?
+              AND status = 'Draft'
+              AND archived_at IS NULL
+            `,
+          )
+          .bind(
+            values.payment_date,
+            timestamp,
+            invoice.id,
+          ),
+        db
+          .prepare(
+            `
+            INSERT INTO activity_log (
+              id,
+              admin_user_id,
+              action,
+              entity_type,
+              entity_id,
+              old_value,
+              new_value,
+              notes,
+              created_at
+            )
+            VALUES (?,?,?,?,?,?,?,?,?)
+            `,
+          )
+          .bind(
+            randomUUID(),
+            adminId,
+            "issue_invoice",
+            "invoices",
+            invoice.id,
+            JSON.stringify({ status: "Draft" }),
+            JSON.stringify({
+              status: "Unpaid",
+              issued_at: invoice.issued_at ?? values.payment_date,
+              due_at: invoice.due_at ?? null,
+            }),
+            "Issued automatically when a payment was recorded.",
+            timestamp,
+          ),
+      ]
+    : [];
+
   const statements = [
+    ...issueStatements,
     db
       .prepare(
         `
@@ -851,7 +907,7 @@ export async function recordPayment(
 
   const result = await db.batch(statements);
 
-  if (!result[0]?.meta.changes) {
+  if (!result[issueStatements.length]?.meta.changes) {
     throw new AdminError(
       "Invoice changed while the payment was being saved. Reload and try again.",
       409,
@@ -1043,8 +1099,9 @@ function paymentForm(
   invoice: RecordData,
 ) {
   if (
-    invoice.status === "Draft" ||
-    invoice.status === "Paid"
+    invoice.status === "Paid" ||
+    invoice.status === "Void" ||
+    invoice.archived_at
   ) {
     return "";
   }
@@ -1054,6 +1111,9 @@ function paymentForm(
   return `
     <section>
       <h2>Record payment</h2>
+      ${invoice.status === "Draft"
+        ? '<p class="muted">This invoice is still a Draft. Recording a payment issues it automatically, dated on the payment date.</p>'
+        : ""}
 
       <form method="post" action="${route}">
         ${hidden(
