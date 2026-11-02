@@ -1,4 +1,4 @@
-import { finishMessage } from "./customer-messages";
+import { finishMessage, messageFooter } from "./customer-messages";
 
 export type ShippingInstructionCustomer = {
   name?: unknown;
@@ -173,7 +173,7 @@ function shippingInstructionsMessage(details: ShippingInstructionCustomer): stri
     "",
     "📦 Shipping Reminder: Final shipping charges will be based on the actual CBM and weight verified by our China warehouse, using the applicable freight rates.",
     "",
-    "Thank you for trusting KargoDoorPH.com! 💚",
+    messageFooter,
   ].join("\n");
 }
 
@@ -204,7 +204,6 @@ export function customerWelcomeMessage(customer: PortalAccessMessage): string {
     "",
     "You can use the portal to view your shipment and payment updates anytime.",
     "",
-    "Thank you for choosing KargoDoor PH! 💚",
   ]);
 }
 
@@ -233,7 +232,6 @@ export function customerWarehouseAddressMessage(customer: ShippingInstructionCus
     "Next Steps:",
     `Please share this address with your supplier and ask them to place ${code} clearly on every package so we can receive and identify your cargo.`,
     "",
-    "Thank you for trusting KargoDoor PH! 💚",
   ]);
 }
 
@@ -242,8 +240,21 @@ export function customerPortalAccessMessage(portal: PortalAccessMessage): string
 }
 
 /** Every China warehouse with its full address, for the bottom of the shipment page. */
-export const malabonWarehouseAddress = `KARGODOOR PH – MALABON WAREHOUSE
-36 Rivera St., Brgy. Tañong, Malabon City`;
+/** Malabon warehouse, exactly as supplied by Em (2026-11-02). */
+export const malabonWarehouseAddress = `Tongda Malabon Warehouse Address
+PIN: FSW COMMERCIAL WAREHOUSE RENTAL
+Old 59, New 36 Rivera St Brgy Tañong Malabon City
+(Color of Gate- Gray / Nearest Landmark McDonalds Rizal Ave)
+
+Warehouse Operational Hours
+7:00AM to 7:00PM
+Monday to Saturday
+
+Contact person: Alma / Elyza / Tiffany / Rhea/ Maylin
+09175188335    09175188339
+
+REMINDER: NEW POLICY
+LONG VEHICLE WITH MORE THAN 16FEET LENGTH NOT ALLOWED DURING PEAK HOURS 9:00AM TO 4:00PM`;
 
 /** Addresses for Nihao: every China warehouse, Hong Kong, then our Malabon warehouse. */
 export function nihaoAddressBook(): Array<[string, string]> {

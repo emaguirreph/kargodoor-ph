@@ -170,7 +170,7 @@ test("shipping instructions include the customer account code and supplier detai
   assert.ok(customerMessage.includes("AIR KD-10025"));
   assert.match(customerMessage, /will NOT be accepted by the warehouse/);
   assert.match(customerMessage, /ONCE SHIPPED, PLEASE SEND US/);
-  assert.match(customerMessage, /Thank you for trusting KargoDoorPH\.com! 💚$/);
+  assert.match(customerMessage, /Thank you for trusting KargoDoorPH\.com! 💚 💙$/);
 
   const addressMessage = customerWarehouseAddressMessage({ name: "Maria", customerCode: "KD-10025", warehouse: "Yiwu" });
   assert.match(addressMessage, /Hi Maria/);
@@ -1510,21 +1510,46 @@ test("shipment notifications include warehouse pickup instructions after Malabon
   assert.equal(keys.indexOf("pickup-instructions"), keys.indexOf("malabon-warehouse") + 1);
   const body = messages.find(([key]) => key === "pickup-instructions")![2];
   assert.match(body, /^📦 KARGODOOR PH – WAREHOUSE PICKUP INSTRUCTIONS\n\nHi Maria! 😊/);
-  assert.match(body, /36 Rivera St\., Brgy\. Tañong, Malabon City/);
+  assert.match(body, /Old 59, New 36 Rivera St Brgy Tañong Malabon City/);
+  assert.match(body, /FSW COMMERCIAL WAREHOUSE RENTAL/);
   assert.match(body, /Wingvan Trucks\nAllowed only from 10:00 PM – 2:00 AM\./);
   assert.doesNotMatch(body, /\*\*/);
-  assert.match(body, /Thank you for trusting KargoDoorPH\.com! 💚$/);
+  assert.match(body, /Thank you for trusting KargoDoorPH\.com! 💚 💙$/);
 });
 
 test("shipment status notifications follow Em's order and Nihao addresses end with Malabon", () => {
   const titles = shipmentStatusMessages({ customerName: "Maria" }).map(([, title]) => title);
   assert.deepEqual(titles, [
     "Awaiting Supplier Package", "China Warehouse", "China Port", "Sea Transit", "Air Transit", "Manila Port",
-    "Gatepass", "Malabon Warehouse", "Pickup Instructions", "Payment Instructions Reminder", "Out for Delivery",
+    "Gatepass", "Malabon Warehouse", "Pickup Instructions", "Lalamove Rider Pickup", "Payment Instructions Reminder", "Out for Delivery",
     "Delivered", "Feedback / Referral",
   ]);
   assert.equal(notificationKeyFor("Sea Transit", "Air Freight"), "air-transit");
   assert.equal(notificationKeyFor("Sea Transit", "Sea Freight"), "sea-transit");
   const book = nihaoAddressBook().map(([name]) => name);
   assert.deepEqual(book, ["Guangzhou", "Yiwu", "Shishi", "Tongda Air Cargo", "Hong Kong", "Malabon Warehouse"]);
+  assert.match(nihaoAddressBook()[5][1], /^Tongda Malabon Warehouse Address\nPIN: FSW COMMERCIAL WAREHOUSE RENTAL/);
+});
+
+test("every customer message ends with the KargoDoorPH.com footer, once", () => {
+  const all = [
+    ...shipmentStatusMessages({ customerName: "Maria", tracking: "KDSEA-1" }).map(([, , body]) => body),
+    customerShippingInstructions({ name: "Maria", customerCode: "KD-1", warehouse: "Yiwu" }),
+    customerWarehouseAddressMessage({ name: "Maria", customerCode: "KD-1", warehouse: "Yiwu" }),
+  ];
+  for (const body of all) {
+    assert.ok(body.endsWith("Thank you for trusting KargoDoorPH.com! 💚 💙"), body.slice(-80));
+    assert.equal(body.split("Thank you for trusting KargoDoorPH.com!").length, 2);
+    assert.doesNotMatch(body, /China to PH, Made SIMPLE/);
+  }
+});
+
+test("rider pickup message carries the shipment's KDOOR code", () => {
+  const rider = shipmentStatusMessages({ customerName: "Maria", cargoCode: "KDOOR-5560", tracking: "KDSEA-123456" })
+    .find(([key]) => key === "rider-pickup")![2];
+  assert.match(rider, /Cargo Code: KDOOR-5560/);
+  assert.match(rider, /Customer\/Cargo Code: KDOOR-5560/);
+  assert.match(rider, /Tracking No\.: KDSEA-123456/);
+  assert.match(rider, /FSW COMMERCIAL WAREHOUSE RENTAL/);
+  assert.ok(rider.endsWith("Thank you for trusting KargoDoorPH.com! 💚 💙"));
 });

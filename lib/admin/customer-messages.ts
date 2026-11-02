@@ -4,18 +4,16 @@
  * emoji instead of bold.
  */
 
-export const messageFooter = [
-  "—",
-  "KargoDoor PH",
-  "China to PH, Made SIMPLE.",
-  "🌐 www.kargodoorph.com",
-].join("\n");
+/** Sign-off at the end of every customer message (Em, 2026-11-02). */
+export const messageFooter = "Thank you for trusting KargoDoorPH.com! 💚 💙";
 
-const thanks = "Thank you for trusting KargoDoor PH! 💚";
+/** Older per-message sign-offs, replaced by messageFooter. */
+const legacySignOff = /^Thank you for (trusting|choosing|supporting) KargoDoor ?PH(\.com)?! 💚$/;
+
 
 /** Joins lines, drops empty optional lines and repeated blank lines, and adds the footer. */
 export function finishMessage(lines: Array<string | false | null | undefined>): string {
-  const kept = lines.filter((line): line is string => typeof line === "string");
+  const kept = lines.filter((line): line is string => typeof line === "string" && !legacySignOff.test(line));
   const body = kept.filter((line, index) => line !== "" || (index > 0 && kept[index - 1] !== ""));
   while (body.length && body[body.length - 1] === "") body.pop();
   return `${body.join("\n")}\n\n${messageFooter}`;
@@ -133,7 +131,6 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
       "",
       "As soon as your package arrives, we'll check it and send you the next update.",
       "",
-      thanks,
     ]],
 
     ["china-warehouse", "China Warehouse", [
@@ -161,7 +158,6 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
       "Next Steps:",
       "No action needed from you. We'll send you your updated shipping quotation and keep you posted on the next steps.",
       "",
-      thanks,
     ]],
 
     ["china-port", "China Port", [
@@ -178,7 +174,6 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
       "",
       track,
       "",
-      thanks,
     ]],
 
     ["sea-transit", "Sea Transit", [
@@ -193,7 +188,6 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
       "",
       track,
       "",
-      thanks,
     ]],
 
     ["air-transit", "Air Transit", [
@@ -208,7 +202,6 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
       "",
       track,
       "",
-      thanks,
     ]],
 
     ["manila-port", "Manila Port", [
@@ -223,7 +216,6 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
       "",
       track,
       "",
-      thanks,
     ]],
 
     ["gatepass", "Gatepass", [
@@ -236,7 +228,6 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
       "Next Steps:",
       "Your cargo is now on its way to our Malabon warehouse. We'll message you once it arrives so we can arrange your pickup or delivery.",
       "",
-      thanks,
     ]],
 
     ["malabon-warehouse", "Malabon Warehouse", [
@@ -255,7 +246,6 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
       "",
       ...paymentInstructions,
       "",
-      thanks,
     ]],
 
     ["payment-request", "Payment Instructions Reminder", [
@@ -274,7 +264,6 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
       "",
       "Once your payment is confirmed, we'll schedule your pickup or delivery right away.",
       "",
-      thanks,
     ]],
 
     ["out-for-delivery", "Out for Delivery", [
@@ -289,7 +278,6 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
       "",
       "We'll update you once your delivery is complete.",
       "",
-      thanks,
     ]],
 
     ["delivered", "Delivered", [
@@ -301,7 +289,6 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
       "",
       "We hope everything arrived in great condition. If you have any concerns about your cargo, just reply to this message and we'll help you right away.",
       "",
-      thanks,
       "",
       "SOURCE • SHIP • RECEIVE",
     ]],
@@ -315,14 +302,80 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
       "",
       "🤝 Know a friend, business owner, online seller, or entrepreneur who imports from China? We'd really appreciate your referral.",
       "",
-      "Thank you for supporting KargoDoor PH! 💚",
     ]],
   ];
 
   const finished: Array<[string, string, string]> = messages.map(([key, title, lines]) => [key, title, finishMessage(lines)]);
   const pickupAt = finished.findIndex(([key]) => key === "malabon-warehouse") + 1;
-  finished.splice(pickupAt, 0, ["pickup-instructions", "Pickup Instructions", pickupInstructionsMessage(text(input.customerName) || "there")]);
+  finished.splice(
+    pickupAt,
+    0,
+    ["pickup-instructions", "Pickup Instructions", pickupInstructionsMessage(text(input.customerName) || "there")],
+    ["rider-pickup", "Lalamove Rider Pickup", riderPickupMessage({ customerName: text(input.customerName), cargoCode: text(input.cargoCode), tracking: text(input.tracking) })],
+  );
   return finished;
+}
+
+/** For the Lalamove (or other) rider collecting cargo at Malabon for the customer. Built from Em's pickup instructions. */
+export function riderPickupMessage(input: { customerName?: string; cargoCode?: string; tracking?: string }): string {
+  const code = input.cargoCode || "[KDOOR code]";
+  return [
+    "🛵 KARGODOOR PH – RIDER PICKUP INSTRUCTIONS",
+    "",
+    "Hi Rider! 😊",
+    "",
+    "Thank you for picking up this KargoDoor PH shipment. Please follow the instructions below for a smooth release.",
+    "",
+    "📦 PICKUP DETAILS",
+    `Cargo Code: ${code}`,
+    input.tracking ? `Tracking No.: ${input.tracking}` : "",
+    input.customerName ? `Customer: ${input.customerName}` : "",
+    "Number of Packages: [Number of Packages]",
+    "",
+    "📍 PICKUP LOCATION",
+    "Tongda Malabon Warehouse",
+    "PIN: FSW COMMERCIAL WAREHOUSE RENTAL",
+    "Old 59, New 36 Rivera St Brgy Tañong Malabon City",
+    "(Color of Gate- Gray / Nearest Landmark McDonalds Rizal Ave)",
+    "",
+    "🕒 Warehouse Operational Hours: 7:00AM to 7:00PM, Monday to Saturday",
+    "📞 Contact person: Alma / Elyza / Tiffany / Rhea/ Maylin",
+    "09175188335    09175188339",
+    "",
+    "━━━━━━━━━━━━━━",
+    "",
+    "📋 PICKUP PROCEDURE",
+    "",
+    "1️⃣ Proceed to Window 1",
+    "Fill out the Pickup Form with:",
+    "",
+    "• Date",
+    "• Your Full Name",
+    "• Vehicle Plate Number",
+    `• Customer/Cargo Code: ${code}`,
+    "• Number of Packages",
+    "",
+    "2️⃣ Submit Your Documents",
+    "Submit the completed form to the Front Desk together with two (2) valid government-issued IDs.",
+    "",
+    "3️⃣ Wait for Verification",
+    "After verification, proceed to the designated waiting area and wait for your name or queue number to be called.",
+    "",
+    "4️⃣ Cargo Release",
+    "When called, proceed to the releasing area to collect the packages. Please check that the number of packages matches before leaving.",
+    "",
+    "━━━━━━━━━━━━━━",
+    "",
+    "🚚 VEHICLE RESTRICTIONS",
+    "• Vehicles over 16 feet: not allowed during peak hours, 9:00 AM – 4:00 PM.",
+    "• Wingvan trucks: allowed only from 10:00 PM – 2:00 AM.",
+    "",
+    "⚠️ IMPORTANT REMINDERS",
+    "• Bring two (2) valid government-issued IDs.",
+    `• Mention Cargo Code ${code} at Window 1.`,
+    "",
+    messageFooter,
+  ].filter((line, index, lines) => line !== "" || lines[index - 1] !== "").join("\n");
 }
 
 /**
@@ -338,7 +391,14 @@ export function pickupInstructionsMessage(customerName: string): string {
     "Your shipment is ready for pickup! Please follow the instructions below for a smooth release.",
     "",
     "📍 PICKUP LOCATION",
-    "36 Rivera St., Brgy. Tañong, Malabon City",
+    "Tongda Malabon Warehouse",
+    "PIN: FSW COMMERCIAL WAREHOUSE RENTAL",
+    "Old 59, New 36 Rivera St Brgy Tañong Malabon City",
+    "(Color of Gate- Gray / Nearest Landmark McDonalds Rizal Ave)",
+    "",
+    "🕒 Warehouse Operational Hours: 7:00AM to 7:00PM, Monday to Saturday",
+    "📞 Contact person: Alma / Elyza / Tiffany / Rhea/ Maylin",
+    "09175188335    09175188339",
     "",
     "━━━━━━━━━━━━━━",
     "",
@@ -384,7 +444,7 @@ export function pickupInstructionsMessage(customerName: string): string {
     "• Pickup representatives must bring two valid government-issued IDs.",
     "• Please coordinate your pickup schedule with our team in advance.",
     "",
-    "Thank you for trusting KargoDoorPH.com! 💚",
+    messageFooter,
   ].join("\n");
 }
 
@@ -450,7 +510,6 @@ export function invoiceMessages(input: InvoiceMessageInput): Array<[string, stri
       "",
       portal,
       "",
-      thanks,
     ]],
     ["payment-reminder", "Payment Reminder", [
       hi,
@@ -472,7 +531,6 @@ export function invoiceMessages(input: InvoiceMessageInput): Array<[string, stri
       "",
       "If you’ve already paid, please send us your payment receipt and we’ll update your account right away.",
       "",
-      thanks,
     ]],
     ["partial-payment", "Partial Payment Received", [
       hi,
@@ -491,7 +549,6 @@ export function invoiceMessages(input: InvoiceMessageInput): Array<[string, stri
       "Next Steps:",
       "Please settle the remaining balance so we can arrange the release of your cargo for pickup or delivery.",
       "",
-      thanks,
     ]],
     ["payment-received", "Payment Received (Fully Paid)", [
       hi,
@@ -504,7 +561,6 @@ export function invoiceMessages(input: InvoiceMessageInput): Array<[string, stri
       "Next Steps:",
       "We’ll now arrange your pickup or delivery schedule and keep you updated.",
       "",
-      thanks,
     ]],
   ];
 
