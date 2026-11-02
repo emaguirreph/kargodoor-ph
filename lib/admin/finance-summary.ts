@@ -71,7 +71,7 @@ const expenseDescriptions: Record<string, string> = {
   Utilities:
     "Electricity, water, internet, telephone, and similar utilities.",
   "Bank / Payment Fees":
-    "Bank, transfer, payment processing, and transaction fees.",
+    "Bank and GCash transfer fees (UnionBank or GCash to Ni Hao, GCash to UnionBank), payment processing and transaction fees.",
   "Repairs / Maintenance":
     "Repairs, servicing, maintenance, and business-property upkeep.",
   "Meals / Representation":
@@ -592,7 +592,7 @@ export function simpleSummarySection(
         After everything is collected and Ni Hao is paid:
         ${esc(financePesos(cash))} + ${esc(financePesos(comingIn))} − ${esc(financePesos(goingOut))} =
         <strong>${esc(financePesos(cash + comingIn - goingOut))}</strong>${goingOutUnknown ? ", less the Ni Hao costs not entered yet" : ""}.
-        When you pay Ni Hao, add it under Expenses as Freight / Ni Hao Cost with the tracking number, so it moves out of Money going out and into Money we have now.
+        When you pay Ni Hao, use Mark Ni Hao paid on the shipment page, so it moves out of Money going out and into Money we have now.
       </p>
 
     </section>
@@ -605,8 +605,13 @@ export async function financeDashboard(
   user: string,
   now = new Date(),
   canWrite = true,
+  mode: "today" | "reports" = "today",
 ) {
-  const range = financeRange(url, now);
+  const reports = mode === "reports";
+  const basePath = reports ? "/admin/finance/reports" : "/admin/finance";
+  // Money Today is always "as of now"; date ranges belong to Reports & BIR.
+  const rangeUrl = reports ? url : new URL("https://admin.local/admin/finance");
+  const range = financeRange(rangeUrl, now);
 
   const summary =
     await readFinanceSummary(
@@ -618,7 +623,7 @@ export async function financeDashboard(
   const report =
     await readFinanceReport(
       db,
-      url,
+      rangeUrl,
       now,
       summary,
     );
@@ -736,7 +741,7 @@ export async function financeDashboard(
     <section>
       <div class="actions">
         <h2>Cash on Hand</h2>
-        <a href="/admin/finance/cash">Cash Flow &amp; Customer Credits</a>
+        <a href="/admin/finance/cash">Money In records</a>
       </div>
 
       <div class="table">
@@ -1041,12 +1046,31 @@ export async function financeDashboard(
       range,
     )}`;
 
+  const downloads = `
+    <section>
+      <h2>Downloads for your CPA</h2>
+      <p class="muted">CSV files open in Excel or Google Sheets. Finance Summary uses the dates above; the others list everything.</p>
+      ${canWrite ? `<div class="actions">
+        <a class="button" href="${esc(exportLink)}">Finance Summary (this period)</a>
+        <a class="button" href="/admin/finance/export?ledger=shipments">Shipments Ledger (KD + Ni Hao)</a>
+        <a class="button" href="/admin/import-export?download=invoices">Sales: Invoices &amp; Payments</a>
+        <a class="button" href="/admin/import-export?download=expenses">Expenses</a>
+        <a class="button" href="/admin/import-export?download=cash-and-credits">Money In (not sales)</a>
+      </div>` : '<p class="muted">Downloads are for the owner and admins.</p>'}
+      <p class="muted">BIR books (sales book, expense book, quarterly tax worksheet) will be added here once your CPA confirms the tax type.</p>
+    </section>
+  `;
+
+  if (!reports) {
+    return moneyTodayPage(db, user, canWrite, simple, cashSection, unbilledSection, collectionWatch.results);
+  }
+
   return page(
-    "Finance",
+    "Reports & BIR",
     `
       <section>
         <form
-          action="/admin/finance"
+          action="${basePath}"
           method="get"
           class="search"
         >
@@ -1070,19 +1094,19 @@ export async function financeDashboard(
         </form>
 
         <div class="actions">
-          <a href="/admin/finance?preset=month">
+          <a href="${basePath}?preset=month">
             This Month
           </a>
 
-          <a href="/admin/finance?preset=last-month">
+          <a href="${basePath}?preset=last-month">
             Last Month
           </a>
 
-          <a href="/admin/finance?preset=year">
+          <a href="${basePath}?preset=year">
             This Year
           </a>
 
-          <a href="/admin/finance">
+          <a href="${basePath}">
             All Time
           </a>
         </div>
@@ -1106,21 +1130,9 @@ export async function financeDashboard(
         )
         .join("")}
 
-      ${simpleSummary}
+      ${downloads}
 
       ${summaryCards}
-
-      ${unbilledSection}
-
-      ${cashSection}
-
-      <section>
-        <div class="actions">
-          <h2>Collections to Follow Up</h2>
-          <a href="/admin/invoices">View Invoices</a>
-        </div>
-        ${collectionWatch.results.length ? `<div class="table"><table><thead><tr><th>Invoice</th><th>Customer</th><th>Due Date</th><th>Balance</th></tr></thead><tbody>${collectionWatch.results.map((invoice) => `<tr><td>${esc(invoice.invoice_number)}</td><td>${esc(invoice.full_name)}</td><td>${esc(invoice.due_at || "No due date")}</td><td><strong>${esc(financePesos(BigInt(invoice.total) - BigInt(invoice.paid)))}</strong></td></tr>`).join("")}</tbody></table></div>` : '<p class="muted">No unpaid invoice balances need follow-up.</p>'}
-      </section>
 
       ${shippingCards}
 
@@ -1178,23 +1190,6 @@ export async function financeDashboard(
       <section>
         <div class="actions">
           <h2>Monthly Summary</h2>
-
-          ${
-            canWrite
-              ? `<a
-                  class="button"
-                  href="${esc(exportLink)}"
-                >
-                  Export Finance CSV
-                </a>
-                <a
-                  class="button"
-                  href="/admin/finance/export?ledger=shipments"
-                >
-                  Export Shipments Ledger (KD + Ni Hao)
-                </a>`
-              : ""
-          }
         </div>
 
         ${monthly}
@@ -1371,6 +1366,86 @@ export async function financeDashboard(
           }
         }
 
+      </style>
+    `,
+    user,
+    200,
+    {},
+    canWrite,
+  );
+}
+
+type CollectionRow = { invoice_number: string; due_at: string | null; full_name: string; total: string; paid: string };
+
+/**
+ * Money Today: the five numbers that matter now and the short to-do list
+ * behind them (bill, collect, pay Ni Hao). Period reports live on
+ * Reports & BIR so nothing here is shown twice.
+ */
+async function moneyTodayPage(
+  db: D1Database,
+  user: string,
+  canWrite: boolean,
+  simple: SimpleSummary,
+  cashSection: string,
+  unbilledSection: string,
+  collections: CollectionRow[],
+) {
+  const { results: niHaoDue } = await db
+    .prepare(
+      `SELECT s.id, s.tracking_number, c.full_name, s.status,
+        CAST(s.nihao_cost AS TEXT) AS nihao_cost, s.nihao_cost_source
+      FROM shipments s
+      JOIN customers c ON c.id = s.customer_id
+      WHERE s.status != 'Cancelled'
+        AND s.archived_at IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM expenses e
+          WHERE e.category = ?
+            AND e.tracking_number = s.tracking_number
+        )
+      ORDER BY s.nihao_cost IS NULL, s.nihao_cost DESC, s.created_at ASC`,
+    )
+    .bind(freightExpenseCategory)
+    .all<{ id: string; tracking_number: string | null; full_name: string; status: string; nihao_cost: string | null; nihao_cost_source: string | null }>();
+
+  const collectionsSection = `
+    <section>
+      <div class="actions">
+        <h2>Collections to Follow Up</h2>
+        <a href="/admin/invoices">Invoices &amp; Payments</a>
+      </div>
+      ${collections.length ? `<div class="table"><table><thead><tr><th>Invoice</th><th>Customer</th><th>Due Date</th><th class="finance-number">Balance</th></tr></thead><tbody>${collections.map((invoice) => `<tr><td>${esc(invoice.invoice_number)}</td><td>${esc(invoice.full_name)}</td><td>${esc(invoice.due_at || "No due date")}</td><td class="finance-number"><strong>${esc(financePesos(BigInt(invoice.total) - BigInt(invoice.paid)))}</strong></td></tr>`).join("")}</tbody></table></div>` : '<p class="muted">No unpaid invoice balances need follow-up.</p>'}
+    </section>`;
+
+  const niHaoSection = `
+    <section>
+      <h2>Ni Hao to Pay</h2>
+      ${niHaoDue.length ? `<div class="table"><table><thead><tr><th>Tracking</th><th>Customer</th><th>Status</th><th class="finance-number">Ni Hao cost</th><th></th></tr></thead><tbody>${niHaoDue.map((row) => `<tr><td>${esc(row.tracking_number || "No tracking yet")}</td><td>${esc(row.full_name)}</td><td>${esc(row.status)}</td><td class="finance-number">${row.nihao_cost === null ? '<span class="muted">Not entered</span>' : `<strong>${esc(financePesos(BigInt(row.nihao_cost)))}</strong>${row.nihao_cost_source === "estimate" ? ' <span class="muted">(estimate)</span>' : ""}`}</td><td><a href="/admin/shipments?id=${encodeURIComponent(row.id)}">${canWrite ? "Mark Ni Hao paid" : "View"}</a></td></tr>`).join("")}</tbody></table></div>` : '<p class="muted">Ni Hao is paid for every active shipment.</p>'}
+      <p class="muted">Pay from the shipment page with Mark Ni Hao paid. Add the transfer fee there too.</p>
+    </section>`;
+
+  return page(
+    "Money Today",
+    `
+      ${simpleSummarySection(simple, "Money Today", "Where the business stands right now. For a month or quarter, open Reports & BIR.")}
+      <div class="actions finance-today-links">
+        <a href="/admin/invoices">Invoices &amp; Payments</a>
+        <a href="/admin/finance/expenses">Expenses</a>
+        <a href="/admin/finance/reports">Reports &amp; BIR</a>
+      </div>
+      <h2 class="finance-todo-heading">To do</h2>
+      ${unbilledSection}
+      ${collectionsSection}
+      ${niHaoSection}
+      <details class="card admin-collapsible finance-cash-details">
+        <summary>How Money we have now is calculated</summary>
+        ${cashSection}
+      </details>
+      <style>
+        .finance-number { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+        .finance-emphasis td { border-top: 2px solid #154876; border-bottom: 2px solid #154876; }
+        .finance-todo-heading { margin: 28px 0 12px; }
       </style>
     `,
     user,

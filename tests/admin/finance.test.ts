@@ -75,7 +75,7 @@ test("finance dashboard empty page, presets and validation perform zero writes",
   const f = fixture();
   const changes = f.sql.prepare("SELECT total_changes() AS n").get()!.n;
   for (const q of ["", "preset=all", "preset=month", "preset=last-month", "preset=year", "from=2026-09-08", "to=2026-09-08", "from=2026-09-08&to=2026-09-08"]) {
-    const response = await financeDashboard(f.db, new URL(`https://test/admin/finance?${q}`), "Admin", now);
+    const response = await financeDashboard(f.db, new URL(`https://test/admin/finance/reports?${q}`), "Admin", now, true, "reports");
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("cache-control"), "no-store, private");
     const html = await response.text();
@@ -83,7 +83,9 @@ test("finance dashboard empty page, presets and validation perform zero writes",
     assert.match(html, /<span[^>]*>\s*Shipments\s*<\/span>[\s\S]*?<strong>\s*0\s*<\/strong>/);
     for (const label of ["This Month", "Last Month", "This Year", "All Time", "Freight Margin", "Expenses"]) assert.ok(html.includes(label));
   }
-  await assert.rejects(financeDashboard(f.db, new URL("https://test/admin/finance?from=2026-09-09&to=2026-09-08"), "Admin", now), /From Date/);
+  await assert.rejects(financeDashboard(f.db, new URL("https://test/admin/finance/reports?from=2026-09-09&to=2026-09-08"), "Admin", now, true, "reports"), /From Date/);
+  // Money Today ignores date filters, so a bad range cannot break it.
+  assert.equal((await financeDashboard(f.db, new URL("https://test/admin/finance?from=2026-09-09&to=2026-09-08"), "Admin", now)).status, 200);
   assert.equal(f.sql.prepare("SELECT total_changes() AS n").get()!.n, changes);
 });
 
@@ -119,7 +121,7 @@ test("finance overview tables, expense breakdown, actions and formulas use Phase
   const before = await readFinanceSummary(f.db, { from: "2026-09-01", to: "2026-09-30" }, now);
   const changes = f.sql.prepare("SELECT total_changes() AS n").get()!.n;
   const html = await (await financeDashboard(f.db,
-    new URL("https://test/admin/finance?from=2026-09-01&to=2026-09-30"), "Admin", now)).text();
+    new URL("https://test/admin/finance/reports?from=2026-09-01&to=2026-09-30"), "Admin", now, true, "reports")).text();
   assert.equal(f.sql.prepare("SELECT total_changes() AS n").get()!.n, changes);
   for (const heading of ["Finance Overview", "Shipping Performance",
     "Operating Expenses", "How the Numbers Are Calculated"]) {
@@ -129,7 +131,7 @@ test("finance overview tables, expense breakdown, actions and formulas use Phase
     assert.match(html, new RegExp(`<h2>\\s*${pattern}\\s*<\\/h2>`));
   }
   assert.ok(html.includes("Reporting period:") && html.includes("September 1, 2026–September 30, 2026"));
-  assert.ok(html.includes("Collections to Follow Up"));
+  assert.ok((await (await financeDashboard(f.db, new URL("https://test/admin/finance"), "Admin", now)).text()).includes("Collections to Follow Up"));
   const expectedMetrics: [string, bigint][] = [["Revenue", before.revenue], ["Payments Received", before.received],
     ["Accounts Receivable", before.receivable], ["Ni Hao Freight Cost", before.costs],
     ["Freight Margin", before.margin], ["Operating Expenses", before.operating],
@@ -248,7 +250,7 @@ test("finance dashboard freight source matches original, including missing/zero 
   assert.equal(s.margin, BigInt(String(original.margin)));
   assert.equal(s.shipments, BigInt(3));
   assert.equal(s.uncosted, BigInt(1));
-  const html = await (await financeDashboard(f.db, new URL("https://test/admin/finance"), "Admin", now)).text();
+  const html = await (await financeDashboard(f.db, new URL("https://test/admin/finance/reports"), "Admin", now, true, "reports")).text();
   assert.match(html, /have no Ni Hao cost/);
 });
 
@@ -290,7 +292,7 @@ test("finance dashboard does not invent dates for legacy invoices and reports in
   assert.equal(s.undatedInvoices, 1);
   assert.equal(s.undatedExpenses, 1);
   assert.equal(s.revenue, BigInt(0));
-  const html = await (await financeDashboard(f.db, new URL("https://test/admin/finance"), "Admin", now)).text();
+  const html = await (await financeDashboard(f.db, new URL("https://test/admin/finance/reports"), "Admin", now, true, "reports")).text();
   assert.match(html, /lack valid issue dates/);
   assert.match(html, /may be incomplete/);
 });
@@ -367,15 +369,15 @@ test("simple summary answers cash now, money coming in and expected profit witho
   f.shipment(BigInt(2840500), null);
   f.invoice(BigInt(50000), "2026-09-08", "Unpaid");
   const html = await (await financeDashboard(f.db, new URL("https://test/admin/finance?preset=last-month"), "Admin", now)).text();
-  assert.match(html, /<h2>Simple Summary<\/h2>/);
-  const simple = html.slice(html.indexOf("Simple Summary"), html.indexOf("Finance Overview"));
+  assert.match(html, /<h2>Money Today<\/h2>/);
+  const simple = html.slice(html.indexOf("<h2>Money Today</h2>"), html.indexOf("finance-todo-heading"));
   assert.ok(simple.includes(financePesos(BigInt(342000 + 2840500 + 50000))), "coming in = unbilled + receivable as of today");
   assert.ok(simple.includes(financePesos(BigInt(342000 - 280500))), "expected profit uses known costs only");
   assert.ok(simple.includes("1 shipment (₱28,405.00) has no Ni Hao cost yet"));
   assert.ok(simple.includes("Money going out") && simple.includes(financePesos(BigInt(280500))));
   f.expense(BigInt(280500), "Freight / Ni Hao Cost", "2026-09-08", String(f.sql.prepare("SELECT tracking_number FROM shipments WHERE nihao_cost = 280500").get()!.tracking_number));
   const paid = await (await financeDashboard(f.db, new URL("https://test/admin/finance"), "Admin", now)).text();
-  const after = paid.slice(paid.indexOf("Simple Summary"), paid.indexOf("Finance Overview"));
+  const after = paid.slice(paid.indexOf("<h2>Money Today</h2>"), paid.indexOf("finance-todo-heading"));
   assert.match(after, /Money going out<\/span>\s*<strong>₱0\.00<\/strong>/, "a recorded Ni Hao expense is no longer owed");
 });
 
@@ -384,7 +386,7 @@ test("overall profit after expenses adds expected profit to profit so far, after
   f.shipment(BigInt(3522500), BigInt(3022000));
   f.expense(BigInt(973000), "Marketing / Advertising", "2026-09-15");
   const html = await (await financeDashboard(f.db, new URL("https://test/admin/finance?preset=last-month"), "Admin", now)).text();
-  const simple = html.slice(html.indexOf("Simple Summary"), html.indexOf("Finance Overview"));
+  const simple = html.slice(html.indexOf("<h2>Money Today</h2>"), html.indexOf("finance-todo-heading"));
   assert.match(simple, /Overall profit after expenses/);
   assert.ok(simple.includes(`${financePesos(BigInt(-973000))} profit so far (after ${financePesos(BigInt(973000))} expenses)`), "all expenses count, whatever range is picked");
   assert.ok(simple.includes(financePesos(BigInt(500500 - 973000))));
@@ -398,7 +400,7 @@ test("money going out shows how much of the Ni Hao cost is an estimate", async (
   f.shipment(BigInt(2840500), BigInt(2000000));
   f.sql.exec("UPDATE shipments SET nihao_cost_source = CASE WHEN nihao_cost = 2000000 THEN 'estimate' ELSE 'actual' END");
   const html = await (await financeDashboard(f.db, new URL("https://test/admin/finance"), "Admin", now)).text();
-  const simple = html.slice(html.indexOf("Simple Summary"), html.indexOf("Finance Overview"));
+  const simple = html.slice(html.indexOf("<h2>Money Today</h2>"), html.indexOf("finance-todo-heading"));
   assert.ok(simple.includes(financePesos(BigInt(2280500))), "estimates count toward money going out");
   assert.ok(simple.includes(`${financePesos(BigInt(280500))} is Ni Hao's actual quote and ${financePesos(BigInt(2000000))} is estimated from the Ni Hao rates.`));
 });

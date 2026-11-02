@@ -8,6 +8,7 @@ import { philippineToday } from "./finance-dates";
  * the freight profit. Used by the Shipment Statement PDF and the ledger CSV.
  */
 const niHaoCategory = "Freight / Ni Hao Cost";
+const feeCategory = "Bank / Payment Fees";
 const marginTarget = 15;
 
 type Row = Record<string, unknown>;
@@ -19,6 +20,8 @@ export type ShipmentStatement = {
   invoice: Row | null;
   payments: StatementPayment[];
   niHaoPayments: StatementPayment[];
+  transferFees: number;
+  profitAfterFees: number | null;
   billed: number;
   collected: number;
   balance: number;
@@ -32,7 +35,7 @@ export type ShipmentStatement = {
 const num = (value: unknown) => Number(value ?? 0) || 0;
 const text = (value: unknown) => (value === null || value === undefined ? "" : String(value));
 
-function summarize(shipment: Row, invoice: Row | null, payments: StatementPayment[], niHaoPayments: StatementPayment[]) {
+function summarize(shipment: Row, invoice: Row | null, payments: StatementPayment[], niHaoPayments: StatementPayment[], transferFees = 0) {
   const charge = num(shipment.shipping_charge);
   // An issued invoice is what the customer owes; before that, the shipment's charges.
   const billed = invoice
@@ -51,6 +54,8 @@ function summarize(shipment: Row, invoice: Row | null, payments: StatementPaymen
     niHaoOwed: niHaoCost === null ? null : niHaoPaid > 0 ? 0 : niHaoCost,
     profit,
     marginPercent: profit === null || charge === 0 ? null : (profit / charge) * 100,
+    transferFees,
+    profitAfterFees: profit === null ? null : profit - transferFees,
   };
 }
 
@@ -73,6 +78,10 @@ export async function readShipmentStatement(db: D1Database, shipmentId: string):
         WHERE category = ? AND tracking_number = ? COLLATE NOCASE ORDER BY expense_date, created_at`)
         .bind(niHaoCategory, shipment.tracking_number).all<Row>()).results
     : [];
+  const fees = shipment.tracking_number
+    ? await db.prepare(`SELECT COALESCE(SUM(amount), 0) AS amount FROM expenses
+        WHERE category = ? AND tracking_number = ? COLLATE NOCASE`).bind(feeCategory, shipment.tracking_number).first<Row>()
+    : null;
   const toPayment = (row: Row, date: string): StatementPayment => ({
     date: text(row[date]), method: text(row.payment_method), amount: num(row.amount), reference: text(row.reference_number),
   });
@@ -88,7 +97,7 @@ export async function readShipmentStatement(db: D1Database, shipmentId: string):
     invoice: invoice ?? null,
     payments: paid,
     niHaoPayments: niHaoPaid,
-    ...summarize(shipment, invoice ?? null, paid, niHaoPaid),
+    ...summarize(shipment, invoice ?? null, paid, niHaoPaid, num(fees?.amount)),
   };
 }
 
@@ -188,6 +197,10 @@ export function shipmentStatementPdf(statement: ShipmentStatement, today = phili
       : row("Freight charge - Ni Hao cost",
         `${peso(statement.profit)}  |  ${(statement.marginPercent ?? 0).toFixed(1)}% margin${(statement.marginPercent ?? 0) < marginTarget ? `  (below ${marginTarget}% target)` : ""}`,
         (statement.marginPercent ?? 0) < marginTarget),
+    ...(statement.transferFees
+      ? [row("Bank transfer fees", peso(statement.transferFees)),
+        row("Profit after transfer fees", statement.profitAfterFees === null ? "-" : peso(statement.profitAfterFees))]
+      : []),
     { text: "", gap: 18 },
     { text: "Ni Hao SOA and receipts are kept in Google Drive under the same tracking number.", size: 9 },
   ];
@@ -219,6 +232,9 @@ export async function shipmentsLedgerCsv(db: D1Database, today = philippineToday
     FROM payments p JOIN invoices i ON i.id = p.invoice_id WHERE i.archived_at IS NULL ORDER BY p.payment_date, p.created_at`).all<Row>();
   const { results: niHao } = await db.prepare(`SELECT lower(tracking_number) AS tracking, expense_date, payment_method, amount, reference_number
     FROM expenses WHERE category = ? AND tracking_number IS NOT NULL ORDER BY expense_date, created_at`).bind(niHaoCategory).all<Row>();
+  const { results: feeRows } = await db.prepare(`SELECT lower(tracking_number) AS tracking, SUM(amount) AS amount
+    FROM expenses WHERE category = ? AND tracking_number IS NOT NULL GROUP BY lower(tracking_number)`).bind(feeCategory).all<Row>();
+  const feesByTracking = new Map(feeRows.map((r) => [String(r.tracking), num(r.amount)]));
 
   const invoiceByShipment = new Map<string, Row>();
   for (const invoice of invoices) invoiceByShipment.set(String(invoice.shipment_id), invoice);
@@ -233,14 +249,15 @@ export async function shipmentsLedgerCsv(db: D1Database, today = philippineToday
   const columns = ["Tracking No.", "Customer", "Account Code", "Company", "Mobile", "Email", "Quotation", "Service", "Status",
     "China Received", "Arrived PH", "Verified CBM", "Verified kg", "Invoice No.", "Invoice Status", "KD Billed PHP",
     "Client Paid PHP", "Last Client Payment", "Balance Due PHP", "Ni Hao Cost PHP", "Ni Hao Cost Source",
-    "Ni Hao Paid PHP", "Ni Hao Paid Date", "Ni Hao Reference", "Owed to Ni Hao PHP", "Freight Profit PHP", "Margin %"];
+    "Ni Hao Paid PHP", "Ni Hao Paid Date", "Ni Hao Reference", "Owed to Ni Hao PHP", "Freight Profit PHP", "Margin %",
+    "Transfer Fees PHP", "Profit After Fees PHP"];
   const lines = shipments.map((shipment) => {
     const invoice = invoiceByShipment.get(String(shipment.id)) ?? null;
     const paid = (invoice ? paymentsByInvoice.get(String(invoice.id)) ?? [] : [])
       .map((p) => ({ date: text(p.payment_date), method: text(p.payment_method), amount: num(p.amount), reference: text(p.reference_number) }));
     const niHaoPaid = (niHaoByTracking.get(text(shipment.tracking_number).toLowerCase()) ?? [])
       .map((p) => ({ date: text(p.expense_date), method: text(p.payment_method), amount: num(p.amount), reference: text(p.reference_number) }));
-    const sum = summarize(shipment, invoice, paid, niHaoPaid);
+    const sum = summarize(shipment, invoice, paid, niHaoPaid, feesByTracking.get(text(shipment.tracking_number).toLowerCase()) ?? 0);
     const last = niHaoPaid[niHaoPaid.length - 1];
     return [
       shipment.tracking_number, shipment.full_name, shipment.customer_code, shipment.company_name, shipment.mobile, shipment.email,
@@ -250,6 +267,7 @@ export async function shipmentsLedgerCsv(db: D1Database, today = philippineToday
       sum.niHaoCost === null ? "" : shipment.nihao_cost_source === "estimate" ? "Estimate" : "Actual",
       php(sum.niHaoPaid), last?.date, niHaoPaid.map((p) => p.reference).filter(Boolean).join("; "),
       php(sum.niHaoOwed), php(sum.profit), sum.marginPercent === null ? "" : sum.marginPercent.toFixed(1),
+      php(sum.transferFees), php(sum.profitAfterFees),
     ].map(csvCell).join(",");
   });
   return new Response(`﻿${[columns.join(","), ...lines].join("\r\n")}\r\n`, {

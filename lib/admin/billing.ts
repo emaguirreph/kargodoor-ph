@@ -2132,8 +2132,23 @@ async function list(
     `
     : "<p>No matching invoices.</p>";
 
+  // Every customer payment in one place (newest first), so Cash Flow does not
+  // need its own page.
+  const { results: received } = await db.prepare(`SELECT p.payment_date, p.amount, p.payment_method,
+      p.reference_number, i.id AS invoice_id, i.invoice_number, c.full_name
+    FROM payments p JOIN invoices i ON i.id = p.invoice_id JOIN customers c ON c.id = p.customer_id
+    WHERE i.archived_at IS NULL
+    ORDER BY p.payment_date DESC, p.created_at DESC LIMIT 50`).all<RecordData>();
+  const receivedTotal = received.reduce((sum, row) => sum + Number(row.amount), 0);
+  const paymentsSection = `
+      <section>
+        <div class="actions"><h2>Payments Received</h2><strong>${esc(pesos(receivedTotal))}</strong></div>
+        ${received.length ? `<div class="table"><table><thead><tr><th>Invoice</th><th>Date</th><th>Customer</th><th>Amount</th><th>Method</th><th>Reference</th></tr></thead><tbody>${received.map((row) => `<tr><td><a href="${route}?id=${encodeURIComponent(String(row.invoice_id))}">${esc(row.invoice_number)}</a></td><td>${esc(row.payment_date)}</td><td>${esc(row.full_name)}</td><td><strong>${esc(pesos(row.amount))}</strong></td><td>${esc(row.payment_method)}</td><td>${esc(row.reference_number) || "—"}</td></tr>`).join("")}</tbody></table></div>` : '<p class="muted">No customer payments yet.</p>'}
+        <p class="muted">Record a payment on its invoice. It is added to Money we have now automatically.</p>
+      </section>`;
+
   return page(
-    "Invoices",
+    "Invoices & Payments",
     `
       <section>
         <form
@@ -2210,6 +2225,7 @@ async function list(
           }
         </div>
       </section>
+      ${paymentsSection}
     `,
     user.name, 200, {}, canMutateAdmin(user),
   );
@@ -2548,5 +2564,41 @@ export async function handleBilling(
           }
         : {},
     );
+  }
+}
+
+/** Statuses where the cargo is measured and in the Philippines, so it is ready to bill. */
+const readyToBillStatuses = ["Gatepass", "Malabon Warehouse", "Delivered", "Arrived in Philippines", "Ready for Release"];
+
+/**
+ * Makes the Draft invoice for a shipment as soon as it can be billed: it has
+ * a KargoDoor charge and either a verified size or has reached the
+ * Philippines. A shipment that already has an active invoice is left alone
+ * (that invoice is kept in step by syncVerifiedFreightToInvoice). Returns the
+ * new invoice id, or null when nothing was made.
+ */
+export async function autoDraftInvoice(db: D1Database, shipmentId: string, adminId: string) {
+  const shipment = await db.prepare(`SELECT s.id, s.shipping_charge, s.delivery_charge, s.status, s.archived_at,
+      s.verified_cbm, s.verified_weight_kg,
+      EXISTS (SELECT 1 FROM invoices i WHERE i.shipment_id = s.id AND i.status != 'Void' AND i.archived_at IS NULL) AS invoiced
+    FROM shipments s WHERE s.id = ?`).bind(shipmentId).first<RecordData>();
+  if (!shipment || shipment.archived_at || shipment.status === "Cancelled" || Number(shipment.invoiced)) return null;
+  if (!(Number(shipment.shipping_charge) > 0)) return null;
+  const measured = shipment.verified_cbm !== null && shipment.verified_cbm !== undefined
+    || shipment.verified_weight_kg !== null && shipment.verified_weight_kg !== undefined;
+  if (!measured && !readyToBillStatuses.includes(String(shipment.status))) return null;
+  try {
+    return await createInvoice(db, {
+      shipment_id: shipmentId,
+      delivery_charge: Number(shipment.delivery_charge ?? 0),
+      other_charge: 0,
+      status: "Draft",
+      issued_at: null,
+      due_at: null,
+    }, adminId);
+  } catch (error) {
+    // Two saves at once: the other one made the invoice.
+    if (error instanceof AdminError && error.status === 409) return null;
+    throw error;
   }
 }
