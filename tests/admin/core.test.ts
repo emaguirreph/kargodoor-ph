@@ -37,8 +37,8 @@ import {
   requireAdminMutation,
 } from "../../lib/admin/security";
 import { expensesPage, saveExpense, mutateExpense } from "../../lib/admin/expenses";
-import { customerShippingInstructions, customerWarehouseAddressMessage, nihaoAddressBook, shipmentShippingInstructions, warehouseAddress } from "../../lib/admin/shipping-instructions";
-import { notificationKeyFor, shipmentStatusMessages } from "../../lib/admin/customer-messages";
+import { customerShippingInstructions, customerWarehouseAddressMessage, customerWelcomeMessage, nihaoAddressBook, shipmentShippingInstructions, warehouseAddress } from "../../lib/admin/shipping-instructions";
+import { invoiceMessages, notificationKeyFor, shipmentStatusMessages } from "../../lib/admin/customer-messages";
 function database(includePhase1 = true) {
   const sql = new DatabaseSync(":memory:");
   sql.exec("PRAGMA foreign_keys=ON");
@@ -1534,9 +1534,11 @@ test("shipment status notifications follow Em's order and Nihao addresses end wi
 
 test("every customer message ends with the KargoDoorPH.com footer, once", () => {
   const all = [
-    ...shipmentStatusMessages({ customerName: "Maria", tracking: "KDSEA-1" }).filter(([key]) => key !== "rider-pickup").map(([, , body]) => body),
+    ...shipmentStatusMessages({ customerName: "Maria", tracking: "KDSEA-1" }).map(([, , body]) => body),
+    ...invoiceMessages({ customerName: "Maria", invoiceNumber: "INV-1", total: 100000, paid: 50000 }).map(([, , body]) => body),
     customerShippingInstructions({ name: "Maria", customerCode: "KD-1", warehouse: "Yiwu" }),
     customerWarehouseAddressMessage({ name: "Maria", customerCode: "KD-1", warehouse: "Yiwu" }),
+    customerWelcomeMessage({ name: "Maria", customerCode: "KD-1" }),
   ];
   for (const body of all) {
     assert.ok(body.endsWith("Thank you for trusting KargoDoorPH.com! 💚 💙"), body.slice(-80));
@@ -1551,7 +1553,7 @@ test("rider pickup message carries the shipment's KDOOR code and stays under 500
   assert.match(rider, /^Hi Rider! Pagdating po sa warehouse:\nAccount\/ Cargo Code: KDOOR-0009\nItem: RC Cars\n/);
   assert.match(rider, /2 valid government IDs/);
   assert.doesNotMatch(rider, /\*\*/);
-  assert.ok(rider.endsWith("Salamat po! 💚"));
+  assert.ok(rider.endsWith("Salamat po! 💚\n\nThank you for trusting KargoDoorPH.com! 💚 💙"));
   assert.ok(rider.length < 500, String(rider.length));
 });
 

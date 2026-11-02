@@ -320,8 +320,8 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
 
 /**
  * Short message for the Lalamove (or other) rider collecting cargo at Malabon.
- * Em's exact wording (2026-11-02), kept under 500 characters, so it has its
- * own "Salamat po!" sign-off instead of the shared footer. Plain text:
+ * Em's exact wording (2026-11-02), kept under 500 characters. Ends with the
+ * shared footer like every other message (Em, 2026-11-02). Plain text:
  * Messenger shows **bold** markers literally.
  */
 export function riderPickupMessage(input: { cargoCode?: string; item?: string }): string {
@@ -337,6 +337,8 @@ export function riderPickupMessage(input: { cargoCode?: string; item?: string })
     "",
     "⚠ Trucks over 16 ft bawal 9 AM–4 PM. Wingvan: 10 PM–2 AM only.",
     "Salamat po! 💚",
+    "",
+    messageFooter,
   ].join("\n");
 }
 
