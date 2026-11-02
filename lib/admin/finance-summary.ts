@@ -1061,6 +1061,29 @@ export async function financeDashboard(
     </section>
   `;
 
+  // Flat transfer fee inside every shipping fee (collected) vs bank / GCash fees actually paid.
+  const inRange = (column: string) => `(? = '' OR ${column} >= ?) AND (? = '' OR ${column} <= ?)`;
+  const transferCollected = reports ? await db.prepare(`SELECT CAST(COALESCE(SUM(s.transfer_fee_collected), 0) AS TEXT) AS amount
+      FROM invoices i JOIN shipments s ON s.id = i.shipment_id
+      WHERE i.status NOT IN ('Draft', 'Void') AND i.archived_at IS NULL AND ${inRange("i.issued_at")}`)
+    .bind(range.from, range.from, range.to, range.to).first<{ amount: string }>() : null;
+  const transferPaid = reports ? await db.prepare(`SELECT CAST(COALESCE(SUM(amount), 0) AS TEXT) AS amount
+      FROM expenses WHERE category = 'Bank / Payment Fees' AND ${inRange("expense_date")}`)
+    .bind(range.from, range.from, range.to, range.to).first<{ amount: string }>() : null;
+  const collectedFees = BigInt(transferCollected?.amount ?? "0");
+  const paidFees = BigInt(transferPaid?.amount ?? "0");
+  const transferSection = `
+    <section>
+      <h2>Transfer fees</h2>
+      <p class="muted">Every shipping fee includes a ₱30 transfer fee. Customers see one shipping fee; this is the internal split.</p>
+      <div class="cards">
+        <div class="card"><span class="muted">Collected (invoiced shipments)</span><strong>${esc(financePesos(collectedFees))}</strong></div>
+        <div class="card"><span class="muted">Paid (Bank / Payment Fees)</span><strong>${esc(financePesos(paidFees))}</strong></div>
+        <div class="card"><span class="muted">Left over</span><strong>${esc(financePesos(collectedFees - paidFees))}</strong></div>
+      </div>
+    </section>
+  `;
+
   if (!reports) {
     return moneyTodayPage(db, user, canWrite, simple, cashSection, unbilledSection, collectionWatch.results);
   }
@@ -1135,6 +1158,8 @@ export async function financeDashboard(
       ${summaryCards}
 
       ${shippingCards}
+
+      ${transferSection}
 
       <section>
         <div class="actions">

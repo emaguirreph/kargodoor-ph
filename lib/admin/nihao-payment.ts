@@ -135,6 +135,14 @@ export async function recordNiHaoPayment(db: D1Database, form: URLSearchParams, 
   return expenseId;
 }
 
+/** The last transfer fee saved with a Ni Hao payment, used to fill in the fee box (centavos). */
+export async function lastNiHaoTransferFee(db: D1Database): Promise<number | null> {
+  const row = await db.prepare(`SELECT amount FROM expenses
+    WHERE category = ? AND tracking_number IS NOT NULL AND tracking_number != ''
+    ORDER BY expense_date DESC, created_at DESC LIMIT 1`).bind(transferFeeCategory).first<{ amount: number }>();
+  return row ? Number(row.amount) : null;
+}
+
 /** "Ni Hao payment" block on the shipment page. */
 export function niHaoPaymentSection(options: {
   path: string;
@@ -145,6 +153,7 @@ export function niHaoPaymentSection(options: {
   payment: NiHaoPayment | null;
   canWrite: boolean;
   justPaid?: boolean;
+  suggestedFee?: number | null;
 }) {
   const { payment } = options;
   const expensesLink = `/admin/finance/expenses?q=${encodeURIComponent(String(options.trackingNumber ?? ""))}`;
@@ -171,7 +180,7 @@ export function niHaoPaymentSection(options: {
         <label>Date paid *<input name="expense_date" type="date" required value="${esc(philippineToday())}"></label>
         <label>Amount paid (PHP) *<input name="amount" type="number" min="0.01" max="1000000000" step="0.01" required value="${esc(amountValue)}"></label>
         <label>Paid from<select name="paid_from">${accounts}</select></label>
-        <label>Transfer fee (PHP)<input name="transfer_fee" type="number" min="0" max="1000000" step="0.01" placeholder="e.g. 10.00"></label>
+        <label>Transfer fee (PHP)<input name="transfer_fee" type="number" min="0" max="1000000" step="0.01" placeholder="e.g. 10.00" value="${options.suggestedFee ? esc((options.suggestedFee / 100).toFixed(2)) : ""}"><small class="muted" style="display:block">${options.suggestedFee ? "Filled in from your last transfer. Change it or clear it if there was no fee." : "Bank or GCash fee for this transfer, if any."}</small></label>
         <label>Reference / receipt no.<input name="reference_number" maxlength="160"></label>
         <label class="wide">Notes<textarea name="notes" maxlength="4000" placeholder="e.g. Ni Hao SOA number or Drive location"></textarea></label>
       </div>
