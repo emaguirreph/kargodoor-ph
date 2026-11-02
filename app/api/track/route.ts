@@ -8,6 +8,7 @@ type Shipment = {
   service_type: string;
   china_warehouse: string | null;
   warehouse_received_date: string | null;
+  departure_date: string | null;
   status: string;
   tracking_remarks: string | null;
   updated_at: string;
@@ -22,6 +23,14 @@ const seaStatusMessages: Record<string, string> = {
   Gatepass: "Customs clearance is complete, and the delivery truck has approval to leave the port.",
   "Malabon Warehouse": "Your items have arrived at our Malabon warehouse and are ready for final delivery or pickup.",
   Delivered: "Your shipment has been delivered. Thank you for choosing KargoDoor PH.",
+};
+
+const airStatusMessages: Record<string, string> = {
+  ...seaStatusMessages,
+  "China Port": "Your shipment has cleared Chinese customs and is waiting to board its flight.",
+  "Air Transit": "Your package is currently on its flight to the Philippines.",
+  "Manila Port": "Your flight has landed, and your cargo is undergoing customs clearance in Manila.",
+  Gatepass: "Customs clearance is complete, and the delivery truck has approval to leave the airport.",
 };
 
 export async function GET(request: Request) {
@@ -74,6 +83,7 @@ export async function GET(request: Request) {
             service_type,
             china_warehouse,
             warehouse_received_date,
+            departure_date,
             status,
             tracking_remarks,
             updated_at
@@ -117,6 +127,13 @@ export async function GET(request: Request) {
       status_message:
         shipment.service_type === "Sea Freight"
           ? seaStatusMessages[shipment.status] ?? null
+          : shipment.service_type === "Air Freight"
+            ? airStatusMessages[shipment.status] ?? null
+            : null,
+
+      flight_date:
+        shipment.service_type === "Air Freight"
+          ? shipment.departure_date
           : null,
 
       remarks:

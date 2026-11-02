@@ -298,7 +298,7 @@ export async function dashboard(
 
   const pipeline = [
     { label: "Waiting in China", statuses: ["Awaiting Supplier Dispatch", "Pending Warehouse Receipt", "China Warehouse", "Received at Warehouse", "China Port"] },
-    { label: "On the way", statuses: ["Sea Transit", "In Transit"] },
+    { label: "On the way", statuses: ["Sea Transit", "Air Transit", "In Transit"] },
     { label: "Arrived in PH", statuses: ["Manila Port", "Gatepass", "Arrived in Philippines"] },
     { label: "At Malabon", statuses: ["Malabon Warehouse", "Ready for Release"] },
     { label: "Delivered", statuses: ["Delivered"] },

@@ -29,6 +29,8 @@ export type ShipmentMessageInput = {
   warehouse?: unknown;
   received?: unknown;
   departure?: unknown;
+  /** Air Freight flight date (the shipment's departure date). */
+  flightDate?: unknown;
   eta?: unknown;
   arrival?: unknown;
   paymentStatus?: unknown;
@@ -75,6 +77,7 @@ export const notificationKeyForStatus: Record<string, string> = {
   "Received at Warehouse": "china-warehouse",
   "China Port": "china-port",
   "Sea Transit": "sea-transit",
+  "Air Transit": "air-transit",
   "In Transit": "sea-transit",
   "Manila Port": "manila-port",
   "Arrived in Philippines": "manila-port",
@@ -92,6 +95,7 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
   const warehouse = text(input.warehouse);
   const received = text(input.received);
   const eta = text(input.eta);
+  const flightDate = text(input.flightDate);
   const arrival = text(input.arrival);
   const paymentStatus = text(input.paymentStatus);
   const declaredCbm = text(input.declaredCbm);
@@ -169,7 +173,7 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
         ? "Good news! Your shipment has cleared customs in China and is now waiting to board its flight to the Philippines. ✈️"
         : "Good news! Your shipment has cleared customs in China and is now at the port, waiting to board the vessel to the Philippines. 🚢",
       "",
-      ...details(service && `Service: ${service}`, warehouse && `Origin Warehouse: ${warehouse}`),
+      ...details(service && `Service: ${service}`, warehouse && `Origin Warehouse: ${warehouse}`, isAir && flightDate && `Flight Date: ${flightDate}`),
       "",
       "Next Steps:",
       `No action needed from you. We'll update you once your shipment ${isAir ? "takes off" : "departs China"}.`,
@@ -197,7 +201,7 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
       "",
       "Your shipment is now on its flight to the Philippines. ✈️",
       "",
-      ...details(service && `Service: ${service}`, eta && `Estimated Arrival: ${eta}`),
+      ...details(service && `Service: ${service}`, flightDate && `Flight Date: ${flightDate}`, eta && `Estimated Arrival: ${eta}`),
       "",
       "Next Steps:",
       "No action needed from you. We'll send another update once your shipment lands in Manila.",

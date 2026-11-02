@@ -23,6 +23,8 @@ import {
 import {
   statuses,
   seaFreightStatuses,
+  airFreightStatuses,
+  legacyShipmentStatuses,
   seaCargoItems,
   shipmentCargoCategory,
   warehouses,
@@ -103,6 +105,14 @@ const shippingChargeField = (record: RecordData) => {
   return field
     .replace('name="shipping_charge"', `name="shipping_charge" data-live-amount="kargodoor"${auto ? ` data-auto="${esc(record.shipping_charge === null || record.shipping_charge === undefined ? "" : (Number(record.shipping_charge) / 100).toFixed(2))}"` : ""}`)
     .replace("</label>", ` ${chargeSourceTag(record.shipping_charge_source)}<small class="muted" style="display:block" data-live-hint="kargodoor">${hint}</small></label>`);
+};
+
+/** Status choices for a shipment's service. Air Freight gets Air Transit; an older status it already has stays selectable. */
+const shipmentStatusOptions = (record: RecordData): readonly string[] => {
+  if (record.service_type === "Sea Freight") return seaFreightStatuses;
+  if (record.service_type !== "Air Freight") return statuses;
+  const current = String(record.status ?? "");
+  return (legacyShipmentStatuses as readonly string[]).includes(current) ? [...airFreightStatuses, current] : airFreightStatuses;
 };
 
 /** Shipment form page: like the default admin policy, plus fetch to this origin for the live estimate. */
@@ -1068,7 +1078,11 @@ export async function handleAdmin(
             "Warehouse received date",
             record,
             "date",
-          ) + hidden("departure_date", record.departure_date ?? "");
+          ) +
+          // Air Freight shows its flight date here; Sea Freight keeps it hidden.
+          (record.service_type === "Air Freight"
+            ? input("departure_date", "Flight date", record, "date")
+            : hidden("departure_date", record.departure_date ?? ""));
 
         /*
          * SHIPPING DETAILS
@@ -1094,7 +1108,7 @@ export async function handleAdmin(
             "status",
             "Status",
             record,
-            record.service_type === "Sea Freight" ? seaFreightStatuses : statuses,
+            shipmentStatusOptions(record),
           ).replace("<label>", '<label class="k-status-red">') + hidden("estimated_arrival", record.estimated_arrival ?? "");
 
         // Actual arrival is an end-of-journey record. Keeping it out of the
@@ -1484,7 +1498,7 @@ export async function handleAdmin(
           .filter(
             (key) =>
               key !== "customer_id" &&
-              key !== "departure_date" &&
+              (key !== "departure_date" || record.service_type === "Air Freight") &&
               key !== "estimated_arrival",
           )
           .concat([
@@ -1524,9 +1538,9 @@ export async function handleAdmin(
               return `
                 <dt>
                   ${esc(
-                    labels[
+                    (key === "departure_date" ? "Flight date" : labels[
                       key
-                    ] ??
+                    ]) ??
                       key.replaceAll(
                         "_",
                         " ",
@@ -1782,6 +1796,7 @@ export async function handleAdmin(
           warehouse: record.china_warehouse,
           received: record.warehouse_received_date,
           departure: record.departure_date,
+          flightDate: record.service_type === "Air Freight" ? record.departure_date : null,
           eta: record.estimated_arrival,
           arrival: record.actual_arrival,
           paymentStatus: record.payment_status,

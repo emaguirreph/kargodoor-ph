@@ -21,6 +21,7 @@ type Shipment = {
   remarks: string | null;
   last_updated: string;
   standard_transit: string;
+  flight_date: string | null;
 };
 
 const seaStages = [
@@ -34,14 +35,24 @@ const seaStages = [
   "Delivered",
 ];
 
-function seaStageIndex(status: string) {
+const airStages = seaStages.map((stage) =>
+  stage === "Sea Transit" ? "Air Transit" : stage,
+);
+
+function stagesFor(freightType: string) {
+  if (freightType === "Sea Freight") return seaStages;
+  if (freightType === "Air Freight") return airStages;
+  return null;
+}
+
+function stageIndex(stages: string[], status: string) {
   const legacyPositions: Record<string, number> = {
     "Received at Warehouse": 1,
     "In Transit": 3,
     "Arrived in Philippines": 4,
     "Ready for Release": 6,
   };
-  return Math.max(0, seaStages.indexOf(status), legacyPositions[status] ?? -1);
+  return Math.max(0, stages.indexOf(status), legacyPositions[status] ?? -1);
 }
 
 function TrackContent() {
@@ -109,8 +120,9 @@ function TrackContent() {
     await trackShipment(code);
   }
 
-  const stageIndex = shipment?.freight_type === "Sea Freight"
-    ? seaStageIndex(shipment.current_status)
+  const stages = shipment ? stagesFor(shipment.freight_type) : null;
+  const currentStage = shipment && stages
+    ? stageIndex(stages, shipment.current_status)
     : -1;
 
   return (
@@ -157,22 +169,22 @@ function TrackContent() {
                 <span className="status"><i />{shipment.current_status}</span>
               </div>
 
-              {stageIndex >= 0 && (
+              {stages && currentStage >= 0 && (
                 <section aria-label={`Shipment progress: ${shipment.current_status}`}>
                   <div className="k" style={{ marginTop: 26 }}>SHIPMENT PROGRESS</div>
                   <div className="tmap" aria-hidden="true">
                     <svg viewBox="0 0 1000 90" preserveAspectRatio="none">
                       <path d="M40 60 Q500 0 960 60" stroke="var(--line)" strokeWidth="4" fill="none" strokeDasharray="10 10" />
-                      <path className="tdone" d="M40 60 Q500 0 960 60" stroke="var(--green)" strokeWidth="5" fill="none" pathLength={1} strokeDasharray="1" style={{ "--to": 1 - stageIndex / (seaStages.length - 1) } as CSSProperties} />
+                      <path className="tdone" d="M40 60 Q500 0 960 60" stroke="var(--green)" strokeWidth="5" fill="none" pathLength={1} strokeDasharray="1" style={{ "--to": 1 - currentStage / (stages.length - 1) } as CSSProperties} />
                     </svg>
                   </div>
                   <ol className="tsteps">
-                    {seaStages.map((stage, index) => (
+                    {stages.map((stage, index) => (
                       <li
-                        className={`${index <= stageIndex ? "done" : ""} ${index === stageIndex ? "now" : ""}`}
+                        className={`${index <= currentStage ? "done" : ""} ${index === currentStage ? "now" : ""}`}
                         key={stage}
                       >
-                        <i aria-hidden="true">{index < stageIndex ? "✓" : index + 1}</i>
+                        <i aria-hidden="true">{index < currentStage ? "✓" : index + 1}</i>
                         <span>{stage}</span>
                       </li>
                     ))}
@@ -193,6 +205,12 @@ function TrackContent() {
                   <dt>CHINA WAREHOUSE RECEIVED</dt>
                   <dd>{shipment.warehouse_received_date || "—"}</dd>
                 </div>
+                {shipment.freight_type === "Air Freight" && (
+                  <div>
+                    <dt>FLIGHT DATE</dt>
+                    <dd>{shipment.flight_date || "—"}</dd>
+                  </div>
+                )}
                 <div>
                   <dt>STANDARD TRANSIT</dt>
                   <dd>{shipment.standard_transit}</dd>
