@@ -1,5 +1,4 @@
 import { esc } from "./ui";
-import { copyButton, copyScript } from "./shipping-instructions";
 
 /**
  * Renders copy-ready messages as tabs, one tab per message. Pure CSS (radio
@@ -49,8 +48,7 @@ export function messageTabs(options: {
       const messageId = `${group}-${k}-text`;
       return `<div class="message-tab-panel" data-panel="${k}">
         <h3>${esc(title)}</h3>
-        <textarea id="${esc(messageId)}" readonly aria-label="${esc(title)} ${esc(ariaLabelSuffix)}" style="min-height:320px;white-space:pre-wrap">${esc(body)}</textarea>
-        <div class="actions">${copyButton(messageId, `Copy ${esc(title)}`)}</div>
+        <textarea id="${esc(messageId)}" aria-label="${esc(title)} ${esc(ariaLabelSuffix)}" style="min-height:320px;white-space:pre-wrap">${esc(body)}</textarea>
       </div>`;
     })
     .join("");
@@ -69,5 +67,5 @@ export function messageTabs(options: {
     + rules
     + `</style>`;
 
-  return `${style}<div class="message-tabs" id="${group}">${inputs}<div class="message-tab-list" role="radiogroup" aria-label="Choose a ${esc(ariaLabelSuffix)}">${labels}</div><div class="message-tab-panels">${panels}</div></div>${copyScript()}`;
+  return `${style}<div class="message-tabs" id="${group}">${inputs}<div class="message-tab-list" role="radiogroup" aria-label="Choose a ${esc(ariaLabelSuffix)}">${labels}</div><div class="message-tab-panels">${panels}</div></div>`;
 }
