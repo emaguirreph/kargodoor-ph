@@ -1481,7 +1481,8 @@ test("shipment notifications include warehouse pickup instructions after Malabon
   assert.equal(keys.indexOf("pickup-instructions"), keys.indexOf("malabon-warehouse") + 1);
   const body = messages.find(([key]) => key === "pickup-instructions")![2];
   assert.match(body, /^📦 KARGODOOR PH – WAREHOUSE PICKUP INSTRUCTIONS\n\nHi Maria! 😊/);
-  assert.match(body, /36 Rivera St\., Brgy\. Tañong, Malabon City/);
+  assert.match(body, /Old 59, New 36 Rivera St Brgy Tañong Malabon City/);
+  assert.match(body, /FSW COMMERCIAL WAREHOUSE RENTAL/);
   assert.match(body, /Wingvan Trucks\nAllowed only from 10:00 PM – 2:00 AM\./);
   assert.doesNotMatch(body, /\*\*/);
   assert.match(body, /Thank you for trusting KargoDoorPH\.com! 💚 💙$/);
@@ -1498,6 +1499,7 @@ test("shipment status notifications follow Em's order and Nihao addresses end wi
   assert.equal(notificationKeyFor("Sea Transit", "Sea Freight"), "sea-transit");
   const book = nihaoAddressBook().map(([name]) => name);
   assert.deepEqual(book, ["Guangzhou", "Yiwu", "Shishi", "Tongda Air Cargo", "Hong Kong", "Malabon Warehouse"]);
+  assert.match(nihaoAddressBook()[5][1], /^Tongda Malabon Warehouse Address\nPIN: FSW COMMERCIAL WAREHOUSE RENTAL/);
 });
 
 test("every customer message ends with the KargoDoorPH.com footer, once", () => {
