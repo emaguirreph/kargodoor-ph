@@ -1,6 +1,7 @@
 import { z, ZodError } from "zod";
 
 import { airItems, itemCategories } from "./quotation-pricing";
+import { kargodoorAccountIds, nihaoAccountIds } from "./bank-accounts";
 
 export const warehouses = [
   "Guangzhou",
@@ -158,11 +159,14 @@ export const cashEntrySchema = z.object({
   amount: money.refine((value) => value > 0, "Amount must be greater than zero"),
   reference_number: optional(160),
   notes: required(4000),
+  bank_account: z.union([z.enum(kargodoorAccountIds), z.literal("")]).transform((value) => value || null),
 }).superRefine((values, context) => {
   if (["Customer Reimbursement Due", "Customer Payment Received"].includes(values.entry_type) && !values.customer_id)
     context.addIssue({ code: "custom", path: ["customer_id"], message: "Choose the customer" });
   if (values.entry_type !== "Customer Payment Received" && values.related_entry_id)
     context.addIssue({ code: "custom", path: ["related_entry_id"], message: "Only customer payments may settle a balance due" });
+  if (values.entry_type === "Customer Reimbursement Due" && values.bank_account)
+    context.addIssue({ code: "custom", path: ["bank_account"], message: "A balance due is not money in a bank account yet" });
 });
 
 export const customerSchema = z
@@ -527,6 +531,8 @@ export const expenseSchema = z.object({
   reference_number: optional(160),
   tracking_number: optional(40),
   notes: optional(4000),
+  paid_from_account: z.union([z.enum(kargodoorAccountIds), z.literal("")]).transform((value) => value || null),
+  paid_to_account: z.union([z.enum(nihaoAccountIds), z.literal("")]).transform((value) => value || null),
 }).strict();
 
 export function parseExpenseForm(form: URLSearchParams) {

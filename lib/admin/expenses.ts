@@ -4,29 +4,32 @@ import { expenseSchema, expenseCategories, expensePaymentMethods, parseExpenseFo
 import { AdminError, canDeleteAdmin, isRestrictedStaff, type AdminUser } from "./security";
 import { page, esc, pesos, input, hidden } from "./ui";
 import { philippineToday } from "./finance-dates";
+import { bankAccountLabel, bankAccountSelect, kargodoorBankAccounts, nihaoBankAccounts } from "./bank-accounts";
 
 const path = "/admin/finance/expenses";
 const fields = [
   ["expense_date", "Expense date"], ["category", "Category"],
   ["payee", "Payee"], ["description", "Description"], ["amount", "Amount"],
-  ["payment_method", "Payment method"], ["reference_number", "Reference number"],
-  ["notes", "Notes"],
+  ["payment_method", "Payment method"], ["paid_from_account", "Paid from"], ["paid_to_account", "Paid to"],
+  ["reference_number", "Reference number"], ["notes", "Notes"],
 ] as const;
 
 export async function saveExpense(db: D1Database, values: z.infer<typeof expenseSchema>, createdBy?: string) {
   const now = new Date().toISOString();
   await db.prepare(`INSERT INTO expenses
     (id, expense_date, category, payee, description, amount, payment_method,
-     reference_number, tracking_number, notes, created_by_admin_user_id, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+     reference_number, tracking_number, notes, paid_from_account, paid_to_account, created_by_admin_user_id, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(crypto.randomUUID(), values.expense_date, values.category, values.payee,
       values.description, values.amount, values.payment_method, values.reference_number,
-      values.tracking_number, values.notes, createdBy ?? null, now, now).run();
+      values.tracking_number, values.notes, values.paid_from_account ?? null, values.paid_to_account ?? null,
+      createdBy ?? null, now, now).run();
 }
 
 const expenseJson = `json_object('expense_date', expense_date, 'category', category, 'payee', payee,
   'description', description, 'amount', amount, 'payment_method', payment_method,
-  'reference_number', reference_number, 'tracking_number', tracking_number, 'notes', notes)`;
+  'reference_number', reference_number, 'tracking_number', tracking_number, 'notes', notes,
+  'paid_from_account', paid_from_account, 'paid_to_account', paid_to_account)`;
 
 const mutationSchema = z.object({
   action: z.enum(["edit", "delete"]),
@@ -79,13 +82,32 @@ export async function mutateExpense(db: D1Database, form: URLSearchParams, user:
       FROM expenses WHERE id = ? AND updated_at = ?${owned}`)
       .bind(crypto.randomUUID(), user.id, JSON.stringify(values), now, ...scope),
     db.prepare(`UPDATE expenses SET expense_date = ?, category = ?, payee = ?,
-      description = ?, amount = ?, payment_method = ?, reference_number = ?, tracking_number = ?, notes = ?, updated_at = ?
+      description = ?, amount = ?, payment_method = ?, reference_number = ?, tracking_number = ?, notes = ?,
+      paid_from_account = ?, paid_to_account = ?, updated_at = ?
       WHERE id = ? AND updated_at = ?${owned}`)
       .bind(values.expense_date, values.category, values.payee, values.description, values.amount,
-        values.payment_method, values.reference_number, values.tracking_number, values.notes, now, ...scope),
+        values.payment_method, values.reference_number, values.tracking_number, values.notes,
+        values.paid_from_account ?? null, values.paid_to_account ?? null, now, ...scope),
   ]);
   if (result.meta.changes !== 1) throw new AdminError("Expense changed or no longer exists. Reload Expenses before trying again.", 409);
   return "updated";
+}
+
+// Bank Accounts page links here with the account (and for Ni Hao, the payee and
+// category) already chosen. Anything not on the approved lists is ignored.
+function newExpensePrefill(url: URL): RecordData {
+  const pick = <T extends string>(key: string, options: readonly T[]) => {
+    const value = url.searchParams.get(key) ?? "";
+    return options.some((option) => option === value) ? { [key]: value } : {};
+  };
+  const prefill: RecordData = {
+    ...pick("category", expenseCategories),
+    ...pick("payment_method", expensePaymentMethods),
+    ...pick("paid_from_account", kargodoorBankAccounts.map((account) => account.id)),
+    ...pick("paid_to_account", nihaoBankAccounts.map((account) => account.id)),
+  };
+  if (prefill.paid_to_account) prefill.payee = nihaoBankAccounts[0].accountName;
+  return prefill;
 }
 
 function dropdown(key: string, label: string, options: readonly string[], value: unknown, prompt: string, required = false) {
@@ -125,7 +147,7 @@ export async function expensesPage(db: D1Database, url: URL, user: AdminUser | s
   if (edit !== null || remove !== null) {
     const id = z.string().uuid().parse(edit ?? remove);
     const found = await db.prepare(`SELECT id, expense_date, category, payee, description, amount,
-      payment_method, reference_number, tracking_number, notes, created_at, updated_at FROM expenses WHERE id = ?${staff ? " AND created_by_admin_user_id = ?" : ""}`)
+      payment_method, reference_number, tracking_number, notes, paid_from_account, paid_to_account, created_at, updated_at FROM expenses WHERE id = ?${staff ? " AND created_by_admin_user_id = ?" : ""}`)
       .bind(id, ...(staff ? [actor.id] : [])).first<RecordData>();
     if (!found) throw new AdminError("Expense not found.", 404);
     record = found;
@@ -140,7 +162,7 @@ export async function expensesPage(db: D1Database, url: URL, user: AdminUser | s
       <a href="${path}">Cancel</a></div></form></section>`, actor.name, 200, {}, canWrite, staff);
   }
   if (add || edit !== null) {
-    if (add) record = { expense_date: philippineToday() };
+    if (add) record = { expense_date: philippineToday(), ...newExpensePrefill(url) };
     const historical = edit !== null && !expenseCategories.some((category) => category === record.category)
       ? `<p class="notice">Saved category: ${esc(record.category)}. Select an approved category to save changes.</p>` : "";
     const oldMethod = edit !== null && record.payment_method && !expensePaymentMethods.some((method) => method === record.payment_method)
@@ -151,6 +173,8 @@ export async function expensesPage(db: D1Database, url: URL, user: AdminUser | s
       + `<label class="wide">Description *<textarea name="description" required maxlength="2000">${esc(record.description)}</textarea></label>`
       + `<label>Amount (PHP) *<input name="amount" type="number" min="0.01" max="1000000000" step="0.01" required value="${record.amount === undefined ? "" : esc(`${BigInt(String(record.amount)) / BigInt(100)}.${(BigInt(String(record.amount)) % BigInt(100)).toString().padStart(2, "0")}`)}"></label>`
       + dropdown("payment_method", "Payment Method", expensePaymentMethods, record.payment_method, "Select payment method")
+      + bankAccountSelect("paid_from_account", "Paid from (KargoDoor account)", kargodoorBankAccounts, record.paid_from_account, "Not recorded / cash")
+      + bankAccountSelect("paid_to_account", "Paid to (Ni Hao account)", nihaoBankAccounts, record.paid_to_account, "Not a Ni Hao bank payment")
       + input("reference_number", "Reference number", record)
       + input("tracking_number", "Tracking number (Ni Hao cost for one shipment)", record)
       + `<label class="wide">Notes<textarea name="notes" maxlength="4000">${esc(record.notes)}</textarea></label>`;
@@ -164,7 +188,7 @@ export async function expensesPage(db: D1Database, url: URL, user: AdminUser | s
     ["from", "to", "category", "payment_method", "q"].map((key) => [key, url.searchParams.get(key) ?? ""]),
   ));
   const { results } = await db.prepare(`SELECT id, expense_date, category, payee, description,
-    amount, payment_method, reference_number, notes FROM expenses
+    amount, payment_method, paid_from_account, paid_to_account, reference_number, notes FROM expenses
     WHERE (${staff ? "created_by_admin_user_id = ?" : "1 = 1"}) AND (? = '' OR expense_date >= ?) AND (? = '' OR expense_date <= ?)
       AND (? = '' OR category = ?) AND (? = '' OR payment_method = ?)
       AND (? = '' OR instr(lower(COALESCE(payee, '')), lower(?)) > 0
@@ -177,12 +201,12 @@ export async function expensesPage(db: D1Database, url: URL, user: AdminUser | s
     .all<RecordData>();
   const table = results.length ? `<div class="table"><table><thead><tr>
     ${fields.map(([, label]) => `<th>${label}</th>`).join("")}${canWrite ? "<th>Actions</th>" : ""}</tr></thead><tbody>
-    ${results.map((row) => `<tr>${fields.map(([key]) => `<td>${key === "amount" ? esc(pesos(row[key])) : esc(row[key]) || "—"}</td>`).join("")}
+    ${results.map((row) => `<tr>${fields.map(([key]) => `<td>${key === "amount" ? esc(pesos(row[key])) : key === "paid_from_account" || key === "paid_to_account" ? esc(bankAccountLabel(row[key])) || "—" : esc(row[key]) || "—"}</td>`).join("")}
       ${canWrite ? `<td><a href="${path}?edit=${esc(encodeURIComponent(String(row.id)))}">Edit</a>${canDelete ? ` <a href="${path}?delete=${esc(encodeURIComponent(String(row.id)))}">Delete</a>` : ""}</td>` : ""}</tr>`).join("")}
     </tbody></table></div>` : "<p>No expenses found.</p>";
   const notice = url.searchParams.get("deleted") === "1" ? "Expense deleted." : url.searchParams.get("updated") === "1" ? "Expense updated." : url.searchParams.get("saved") === "1" ? "Expense saved." : "";
   return page("Expenses", `${notice ? `<p class="notice" role="status">${notice}</p>` : ""}
-    <section><div class="actions">${staff ? "" : `<a href="/admin/finance">Dashboard</a>`}<a href="${path}"><strong>Expenses</strong></a>${staff ? "" : `<a href="/admin/finance/cash">Cash Flow &amp; Customer Credits</a>`}${canWrite ? `<a class="button" href="${path}?new=1">Add Expense</a>` : ""}</div></section>
+    <section><div class="actions">${staff ? "" : `<a href="/admin/finance">Dashboard</a>`}<a href="${path}"><strong>Expenses</strong></a>${staff ? "" : `<a href="/admin/finance/cash">Cash Flow &amp; Customer Credits</a><a href="/admin/finance/accounts">Bank Accounts</a>`}${canWrite ? `<a class="button" href="${path}?new=1">Add Expense</a>` : ""}</div></section>
     <section><form method="get" action="${path}" class="search">
       ${input("q", "Search", filters)}${input("from", "From Date", filters, "date")}${input("to", "To Date", filters, "date")}
       ${dropdown("category", "Category", expenseCategories, filters.category, "All Categories")}

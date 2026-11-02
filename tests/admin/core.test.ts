@@ -1,3 +1,7 @@
+import { paymentInstructions } from "../../lib/admin/customer-messages";
+import { financeAccountsPage } from "../../lib/admin/finance-accounts";
+import { kargodoorBankAccounts, nihaoBankAccounts } from "../../lib/admin/bank-accounts";
+import { mutateFinanceCash } from "../../lib/admin/finance-cash";
 import type { D1Database } from "@cloudflare/workers-types";
 import { itemCategories } from "../../lib/admin/quotation-pricing";
 import { calculateCbmConversion, calculateTotalCbm } from "../../lib/admin/quotation-cbm";
@@ -75,6 +79,7 @@ function database(includePhase1 = true) {
     sql.exec(readFileSync("migrations/admin/0030_manual_shipment_cargo.sql", "utf8"));
   if (includePhase1)
     sql.exec(readFileSync("migrations/admin/0031_manual_shipment_description_and_auto_charge.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0033_bank_accounts.sql", "utf8"));
   const user = randomUUID();
   sql
     .prepare("INSERT INTO admin_users VALUES (?,?,?,?,?,?)")
@@ -1467,4 +1472,56 @@ test("quotation shipments recalculate the KargoDoor charge from the verified siz
   assert.deepEqual(resolveQuotationShipmentCharge(null, { shipping_charge: 1000000, shipping_charge_source: "manual" }, 960000), { cost: 960000, source: "rate" });
   // A rate-following charge moves when the verified size changes again.
   assert.deepEqual(resolveQuotationShipmentCharge(950000, { shipping_charge: 950000, shipping_charge_source: "rate" }, 990000), { cost: 990000, source: "rate" });
+});
+
+test("bank accounts: Ni Hao and KargoDoor tabs, account tags on expenses and cash records", async () => {
+  const { db, sql } = database();
+  // Exact Ni Hao 2026 account numbers and the KargoDoor accounts customers pay into.
+  assert.deepEqual(nihaoBankAccounts.map((a) => [a.bank, a.accountName, a.accountNumber]), [
+    ["Sterling Bank of Asia", "NIHAO EXPRESS LOGISTICS CORPORATION", "532600010047"],
+    ["Metrobank", "NIHAO EXPRESS LOGISTICS CORPORATION", "279-7-27901627-7"],
+    ["BDO", "NIHAO EXPRESS LOGISTICS CORPORATION", "0128 8800 1087"],
+  ]);
+  for (const account of kargodoorBankAccounts)
+    assert.ok(paymentInstructions.some((line) => line.includes(account.accountNumber)), account.accountNumber);
+
+  // Account fields are optional; unknown or mismatched accounts are rejected.
+  assert.equal(parseExpenseForm(new URLSearchParams(expenseInput)).paid_from_account, null);
+  assert.throws(() => parseExpenseForm(new URLSearchParams({ ...expenseInput, paid_to_account: "kd-gcash" })));
+  assert.throws(() => parseExpenseForm(new URLSearchParams({ ...expenseInput, paid_from_account: "nihao-bdo" })));
+
+  await saveExpense(db, parseExpenseForm(new URLSearchParams({ ...expenseInput, category: "Freight / Ni Hao Cost", description: "KDSEA000005 freight",
+    amount: "25415", paid_from_account: "kd-unionbank", paid_to_account: "nihao-bdo" })));
+  await saveExpense(db, parseExpenseForm(new URLSearchParams({ ...expenseInput, description: "Tape", amount: "100", paid_from_account: "kd-gcash" })));
+  const saved = sql.prepare("SELECT paid_from_account, paid_to_account FROM expenses WHERE description = 'KDSEA000005 freight'").get()!;
+  assert.deepEqual({ ...saved }, { paid_from_account: "kd-unionbank", paid_to_account: "nihao-bdo" });
+
+  const csrf = "token";
+  await mutateFinanceCash(db, new URLSearchParams({ csrf, entry_date: "2026-09-08", entry_type: "Owner Contribution", customer_id: "",
+    related_entry_id: "", amount: "5000", reference_number: "", notes: "Top up", bank_account: "kd-gcash" }));
+  await assert.rejects(mutateFinanceCash(db, new URLSearchParams({ csrf, entry_date: "2026-09-08", entry_type: "Owner Contribution", customer_id: "",
+    related_entry_id: "", amount: "5000", reference_number: "", notes: "Wrong", bank_account: "nihao-bdo" })));
+
+  const nihao = await (await financeAccountsPage(db, new URL("https://admin.test/admin/finance/accounts"), "Admin")).text();
+  assert.match(nihao, /aria-current="page">Ni Hao Bank Accounts/);
+  for (const number of ["532600010047", "279-7-27901627-7", "0128 8800 1087"]) assert.match(nihao, new RegExp(number));
+  assert.match(nihao, /KDSEA000005 freight/);
+  assert.match(nihao, /₱25,415\.00/);
+  assert.match(nihao, /paid_to_account=nihao-bdo/);
+  assert.doesNotMatch(nihao, /Tape/);
+
+  const kd = await (await financeAccountsPage(db, new URL("https://admin.test/admin/finance/accounts?tab=kargodoor"), "Admin")).text();
+  assert.match(kd, /aria-current="page">KargoDoor Bank Accounts/);
+  assert.match(kd, /002170017106/);
+  assert.match(kd, /0919 932 3077/);
+  assert.match(kd, /Top up/);
+  assert.match(kd, /Tape/);
+  assert.match(kd, /₱4,900\.00/); // GCash net: 5,000 in − 100 out
+
+  const form = await (await expensesPage(db, new URL("https://admin.test/admin/finance/expenses?new=1&paid_to_account=nihao-sterling&category=Freight%20%2F%20Ni%20Hao%20Cost"), "Admin", "token")).text();
+  assert.match(form, /<option value="nihao-sterling" selected>/);
+  assert.match(form, /<option value="Freight \/ Ni Hao Cost" selected>/);
+  assert.match(form, /value="NIHAO EXPRESS LOGISTICS CORPORATION"/);
+  const viewer = await (await financeAccountsPage(db, new URL("https://admin.test/admin/finance/accounts"), "Viewer", false)).text();
+  assert.doesNotMatch(viewer, /Record payment to Ni Hao/);
 });
