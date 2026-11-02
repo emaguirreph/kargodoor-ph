@@ -571,3 +571,12 @@ export function parseExpenseForm(form: URLSearchParams) {
   }
   return expenseSchema.parse(Object.fromEntries(keys.map((key) => [key, form.get(key) ?? ""])));
 }
+
+/** Ni Hao's paper for a shipment (Edit shipment → Ni Hao details). */
+export const niHaoDetailsSchema = z.object({
+  nihao_no: optional(40),
+  nihao_doc_no: optional(40),
+  nihao_date: date,
+  nihao_tracking: optional(80),
+}).strict();
+export type NiHaoDetailsInput = z.infer<typeof niHaoDetailsSchema>;

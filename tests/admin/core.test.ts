@@ -1,5 +1,6 @@
 import { paymentInstructions } from "../../lib/admin/customer-messages";
 import { financeAccountsPage } from "../../lib/admin/finance-accounts";
+import { niHaoCopyText, niHaoDetailsBox, niHaoFileResponse, readNiHaoDetails, readNiHaoFile, saveNiHaoDetails, saveNiHaoFile, takeNiHaoDetails } from "../../lib/admin/nihao-details";
 import { kargodoorBankAccounts, nihaoBankAccounts } from "../../lib/admin/bank-accounts";
 import { mutateFinanceCash } from "../../lib/admin/finance-cash";
 import type { D1Database } from "@cloudflare/workers-types";
@@ -84,6 +85,7 @@ function database(includePhase1 = true) {
   sql.exec(readFileSync("migrations/admin/0034_bank_accounts.sql", "utf8"));
   if (includePhase1)
     sql.exec(readFileSync("migrations/admin/0035_air_transit_status.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0036_shipment_nihao_details.sql", "utf8"));
   const user = randomUUID();
   sql
     .prepare("INSERT INTO admin_users VALUES (?,?,?,?,?,?)")
@@ -1848,4 +1850,53 @@ test("₱30 transfer fee is inside every new admin shipping fee (not the website
   assert.equal(await lastNiHaoTransferFee(db), 1000);
   const form = niHaoPaymentSection({ path: "/admin/shipments", csrf: "t", shipmentId, trackingNumber: "KDSEA900004", nihaoCost: 20000, payment: null, canWrite: true, suggestedFee: 1000 });
   assert.match(form, /name="transfer_fee"[^>]*value="10\.00"/);
+});
+
+test("Ni Hao details on Edit shipment: No. 9945 for KDSEA000006, copy text uses Ni Hao cost and verified size, file upload", async () => {
+  const { sql, db, user } = database();
+  const customerId = await saveRecord(db, "customers", { ...customer, full_name: "Archie Aguirre", customer_code: "KD-NH" }, user, "", "");
+  const shipmentId = await saveRecord(db, "shipments", { ...shipment(customerId), tracking_number: "KDSEA000006", verified_cbm: 0.06, verified_weight_kg: 6 }, user, "", "");
+  sql.prepare("UPDATE shipments SET nihao_cost = 60000, nihao_cost_source = 'actual' WHERE id = ?").run(shipmentId);
+
+  const form = new URLSearchParams({ csrf: "x", delivery_charge: "0", nihao_no: " 9945 ", nihao_doc_no: "0040385", nihao_date: "2026-10-30", nihao_tracking: "2610040014-1" });
+  const details = takeNiHaoDetails(form)!;
+  assert.deepEqual({ ...details }, { nihao_no: "9945", nihao_doc_no: "0040385", nihao_date: "2026-10-30", nihao_tracking: "2610040014-1" });
+  assert.deepEqual([...form.keys()], ["csrf", "delivery_charge"], "the shipment form no longer carries the Ni Hao fields");
+  assert.equal(takeNiHaoDetails(new URLSearchParams({ csrf: "x" })), null);
+  assert.throws(() => takeNiHaoDetails(new URLSearchParams({ nihao_date: "30/10/2026" })));
+  assert.equal(await saveNiHaoDetails(db, shipmentId, details, user), true);
+  assert.equal(await saveNiHaoDetails(db, shipmentId, details, user), false, "no change, no second log");
+
+  const saved = await readNiHaoDetails(db, shipmentId);
+  const record = sql.prepare("SELECT * FROM shipments WHERE id = ?").get(shipmentId) as Record<string, unknown>;
+  assert.equal(niHaoCopyText(saved, record as never, "Archie Aguirre"), [
+    "Ni Hao No.: 9945", "Ni Hao Doc No.: 0040385", "Ni Hao date: Oct 30, 2026", "Ni Hao Tracking No.: 2610040014-1",
+    "Verified CBM: 0.060", "Verified weight: 6 kg", "Ni Hao freight cost: ₱600.00", "KargoDoor shipment: KDSEA000006 (Archie Aguirre)",
+  ].join("\n"));
+
+  const pdf = new File([new TextEncoder().encode("%PDF-1.7\nNi Hao 9945")], "NiHao 9945.pdf", { type: "application/pdf" });
+  await saveNiHaoFile(db, shipmentId, pdf, user);
+  await saveNiHaoFile(db, shipmentId, new File([new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1])], "photo.jpg"), user);
+  const stored = await readNiHaoFile(db, shipmentId);
+  assert.equal(stored?.file_mime, "image/jpeg");
+  assert.equal(niHaoFileResponse(stored!).headers.get("Content-Type"), "image/jpeg");
+  assert.equal((await readNiHaoDetails(db, shipmentId))?.nihao_no, "9945", "uploading keeps the typed details");
+  await assert.rejects(saveNiHaoFile(db, shipmentId, new File(["<html><script>"], "x.pdf"), user), /PDF, JPEG, PNG or WebP/);
+  await assert.rejects(saveNiHaoFile(db, shipmentId, new File([new Uint8Array(1.6 * 1024 * 1024)], "big.pdf"), user), /over 1\.5 MB/);
+  await assert.rejects(saveNiHaoFile(db, randomUUID(), pdf, user), /Shipment not found/);
+  assert.deepEqual(sql.prepare("SELECT action FROM activity_log WHERE action LIKE 'nihao_%' ORDER BY rowid").all().map((row) => row.action),
+    ["nihao_details", "nihao_file_uploaded", "nihao_file_replaced"]);
+
+  const box = niHaoDetailsBox({ shipmentId, record: record as never, details: await readNiHaoDetails(db, shipmentId), customerName: "Archie Aguirre", csrf: "token", canWrite: true });
+  assert.match(box.inline, /<h4>Ni Hao details<\/h4>/);
+  assert.match(box.inline, /name="nihao_no" value="9945"/);
+  assert.match(box.inline, /photo\.jpg/);
+  assert.match(box.inline, /href="\/admin\/shipments\/nihao-file\?id=/);
+  assert.match(box.inline, /<input form="nihao-file-form" type="file" name="file"/);
+  assert.match(box.inline, /data-copy-source="nihao-copy-/);
+  assert.doesNotMatch(box.inline, /SOA/);
+  assert.match(box.form, /<form id="nihao-file-form" method="post" action="\/admin\/shipments\/nihao-file" enctype="multipart\/form-data">/);
+  const viewer = niHaoDetailsBox({ shipmentId, record: record as never, details: null, customerName: "", csrf: "", canWrite: false });
+  assert.equal(viewer.form, "");
+  assert.match(viewer.inline, /name="nihao_no" value="" maxlength="40" placeholder="9945" readonly/);
 });

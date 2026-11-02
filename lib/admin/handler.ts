@@ -56,6 +56,7 @@ import { readShipmentStatement, shipmentStatementPdf, shipmentsLedgerCsv, statem
 import { autoDraftInvoice } from "./billing";
 import { readShipmentBilling, recordShipmentPayment, shipmentPaymentSection } from "./shipment-payment";
 import { detachForm } from "./detached-form";
+import { niHaoDetailsBox, niHaoDetailsCss, readNiHaoDetails, saveNiHaoDetails, takeNiHaoDetails } from "./nihao-details";
 
 /** Ni Hao cost input with the system estimate shown under it. Clearing the box saves the estimate. */
 const niHaoCostField = (record: RecordData, estimate: NiHaoEstimate | null) => {
@@ -120,7 +121,7 @@ const shipmentStatusOptions = (record: RecordData): readonly string[] => {
 const shipmentFormCsp =
   "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
 
-/** Blue (KargoDoor, money in) and orange (Ni Hao, money out) parts of the Edit shipment form. */
+/** Green (KargoDoor, money in) and red (Ni Hao, money out) parts of the Edit shipment form. */
 const shipmentMoneyCss = `<style>
 .shipment-money{border:1.5px solid;border-radius:16px;padding:20px 22px}
 .shipment-money>h3{margin:0 0 14px;font-size:1.15rem;display:flex;align-items:center;flex-wrap:wrap;gap:10px}
@@ -129,15 +130,16 @@ const shipmentMoneyCss = `<style>
 .shipment-pay-box{margin-top:18px;padding:16px 18px;border:1.5px solid;border-radius:12px;background:#fff;scroll-margin-top:20px}
 .shipment-pay-box h4{margin:0 0 4px;font-size:1rem}
 .shipment-pay-box>p{font-size:.92rem}
-.shipment-money-kd{background:#eaf2ff;border-color:#b9cff5}
-.shipment-money-kd>h3,.shipment-money-kd h4{color:#003b9d}
-.shipment-money-kd .shipment-money-tag{background:#003b9d}
-.shipment-money-kd .shipment-pay-box{border-color:#b9cff5}
-.shipment-money-nh{background:#fff4e6;border-color:#f6c58f}
-.shipment-money-nh>h3,.shipment-money-nh h4{color:#a14c00}
-.shipment-money-nh .shipment-money-tag{background:#d9700a}
-.shipment-money-nh .shipment-pay-box{border-color:#f6c58f}
-html body .shipment-money-nh .shipment-pay-box button{background:linear-gradient(135deg,#c25e00,#e8840f);box-shadow:0 10px 20px -12px rgba(194,94,0,.8)}
+.shipment-money-kd{background:#e8f6ec;border-color:#a9dbb8}
+.shipment-money-kd>h3,.shipment-money-kd h4{color:#17643a}
+.shipment-money-kd .shipment-money-tag{background:#1d8a46}
+.shipment-money-kd .shipment-pay-box{border-color:#a9dbb8}
+html body .shipment-money-kd .shipment-pay-box button{background:linear-gradient(135deg,#17643a,#1d8a46);box-shadow:0 10px 20px -12px rgba(23,100,58,.8)}
+.shipment-money-nh{background:#fdecec;border-color:#f0aaa4}
+.shipment-money-nh>h3,.shipment-money-nh h4{color:#a3261f}
+.shipment-money-nh .shipment-money-tag{background:#c62828}
+.shipment-money-nh .shipment-pay-box{border-color:#f0aaa4}
+html body .shipment-money-nh .shipment-pay-box button{background:linear-gradient(135deg,#a3261f,#d33a2c);box-shadow:0 10px 20px -12px rgba(163,38,31,.8)}
 @media(max-width:520px){.shipment-money{padding:14px}.shipment-pay-box{padding:12px}}
 </style>`;
 
@@ -590,6 +592,9 @@ export async function handleAdmin(
         );
       }
 
+      // Ni Hao details have their own table; take them out before the shipment fields are checked.
+      const niHaoDetails = entity === "shipments" ? takeNiHaoDetails(form) : null;
+
       let values =
         parseForm(
           entity!,
@@ -658,6 +663,8 @@ export async function handleAdmin(
           id,
           revision,
         );
+
+      if (niHaoDetails) await saveNiHaoDetails(db, recordId, niHaoDetails, user.id);
 
       if (
         entity === "shipments" &&
@@ -1198,7 +1205,7 @@ export async function handleAdmin(
         /*
          * FINANCIAL DETAILS
          */
-        // Money in (KargoDoor, blue) and money out (Ni Hao, orange), each with
+        // Money in (KargoDoor, green) and money out (Ni Hao, red), each with
         // its payment box. The payment boxes submit their own forms (see
         // detachForm), placed after the Save shipment form.
         const payable = Boolean(id) && !record.archived_at && record.status !== "Cancelled";
@@ -1227,7 +1234,19 @@ export async function handleAdmin(
               title: "Ni Hao payment",
             }), "nihao-payment-form")
           : { inline: "", form: "" };
-        paymentForms = customerBox.form + niHaoBox.form;
+        const niHaoCustomer = record.customer_id
+          ? await db.prepare("SELECT full_name FROM customers WHERE id = ?").bind(record.customer_id).first<{ full_name: string }>()
+          : null;
+        const niHaoDetailsCard = niHaoDetailsBox({
+          shipmentId: String(id ?? ""),
+          record,
+          details: await readNiHaoDetails(db, String(id ?? "")),
+          customerName: niHaoCustomer?.full_name ?? "",
+          csrf: csrfToken(env, user.id, path),
+          canWrite,
+          uploaded: url.searchParams.get("nihao_file") === "1",
+        });
+        paymentForms = customerBox.form + niHaoBox.form + niHaoDetailsCard.form;
 
         fields +=
           `<div class="wide shipment-money shipment-money-kd">
@@ -1243,7 +1262,6 @@ export async function handleAdmin(
             30,
           ) +
           // Payment status follows the invoice; it is shown here, not typed.
-          `<label>Payment status<input value="${esc(record.payment_status ?? "Unpaid")}" readonly aria-readonly="true" class="k-readonly"><small class="muted">Set automatically from the invoice when a payment is recorded.</small></label>` +
           hidden("payment_status", record.payment_status ?? "Unpaid") +
           `</div>${customerBox.inline}</div>
           <div class="wide shipment-money shipment-money-nh">
@@ -1253,7 +1271,7 @@ export async function handleAdmin(
             record,
             await shipmentNiHaoEstimate(db, String(record.id ?? ""), record),
           ) +
-          `</div>${niHaoBox.inline}</div>`;
+          `</div>${niHaoDetailsCss}<script src="/admin-copy.js" defer></script>${niHaoDetailsCard.inline}${niHaoBox.inline}</div>`;
       }
 
       /*
@@ -1386,7 +1404,7 @@ export async function handleAdmin(
 
               <p class="muted">
                 * Required. Optional blank
-                values clear the saved field.${paymentForms ? " Record payment and Mark Ni Hao paid save only their own box. If you changed other fields, click Save shipment first." : ""}
+                values clear the saved field.${paymentForms ? " Record payment, Mark Ni Hao paid and Upload save only their own box. If you changed other fields, click Save shipment first." : ""}
               </p>
 
               <div class="actions">
