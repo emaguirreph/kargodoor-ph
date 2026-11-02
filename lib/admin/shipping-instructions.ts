@@ -3,6 +3,8 @@ import { finishMessage } from "./customer-messages";
 export type ShippingInstructionCustomer = {
   name?: unknown;
   customerCode?: unknown;
+  /** Sea Freight, Air Freight or Full Container. */
+  service?: unknown;
   warehouse?: unknown;
   warehouseAddress?: unknown;
 };
@@ -47,7 +49,7 @@ Receiving Time: Monday to Sunday 8am to 6pm (except for holidays)`,
 邮编：322009
 Receiving Time: Monday to Sunday 8am to 5pm (except for holidays)`,
   "Tongda Air Cargo": `TONGDA AIR CARGO 通达空运
-贴标: AIR + 客户唛头
+贴标：AIR + 客户唛头
 收件人：通达空运
 地址：福建泉州市晋江市龙湖梧坑逸海产业园4栋空运部（+客户唛头）
 手机号：13533392699
@@ -61,34 +63,110 @@ export function warehouseAddress(warehouse: unknown): string {
     : "";
 }
 
-export const supplierRequirements = `📦 KARGODOOR PH – INSTRUCTIONS TO SUPPLIER
-🇨🇳 中文 | 发货前注意重要事项
-1️⃣ 请务必每件货物贴好唛头标签（包括客户代号、菲律宾收货人电话、中国寄件人电话），否则仓库无法收货入仓。
-2️⃣ 请每票货随货附一张装箱单，包含详细中文品名、材质、件数、重量、发货人电话等。
-3️⃣ 送货前请确保货物包装完整无破损，易碎货物需加固包装，否则仓库不接收包装破损货物。
-━━━━━━━━━━━━━━
-🇬🇧 ENGLISH | IMPORTANT REMINDERS BEFORE SHIPPING
-1️⃣ Proper Cargo Labeling
-Every package must have a shipping label containing:
+const divider = "━━━━━━━━━━━━━━";
 
-• Customer Cargo Code: KDOOR-XXXX
-• Philippine recipient’s phone number
-• Chinese sender’s phone number
-2️⃣ Packing List
-Each shipment must include a packing list indicating:
+/** Supplier rules in Chinese and English, with label examples for the customer's cargo code. */
+export function supplierRequirementsText(code = "KDOOR-XXXX"): string {
+  return [
+    "📌 IMPORTANT SUPPLIER INSTRUCTIONS",
+    "",
+    "🇨🇳 中文说明（请转发供应商）",
+    "",
+    "1️⃣ 每件货物必须贴好唛头标签，注明客户代号、菲律宾收货人电话及中国寄件人电话，否则仓库不予收货。",
+    "",
+    "2️⃣ 每票货须附装箱单，注明中文品名、材质、数量、重量及寄件人电话。",
+    "",
+    "3️⃣ 包装必须完整无损，易碎品需加固，否则仓库不予接收。",
+    "",
+    divider,
+    "",
+    "🇬🇧 ENGLISH – SHIPPING REMINDERS",
+    "",
+    "1️⃣ Cargo Label – Required on EVERY package",
+    "",
+    "Each package must display the cargo code, item name, supplier's contact number, and Philippine recipient's phone number.",
+    "",
+    "🚢 SEA FREIGHT – Label Example",
+    "",
+    `SEA ${code}`,
+    "Item: [Product Name]",
+    "Supplier: [Chinese Phone Number]",
+    "Recipient: [PH Phone Number]",
+    "",
+    "✈️ AIR FREIGHT – Label Example",
+    "",
+    `AIR ${code}`,
+    "Item: [Product Name]",
+    "Supplier: [Chinese Phone Number]",
+    "Recipient: [PH Phone Number]",
+    "",
+    "2️⃣ Packing List",
+    "",
+    "Every shipment must include:",
+    "• Product description in Chinese",
+    "• Material/composition",
+    "• Quantity and weight",
+    "• Supplier's phone number",
+    "",
+    "3️⃣ Proper Packaging",
+    "",
+    "All packages must be securely packed and undamaged. Fragile items require additional protection.",
+    "",
+    "⚠️ IMPORTANT: Packages with incomplete labels or damaged packaging will NOT be accepted by the warehouse.",
+  ].join("\n");
+}
 
-* Detailed product description in Chinese
-* Material or composition
-* Quantity
-* Weight
-* Sender's phone number
+export const supplierRequirements = supplierRequirementsText();
 
-3️⃣ Proper Packaging
-Ensure all packages are securely packed and undamaged. Fragile items must have additional protective packaging.
-⚠️ IMPORTANT: The warehouse will NOT accept packages with incomplete labels or damaged packaging.
-📲 Once shipped, please send us the tracking number and total number of packages.
-KargoDoor PH 💙💚
-China to PH, Made SIMPLE.`;
+const shippingMethod = (service: unknown) => {
+  const value = text(service);
+  if (!value) return "[Confirm shipping method]";
+  return /air/i.test(value) ? `${value} ✈️` : `${value} 🚢`;
+};
+
+/** Full shipping instructions the customer forwards to their supplier. */
+function shippingInstructionsMessage(details: ShippingInstructionCustomer): string {
+  const name = text(details.name, "there");
+  const code = text(details.customerCode, "[account/cargo code]");
+  const warehouse = text(details.warehouse, "[Confirm the assigned warehouse]");
+  const address = text(details.warehouseAddress || warehouseAddress(warehouse), "[Add warehouse address]");
+  return [
+    `Hi ${name}! 😊`,
+    "",
+    "Here are the shipping instructions for your KargoDoor PH shipment. Please forward these details to your supplier before shipping.",
+    "",
+    "📦 YOUR SHIPPING DETAILS",
+    "",
+    `Cargo Code: ${code}`,
+    `Shipping Method: ${shippingMethod(details.service)}`,
+    `Assigned Warehouse: ${warehouse}`,
+    "",
+    "📍 CHINA WAREHOUSE ADDRESS",
+    "",
+    address,
+    "",
+    divider,
+    "",
+    supplierRequirementsText(code),
+    "",
+    divider,
+    "",
+    "📲 ONCE SHIPPED, PLEASE SEND US:",
+    "",
+    "Example:",
+    "",
+    "• Courier: SF Express",
+    "• Tracking/Waybill No.: SF123456789",
+    "• Total Packages: 2",
+    "• Receipt or Package Photo: 📸",
+    "",
+    "This allows us to monitor your shipment before it reaches our China warehouse.",
+    "",
+    "📦 Shipping Reminder: Final shipping charges will be based on the actual CBM and weight verified by our China warehouse, using the applicable freight rates.",
+    "",
+    "Thank you for trusting KargoDoorPH.com! 💚",
+  ].join("\n");
+}
 
 /** Welcome message: Account/Cargo Code and customer portal login in one message. */
 export function customerWelcomeMessage(customer: PortalAccessMessage): string {
@@ -122,31 +200,7 @@ export function customerWelcomeMessage(customer: PortalAccessMessage): string {
 }
 
 export function customerShippingInstructions(customer: ShippingInstructionCustomer): string {
-  const name = text(customer.name, "there");
-  const code = text(customer.customerCode, "[account/cargo code]");
-  const warehouse = text(customer.warehouse, "[Confirm the assigned warehouse]");
-  const address = text(customer.warehouseAddress || warehouseAddress(warehouse), "[Add warehouse address]");
-  return finishMessage([
-    `Hi ${name}! 😊`,
-    "",
-    "Here are your KargoDoor China warehouse shipping instructions.",
-    "",
-    "📦 Your Details",
-    `Account/Cargo Code: ${code}`,
-    `Assigned Warehouse: ${warehouse}`,
-    "",
-    "📍 Warehouse Address",
-    address,
-    "",
-    "Next Steps:",
-    `1. Please ask your supplier to place ${code} clearly on every package label. This helps us receive, identify, and update your shipment correctly.`,
-    "2. Send your supplier the instructions below.",
-    "3. Once shipped, please send us the courier name, tracking/waybill number, and a receipt or package photo so we can monitor your cargo going to our warehouse.",
-    "",
-    supplierRequirements,
-    "",
-    "Thank you for trusting KargoDoor PH! 💚",
-  ]);
+  return shippingInstructionsMessage(customer);
 }
 
 /** Short message with only the assigned China warehouse address and the cargo code. */
@@ -184,38 +238,7 @@ export function warehouseAddressBook(): Array<[WarehouseName, string]> {
 }
 
 export function shipmentShippingInstructions(shipment: ShippingInstructionShipment): string {
-  const name = text(shipment.name, "there");
-  const code = text(shipment.customerCode, "[account/cargo code]");
-  const warehouse = text(shipment.warehouse, "[Confirm the assigned warehouse]");
-  const address = text(shipment.warehouseAddress || warehouseAddress(warehouse), "[Add warehouse address]");
-  const courier = text(shipment.supplierCourier, "[courier name]");
-  const waybill = text(shipment.supplierWaybill, "[tracking/waybill number]");
-  return finishMessage([
-    `Hi ${name}! 😊`,
-    "",
-    "Here are the shipping instructions for your KargoDoor cargo.",
-    "",
-    "📦 Your Details",
-    `Account/Cargo Code: ${code}`,
-    `Assigned Warehouse: ${warehouse}`,
-    "",
-    "📍 Warehouse Address",
-    address,
-    "",
-    "Next Steps:",
-    `Please ask your supplier to place ${code} clearly on every package before shipping, and send them the instructions below.`,
-    "",
-    supplierRequirements,
-    "",
-    "Once shipped, please send us:",
-    `• Courier: ${courier}`,
-    `• Tracking/Waybill number: ${waybill}`,
-    "• Receipt or package photo",
-    "",
-    "This helps us monitor your cargo going to our warehouse.",
-    "",
-    "Thank you for trusting KargoDoor PH! 💚",
-  ]);
+  return shippingInstructionsMessage(shipment);
 }
 
 export function copyButton(id: string, label = "Copy shipping instructions"): string {

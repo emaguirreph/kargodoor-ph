@@ -1694,7 +1694,8 @@ export async function handleAdmin(
       const instructionMessage = entity === "shipments"
         ? shipmentShippingInstructions({
             name: linkedCustomer?.full_name,
-            customerCode: linkedCustomer?.customer_code,
+            customerCode: record.cargo_code || linkedCustomer?.customer_code,
+            service: record.service_type,
             warehouse: record.china_warehouse,
             warehouseAddress: warehouseAddress(record.china_warehouse),
             supplierCourier: record.supplier_courier,

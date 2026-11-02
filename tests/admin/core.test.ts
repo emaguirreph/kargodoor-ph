@@ -157,34 +157,38 @@ const shipmentInput = (id: string) =>
 const shipment = (id: string) => shipmentSchema.parse(shipmentInput(id));
 
 test("shipping instructions include the customer account code and supplier details", () => {
-  const customerMessage = customerShippingInstructions({ name: "Maria", customerCode: "KD-10025", warehouse: "Guangzhou" });
+  const customerMessage = customerShippingInstructions({ name: "Maria", customerCode: "KD-10025", service: "Air Freight", warehouse: "Guangzhou" });
   assert.match(customerMessage, /Hi Maria/);
-  assert.match(customerMessage, /Account\/Cargo Code: KD-10025/);
-  assert.match(customerMessage, /place KD-10025 clearly on every package/);
+  assert.match(customerMessage, /Cargo Code: KD-10025/);
+  assert.match(customerMessage, /Shipping Method: Air Freight ✈️/);
+  assert.match(customerMessage, /Assigned Warehouse: Guangzhou/);
   assert.match(customerMessage, /广州市白云区江高镇沙溪东路18号166通达仓库/);
-  assert.match(customerMessage, /发货前注意重要事项/);
-  assert.match(customerMessage, /IMPORTANT REMINDERS BEFORE SHIPPING/);
-  assert.ok(customerMessage.includes("Customer Cargo Code: KDOOR-XXXX"));
-  assert.match(customerMessage, /will NOT accept packages with incomplete labels/);
+  assert.match(customerMessage, /中文说明（请转发供应商）/);
+  assert.match(customerMessage, /ENGLISH – SHIPPING REMINDERS/);
+  assert.ok(customerMessage.includes("SEA KD-10025"));
+  assert.ok(customerMessage.includes("AIR KD-10025"));
+  assert.match(customerMessage, /will NOT be accepted by the warehouse/);
+  assert.match(customerMessage, /ONCE SHIPPED, PLEASE SEND US/);
+  assert.match(customerMessage, /Thank you for trusting KargoDoorPH\.com! 💚$/);
 
   const addressMessage = customerWarehouseAddressMessage({ name: "Maria", customerCode: "KD-10025", warehouse: "Yiwu" });
   assert.match(addressMessage, /Hi Maria/);
   assert.match(addressMessage, /Account\/Cargo Code: KD-10025/);
   assert.ok(addressMessage.includes(warehouseAddress("Yiwu")));
-  assert.doesNotMatch(addressMessage, /发货前注意重要事项/);
+  assert.doesNotMatch(addressMessage, /中文说明/);
   assert.match(customerWarehouseAddressMessage({ name: "Maria", warehouse: "Hong Kong" }), /\[Add warehouse address\]/);
 
   const shipmentMessage = shipmentShippingInstructions({
     name: "Maria",
     customerCode: "KD-10025",
+    service: "Sea Freight",
     warehouse: "Guangzhou",
-    supplierCourier: "SF Express",
-    supplierWaybill: "SF123456",
   });
+  assert.match(shipmentMessage, /Shipping Method: Sea Freight 🚢/);
   assert.match(shipmentMessage, /Assigned Warehouse: Guangzhou/);
   assert.match(shipmentMessage, /广州市白云区江高镇沙溪东路18号166通达仓库/);
   assert.match(shipmentMessage, /Courier: SF Express/);
-  assert.match(shipmentMessage, /Tracking\/Waybill number: SF123456/);
+  assert.match(shipmentMessage, /Tracking\/Waybill No\.: SF123456789/);
   assert.match(shipmentMessage, /Packing List/);
   assert.match(warehouseAddress("Tongda Air Cargo"), /TONGDA AIR CARGO/);
 });
