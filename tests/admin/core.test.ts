@@ -1605,3 +1605,45 @@ test("marking Ni Hao paid on a shipment creates one linked expense and no double
   assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM expenses").get()!.n, 1);
   await assert.rejects(recordNiHaoPayment(db, new URLSearchParams({ ...Object.fromEntries(form), extra: "x" }), actor), /Unexpected/);
 });
+
+test("shipment statement PDF and ledger CSV join customer, KD billing and Ni Hao payment", async () => {
+  const { db, sql, user } = database();
+  const { recordNiHaoPayment } = await import("../../lib/admin/nihao-payment");
+  const { readShipmentStatement, shipmentStatementPdf, shipmentsLedgerCsv, statementFilename } = await import("../../lib/admin/shipment-statement");
+  const customerId = randomUUID();
+  const shipmentId = randomUUID();
+  sql.prepare("INSERT INTO customers (id, customer_code, full_name, company_name, mobile, email, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)")
+    .run(customerId, "KDOOR-9001", "Statement Tester", "Test Co", "09170000001", "tester@example.test", "2026-10-01", "2026-10-01");
+  sql.prepare("INSERT INTO shipments (id, customer_id, tracking_number, service_type, china_warehouse, cbm, weight_kg, status, shipping_charge, delivery_charge, payment_status, nihao_cost, nihao_cost_source, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+    .run(shipmentId, customerId, "KDAIR-900001", "Air Freight", "Guangzhou", 0.01, 2, "Malabon Warehouse", 100000, 24700, "Unpaid", 70000, "actual", "2026-10-01", "2026-10-01");
+
+  let statement = await readShipmentStatement(db, shipmentId);
+  assert.equal(statement.invoice, null);
+  assert.equal(statement.billed, 124700);
+  assert.equal(statement.balance, 124700);
+  assert.equal(statement.niHaoOwed, 70000);
+  assert.equal(statement.profit, 30000);
+  assert.equal(statementFilename(statement), "KDAIR-900001 - Statement Tester.pdf");
+
+  await recordNiHaoPayment(db, new URLSearchParams({ csrf: "t", action: "nihao_paid", id: shipmentId, expense_date: "2026-11-02", amount: "700.00", payment_method: "GCash", reference_number: "SOA 9986", notes: "" }),
+    { id: user, name: "Admin", email: "admin@example.test", role: "admin" });
+  statement = await readShipmentStatement(db, shipmentId);
+  assert.equal(statement.niHaoPaid, 70000);
+  assert.equal(statement.niHaoOwed, 0);
+  const pdf = new TextDecoder().decode(shipmentStatementPdf(statement, "2026-11-02"));
+  assert.match(pdf, /^%PDF-1\.4/);
+  for (const expected of ["Statement Tester", "Test Co", "09170000001", "tester@example.test", "KDOOR-9001", "KDAIR-900001", "SOA 9986", "30.0% margin", "Not issued yet"])
+    assert.ok(pdf.includes(expected), expected);
+
+  const csv = await (await shipmentsLedgerCsv(db, "2026-11-02")).text();
+  const [header, row] = csv.replace(/^﻿/, "").trim().split("\r\n");
+  const cells = Object.fromEntries(header.split(",").map((name, i) => [name, row.split(",")[i]]));
+  assert.equal(cells["Customer"], "Statement Tester");
+  assert.equal(cells["Mobile"], "09170000001");
+  assert.equal(cells["KD Billed PHP"], "1247.00");
+  assert.equal(cells["Ni Hao Paid PHP"], "700.00");
+  assert.equal(cells["Ni Hao Reference"], "SOA 9986");
+  assert.equal(cells["Owed to Ni Hao PHP"], "0.00");
+  assert.equal(cells["Freight Profit PHP"], "300.00");
+  assert.equal(cells["Margin %"], "30.0");
+});
