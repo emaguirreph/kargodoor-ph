@@ -183,13 +183,23 @@ export async function expensesPage(db: D1Database, url: URL, user: AdminUser | s
       ${listFields.map(([key]) => `<td>${key === "amount" ? esc(pesos(row[key])) : esc(row[key]) || "—"}</td>`).join("")}</tr>`).join("")}
     </tbody></table></div>` : "<p>No expenses found.</p>";
   const notice = url.searchParams.get("deleted") === "1" ? "Expense deleted." : url.searchParams.get("updated") === "1" ? "Expense updated." : url.searchParams.get("saved") === "1" ? "Expense saved." : "";
+  // Owner money, opening cash and adjustments are not sales, but they are
+  // money in, so they sit next to money out (staff only see their expenses).
+  const moneyIn = staff ? [] : (await db.prepare(`SELECT id, entry_date, entry_type, amount, reference_number, notes
+    FROM finance_cash_entries ORDER BY entry_date DESC, created_at DESC LIMIT 50`).all<RecordData>()).results;
+  const moneyInSection = staff ? "" : `<section><div class="actions"><h2>Money In (not sales)</h2>
+    ${canWrite ? `<a class="button" href="/admin/finance/cash?new=1">+ Add money in</a>` : ""}<a href="/admin/finance/cash">All records</a></div>
+    <p class="muted">Opening cash, owner money, adjustments and customer credits. Customer invoice payments are under Invoices &amp; Payments.</p>
+    ${moneyIn.length ? `<div class="table"><table><thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Notes</th></tr></thead><tbody>${moneyIn.map((row) => `<tr><td>${esc(row.entry_date)}</td><td>${esc(row.entry_type)}</td><td><strong>${esc(pesos(row.amount))}</strong></td><td>${esc(row.notes) || "—"}</td></tr>`).join("")}</tbody></table></div>` : '<p class="muted">No money-in records yet.</p>'}</section>`;
   return page("Expenses", `${notice ? `<p class="notice" role="status">${notice}</p>` : ""}
-    <section><div class="actions">${staff ? "" : `<a href="/admin/finance">Dashboard</a>`}<a href="${path}"><strong>Expenses</strong></a>${staff ? "" : `<a href="/admin/finance/cash">Cash Flow &amp; Customer Credits</a>`}${canWrite ? `<a class="button" href="${path}?new=1">Add Expense</a>` : ""}</div></section>
+    <section><div class="actions">${staff ? "" : `<a href="/admin/finance">Money Today</a>`}<a href="${path}"><strong>Expenses</strong></a>${canWrite ? `<a class="button" href="${path}?new=1">Add Expense</a>` : ""}</div>
+    ${staff ? "" : `<p class="muted">Paying Ni Hao? Use Mark Ni Hao paid on the shipment page. Bank or GCash transfer fees go under Bank / Payment Fees.</p>`}</section>
     <section><form method="get" action="${path}" class="search">
       ${input("q", "Search", filters)}${input("from", "From Date", filters, "date")}${input("to", "To Date", filters, "date")}
       ${dropdown("category", "Category", expenseCategories, filters.category, "All Categories")}
       ${dropdown("payment_method", "Payment Method", expensePaymentMethods, filters.payment_method, "All Payment Methods")}
       <button type="submit">Apply Filters</button><a href="${path}">Clear Filters</a></form></section>
     <div class="card"><h2>Total Expenses</h2><strong>${esc(totalPesos(results))}</strong></div>
-    <section>${table}</section>`, actor.name, 200, {}, canWrite, staff);
+    <section>${table}</section>
+    ${moneyInSection}`, actor.name, 200, {}, canWrite, staff);
 }

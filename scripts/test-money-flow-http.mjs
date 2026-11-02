@@ -80,7 +80,7 @@ server.stderr.on("data", (d) => (logs += d));
 const authorization =
   "Basic " +
   Buffer.from(`local-admin@example.test:${password}`).toString("base64");
-const get = (path, auth = true) =>
+let get = (path, auth = true) =>
   fetch(origin + path, {
     headers: auth === "invalid"
       ? { authorization: "Basic invalid" }
@@ -97,7 +97,7 @@ const revision = (html) => {
   assert.ok(m);
   return m[1];
 };
-const post = (path, values, extra = {}) =>
+let post = (path, values, extra = {}) =>
   fetch(origin + path, {
     method: "POST",
     headers: {
@@ -119,6 +119,12 @@ try {
       await new Promise((r) => setTimeout(r, 500));
     }
   }
+  // The local dev server can drop the first connection after a CLI database
+  // read; retry that request once (only when no response came back).
+  const retry = async (fn) => { try { return await fn(); } catch (e) { if (!String(e?.cause ?? e).includes("other side closed")) throw e; await new Promise((r) => setTimeout(r, 1000)); return fn(); } };
+  const get2 = get, post2 = post;
+  get = (...a) => retry(() => get2(...a));
+  post = (...a) => retry(() => post2(...a));
   const sqlRows = (command) => JSON.parse(cli(["d1", "execute", "ADMIN_DB", "--local", "--json", "--command", command]))[0].results;
   const money = (html, label) => {
     const at = html.indexOf(label);
@@ -150,30 +156,30 @@ try {
   const tracking = sqlRows(`SELECT tracking_number FROM shipments WHERE id='${sid}'`)[0].tracking_number;
   html = await (await get("/admin/finance")).text();
   assert.equal(money(html, "Money coming in"), "₱3,420.00");
-  step(`Shipment ${tracking} saved; ₱3,420 shows under Money coming in (still to bill)`);
+  let drafts = sqlRows(`SELECT id, status, total FROM invoices WHERE shipment_id='${sid}'`);
+  assert.deepEqual(drafts.map((d) => [d.status, d.total]), [["Draft", 342000]], "Draft invoice made automatically");
+  step(`Shipment ${tracking} saved at Malabon Warehouse; Draft invoice ₱3,420 made automatically; ₱3,420 under Money coming in`);
 
   // 3. Ni Hao SOA arrives: enter the actual cost ₱2,805.
   html = await (await get(`/admin/shipments?id=${sid}&edit=1`)).text();
-  response = await post("/admin/shipments", { ...shipment, id: sid, revision: revision(html), csrf: token(html), nihao_cost: "2805" });
+  assert.ok(html.includes('name="payment_status" value="Unpaid"') && html.includes("Set automatically from the invoice"), "payment status is read-only");
+  response = await post("/admin/shipments", { ...shipment, id: sid, revision: revision(html), csrf: token(html), nihao_cost: "2805", payment_status: "Paid" });
   assert.equal(response.status, 303, await response.text());
   let row = sqlRows(`SELECT nihao_cost, nihao_cost_source, shipping_charge FROM shipments WHERE id='${sid}'`)[0];
   assert.deepEqual(row, { nihao_cost: 280500, nihao_cost_source: "actual", shipping_charge: 342000 });
+  assert.equal(sqlRows(`SELECT payment_status FROM shipments WHERE id='${sid}'`)[0].payment_status, "Unpaid", "typing Paid on the shipment form is ignored");
+  assert.equal(sqlRows(`SELECT COUNT(*) AS n FROM invoices WHERE shipment_id='${sid}'`)[0].n, 1, "saving again does not make a second invoice");
   html = await (await get("/admin/finance")).text();
   assert.equal(money(html, "Money going out"), "₱2,805.00");
   assert.equal(money(html, "Expected profit once billed"), "₱615.00");
   step("Ni Hao SOA ₱2,805 saved as Ni Hao actual; Going out ₱2,805; expected profit ₱615");
 
-  // 4. Invoice from the shipment page link, saved as Draft.
-  response = await get(`/admin/invoices?new=1&shipment_id=${sid}`);
-  html = await response.text();
-  response = await post("/admin/invoices", { csrf: token(html), action: "invoice", shipment_id: sid, delivery_charge: "0", other_charge: "0", status: "Draft", issued_at: "", due_at: "" });
-  assert.equal(response.status, 303, await response.text());
-  const invoiceUrl = response.headers.get("location");
-  const iid = new URL(invoiceUrl, origin).searchParams.get("id");
-  html = await (await get(`/admin/shipments?id=${sid}`)).text();
+  // 4. The shipment page's invoice link opens the automatic Draft.
+  const iid = drafts[0].id;
+  const invoiceUrl = `/admin/invoices?id=${iid}`;
   response = await get(`/admin/invoices?new=1&shipment_id=${sid}`);
   assert.ok([302, 303, 307].includes(response.status) && response.headers.get("location").includes(iid), "shipment invoice link opens the existing invoice");
-  step("Draft invoice created; shipment's invoice link opens the same invoice");
+  step("Shipment's invoice link opens the automatic Draft; typing Paid on the shipment form is ignored");
 
   // 5. Client pays in full on the Draft (auto-issues it).
   html = await (await get(invoiceUrl)).text();
@@ -191,36 +197,53 @@ try {
   // 6. Pay Ni Hao from the shipment page.
   html = await (await get(`/admin/shipments?id=${sid}`)).text();
   assert.ok(html.includes("Mark Ni Hao paid"));
-  const niHao = { csrf: token(html), action: "nihao_paid", id: sid, expense_date: "2026-11-02", amount: "2805", payment_method: "Bank Transfer", reference_number: "UB-777", notes: "SOA 9999" };
+  assert.ok(html.includes('name="paid_from"') && html.includes('name="transfer_fee"'));
+  const niHao = { csrf: token(html), action: "nihao_paid", id: sid, expense_date: "2026-11-02", amount: "2805", paid_from: "UnionBank", transfer_fee: "10", reference_number: "UB-777", notes: "SOA 9999" };
   response = await post("/admin/shipments", niHao);
   assert.equal(response.status, 303, await response.text());
   assert.equal((await post("/admin/shipments", niHao)).status, 409, "second Ni Hao payment refused");
   html = await (await get(`/admin/shipments?id=${sid}`)).text();
-  assert.ok(html.includes("<strong>Paid</strong> · ₱2,805.00"));
-  const expenses = sqlRows(`SELECT category, amount, tracking_number FROM expenses`);
-  assert.deepEqual(expenses, [{ category: "Freight / Ni Hao Cost", amount: 280500, tracking_number: tracking }]);
-  step("Mark Ni Hao paid: one Freight / Ni Hao Cost expense ₱2,805 with the tracking no.; double payment refused");
+  assert.ok(html.includes("<strong>Paid</strong> · ₱2,805.00") && html.includes("+ ₱10.00 transfer fee"));
+  const expenses = sqlRows(`SELECT category, payee, amount, payment_method, tracking_number FROM expenses ORDER BY amount DESC`);
+  assert.deepEqual(expenses, [
+    { category: "Freight / Ni Hao Cost", payee: "Ni Hao", amount: 280500, payment_method: "Bank Transfer", tracking_number: tracking },
+    { category: "Bank / Payment Fees", payee: "UnionBank", amount: 1000, payment_method: "Bank Transfer", tracking_number: tracking },
+  ]);
+  step("Mark Ni Hao paid from UnionBank with ₱10 fee: ₱2,805 Ni Hao expense + ₱10 Bank / Payment Fees expense; double payment refused");
 
   // 7. Final balance.
   html = await (await get("/admin/finance")).text();
-  assert.equal(money(html, "Money we have now"), "₱25,615.00");
+  assert.equal(money(html, "Money we have now"), "₱25,605.00");
   assert.equal(money(html, "Money going out"), "₱0.00");
-  assert.equal(money(html, "Overall profit after expenses"), "₱615.00");
-  step("Balance: cash ₱25,615 (25,000 + 3,420 − 2,805), going out ₱0, overall profit ₱615");
+  assert.equal(money(html, "Overall profit after expenses"), "₱605.00");
+  assert.ok(html.includes("Ni Hao is paid for every active shipment."));
+  step("Balance: cash ₱25,605 (25,000 + 3,420 − 2,805 − 10 fee), going out ₱0, overall profit ₱605");
 
   // 8. Statement PDF and ledger CSV.
   response = await get(`/admin/shipments?id=${sid}&statement=pdf`);
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type"), /application\/pdf/);
   const pdf = Buffer.from(await response.arrayBuffer()).toString("latin1");
-  for (const text of [tracking, "Flow Test Customer", "3,420.00", "2,805.00", "615.00"]) assert.ok(pdf.includes(text), `statement has ${text}`);
+  for (const text of [tracking, "Flow Test Customer", "3,420.00", "2,805.00", "615.00", "Bank transfer fees", "605.00"]) assert.ok(pdf.includes(text), `statement has ${text}`);
   response = await get("/admin/finance/export?ledger=shipments");
   assert.equal(response.status, 200);
   const csv = await response.text();
   const line = csv.split(/\r?\n/).find((l) => l.includes(tracking));
   assert.ok(line, "ledger row present");
-  for (const text of ["Flow Test Customer", "3420.00", "2805.00", "615.00"]) assert.ok(line.includes(text), `ledger row has ${text}: ${line}`);
-  step("Shipment Statement PDF and Shipments Ledger CSV both show ₱3,420 billed, ₱2,805 Ni Hao, ₱615 profit");
+  for (const text of ["Flow Test Customer", "3420.00", "2805.00", "615.00", ",10.00,605.00"]) assert.ok(line.includes(text), `ledger row has ${text}: ${line}`);
+  step("Statement PDF and Ledger CSV: ₱3,420 billed, ₱2,805 Ni Hao, ₱615 profit, ₱10 fee, ₱605 after fees");
+
+  // 8b. The 4 Billing & Finance pages.
+  html = await (await get("/admin/finance")).text();
+  for (const t of ["Money Today", "Invoices &amp; Payments", "Reports &amp; BIR", "Ni Hao to Pay"]) assert.ok(html.includes(t), t);
+  assert.ok(!html.includes("Finance Overview") && !html.includes("Cash Flow &amp; Customer Credits"));
+  html = await (await get("/admin/finance/reports?preset=month")).text();
+  for (const t of ["Downloads for your CPA", "Finance Overview", "Shipping Performance", "Monthly Summary"]) assert.ok(html.includes(t), t);
+  html = await (await get("/admin/invoices")).text();
+  assert.ok(html.includes("Payments Received") && html.includes("GC-123"));
+  html = await (await get("/admin/finance/expenses")).text();
+  assert.ok(html.includes("Money In (not sales)") && html.includes("Starting cash"));
+  step("4 pages: Money Today, Invoices & Payments (with payments), Expenses (with money in), Reports & BIR (with downloads)");
 
   // 9. Audit trail.
   const actions = sqlRows(`SELECT action FROM activity_log ORDER BY created_at`).map((r) => r.action);

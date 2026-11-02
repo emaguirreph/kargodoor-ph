@@ -83,7 +83,7 @@ test("Phase 4 dated CSV filename and dashboard report UI preserve the active ran
   const csv = await financeCsv(f.db, url, now);
   assert.equal(csv.headers.get("content-disposition"),
     'attachment; filename="KargoDoor-Finance-2026-09-01-to-2026-09-30.csv"');
-  const html = await (await financeDashboard(f.db, url, "Admin", now)).text();
+  const html = await (await financeDashboard(f.db, new URL(`https://test/admin/finance/reports${url.search}`), "Admin", now, true, "reports")).text();
   for (const heading of ["Operating Expenses", "Period Comparison", "Monthly Summary"]) {
     assert.ok(html.includes(`<h2>${heading}</h2>`));
   }

@@ -244,7 +244,7 @@ function validateFormOrigin(
 
 export async function handleAdmin(
   request: Request,
-  view?: Entity | "finance" | "finance/expenses" | "finance/cash" | "finance/export" | "activity" | "leads" | "customer-preview",
+  view?: Entity | "finance" | "finance/expenses" | "finance/cash" | "finance/export" | "finance/reports" | "activity" | "leads" | "customer-preview",
 ) {
   let localChallenge = false;
 
@@ -666,6 +666,9 @@ export async function handleAdmin(
     if (view === "finance/export") {
       if (url.searchParams.get("ledger") === "shipments") return await shipmentsLedgerCsv(db);
       return await financeCsv(db, url);
+    }
+    if (view === "finance/reports") {
+      return await financeDashboard(db, url, user.name, undefined, canWrite, "reports");
     }
     /*
      * REPORT PAGES
