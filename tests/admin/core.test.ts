@@ -80,7 +80,7 @@ function database(includePhase1 = true) {
     sql.exec(readFileSync("migrations/admin/0030_manual_shipment_cargo.sql", "utf8"));
   if (includePhase1)
     sql.exec(readFileSync("migrations/admin/0031_manual_shipment_description_and_auto_charge.sql", "utf8"));
-  sql.exec(readFileSync("migrations/admin/0033_bank_accounts.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0034_bank_accounts.sql", "utf8"));
   const user = randomUUID();
   sql
     .prepare("INSERT INTO admin_users VALUES (?,?,?,?,?,?)")
