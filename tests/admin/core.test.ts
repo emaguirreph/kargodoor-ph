@@ -1492,7 +1492,7 @@ test("shipment status notifications follow Em's order and Nihao addresses end wi
   const titles = shipmentStatusMessages({ customerName: "Maria" }).map(([, title]) => title);
   assert.deepEqual(titles, [
     "Awaiting Supplier Package", "China Warehouse", "China Port", "Sea Transit", "Air Transit", "Manila Port",
-    "Gatepass", "Malabon Warehouse", "Pickup Instructions", "Payment Instructions Reminder", "Out for Delivery",
+    "Gatepass", "Malabon Warehouse", "Pickup Instructions", "Lalamove Rider Pickup", "Payment Instructions Reminder", "Out for Delivery",
     "Delivered", "Feedback / Referral",
   ]);
   assert.equal(notificationKeyFor("Sea Transit", "Air Freight"), "air-transit");
@@ -1513,4 +1513,14 @@ test("every customer message ends with the KargoDoorPH.com footer, once", () => 
     assert.equal(body.split("Thank you for trusting KargoDoorPH.com!").length, 2);
     assert.doesNotMatch(body, /China to PH, Made SIMPLE/);
   }
+});
+
+test("rider pickup message carries the shipment's KDOOR code", () => {
+  const rider = shipmentStatusMessages({ customerName: "Maria", cargoCode: "KDOOR-5560", tracking: "KDSEA-123456" })
+    .find(([key]) => key === "rider-pickup")![2];
+  assert.match(rider, /Cargo Code: KDOOR-5560/);
+  assert.match(rider, /Customer\/Cargo Code: KDOOR-5560/);
+  assert.match(rider, /Tracking No\.: KDSEA-123456/);
+  assert.match(rider, /FSW COMMERCIAL WAREHOUSE RENTAL/);
+  assert.ok(rider.endsWith("Thank you for trusting KargoDoorPH.com! 💚 💙"));
 });

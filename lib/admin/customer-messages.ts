@@ -307,8 +307,75 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
 
   const finished: Array<[string, string, string]> = messages.map(([key, title, lines]) => [key, title, finishMessage(lines)]);
   const pickupAt = finished.findIndex(([key]) => key === "malabon-warehouse") + 1;
-  finished.splice(pickupAt, 0, ["pickup-instructions", "Pickup Instructions", pickupInstructionsMessage(text(input.customerName) || "there")]);
+  finished.splice(
+    pickupAt,
+    0,
+    ["pickup-instructions", "Pickup Instructions", pickupInstructionsMessage(text(input.customerName) || "there")],
+    ["rider-pickup", "Lalamove Rider Pickup", riderPickupMessage({ customerName: text(input.customerName), cargoCode: text(input.cargoCode), tracking: text(input.tracking) })],
+  );
   return finished;
+}
+
+/** For the Lalamove (or other) rider collecting cargo at Malabon for the customer. Built from Em's pickup instructions. */
+export function riderPickupMessage(input: { customerName?: string; cargoCode?: string; tracking?: string }): string {
+  const code = input.cargoCode || "[KDOOR code]";
+  return [
+    "🛵 KARGODOOR PH – RIDER PICKUP INSTRUCTIONS",
+    "",
+    "Hi Rider! 😊",
+    "",
+    "Thank you for picking up this KargoDoor PH shipment. Please follow the instructions below for a smooth release.",
+    "",
+    "📦 PICKUP DETAILS",
+    `Cargo Code: ${code}`,
+    input.tracking ? `Tracking No.: ${input.tracking}` : "",
+    input.customerName ? `Customer: ${input.customerName}` : "",
+    "Number of Packages: [Number of Packages]",
+    "",
+    "📍 PICKUP LOCATION",
+    "Tongda Malabon Warehouse",
+    "PIN: FSW COMMERCIAL WAREHOUSE RENTAL",
+    "Old 59, New 36 Rivera St Brgy Tañong Malabon City",
+    "(Color of Gate- Gray / Nearest Landmark McDonalds Rizal Ave)",
+    "",
+    "🕒 Warehouse Operational Hours: 7:00AM to 7:00PM, Monday to Saturday",
+    "📞 Contact person: Alma / Elyza / Tiffany / Rhea/ Maylin",
+    "09175188335    09175188339",
+    "",
+    "━━━━━━━━━━━━━━",
+    "",
+    "📋 PICKUP PROCEDURE",
+    "",
+    "1️⃣ Proceed to Window 1",
+    "Fill out the Pickup Form with:",
+    "",
+    "• Date",
+    "• Your Full Name",
+    "• Vehicle Plate Number",
+    `• Customer/Cargo Code: ${code}`,
+    "• Number of Packages",
+    "",
+    "2️⃣ Submit Your Documents",
+    "Submit the completed form to the Front Desk together with two (2) valid government-issued IDs.",
+    "",
+    "3️⃣ Wait for Verification",
+    "After verification, proceed to the designated waiting area and wait for your name or queue number to be called.",
+    "",
+    "4️⃣ Cargo Release",
+    "When called, proceed to the releasing area to collect the packages. Please check that the number of packages matches before leaving.",
+    "",
+    "━━━━━━━━━━━━━━",
+    "",
+    "🚚 VEHICLE RESTRICTIONS",
+    "• Vehicles over 16 feet: not allowed during peak hours, 9:00 AM – 4:00 PM.",
+    "• Wingvan trucks: allowed only from 10:00 PM – 2:00 AM.",
+    "",
+    "⚠️ IMPORTANT REMINDERS",
+    "• Bring two (2) valid government-issued IDs.",
+    `• Mention Cargo Code ${code} at Window 1.`,
+    "",
+    messageFooter,
+  ].filter((line, index, lines) => line !== "" || lines[index - 1] !== "").join("\n");
 }
 
 /**
