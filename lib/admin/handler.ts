@@ -49,6 +49,10 @@ import { manualShipmentRate, resolveManualShipmentCharge, resolveQuotationShipme
 import { airItems, itemCategories } from "./quotation-pricing";
 import { cargoCategory, cargoCategorySql, cargoItemSql, shipmentCargo, type ShipmentCargo } from "./shipment-cargo";
 import { resolveNiHaoCost, shipmentNiHaoEstimate, type NiHaoEstimate } from "./nihao-estimate";
+import { lastNiHaoTransferFee, niHaoExpenseCategory, niHaoPaymentSection, readNiHaoPayment, recordNiHaoPayment } from "./nihao-payment";
+import { readShipmentStatement, shipmentStatementPdf, shipmentsLedgerCsv, statementFilename } from "./shipment-statement";
+import { autoDraftInvoice } from "./billing";
+import { readShipmentBilling, recordShipmentPayment, shipmentPaymentSection } from "./shipment-payment";
 
 /** Ni Hao cost input with the system estimate shown under it. Clearing the box saves the estimate. */
 const niHaoCostField = (record: RecordData, estimate: NiHaoEstimate | null) => {
@@ -178,6 +182,7 @@ const labels: Record<string, string> = {
   tracking_remarks: "Tracking remarks",
   cargo_quantity: "Units",
   payment_status: "Payment status",
+  nihao_payment: "Ni Hao payment",
   cbm: "Declared CBM",
   weight_kg: "Declared weight (kg)",
   supplier_waybill_number: "Supplier waybill number",
@@ -241,7 +246,7 @@ function validateFormOrigin(
 
 export async function handleAdmin(
   request: Request,
-  view?: Entity | "finance" | "finance/expenses" | "finance/cash" | "finance/accounts" | "finance/export" | "activity" | "leads" | "customer-preview",
+  view?: Entity | "finance" | "finance/expenses" | "finance/cash" | "finance/export" | "finance/reports" | "finance/accounts" | "activity" | "leads" | "customer-preview",
 ) {
   let localChallenge = false;
 
@@ -480,6 +485,16 @@ export async function handleAdmin(
 
       const action = form.get("action") ?? "";
 
+      if (entity === "shipments" && action === "customer_paid") {
+        await recordShipmentPayment(db, form, user);
+        return page("Saved", "", user.name, 303, { Location: `${path}?id=${encodeURIComponent(form.get("id") ?? "")}&customer_paid=1` });
+      }
+
+      if (entity === "shipments" && action === "nihao_paid") {
+        await recordNiHaoPayment(db, form, user);
+        return page("Saved", "", user.name, 303, { Location: `${path}?id=${encodeURIComponent(form.get("id") ?? "")}&nihao_paid=1` });
+      }
+
       if (action === "archive") {
         requireAdminDelete(user);
 
@@ -572,8 +587,11 @@ export async function handleAdmin(
       if (entity === "shipments") {
         const current = values as RecordData;
         const previous = id
-          ? await db.prepare("SELECT nihao_cost, nihao_cost_source, shipping_charge, shipping_charge_source, source_quotation_id FROM shipments WHERE id = ?").bind(id).first<RecordData>()
+          ? await db.prepare("SELECT nihao_cost, nihao_cost_source, shipping_charge, shipping_charge_source, source_quotation_id, payment_status FROM shipments WHERE id = ?").bind(id).first<RecordData>()
           : null;
+        // Only invoice payments change the payment status, so it can never say
+        // Paid without the money being recorded.
+        current.payment_status = previous?.payment_status ?? "Unpaid";
         const submittedCharge = current.shipping_charge === null || current.shipping_charge === undefined ? null : Number(current.shipping_charge);
         if (previous?.source_quotation_id) {
           // Re-price from the quotation with the warehouse-verified size, but keep a typed override.
@@ -626,6 +644,11 @@ export async function handleAdmin(
         );
       }
 
+      if (entity === "shipments") {
+        // Ready to bill (charge + verified size or arrived in PH): make the Draft invoice.
+        await autoDraftInvoice(db, recordId, user.id);
+      }
+
       return page(
         "Saved",
         "",
@@ -651,7 +674,11 @@ export async function handleAdmin(
     }
 
     if (view === "finance/export") {
+      if (url.searchParams.get("ledger") === "shipments") return await shipmentsLedgerCsv(db);
       return await financeCsv(db, url);
+    }
+    if (view === "finance/reports") {
+      return await financeDashboard(db, url, user.name, undefined, canWrite, "reports");
     }
     /*
      * REPORT PAGES
@@ -731,6 +758,17 @@ export async function handleAdmin(
       record =
         found;
       if (entity === "shipments") cargoInfo = await shipmentCargo(db, id);
+      if (entity === "shipments" && url.searchParams.get("statement") === "pdf") {
+        if (!canWrite) requireOperationalAdmin(user);
+        const statement = await readShipmentStatement(db, id);
+        return new Response(shipmentStatementPdf(statement), {
+          headers: {
+            "Content-Type": "application/pdf",
+            "Content-Disposition": `attachment; filename="${statementFilename(statement)}"`,
+            "Cache-Control": "no-store, private",
+          },
+        });
+      }
     }
 
     const title =
@@ -1137,16 +1175,9 @@ export async function handleAdmin(
             record,
             await shipmentNiHaoEstimate(db, String(record.id ?? ""), record),
           ) +
-          select(
-            "payment_status",
-            "Payment status",
-            record,
-            [
-              "Unpaid",
-              "Partial",
-              "Paid",
-            ],
-          );
+          // Payment status follows the invoice; it is shown here, not typed.
+          `<label>Payment status<input value="${esc(record.payment_status ?? "Unpaid")}" readonly aria-readonly="true" class="k-readonly"><small class="muted">Set automatically from the invoice when a payment is recorded.</small></label>` +
+          hidden("payment_status", record.payment_status ?? "Unpaid");
       }
 
       /*
@@ -1553,6 +1584,9 @@ export async function handleAdmin(
 
         const finance = [
           shipmentDetail("KargoDoor freight charge", `${money("shipping_charge")} ${chargeSourceTag(record.shipping_charge_source)}`),
+          ...(Number(record.transfer_fee_collected || 0) > 0
+            ? [shipmentDetail("Transfer fee (internal)", `${pesos(record.transfer_fee_collected)} <small class="muted">included in the freight charge; the customer sees one shipping fee</small>`)]
+            : []),
           shipmentDetail("Ni Hao freight cost", `${money("nihao_cost")} ${record.nihao_cost === null ? "" : niHaoSourceTag(record.nihao_cost_source)}`),
           shipmentDetail("Freight margin", marginValue),
           ...(Number(record.delivery_charge || 0) > 0
@@ -1663,6 +1697,9 @@ export async function handleAdmin(
             >
               Create or view invoice
             </a>
+            <a href="/admin/shipments?id=${esc(id)}&amp;statement=pdf">
+              Download Shipment Statement (PDF)
+            </a>
           ` : "";
 
       const portal = entity === "customers" ? await portalFor(db, id) : null;
@@ -1712,11 +1749,35 @@ export async function handleAdmin(
       const shippingInstructions = !canWrite ? "" : entity === "customers"
         ? `<section><h2>Send Account Setup</h2><p class="muted">Send this first so the customer has their Account/Cargo Code and portal login before their supplier ships any package. Click Create Customer Account or Generate New Temporary Password above, and the same message appears with the temporary password filled in.</p><textarea id="${accountMessageId}" readonly aria-label="Account setup message" style="min-height:260px;white-space:pre-wrap">${esc(accountMessage)}</textarea><div class="actions">${copyButton(accountMessageId, "Copy account setup message")}</div>${copyScript()}</section>`
         : entity === "shipments" ? "" : `<section><h2>Send Warehouse Instructions</h2><p class="muted">The address of this shipment’s China warehouse is added automatically.</p><textarea id="${instructionId}" readonly aria-label="Warehouse instructions" style="min-height:260px;white-space:pre-wrap">${esc(instructionMessage)}</textarea><div class="actions">${copyButton(instructionId, "Copy warehouse instructions")}</div>${copyScript()}</section>`;
+      const customerPayment = entity === "shipments" && !record.archived_at && record.status !== "Cancelled"
+        ? shipmentPaymentSection({
+            path,
+            csrf: csrfToken(env, user.id, path),
+            shipmentId: id,
+            billing: await readShipmentBilling(db, id, record),
+            canWrite,
+            justPaid: url.searchParams.get("customer_paid") === "1",
+          })
+        : "";
+      const niHaoPayment = entity === "shipments" && !record.archived_at && record.status !== "Cancelled"
+        ? niHaoPaymentSection({
+            path,
+            csrf: csrfToken(env, user.id, path),
+            shipmentId: id,
+            trackingNumber: record.tracking_number,
+            nihaoCost: record.nihao_cost,
+            payment: await readNiHaoPayment(db, record.tracking_number),
+            canWrite,
+            justPaid: url.searchParams.get("nihao_paid") === "1",
+            suggestedFee: canWrite ? await lastNiHaoTransferFee(db) : null,
+          })
+        : "";
       const customerNotifications = entity === "shipments" && canWrite ? (() => {
         const messages = shipmentStatusMessages({
           customerName: linkedCustomer?.full_name,
           tracking: record.tracking_number,
           cargoCode: record.cargo_code || linkedCustomer?.customer_code,
+          item: cargoInfo?.item,
           service: record.service_type,
           warehouse: record.china_warehouse,
           received: record.warehouse_received_date,
@@ -1818,6 +1879,8 @@ export async function handleAdmin(
             </div>
           </section>
           ${portalSection}
+          ${customerPayment}
+          ${niHaoPayment}
           ${shippingInstructions}
           ${customerNotifications}
         `,
@@ -1973,8 +2036,12 @@ export async function handleAdmin(
                 ${cargoCategorySql.item} AS cargo_category_item,
                 ${cargoCategorySql.group} AS cargo_category_group,
                 s.status,
-                s.cbm,
-                s.weight_kg
+                s.payment_status,
+                CASE WHEN EXISTS (
+                  SELECT 1 FROM expenses e
+                  WHERE e.category = '${niHaoExpenseCategory}'
+                    AND e.tracking_number = s.tracking_number COLLATE NOCASE
+                ) THEN 'Paid' ELSE 'Unpaid' END AS nihao_payment
               FROM shipments s
               JOIN customers c
                 ON c.id =
@@ -2044,8 +2111,8 @@ export async function handleAdmin(
             "cargo_item",
             "cargo_category",
             "status",
-            "cbm",
-            "weight_kg",
+            "payment_status",
+            "nihao_payment",
           ];
     if (entity === "shipments") {
       for (const row of rows) row.cargo_category = cargoCategory(row.cargo_category_item, row.cargo_category_group);

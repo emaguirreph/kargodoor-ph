@@ -199,19 +199,34 @@ export async function expensesPage(db: D1Database, url: URL, user: AdminUser | s
     .bind(...(staff ? [actor.id] : []), filters.from, filters.from, filters.to, filters.to, filters.category, filters.category,
       filters.payment_method, filters.payment_method, filters.q, filters.q, filters.q, filters.q, filters.q)
     .all<RecordData>();
-  const table = results.length ? `<div class="table"><table><thead><tr>
-    ${fields.map(([, label]) => `<th>${label}</th>`).join("")}${canWrite ? "<th>Actions</th>" : ""}</tr></thead><tbody>
-    ${results.map((row) => `<tr>${fields.map(([key]) => `<td>${key === "amount" ? esc(pesos(row[key])) : key === "paid_from_account" || key === "paid_to_account" ? esc(bankAccountLabel(row[key])) || "—" : esc(row[key]) || "—"}</td>`).join("")}
-      ${canWrite ? `<td><a href="${path}?edit=${esc(encodeURIComponent(String(row.id)))}">Edit</a>${canDelete ? ` <a href="${path}?delete=${esc(encodeURIComponent(String(row.id)))}">Delete</a>` : ""}</td>` : ""}</tr>`).join("")}
-    </tbody></table></div>` : "<p>No expenses found.</p>";
+  // The list leaves out Reference number (Em, 2026-11-02); the add/edit form still has it.
+  const listFields = fields.filter(([key]) => key !== "reference_number");
+  // Short columns never wrap; Description and Notes take the room that is left.
+  const cellClass = (key: string) => ["expense_date", "amount", "payment_method"].includes(key) ? ` class="exp-${key === "amount" ? "num" : "tight"}"` : key === "description" || key === "notes" ? ' class="exp-wide"' : "";
+  const table = results.length ? `<div class="table"><table class="expense-list"><thead><tr>
+    ${canWrite ? '<th class="exp-tight">Actions</th>' : ""}${listFields.map(([key, label]) => `<th${cellClass(key)}>${label}</th>`).join("")}</tr></thead><tbody>
+    ${results.map((row) => `<tr>${canWrite ? `<td class="exp-tight"><a href="${path}?edit=${esc(encodeURIComponent(String(row.id)))}">Edit</a>${canDelete ? `<br><a href="${path}?delete=${esc(encodeURIComponent(String(row.id)))}">Delete</a>` : ""}</td>` : ""}
+      ${listFields.map(([key]) => `<td${cellClass(key)}>${key === "amount" ? esc(pesos(row[key])) : key === "paid_from_account" || key === "paid_to_account" ? esc(bankAccountLabel(row[key])) || "—" : esc(row[key]) || "—"}</td>`).join("")}</tr>`).join("")}
+    </tbody></table></div>
+    <style>.expense-list .exp-tight,.expense-list .exp-num{white-space:nowrap;overflow-wrap:normal;word-break:normal}.expense-list .exp-num{text-align:right;font-variant-numeric:tabular-nums}.expense-list th.exp-num{text-align:right}.expense-list .exp-wide{min-width:200px}.expense-list th,.expense-list td{overflow-wrap:break-word;word-break:normal}</style>` : "<p>No expenses found.</p>";
   const notice = url.searchParams.get("deleted") === "1" ? "Expense deleted." : url.searchParams.get("updated") === "1" ? "Expense updated." : url.searchParams.get("saved") === "1" ? "Expense saved." : "";
+  // Owner money, opening cash and adjustments are not sales, but they are
+  // money in, so they sit next to money out (staff only see their expenses).
+  const moneyIn = staff ? [] : (await db.prepare(`SELECT id, entry_date, entry_type, amount, reference_number, notes
+    FROM finance_cash_entries ORDER BY entry_date DESC, created_at DESC LIMIT 50`).all<RecordData>()).results;
+  const moneyInSection = staff ? "" : `<section><div class="actions"><h2>Money In (not sales)</h2>
+    ${canWrite ? `<a class="button" href="/admin/finance/cash?new=1">+ Add money in</a>` : ""}<a href="/admin/finance/cash">All records</a></div>
+    <p class="muted">Opening cash, owner money, adjustments and customer credits. Customer invoice payments are under Invoices &amp; Payments.</p>
+    ${moneyIn.length ? `<div class="table"><table><thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Notes</th></tr></thead><tbody>${moneyIn.map((row) => `<tr><td>${esc(row.entry_date)}</td><td>${esc(row.entry_type)}</td><td><strong>${esc(pesos(row.amount))}</strong></td><td>${esc(row.notes) || "—"}</td></tr>`).join("")}</tbody></table></div>` : '<p class="muted">No money-in records yet.</p>'}</section>`;
   return page("Expenses", `${notice ? `<p class="notice" role="status">${notice}</p>` : ""}
-    <section><div class="actions">${staff ? "" : `<a href="/admin/finance">Dashboard</a>`}<a href="${path}"><strong>Expenses</strong></a>${staff ? "" : `<a href="/admin/finance/cash">Cash Flow &amp; Customer Credits</a><a href="/admin/finance/accounts">Bank Accounts</a>`}${canWrite ? `<a class="button" href="${path}?new=1">Add Expense</a>` : ""}</div></section>
+    <section><div class="actions">${staff ? "" : `<a href="/admin/finance">Money Today</a>`}<a href="${path}"><strong>Expenses</strong></a>${staff ? "" : `<a href="/admin/finance/accounts">Bank Accounts</a>`}${canWrite ? `<a class="button" href="${path}?new=1">Add Expense</a>` : ""}</div>
+    ${staff ? "" : `<p class="muted">Paying Ni Hao? Use Mark Ni Hao paid on the shipment page. Bank or GCash transfer fees go under Bank / Payment Fees.</p>`}</section>
     <section><form method="get" action="${path}" class="search">
       ${input("q", "Search", filters)}${input("from", "From Date", filters, "date")}${input("to", "To Date", filters, "date")}
       ${dropdown("category", "Category", expenseCategories, filters.category, "All Categories")}
       ${dropdown("payment_method", "Payment Method", expensePaymentMethods, filters.payment_method, "All Payment Methods")}
       <button type="submit">Apply Filters</button><a href="${path}">Clear Filters</a></form></section>
     <div class="card"><h2>Total Expenses</h2><strong>${esc(totalPesos(results))}</strong></div>
-    <section>${table}</section>`, actor.name, 200, {}, canWrite, staff);
+    <section>${table}</section>
+    ${moneyInSection}`, actor.name, 200, {}, canWrite, staff);
 }

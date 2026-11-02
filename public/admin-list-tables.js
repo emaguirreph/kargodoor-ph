@@ -1,9 +1,8 @@
 (() => {
+  // Record links go in the first column, on the left (Em, 2026-11-02).
   const recordColumn = location.pathname === "/admin/quotations"
     ? "Quotation"
-    : location.pathname === "/admin/invoices"
-      ? "Invoice"
-      : "";
+    : "";
 
   if (!recordColumn) return;
 
@@ -34,7 +33,7 @@
         ? recordIndex - 1
         : recordIndex;
       const recordCell = row.children.item(adjustedRecordIndex);
-      if (recordCell) row.append(recordCell);
+      if (recordCell) row.prepend(recordCell);
     });
   });
 })();

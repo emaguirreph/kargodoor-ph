@@ -22,27 +22,33 @@ export const airPieceRates: Partial<Record<AirItem, number>> = { "Mobile Phones"
 export const airPerKgRates = { ordinary: 500, restricted: 600, medicine: 650 } as const;
 export const airVolumetricFactor = 167;
 export const roundAirBillableWeight = (weight: number) => Math.ceil(weight);
+/**
+ * Flat transfer fee (PHP) added to every KargoDoor freight charge. The customer
+ * sees one shipping fee; inside the admin this part is labelled the transfer
+ * fee that covers bank / GCash transfer costs to Ni Hao.
+ */
+export const transferFeePesos = 30;
 const valid = (value: number) => Number.isFinite(value) && value >= 0;
 export function seaQuote(category: SeaCategory, cbm: number, weight: number, units = 0) {
   if (!valid(cbm) || !valid(weight) || cbm <= 0 || (category === "MOBILE / COMPUTERS / TABLETS" && (!Number.isInteger(units) || units < 1))) throw new Error("Invalid sea quotation inputs.");
   const rate = seaRates[category], density = weight / cbm;
   if (category === "MOBILE / COMPUTERS / TABLETS") {
     const base = Math.max(1700, cbm * 10500), unitCharge = units * 250;
-    return { packageTier:"KD Standard", density, base, volumeCharge:cbm*10500, densityCharge:0, unitCharge, densityApplies:false, final:base+unitCharge, pricingMethod:"₱10,500/CBM + ₱250/unit" };
+    return { packageTier:"KD Standard", density, base, volumeCharge:cbm*10500, densityCharge:0, unitCharge, densityApplies:false, final:base+unitCharge+transferFeePesos, transferFee:transferFeePesos, pricingMethod:"₱10,500/CBM + ₱250/unit" };
   }
   const fixed = cbm <= .01 ? 250 : cbm <= .05 ? 750 : cbm <= .125 ? 1400 : null;
   const volumeCharge = fixed ?? cbm * rate.cbmRate;
   const base = fixed ?? Math.max(1700, volumeCharge);
   const densityApplies = density > 425;
   const densityCharge = weight * rate.densityRate!;
-  const final = Math.max(base, densityApplies ? densityCharge : 0);
-  return { packageTier: densityApplies && densityCharge > base ? "KD Max" : fixed === 250 ? "KD Mini" : fixed === 750 ? "KD Lite" : fixed === 1400 ? "KD Plus" : "KD Standard", density, base, volumeCharge, densityCharge, unitCharge:0, densityApplies, final, pricingMethod:densityApplies && densityCharge > base ? "Density-Based" : fixed ? "Fixed Rate" : "CBM-Based" };
+  const final = Math.max(base, densityApplies ? densityCharge : 0) + transferFeePesos;
+  return { transferFee:transferFeePesos, packageTier: densityApplies && densityCharge > base ? "KD Max" : fixed === 250 ? "KD Mini" : fixed === 750 ? "KD Lite" : fixed === 1400 ? "KD Plus" : "KD Standard", density, base, volumeCharge, densityCharge, unitCharge:0, densityApplies, final, pricingMethod:densityApplies && densityCharge > base ? "Density-Based" : fixed ? "Fixed Rate" : "CBM-Based" };
 }
 export function airQuote(item: AirItem, cbm: number, weight: number, quantity: number) {
   if (!valid(quantity) || !Number.isInteger(quantity) || quantity < 1) throw new Error("Quantity is required.");
-  if (item in airPieceRates) return { rate:airPieceRates[item]!, rateBasis:"Per piece", volumetricWeight:0, billableWeight:0, final:quantity*airPieceRates[item]!, formula:"Quantity × rate" };
+  if (item in airPieceRates) return { rate:airPieceRates[item]!, rateBasis:"Per piece", volumetricWeight:0, billableWeight:0, final:quantity*airPieceRates[item]!+transferFeePesos, transferFee:transferFeePesos, formula:"Quantity × rate" };
   if (!valid(cbm) || !valid(weight) || cbm <= 0 || weight <= 0) throw new Error("CBM and declared weight are required.");
   const rate = item === "Ordinary Items" ? airPerKgRates.ordinary : item === "Medicine and Food Supplements" ? airPerKgRates.medicine : airPerKgRates.restricted;
   const volumetricWeight=cbm*airVolumetricFactor, rawBillableWeight=Math.max(weight,volumetricWeight), billableWeight=roundAirBillableWeight(rawBillableWeight);
-  return { rate, rateBasis:"Higher of Declared vs Volumetric, rounded up to a whole kg", volumetricWeight, rawBillableWeight, billableWeight, final:billableWeight*rate, formula:"CEILING(MAX(Declared Weight, CBM × 167)) × rate" };
+  return { rate, rateBasis:"Higher of Declared vs Volumetric, rounded up to a whole kg", volumetricWeight, rawBillableWeight, billableWeight, final:billableWeight*rate+transferFeePesos, transferFee:transferFeePesos, formula:"CEILING(MAX(Declared Weight, CBM × 167)) × rate" };
 }

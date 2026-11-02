@@ -189,8 +189,7 @@ function quotationCustomerMessage(q: Row, accountNumber = "") {
         "",
         ...supplierInstructions,
         "",
-        "Thank you for choosing KargoDoor PH! 💚",
-      ],
+        ],
     ],
     [
       "follow-up",
@@ -207,8 +206,7 @@ function quotationCustomerMessage(q: Row, accountNumber = "") {
         "Next Steps:",
         "Please let us know if you have any questions about the quotation or if you’re ready to proceed. We’ll be happy to guide you through the next step.",
         "",
-        "Thank you for choosing KargoDoor PH! 💚",
-      ],
+        ],
     ],
     [
       "approved",
@@ -222,8 +220,6 @@ function quotationCustomerMessage(q: Row, accountNumber = "") {
         "We’ll create your shipment record and send your KargoDoor Account/Cargo Code and shipping instructions for your supplier.",
         "",
         "Please make sure your supplier follows the shipping instructions before sending the cargo to our China warehouse.",
-        "",
-        "Thank you for trusting KargoDoor PH! 💚",
       ],
     ],
   ];
