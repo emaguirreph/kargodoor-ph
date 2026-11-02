@@ -78,7 +78,7 @@ function database(includePhase1 = true) {
     sql.exec(readFileSync("migrations/admin/0031_manual_shipment_description_and_auto_charge.sql", "utf8"));
   sql.exec(readFileSync("migrations/admin/0033_transfer_fee_collected.sql", "utf8"));
   if (includePhase1)
-    sql.exec(readFileSync("migrations/admin/0034_air_transit_status.sql", "utf8"));
+    sql.exec(readFileSync("migrations/admin/0035_air_transit_status.sql", "utf8"));
   const user = randomUUID();
   sql
     .prepare("INSERT INTO admin_users VALUES (?,?,?,?,?,?)")
@@ -398,14 +398,14 @@ test("air shipments get an Air Transit notification with the flight date", () =>
   assert.doesNotMatch(sea.find(([key]) => key === "sea-transit")![2], /Flight Date/);
   assert.doesNotMatch(sea.find(([key]) => key === "china-port")![2], /Flight Date/);
 });
-test("migration 0034 moves Air Freight shipments on Sea Transit to Air Transit", async () => {
+test("migration 0035 moves Air Freight shipments on Sea Transit to Air Transit", async () => {
   const { sql, db, user } = database();
   const customerId = await saveRecord(db, "customers", { ...customer, customer_code: "KD-AIRMIG", email: "airmig@example.test" }, user, "", "");
   const insert = sql.prepare("INSERT INTO shipments (id, customer_id, tracking_number, service_type, china_warehouse, cbm, weight_kg, status, shipping_charge, delivery_charge, payment_status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)");
   insert.run("air", customerId, "KDAIR-200001", "Air Freight", "Guangzhou", 0, 5, "Sea Transit", 0, 0, "Unpaid", "2026-10-01", "2026-10-01");
   insert.run("sea", customerId, "KDSEA-200002", "Sea Freight", "Guangzhou", 1, 5, "Sea Transit", 0, 0, "Unpaid", "2026-10-01", "2026-10-01");
-  const migration = readFileSync("migrations/admin/0034_air_transit_status.sql", "utf8");
-  // The test database already has 0034, so run it again under another temporary column name.
+  const migration = readFileSync("migrations/admin/0035_air_transit_status.sql", "utf8");
+  // The test database already has 0035, so run it again under another temporary column name.
   sql.exec(migration.replaceAll("status_next", "status_again"));
   assert.deepEqual(sql.prepare("SELECT id, status FROM shipments ORDER BY id").all().map((row) => [row.id, row.status]), [["air", "Air Transit"], ["sea", "Sea Transit"]]);
   assert.throws(() => sql.exec("UPDATE shipments SET status = 'Flying'"), /CHECK/);
