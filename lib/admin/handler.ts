@@ -1713,6 +1713,7 @@ export async function handleAdmin(
           customerName: linkedCustomer?.full_name,
           tracking: record.tracking_number,
           cargoCode: record.cargo_code || linkedCustomer?.customer_code,
+          item: cargoInfo?.item,
           service: record.service_type,
           warehouse: record.china_warehouse,
           received: record.warehouse_received_date,
