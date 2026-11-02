@@ -1637,7 +1637,7 @@ function invoiceMessageSection(invoice: RecordData, grand: number, paid: number)
   </section>`;
 }
 
-async function createView(
+export async function createView(
   db: D1Database,
   env: AdminEnv,
   user: {
@@ -1661,6 +1661,40 @@ async function createView(
     throw new AdminError(
       "Invalid shipment search.",
     );
+  }
+
+  /*
+   * "Create or view invoice" links pass the shipment. When that shipment
+   * already has an active invoice, open it instead of an empty create form.
+   */
+  if (selected) {
+    const existing = await db
+      .prepare(
+        `
+        SELECT id
+        FROM invoices
+        WHERE
+          shipment_id = ?
+          AND status != 'Void'
+          AND archived_at IS NULL
+        ORDER BY created_at DESC
+        LIMIT 1
+        `,
+      )
+      .bind(selected)
+      .first<RecordData>();
+
+    if (existing) {
+      return page(
+        "Invoice",
+        "",
+        user.name,
+        303,
+        {
+          Location: `${route}?id=${encodeURIComponent(String(existing.id))}`,
+        },
+      );
+    }
   }
 
   const shipments = (

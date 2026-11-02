@@ -22,7 +22,7 @@ import { createShipmentFromApprovedQuotation } from "../../lib/admin/quotation-s
 import { shipmentNiHaoEstimate } from "../../lib/admin/nihao-estimate";
 import { resolveManualShipmentCharge, resolveQuotationShipmentCharge, syncVerifiedFreightToInvoice, verifiedShipmentFreight } from "../../lib/admin/shipment-verified-pricing";
 import { shipmentCargo } from "../../lib/admin/shipment-cargo";
-import { archiveInvoice, createInvoice, issueInvoice, recordPayment, voidInvoice } from "../../lib/admin/billing";
+import { archiveInvoice, createInvoice, createView, issueInvoice, recordPayment, voidInvoice } from "../../lib/admin/billing";
 import {
   validateJwt,
   csrfToken,
@@ -1196,6 +1196,20 @@ test("recording a payment on a Draft invoice issues it and marks it paid", async
   assert.equal(sql.prepare("SELECT payment_status FROM shipments WHERE id=?").get(shipmentId)!.payment_status, "Paid");
   assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM activity_log WHERE entity_id=? AND action='issue_invoice'").get(invoiceId)!.n, 1);
   await assert.rejects(recordPayment(db, { invoice_id: invoiceId, amount: "1", payment_method: "Cash", reference_number: "", payment_date: "2026-11-02", notes: "" }, user), /fully paid/);
+});
+
+test("create-or-view invoice link opens the shipment's existing invoice", async () => {
+  const { db, user } = database();
+  const customerId = await saveRecord(db, "customers", customer, user, "", "");
+  const shipmentId = await saveRecord(db, "shipments", { ...shipment(customerId), shipping_charge: 100000 }, user, "", "");
+  const env = { ADMIN_CSRF_SECRET: "x".repeat(32) } as AdminEnv;
+  const admin = { id: user, name: "Admin" };
+  const before = await createView(db, env, admin, new URL(`https://example.test/admin/invoices?new=1&shipment_id=${shipmentId}`));
+  assert.equal(before.status, 200);
+  const invoiceId = await createInvoice(db, { shipment_id: shipmentId, delivery_charge: "0", other_charge: "0", status: "Draft", issued_at: "", due_at: "" }, user);
+  const after = await createView(db, env, admin, new URL(`https://example.test/admin/invoices?new=1&shipment_id=${shipmentId}`));
+  assert.equal(after.status, 303);
+  assert.equal(after.headers.get("Location"), `/admin/invoices?id=${invoiceId}`);
 });
 
 test("only Draft or Void invoices can be archived, and a voided shipment can be invoiced again", async () => {
