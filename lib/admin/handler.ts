@@ -49,6 +49,7 @@ import { airItems, itemCategories } from "./quotation-pricing";
 import { cargoCategory, cargoCategorySql, cargoItemSql, shipmentCargo, type ShipmentCargo } from "./shipment-cargo";
 import { resolveNiHaoCost, shipmentNiHaoEstimate, type NiHaoEstimate } from "./nihao-estimate";
 import { niHaoPaymentSection, readNiHaoPayment, recordNiHaoPayment } from "./nihao-payment";
+import { readShipmentStatement, shipmentStatementPdf, shipmentsLedgerCsv, statementFilename } from "./shipment-statement";
 
 /** Ni Hao cost input with the system estimate shown under it. Clearing the box saves the estimate. */
 const niHaoCostField = (record: RecordData, estimate: NiHaoEstimate | null) => {
@@ -653,6 +654,7 @@ export async function handleAdmin(
     }
 
     if (view === "finance/export") {
+      if (url.searchParams.get("ledger") === "shipments") return await shipmentsLedgerCsv(db);
       return await financeCsv(db, url);
     }
     /*
@@ -733,6 +735,17 @@ export async function handleAdmin(
       record =
         found;
       if (entity === "shipments") cargoInfo = await shipmentCargo(db, id);
+      if (entity === "shipments" && url.searchParams.get("statement") === "pdf") {
+        if (!canWrite) requireOperationalAdmin(user);
+        const statement = await readShipmentStatement(db, id);
+        return new Response(shipmentStatementPdf(statement), {
+          headers: {
+            "Content-Type": "application/pdf",
+            "Content-Disposition": `attachment; filename="${statementFilename(statement)}"`,
+            "Cache-Control": "no-store, private",
+          },
+        });
+      }
     }
 
     const title =
@@ -1664,6 +1677,9 @@ export async function handleAdmin(
               )}"
             >
               Create or view invoice
+            </a>
+            <a href="/admin/shipments?id=${esc(id)}&amp;statement=pdf">
+              Download Shipment Statement (PDF)
             </a>
           ` : "";
 

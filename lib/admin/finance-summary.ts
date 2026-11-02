@@ -1186,6 +1186,12 @@ export async function financeDashboard(
                   href="${esc(exportLink)}"
                 >
                   Export Finance CSV
+                </a>
+                <a
+                  class="button"
+                  href="/admin/finance/export?ledger=shipments"
+                >
+                  Export Shipments Ledger (KD + Ni Hao)
                 </a>`
               : ""
           }
