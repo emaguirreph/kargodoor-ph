@@ -240,10 +240,10 @@ try {
   html = await (await get("/admin/finance/reports?preset=month")).text();
   for (const t of ["Downloads for your CPA", "Finance Overview", "Shipping Performance", "Monthly Summary"]) assert.ok(html.includes(t), t);
   html = await (await get("/admin/invoices")).text();
-  assert.ok(html.includes("Payments Received") && html.includes("GC-123"));
+  assert.ok(html.includes("2026-11-02 · GCash") && !html.includes("Payments Received"), "payment date and method shown on the invoice row");
   html = await (await get("/admin/finance/expenses")).text();
   assert.ok(html.includes("Money In (not sales)") && html.includes("Starting cash"));
-  step("4 pages: Money Today, Invoices & Payments (with payments), Expenses (with money in), Reports & BIR (with downloads)");
+  step("4 pages: Money Today, Invoices & Payments (payment date + method on each row), Expenses (with money in), Reports & BIR (with downloads)");
 
   // 8c. A shipment not yet in the Philippines, paid from the shipment page.
   html = await (await get(`/admin/shipments?new=1&customer_id=${cid}`)).text();
