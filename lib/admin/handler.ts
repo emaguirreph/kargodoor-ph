@@ -42,13 +42,18 @@ import { saveRecord, archiveOrCancelRecord } from "./data";
 import { page, esc, pesos, input, select, hidden, niHaoSourceTag } from "./ui";
 import { dashboard, finance, activity, saveStaffFollowUp } from "./reports";
 import { createPortal, disablePortal, portalFor, portalStatus, resetPortal } from "./customer-portal";
-import { shipmentStatusMessages } from "./customer-messages";
-import { copyButton, copyScript, customerPortalAccessMessage, customerWelcomeMessage, shipmentShippingInstructions, warehouseAddress, warehouseAddressBook } from "./shipping-instructions";
+import { notificationKeyFor, shipmentStatusMessages } from "./customer-messages";
+import { messageTabs } from "./message-tabs";
+import { copyButton, copyScript, customerPortalAccessMessage, customerWelcomeMessage, nihaoAddressBook, shipmentShippingInstructions, warehouseAddress } from "./shipping-instructions";
 import { leadsPage } from "./leads";
-import { manualShipmentRate, resolveManualShipmentCharge, syncVerifiedFreightToInvoice, verifiedShipmentFreight } from "./shipment-verified-pricing";
+import { manualShipmentRate, resolveManualShipmentCharge, resolveQuotationShipmentCharge, syncVerifiedFreightToInvoice, verifiedShipmentFreight } from "./shipment-verified-pricing";
 import { airItems, itemCategories } from "./quotation-pricing";
 import { cargoCategory, cargoCategorySql, cargoItemSql, shipmentCargo, type ShipmentCargo } from "./shipment-cargo";
 import { resolveNiHaoCost, shipmentNiHaoEstimate, type NiHaoEstimate } from "./nihao-estimate";
+import { lastNiHaoTransferFee, niHaoExpenseCategory, niHaoPaymentSection, readNiHaoPayment, recordNiHaoPayment } from "./nihao-payment";
+import { readShipmentStatement, shipmentStatementPdf, shipmentsLedgerCsv, statementFilename } from "./shipment-statement";
+import { autoDraftInvoice } from "./billing";
+import { readShipmentBilling, recordShipmentPayment, shipmentPaymentSection } from "./shipment-payment";
 
 /** Ni Hao cost input with the system estimate shown under it. Clearing the box saves the estimate. */
 const niHaoCostField = (record: RecordData, estimate: NiHaoEstimate | null) => {
@@ -82,7 +87,14 @@ const chargeSourceTag = (source: unknown) =>
 
 /** KargoDoor freight charge input. Hand-added shipments may leave it blank to use the KargoDoor rates. */
 const shippingChargeField = (record: RecordData) => {
-  if (record.source_quotation_id) return input("shipping_charge", "KargoDoor freight charge (PHP)", record, "text", true, 30);
+  if (record.source_quotation_id) {
+    // Quotation shipments: the quotation's charge until the warehouse verifies the size, then it follows the verified freight unless typed over.
+    const auto = record.shipping_charge_source !== "manual";
+    const amount = record.shipping_charge === null || record.shipping_charge === undefined ? "" : (Number(record.shipping_charge) / 100).toFixed(2);
+    return input("shipping_charge", "KargoDoor freight charge (PHP)", record, "text", false, 30)
+      .replace('name="shipping_charge"', `name="shipping_charge" data-live-amount="kargodoor" data-quotation${auto ? ` data-auto="${esc(amount)}"` : ""}`)
+      .replace("</label>", ` ${chargeSourceTag(record.shipping_charge_source)}<small class="muted" style="display:block" data-live-hint="kargodoor">From the quotation. When you enter the verified CBM and weight it is recalculated from the KargoDoor rates, like the Ni Hao cost. Type an amount to override it; clear the box to go back to the rate.</small></label>`);
+  }
   const field = input("shipping_charge", "KargoDoor freight charge (PHP)", record, "text", false, 30);
   const rate = manualShipmentRate(record);
   const hint = rate
@@ -135,7 +147,17 @@ async function shipmentLiveEstimate(db: D1Database, params: URLSearchParams) {
     values.cargo_category = shipmentCargoCategory(serviceType, cargoItem);
     values.cargo_quantity = number("cargo_quantity");
   }
-  const kargodoor = saved?.source_quotation_id ? null : manualShipmentRate(values);
+  let kargodoor: { cost: number; basis: string } | null = null;
+  if (!saved?.source_quotation_id) {
+    kargodoor = manualShipmentRate(values);
+  } else if (measured) {
+    try {
+      const freight = await verifiedShipmentFreight(db, id, verifiedCbm, verifiedWeight);
+      if (freight) kargodoor = { cost: freight.shippingCharge, basis: `${serviceType === "Air Freight" ? "Air" : "Sea"} · from the quotation · verified size` };
+    } catch {
+      kargodoor = null;
+    }
+  }
   const nihao = await shipmentNiHaoEstimate(db, id, values);
   const amount = (estimate: { cost: number; basis: string } | null) =>
     estimate ? { amount: (estimate.cost / 100).toFixed(2), label: `${pesos(estimate.cost)} · ${estimate.basis}` } : null;
@@ -169,6 +191,7 @@ const labels: Record<string, string> = {
   tracking_remarks: "Tracking remarks",
   cargo_quantity: "Units",
   payment_status: "Payment status",
+  nihao_payment: "Ni Hao payment",
   cbm: "Declared CBM",
   weight_kg: "Declared weight (kg)",
   supplier_waybill_number: "Supplier waybill number",
@@ -232,7 +255,7 @@ function validateFormOrigin(
 
 export async function handleAdmin(
   request: Request,
-  view?: Entity | "finance" | "finance/expenses" | "finance/cash" | "finance/export" | "activity" | "leads" | "customer-preview",
+  view?: Entity | "finance" | "finance/expenses" | "finance/cash" | "finance/export" | "finance/reports" | "activity" | "leads" | "customer-preview",
 ) {
   let localChallenge = false;
 
@@ -471,6 +494,16 @@ export async function handleAdmin(
 
       const action = form.get("action") ?? "";
 
+      if (entity === "shipments" && action === "customer_paid") {
+        await recordShipmentPayment(db, form, user);
+        return page("Saved", "", user.name, 303, { Location: `${path}?id=${encodeURIComponent(form.get("id") ?? "")}&customer_paid=1` });
+      }
+
+      if (entity === "shipments" && action === "nihao_paid") {
+        await recordNiHaoPayment(db, form, user);
+        return page("Saved", "", user.name, 303, { Location: `${path}?id=${encodeURIComponent(form.get("id") ?? "")}&nihao_paid=1` });
+      }
+
       if (action === "archive") {
         requireAdminDelete(user);
 
@@ -559,35 +592,27 @@ export async function handleAdmin(
         );
       }
 
-      let verifiedFreight: Awaited<ReturnType<typeof verifiedShipmentFreight>> = null;
-      const shipmentValues = values as RecordData;
-      if (
-        entity === "shipments" &&
-        id &&
-        shipmentValues.verified_cbm !== null &&
-        shipmentValues.verified_weight_kg !== null
-      ) {
-        verifiedFreight = await verifiedShipmentFreight(
-          db,
-          String(id),
-          Number(shipmentValues.verified_cbm),
-          Number(shipmentValues.verified_weight_kg),
-        );
-        if (verifiedFreight) {
-          values = {
-            ...values,
-            shipping_charge: verifiedFreight.shippingCharge,
-          };
-        }
-      }
-
+      let measuredCharge = false;
       if (entity === "shipments") {
         const current = values as RecordData;
         const previous = id
-          ? await db.prepare("SELECT nihao_cost, nihao_cost_source, shipping_charge, shipping_charge_source, source_quotation_id FROM shipments WHERE id = ?").bind(id).first<RecordData>()
+          ? await db.prepare("SELECT nihao_cost, nihao_cost_source, shipping_charge, shipping_charge_source, source_quotation_id, payment_status FROM shipments WHERE id = ?").bind(id).first<RecordData>()
           : null;
+        // Only invoice payments change the payment status, so it can never say
+        // Paid without the money being recorded.
+        current.payment_status = previous?.payment_status ?? "Unpaid";
+        const submittedCharge = current.shipping_charge === null || current.shipping_charge === undefined ? null : Number(current.shipping_charge);
         if (previous?.source_quotation_id) {
-          if (current.shipping_charge === null) throw new AdminError("Enter the KargoDoor freight charge.");
+          // Re-price from the quotation with the warehouse-verified size, but keep a typed override.
+          const verifiedFreight =
+            current.verified_cbm !== null && current.verified_cbm !== undefined &&
+            current.verified_weight_kg !== null && current.verified_weight_kg !== undefined
+              ? await verifiedShipmentFreight(db, String(id), Number(current.verified_cbm), Number(current.verified_weight_kg))
+              : null;
+          const charge = resolveQuotationShipmentCharge(submittedCharge, previous, verifiedFreight?.shippingCharge ?? null);
+          current.shipping_charge = charge.cost;
+          current.shipping_charge_source = charge.source;
+          measuredCharge = Boolean(verifiedFreight) && charge.source === "rate";
         } else {
           const charge = resolveManualShipmentCharge(current, previous);
           current.shipping_charge = charge.cost;
@@ -611,26 +636,26 @@ export async function handleAdmin(
           revision,
         );
 
-      if (verifiedFreight) {
-        await syncVerifiedFreightToInvoice(
-          db,
-          recordId,
-          verifiedFreight.shippingCharge,
-          user.id,
-        );
-      } else if (
+      if (
         entity === "shipments" &&
         id &&
         Number.isSafeInteger((values as RecordData).shipping_charge)
       ) {
-        // Keep Draft and Unpaid invoices in step with an edited or rate-updated charge.
+        // Keep Draft and Unpaid invoices in step with a verified, rate-updated or edited charge.
         await syncVerifiedFreightToInvoice(
           db,
           recordId,
           Number((values as RecordData).shipping_charge),
           user.id,
-          "Invoice freight updated from the shipment's edited shipping charge.",
+          measuredCharge
+            ? "Invoice freight updated from verified warehouse measurements."
+            : "Invoice freight updated from the shipment's edited shipping charge.",
         );
+      }
+
+      if (entity === "shipments") {
+        // Ready to bill (charge + verified size or arrived in PH): make the Draft invoice.
+        await autoDraftInvoice(db, recordId, user.id);
       }
 
       return page(
@@ -655,7 +680,11 @@ export async function handleAdmin(
     }
 
     if (view === "finance/export") {
+      if (url.searchParams.get("ledger") === "shipments") return await shipmentsLedgerCsv(db);
       return await financeCsv(db, url);
+    }
+    if (view === "finance/reports") {
+      return await financeDashboard(db, url, user.name, undefined, canWrite, "reports");
     }
     /*
      * REPORT PAGES
@@ -735,6 +764,17 @@ export async function handleAdmin(
       record =
         found;
       if (entity === "shipments") cargoInfo = await shipmentCargo(db, id);
+      if (entity === "shipments" && url.searchParams.get("statement") === "pdf") {
+        if (!canWrite) requireOperationalAdmin(user);
+        const statement = await readShipmentStatement(db, id);
+        return new Response(shipmentStatementPdf(statement), {
+          headers: {
+            "Content-Type": "application/pdf",
+            "Content-Disposition": `attachment; filename="${statementFilename(statement)}"`,
+            "Cache-Control": "no-store, private",
+          },
+        });
+      }
     }
 
     const title =
@@ -1065,7 +1105,7 @@ export async function handleAdmin(
             "Status",
             record,
             shipmentStatusOptions(record),
-          ) + hidden("estimated_arrival", record.estimated_arrival ?? "");
+          ).replace("<label>", '<label class="k-status-red">') + hidden("estimated_arrival", record.estimated_arrival ?? "");
 
         // Actual arrival is an end-of-journey record. Keeping it out of the
         // earlier stages avoids implying that cargo has already reached Manila.
@@ -1145,16 +1185,9 @@ export async function handleAdmin(
             record,
             await shipmentNiHaoEstimate(db, String(record.id ?? ""), record),
           ) +
-          select(
-            "payment_status",
-            "Payment status",
-            record,
-            [
-              "Unpaid",
-              "Partial",
-              "Paid",
-            ],
-          );
+          // Payment status follows the invoice; it is shown here, not typed.
+          `<label>Payment status<input value="${esc(record.payment_status ?? "Unpaid")}" readonly aria-readonly="true" class="k-readonly"><small class="muted">Set automatically from the invoice when a payment is recorded.</small></label>` +
+          hidden("payment_status", record.payment_status ?? "Unpaid");
       }
 
       /*
@@ -1424,7 +1457,9 @@ export async function handleAdmin(
               `
               SELECT
                 customer_code,
-                full_name
+                full_name,
+                mobile,
+                email
               FROM customers
               WHERE id = ?
               `,
@@ -1559,6 +1594,9 @@ export async function handleAdmin(
 
         const finance = [
           shipmentDetail("KargoDoor freight charge", `${money("shipping_charge")} ${chargeSourceTag(record.shipping_charge_source)}`),
+          ...(Number(record.transfer_fee_collected || 0) > 0
+            ? [shipmentDetail("Transfer fee (internal)", `${pesos(record.transfer_fee_collected)} <small class="muted">included in the freight charge; the customer sees one shipping fee</small>`)]
+            : []),
           shipmentDetail("Ni Hao freight cost", `${money("nihao_cost")} ${record.nihao_cost === null ? "" : niHaoSourceTag(record.nihao_cost_source)}`),
           shipmentDetail("Freight margin", marginValue),
           ...(Number(record.delivery_charge || 0) > 0
@@ -1669,6 +1707,9 @@ export async function handleAdmin(
             >
               Create or view invoice
             </a>
+            <a href="/admin/shipments?id=${esc(id)}&amp;statement=pdf">
+              Download Shipment Statement (PDF)
+            </a>
           ` : "";
 
       const portal = entity === "customers" ? await portalFor(db, id) : null;
@@ -1707,7 +1748,8 @@ export async function handleAdmin(
       const instructionMessage = entity === "shipments"
         ? shipmentShippingInstructions({
             name: linkedCustomer?.full_name,
-            customerCode: linkedCustomer?.customer_code,
+            customerCode: record.cargo_code || linkedCustomer?.customer_code,
+            service: record.service_type,
             warehouse: record.china_warehouse,
             warehouseAddress: warehouseAddress(record.china_warehouse),
             supplierCourier: record.supplier_courier,
@@ -1716,23 +1758,42 @@ export async function handleAdmin(
         : "";
       const shippingInstructions = !canWrite ? "" : entity === "customers"
         ? `<section><h2>Send Account Setup</h2><p class="muted">Send this first so the customer has their Account/Cargo Code and portal login before their supplier ships any package. Click Create Customer Account or Generate New Temporary Password above, and the same message appears with the temporary password filled in.</p><textarea id="${accountMessageId}" readonly aria-label="Account setup message" style="min-height:260px;white-space:pre-wrap">${esc(accountMessage)}</textarea><div class="actions">${copyButton(accountMessageId, "Copy account setup message")}</div>${copyScript()}</section>`
-        : `<section><h2>Send Warehouse Instructions</h2><p class="muted">The address of this shipment’s China warehouse is added automatically.</p><textarea id="${instructionId}" readonly aria-label="Warehouse instructions" style="min-height:260px;white-space:pre-wrap">${esc(instructionMessage)}</textarea><div class="actions">${copyButton(instructionId, "Copy warehouse instructions")}</div>${copyScript()}</section>`;
-      const warehouseAddresses = entity === "shipments" && canWrite
-        ? `<section><h2>China Warehouse Addresses</h2><p class="muted">Every KargoDoor China warehouse, ready to copy.</p>${warehouseAddressBook().map(([warehouse, address]) => {
-            const addressId = `warehouse-address-${id}-${warehouse.replace(/\W+/g, "-").toLowerCase()}`;
-            return `<details class="customer-notification"><summary>${esc(warehouse)}</summary><textarea id="${esc(addressId)}" readonly aria-label="${esc(warehouse)} warehouse address" style="min-height:200px;white-space:pre-wrap">${esc(address)}</textarea><div class="actions">${copyButton(addressId, `Copy ${warehouse} address`)}</div></details>`;
-          }).join("")}${copyScript()}</section>`
+        : entity === "shipments" ? "" : `<section><h2>Send Warehouse Instructions</h2><p class="muted">The address of this shipment’s China warehouse is added automatically.</p><textarea id="${instructionId}" readonly aria-label="Warehouse instructions" style="min-height:260px;white-space:pre-wrap">${esc(instructionMessage)}</textarea><div class="actions">${copyButton(instructionId, "Copy warehouse instructions")}</div>${copyScript()}</section>`;
+      const customerPayment = entity === "shipments" && !record.archived_at && record.status !== "Cancelled"
+        ? shipmentPaymentSection({
+            path,
+            csrf: csrfToken(env, user.id, path),
+            shipmentId: id,
+            billing: await readShipmentBilling(db, id, record),
+            canWrite,
+            justPaid: url.searchParams.get("customer_paid") === "1",
+          })
         : "";
-
+      const niHaoPayment = entity === "shipments" && !record.archived_at && record.status !== "Cancelled"
+        ? niHaoPaymentSection({
+            path,
+            csrf: csrfToken(env, user.id, path),
+            shipmentId: id,
+            trackingNumber: record.tracking_number,
+            nihaoCost: record.nihao_cost,
+            payment: await readNiHaoPayment(db, record.tracking_number),
+            canWrite,
+            justPaid: url.searchParams.get("nihao_paid") === "1",
+            suggestedFee: canWrite ? await lastNiHaoTransferFee(db) : null,
+          })
+        : "";
       const customerNotifications = entity === "shipments" && canWrite ? (() => {
         const messages = shipmentStatusMessages({
           customerName: linkedCustomer?.full_name,
           tracking: record.tracking_number,
           cargoCode: record.cargo_code || linkedCustomer?.customer_code,
+          item: cargoInfo?.item,
           service: record.service_type,
           warehouse: record.china_warehouse,
           received: record.warehouse_received_date,
-          flightDate: record.departure_date,
+          departure: record.departure_date,
+          flightDate: record.service_type === "Air Freight" ? record.departure_date : null,
+          eta: record.estimated_arrival,
           arrival: record.actual_arrival,
           paymentStatus: record.payment_status,
           declaredCbm: record.cbm,
@@ -1743,18 +1804,42 @@ export async function handleAdmin(
           deliveryCharge: record.delivery_charge,
         });
 
+        const clientMessages: Array<[string, string, string]> = [
+          ["customer-account-info", "Customer Account Info", customerWelcomeMessage({
+            name: linkedCustomer?.full_name,
+            customerCode: record.cargo_code || linkedCustomer?.customer_code,
+            login: linkedCustomer?.mobile || linkedCustomer?.email,
+            loginLabel: linkedCustomer?.mobile ? "mobile number" : "email",
+            temporaryPassword: "[Generate a temporary password on the customer page]",
+          })],
+          ["supplier-instructions", "Supplier Instructions", instructionMessage],
+        ];
+        const category = (heading: string, note: string, tabs: string) =>
+          `<div class="message-category"><h3 class="message-category-title">${esc(heading)}</h3><p class="muted">${esc(note)}</p>${tabs}</div>`;
+
         return `<section>
           <h2>Customer Notifications</h2>
-          <p class="muted">Messages are personalized from this shipment. Review before sending. Copying a message does not change the shipment status.</p>
-          ${messages.map(([key,title,body]) => {
-            const messageId = `customer-notification-${id}-${key}`;
-            return `<details class="customer-notification">
-              <summary>${esc(title)}</summary>
-              <textarea id="${esc(messageId)}" readonly aria-label="${esc(title)} customer message" style="min-height:260px;white-space:pre-wrap">${esc(body)}</textarea>
-              <div class="actions">${copyButton(messageId, `Copy ${title}`)}</div>
-            </details>`;
-          }).join("")}
-          ${copyScript()}
+          <p class="muted">Personalized from this shipment. Review and edit before sending. Copying a message does not change the shipment.</p>
+          <style>.message-category{padding-top:18px}.message-category+.message-category{margin-top:22px;border-top:2px solid var(--k-line,#d5e4ed)}.message-category-title{margin:0 0 4px;font-size:1.15rem;color:var(--k-blue,#0753ad)}</style>
+          ${category("1. Client", "Account details and the instructions the customer forwards to their supplier.", messageTabs({
+            groupId: `client-messages-${id}`,
+            messages: clientMessages,
+            activeLabel: "",
+            ariaLabelSuffix: "client message",
+          }))}
+          ${category("2. Status", "One message per shipment status. The tab for the current status opens first.", messageTabs({
+            groupId: `customer-notification-${id}`,
+            messages,
+            activeKey: notificationKeyFor(record.status, record.service_type),
+            ariaLabelSuffix: "status notification",
+          }))}
+          ${category("3. Nihao", "Warehouse addresses, ready to copy. This shipment's warehouse opens first.", messageTabs({
+            groupId: `nihao-addresses-${id}`,
+            messages: nihaoAddressBook().map(([warehouse, address]) => [warehouse.replace(/\W+/g, "-").toLowerCase(), warehouse, address]),
+            activeKey: String(record.china_warehouse || "").replace(/\W+/g, "-").toLowerCase(),
+            activeLabel: "assigned",
+            ariaLabelSuffix: "warehouse address",
+          }))}
         </section>`;
       })() : "";
 
@@ -1805,9 +1890,10 @@ export async function handleAdmin(
             </div>
           </section>
           ${portalSection}
+          ${customerPayment}
+          ${niHaoPayment}
           ${shippingInstructions}
           ${customerNotifications}
-          ${warehouseAddresses}
         `,
         user.name,
         200,
@@ -1961,8 +2047,12 @@ export async function handleAdmin(
                 ${cargoCategorySql.item} AS cargo_category_item,
                 ${cargoCategorySql.group} AS cargo_category_group,
                 s.status,
-                s.cbm,
-                s.weight_kg
+                s.payment_status,
+                CASE WHEN EXISTS (
+                  SELECT 1 FROM expenses e
+                  WHERE e.category = '${niHaoExpenseCategory}'
+                    AND e.tracking_number = s.tracking_number COLLATE NOCASE
+                ) THEN 'Paid' ELSE 'Unpaid' END AS nihao_payment
               FROM shipments s
               JOIN customers c
                 ON c.id =
@@ -2032,8 +2122,8 @@ export async function handleAdmin(
             "cargo_item",
             "cargo_category",
             "status",
-            "cbm",
-            "weight_kg",
+            "payment_status",
+            "nihao_payment",
           ];
     if (entity === "shipments") {
       for (const row of rows) row.cargo_category = cargoCategory(row.cargo_category_item, row.cargo_category_group);

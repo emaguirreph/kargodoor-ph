@@ -35,7 +35,7 @@ const invoiceStatuses = [
   "Paid",
 ] as const;
 
-const paymentMethods = [
+export const paymentMethods = [
   "Cash",
   "Bank Transfer",
   "GCash",
@@ -610,12 +610,7 @@ export async function recordPayment(
     );
   }
 
-  if (invoice.status === "Draft") {
-    throw new AdminError(
-      "Issue the invoice before recording a payment.",
-      409,
-    );
-  }
+  const issuingDraft = invoice.status === "Draft";
 
   if (invoice.status === "Paid") {
     throw new AdminError(
@@ -648,7 +643,68 @@ export async function recordPayment(
     customer_id: invoice.customer_id,
   };
 
+  /*
+   * A payment on a Draft invoice issues it first, dated on the payment
+   * date, so the admin does not have to issue it in a separate step.
+   */
+  const issueStatements = issuingDraft
+    ? [
+        db
+          .prepare(
+            `
+            UPDATE invoices
+            SET
+              status = 'Unpaid',
+              issued_at = COALESCE(issued_at, ?),
+              updated_at = ?
+            WHERE
+              id = ?
+              AND status = 'Draft'
+              AND archived_at IS NULL
+            `,
+          )
+          .bind(
+            values.payment_date,
+            timestamp,
+            invoice.id,
+          ),
+        db
+          .prepare(
+            `
+            INSERT INTO activity_log (
+              id,
+              admin_user_id,
+              action,
+              entity_type,
+              entity_id,
+              old_value,
+              new_value,
+              notes,
+              created_at
+            )
+            VALUES (?,?,?,?,?,?,?,?,?)
+            `,
+          )
+          .bind(
+            randomUUID(),
+            adminId,
+            "issue_invoice",
+            "invoices",
+            invoice.id,
+            JSON.stringify({ status: "Draft" }),
+            JSON.stringify({
+              status: "Unpaid",
+              issued_at: invoice.issued_at ?? values.payment_date,
+              due_at: invoice.due_at ?? null,
+            }),
+            "Issued automatically when a payment was recorded.",
+            timestamp,
+          ),
+      ]
+    : [];
+
   const statements = [
+    ...issueStatements,
     db
       .prepare(
         `
@@ -851,7 +907,7 @@ export async function recordPayment(
 
   const result = await db.batch(statements);
 
-  if (!result[0]?.meta.changes) {
+  if (!result[issueStatements.length]?.meta.changes) {
     throw new AdminError(
       "Invoice changed while the payment was being saved. Reload and try again.",
       409,
@@ -1043,8 +1099,9 @@ function paymentForm(
   invoice: RecordData,
 ) {
   if (
-    invoice.status === "Draft" ||
-    invoice.status === "Paid"
+    invoice.status === "Paid" ||
+    invoice.status === "Void" ||
+    invoice.archived_at
   ) {
     return "";
   }
@@ -1054,6 +1111,9 @@ function paymentForm(
   return `
     <section>
       <h2>Record payment</h2>
+      ${invoice.status === "Draft"
+        ? '<p class="muted">This invoice is still a Draft. Recording a payment issues it automatically, dated on the payment date.</p>'
+        : ""}
 
       <form method="post" action="${route}">
         ${hidden(
@@ -1526,13 +1586,6 @@ async function detail(
         </div>
       </section>
 
-      <section>
-        <h2>Payment history</h2>
-        ${paymentHistory}
-      </section>
-
-      ${canMutateAdmin(user) ? invoiceMessageSection(invoice, grand, paid) : ""}
-
       ${canMutateAdmin(user) ? issueForm(
         env,
         user.id,
@@ -1544,6 +1597,14 @@ async function detail(
         user.id,
         invoice,
       ) : ""}
+
+      <section>
+        <h2>Payment history</h2>
+        ${paymentHistory}
+      </section>
+
+      ${canMutateAdmin(user) ? invoiceMessageSection(invoice, grand, paid) : ""}
+
     `,
     user.name, 200, {}, canMutateAdmin(user),
   );
@@ -1577,7 +1638,7 @@ function invoiceMessageSection(invoice: RecordData, grand: number, paid: number)
   </section>`;
 }
 
-async function createView(
+export async function createView(
   db: D1Database,
   env: AdminEnv,
   user: {
@@ -1601,6 +1662,40 @@ async function createView(
     throw new AdminError(
       "Invalid shipment search.",
     );
+  }
+
+  /*
+   * "Create or view invoice" links pass the shipment. When that shipment
+   * already has an active invoice, open it instead of an empty create form.
+   */
+  if (selected) {
+    const existing = await db
+      .prepare(
+        `
+        SELECT id
+        FROM invoices
+        WHERE
+          shipment_id = ?
+          AND status != 'Void'
+          AND archived_at IS NULL
+        ORDER BY created_at DESC
+        LIMIT 1
+        `,
+      )
+      .bind(selected)
+      .first<RecordData>();
+
+    if (existing) {
+      return page(
+        "Invoice",
+        "",
+        user.name,
+        303,
+        {
+          Location: `${route}?id=${encodeURIComponent(String(existing.id))}`,
+        },
+      );
+    }
   }
 
   const shipments = (
@@ -1890,6 +1985,8 @@ async function list(
           i.issued_at,
           i.total + i.other_charge AS invoice_total,
           COALESCE(SUM(p.amount),0) AS amount_paid,
+          (SELECT payment_date || ' · ' || payment_method FROM payments
+            WHERE invoice_id = i.id ORDER BY payment_date DESC, created_at DESC LIMIT 1) AS last_payment,
           c.full_name,
           s.tracking_number
         FROM invoices i
@@ -2015,7 +2112,7 @@ async function list(
                       pesos(
                         row.amount_paid,
                       ),
-                    )}</td>
+                    )}${row.last_payment ? `<br><span class="muted">${esc(row.last_payment)}</span>` : ""}</td>
 
                     <td>${esc(
                       pesos(
@@ -2038,7 +2135,7 @@ async function list(
     : "<p>No matching invoices.</p>";
 
   return page(
-    "Invoices",
+    "Invoices & Payments",
     `
       <section>
         <form
@@ -2453,5 +2550,41 @@ export async function handleBilling(
           }
         : {},
     );
+  }
+}
+
+/** Statuses where the cargo is measured and in the Philippines, so it is ready to bill. */
+const readyToBillStatuses = ["Gatepass", "Malabon Warehouse", "Delivered", "Arrived in Philippines", "Ready for Release"];
+
+/**
+ * Makes the Draft invoice for a shipment as soon as it can be billed: it has
+ * a KargoDoor charge and either a verified size or has reached the
+ * Philippines. A shipment that already has an active invoice is left alone
+ * (that invoice is kept in step by syncVerifiedFreightToInvoice). Returns the
+ * new invoice id, or null when nothing was made.
+ */
+export async function autoDraftInvoice(db: D1Database, shipmentId: string, adminId: string) {
+  const shipment = await db.prepare(`SELECT s.id, s.shipping_charge, s.delivery_charge, s.status, s.archived_at,
+      s.verified_cbm, s.verified_weight_kg,
+      EXISTS (SELECT 1 FROM invoices i WHERE i.shipment_id = s.id AND i.status != 'Void' AND i.archived_at IS NULL) AS invoiced
+    FROM shipments s WHERE s.id = ?`).bind(shipmentId).first<RecordData>();
+  if (!shipment || shipment.archived_at || shipment.status === "Cancelled" || Number(shipment.invoiced)) return null;
+  if (!(Number(shipment.shipping_charge) > 0)) return null;
+  const measured = shipment.verified_cbm !== null && shipment.verified_cbm !== undefined
+    || shipment.verified_weight_kg !== null && shipment.verified_weight_kg !== undefined;
+  if (!measured && !readyToBillStatuses.includes(String(shipment.status))) return null;
+  try {
+    return await createInvoice(db, {
+      shipment_id: shipmentId,
+      delivery_charge: Number(shipment.delivery_charge ?? 0),
+      other_charge: 0,
+      status: "Draft",
+      issued_at: null,
+      due_at: null,
+    }, adminId);
+  } catch (error) {
+    // Two saves at once: the other one made the invoice.
+    if (error instanceof AdminError && error.status === 409) return null;
+    throw error;
   }
 }

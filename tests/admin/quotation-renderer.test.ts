@@ -346,7 +346,7 @@ test("Sea Freight Solar Panels persists exact pricing and Edit renderer stays cl
   assert.equal(pricing.densityCharge, 74800);
   assert.equal(pricing.densityApplies, false);
   assert.equal(pricing.pricingMethod, "CBM-Based");
-  assert.equal(pricing.final, 79705);
+  assert.equal(pricing.final, 79735);
   assert.equal(row.backend_cost, 123456);
 
   const rehydratedEdit = await quotationsPage(
@@ -358,8 +358,8 @@ test("Sea Freight Solar Panels persists exact pricing and Edit renderer stays cl
   assert.match(editHtml, /data-existing-nihao-cost value="1234\.56"/);
   assert.match(readFileSync("public/admin-quotation-cargo.js", "utf8"), /name="nihao_cost"[^>]*value="\$\{saved\}"/);
 
-  assert.equal(row.calculated_amount, 7_970_500);
-  assert.equal(row.final_amount, 7_970_500);
+  assert.equal(row.calculated_amount, 7_973_500);
+  assert.equal(row.final_amount, 7_973_500);
 
   const edit = await quotationsPage(
     new Request(`http://localhost:3000/admin/quotations?edit=${row.id}`, {
@@ -437,9 +437,9 @@ test("Sea Freight Solar Panels persists exact pricing and Edit renderer stays cl
   assert.equal(updatedPricing.densityCharge, 74800);
   assert.equal(updatedPricing.densityApplies, false);
   assert.equal(updatedPricing.pricingMethod, "CBM-Based");
-  assert.equal(updatedPricing.final, 79800);
+  assert.equal(updatedPricing.final, 79830);
 
-  assert.equal(updated.calculated_amount, 7_980_000);
+  assert.equal(updated.calculated_amount, 7_983_000);
   assert.equal(updated.override_amount, 8_100_000);
   assert.equal(updated.override_reason, "Approved customer adjustment");
   assert.equal(updated.final_amount, 8_100_000);
@@ -491,9 +491,9 @@ test("quotation detail uses the compact three-column layout and tolerates legacy
   assert.match(html, /Account number/);
   assert.match(html, /Legacy Customer/);
   assert.match(html, /Quotation Sent/);
-  assert.match(html, /INSTRUCTIONS TO SUPPLIER/);
-  assert.match(html, /will NOT accept packages with incomplete labels/);
-  assert.match(html, /发货前注意重要事项/);
+  assert.match(html, /IMPORTANT SUPPLIER INSTRUCTIONS/);
+  assert.match(html, /will NOT be accepted by the warehouse/);
+  assert.match(html, /中文说明（请转发供应商）/);
   assert.doesNotMatch(html, /Dimensions: Not provided/);
   assert.doesNotMatch(html, /Quantity:/);
   for (const action of ["Edit", "Download PDF", "Duplicate", "Archive quotation"])

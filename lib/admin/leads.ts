@@ -47,7 +47,6 @@ function leadMessages(lead: Row) {
       "",
       "The estimated rate is based on the details you entered. Your final rate will be confirmed in your quotation.",
       "",
-      "Thank you for choosing KargoDoor PH! 💚",
     ])],
     ["follow-up", "Follow-Up", finishMessage([
       `Hi ${name}! 😊`,
@@ -59,7 +58,6 @@ function leadMessages(lead: Row) {
       "Next Steps:",
       "Would you still like us to prepare a quotation for your cargo? Just reply with your updated item details, dimensions or CBM, and weight when you’re ready.",
       "",
-      "Thank you for choosing KargoDoor PH! 💚",
     ])],
     ["check-in", "Check-In", finishMessage([
       `Hi ${name}! 😊`,
@@ -72,7 +70,6 @@ function leadMessages(lead: Row) {
       "",
       "We’ll prepare your quotation right away.",
       "",
-      "Thank you for choosing KargoDoor PH! 💚",
     ])],
   ] as const;
   return `<section><h2>Lead Messages</h2><p class="muted">Edit any message before copying it to Messenger, WhatsApp, Viber, or email.</p>${messages.map(([key, title, body]) => { const messageId = `lead-message-${id}-${key}`; return `<details class="customer-notification"><summary>${esc(title)}</summary><textarea id="${esc(messageId)}" aria-label="${esc(title)} lead message" style="min-height:220px;white-space:pre-wrap">${esc(body)}</textarea><div class="actions">${copyButton(messageId, `Copy ${title}`)}</div></details>`; }).join("")}${copyScript()}</section>`;
