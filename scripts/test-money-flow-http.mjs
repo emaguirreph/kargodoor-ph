@@ -162,7 +162,8 @@ try {
 
   // 3. Ni Hao SOA arrives: enter the actual cost ₱2,805.
   html = await (await get(`/admin/shipments?id=${sid}&edit=1`)).text();
-  assert.ok(html.includes('name="payment_status" value="Unpaid"') && html.includes("Set automatically from the invoice"), "payment status is read-only");
+  // Payment status is not typed: only a hidden copy is on the form (the Customer payment box shows it).
+  assert.ok(html.includes('<input type="hidden" name="payment_status" value="Unpaid">') && !html.includes("Set automatically from the invoice"), "payment status is read-only");
   response = await post("/admin/shipments", { ...shipment, id: sid, revision: revision(html), csrf: token(html), nihao_cost: "2805", payment_status: "Paid" });
   assert.equal(response.status, 303, await response.text());
   let row = sqlRows(`SELECT nihao_cost, nihao_cost_source, shipping_charge FROM shipments WHERE id='${sid}'`)[0];
