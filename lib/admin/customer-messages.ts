@@ -28,6 +28,8 @@ export type ShipmentMessageInput = {
   service?: unknown;
   warehouse?: unknown;
   received?: unknown;
+  departure?: unknown;
+  eta?: unknown;
   arrival?: unknown;
   paymentStatus?: unknown;
   declaredCbm?: unknown;
@@ -59,14 +61,32 @@ export const paymentInstructions = [
 
 const text = (value: unknown) => (value === null || value === undefined ? "" : String(value).trim());
 
-/** [key, title, message] for every shipment status update, in status order. */
+/** Which notification tab matches each shipment status, so the page opens on the right one. */
+export const notificationKeyForStatus: Record<string, string> = {
+  "Awaiting Supplier Dispatch": "awaiting-supplier-dispatch",
+  "Pending Warehouse Receipt": "awaiting-supplier-dispatch",
+  "China Warehouse": "china-warehouse",
+  "Received at Warehouse": "china-warehouse",
+  "China Port": "china-port",
+  "Sea Transit": "sea-transit",
+  "In Transit": "sea-transit",
+  "Manila Port": "manila-port",
+  "Arrived in Philippines": "manila-port",
+  Gatepass: "gatepass",
+  "Malabon Warehouse": "malabon-warehouse",
+  Delivered: "delivered",
+};
+
+/** [key, title, message] for every shipment status update, in status order. Taglish, friendly. */
 export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[string, string, string]> {
-  const name = text(input.customerName) || "there";
+  const name = text(input.customerName);
   const tracking = text(input.tracking);
   const cargoCode = text(input.cargoCode);
   const service = text(input.service);
   const warehouse = text(input.warehouse);
   const received = text(input.received);
+  const departure = text(input.departure);
+  const eta = text(input.eta);
   const arrival = text(input.arrival);
   const paymentStatus = text(input.paymentStatus);
   const declaredCbm = text(input.declaredCbm);
@@ -78,133 +98,143 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
   const shippingCharge = amount(input.shippingCharge);
   const deliveryCharge = amount(input.deliveryCharge) ?? 0;
   const shippingCost = [
-    "💰 Shipping Cost",
+    "💰 Shipping Charges",
     `Shipping Fee: ${shippingCharge === null ? "To be confirmed" : peso(shippingCharge)}`,
     deliveryCharge > 0 && `Delivery Fee: ${peso(deliveryCharge)}`,
     shippingCharge !== null && `Total Amount Due: ${peso(shippingCharge + deliveryCharge)}`,
   ];
   const isAir = /air/i.test(service);
   const trackLink = `https://www.kargodoorph.com/track${tracking ? `?tracking=${encodeURIComponent(tracking)}` : ""}`;
+  const chinaWarehouse = warehouse ? `${warehouse} warehouse` : "warehouse";
+  const codeText = cargoCode ? `Account/Cargo Code mo (${cargoCode})` : "Account/Cargo Code mo";
 
-  const hi = `Hi ${name}! 😊`;
+  const hi = name ? `Hi ${name}! 😊` : "Hi po! 😊";
   const details = (...extra: Array<string | false>) => [
     "📦 Shipment Details",
-    tracking && `Tracking Number: ${tracking}`,
+    tracking && `Tracking No.: ${tracking}`,
     cargoCode && `Account/Cargo Code: ${cargoCode}`,
     ...extra,
   ];
-  const track = `📍 Track your shipment anytime: ${trackLink}`;
+  const track = `📍 I-track ang shipment mo anytime: ${trackLink}`;
+  const salamat = "Salamat sa tiwala mo sa KargoDoor PH! 💚";
+  const noAction = "Wala kang kailangang gawin for now. 👍";
 
   const messages: Array<[string, string, Array<string | false>]> = [
     ["awaiting-supplier-dispatch", "Awaiting Supplier Dispatch", [
       hi,
       "",
-      `Your KargoDoor shipment is all set! We're now waiting for your supplier to send your package to our ${warehouse ? `${warehouse} warehouse` : "warehouse"} in China.`,
+      `Ready na ang KargoDoor shipment mo! 🙌 Hinihintay na lang namin na ipadala ng supplier mo ang package sa ${chinaWarehouse} namin sa China.`,
       "",
-      ...details(warehouse && `China Warehouse: ${warehouse}`),
+      ...details(service && `Service: ${service}`, warehouse && `China Warehouse: ${warehouse}`),
       "",
-      "Next Steps:",
-      `Please remind your supplier to put ${cargoCode ? `your Account/Cargo Code ${cargoCode}` : "your Account/Cargo Code"} on every package. Once it ships, send us the courier name and tracking number so we can watch for it.`,
+      "✅ Next Steps",
+      `1. Paalalahanan lang po ang supplier na ilagay ang ${codeText} sa bawat box or package.`,
+      "2. Pag naipadala na ng supplier, send mo lang sa amin ang courier name at tracking number para ma-monitor namin.",
       "",
-      "As soon as your package arrives, we'll check it and send you the next update.",
+      "Pagdating ng package sa warehouse, iche-check namin agad at mag-a-update kami sa'yo.",
       "",
-      thanks,
+      salamat,
     ]],
 
     ["china-warehouse", "China Warehouse", [
       hi,
       "",
-      `Good news! Your items have safely arrived at our ${warehouse ? `${warehouse} warehouse` : "warehouse"} in China.`,
+      `Good news! 🎉 Dumating na nang safe ang items mo sa ${chinaWarehouse} namin sa China.`,
       "",
-      ...details(received && `Received: ${received}`),
+      ...details(received && `Date Received: ${received}`),
       "",
       "📝 Declared Measurements",
       declaredCbm && `• CBM: ${declaredCbm}`,
       declaredWeight && `• Weight: ${declaredWeight} kg`,
+      !declaredCbm && !declaredWeight && "• Not provided",
       "",
       "✅ Warehouse-Verified Measurements",
       `• CBM: ${hasVerified ? verifiedCbm : "Pending warehouse verification"}`,
       `• Weight: ${hasVerified ? `${verifiedWeight} kg` : "Pending warehouse verification"}`,
       "",
-      "💰 How Your Final Shipping Cost Is Computed",
-      "Your final shipping charge is based on the warehouse-verified measurements, not the declared figures.",
-      "For sea freight, we compute both the volume charge (CBM × rate) and the weight charge (kg × rate). Whichever is higher becomes your final shipping cost, subject to the minimum charge and any additional charges in your quotation.",
+      "💡 Paano kino-compute ang final shipping cost mo?",
+      "Ang basis ng final shipping charge ay ang warehouse-verified measurements, hindi ang declared.",
+      isAir
+        ? "For air freight, kino-compute namin ang volumetric weight (CBM × 167). Kung alin ang mas mataas sa actual weight at volumetric weight, 'yun ang billable weight (rounded up sa next whole kg) × rate. Ang phones, tablets at laptops ay per piece ang charge."
+        : "For sea freight, kino-compute namin ang volume charge (CBM × rate) at weight charge (kg × rate). Kung alin ang mas mataas, 'yun ang final shipping cost mo, subject sa minimum charge at additional charges sa quotation mo.",
       hasVerified
-        ? `For your shipment, we'll use the verified ${verifiedCbm} CBM and ${verifiedWeight} kg.`
-        : "We'll use the verified CBM and weight once the warehouse has measured your cargo.",
+        ? `Sa shipment mo, gagamitin namin ang verified ${verifiedCbm} CBM at ${verifiedWeight} kg.`
+        : "Gagamitin namin ang verified CBM at weight once nasukat na ng warehouse ang cargo mo.",
       "",
-      "Next Steps:",
-      "No action needed from you. We'll send you your updated shipping quotation and keep you posted on the next steps.",
+      "✅ Next Steps",
+      `${noAction} Ise-send namin sa'yo ang updated shipping quotation mo at ia-update ka namin sa susunod na steps.`,
       "",
-      thanks,
+      salamat,
     ]],
 
     ["china-port", "China Port", [
       hi,
       "",
       isAir
-        ? "Good news! Your shipment has cleared customs in China and is now waiting to board its flight to the Philippines. ✈️"
-        : "Good news! Your shipment has cleared customs in China and is now at the port, waiting to board the vessel to the Philippines. 🚢",
+        ? "Good news! Cleared na sa China customs ang shipment mo at hinihintay na lang ang flight papuntang Pilipinas. ✈️"
+        : "Good news! Cleared na sa China customs ang shipment mo at nasa port na, hinihintay na lang maisakay sa barko papuntang Pilipinas. 🚢",
       "",
-      ...details(service && `Service: ${service}`, warehouse && `Origin Warehouse: ${warehouse}`),
+      ...details(service && `Service: ${service}`, warehouse && `Origin Warehouse: ${warehouse}`, departure && `Departure: ${departure}`),
       "",
-      "Next Steps:",
-      `No action needed from you. We'll update you once your shipment ${isAir ? "takes off" : "departs China"}.`,
+      "✅ Next Steps",
+      `${noAction} Mag-a-update kami once ${isAir ? "naka-take off na ang flight" : "umalis na ng China ang barko"}.`,
       "",
       track,
       "",
-      thanks,
+      salamat,
     ]],
 
-    ["sea-transit", "Sea Transit", [
+    ["sea-transit", isAir ? "Air Transit" : "Sea Transit", [
       hi,
       "",
       isAir
-        ? "Your shipment is now on its flight to the Philippines. ✈️"
-        : "Your shipment is now on the vessel, sailing to the Philippines. 🚢🌊",
+        ? "On the way na ang shipment mo! ✈️ Nasa flight na ito papuntang Pilipinas."
+        : "On the way na ang shipment mo! 🚢🌊 Nasa barko na ito at naglalayag papuntang Pilipinas.",
       "",
-      ...details(service && `Service: ${service}`),
+      ...details(service && `Service: ${service}`, departure && `Departure: ${departure}`, eta && `Estimated Arrival: ${eta}`),
       "",
-      "Next Steps:",
-      `No action needed from you. We'll send another update once ${isAir ? "your shipment lands in Manila" : "the ship docks in Manila"}.`,
+      "✅ Next Steps",
+      `${noAction} Mag-a-update ulit kami once ${isAir ? "nag-land na ang shipment mo sa Manila" : "dumaong na ang barko sa Manila"}.`,
       "",
       track,
       "",
-      thanks,
+      salamat,
     ]],
 
-    ["manila-port", "Manila Port", [
+    ["manila-port", isAir ? "Manila Arrival" : "Manila Port", [
       hi,
       "",
-      "Your shipment has arrived in Manila! 🇵🇭 It's now going through customs clearance.",
+      "Nasa Pilipinas na ang shipment mo! 🇵🇭 Dumating na ito sa Manila at kasalukuyang dumadaan sa customs clearance.",
       "",
       ...details(),
       "",
-      "Next Steps:",
-      "No action needed from you. We'll let you know once customs clearance is complete and your cargo is released from the port.",
+      "✅ Next Steps",
+      `${noAction} Sasabihan ka namin agad once tapos na ang customs clearance at na-release na ang cargo mo.`,
       "",
       track,
       "",
-      thanks,
+      salamat,
     ]],
 
     ["gatepass", "Gatepass", [
       hi,
       "",
-      "Good news! Your shipment has cleared customs and has been released from the port. 🎉",
+      "Good news! 🎉 Cleared na sa customs ang shipment mo at na-release na ito.",
       "",
       ...details(),
       "",
-      "Next Steps:",
-      "Your cargo is now on its way to our Malabon warehouse. We'll message you once it arrives so we can arrange your pickup or delivery.",
+      "✅ Next Steps",
+      "Papunta na ang cargo mo sa Malabon warehouse namin. Message ka namin once dumating na para ma-arrange natin ang pickup or delivery mo.",
       "",
-      thanks,
+      track,
+      "",
+      salamat,
     ]],
 
     ["payment-request", "Payment Request", [
       hi,
       "",
-      "Your shipment is almost ready for release! Just one more step before we can arrange your pickup or delivery.",
+      "Malapit nang ma-release ang shipment mo! 🙌 Isang step na lang bago namin ma-arrange ang pickup or delivery mo.",
       "",
       ...details(paymentStatus && `Payment Status: ${paymentStatus}`),
       "",
@@ -212,72 +242,70 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
       "",
       ...paymentInstructions,
       "",
-      "Next Steps:",
-      "Please settle your shipping charges. You can also view your invoice in your KargoDoor customer portal: https://kargodoorph.com/customer/login",
+      "✅ Next Steps",
+      "Paki-settle lang po ang shipping charges. Pwede mo ring makita ang invoice mo sa KargoDoor customer portal: https://kargodoorph.com/customer/login",
       "",
-      "Once your payment is confirmed, we'll schedule your pickup or delivery right away.",
+      "Once confirmed na ang payment mo, ise-schedule na namin agad ang pickup or delivery.",
       "",
-      thanks,
+      salamat,
     ]],
 
     ["malabon-warehouse", "Malabon Warehouse", [
       hi,
       "",
-      "Good news! Your shipment has safely arrived at our Malabon warehouse and is now ready for pickup or delivery arrangements.",
+      "Good news! 🎉 Dumating na nang safe ang shipment mo sa Malabon warehouse namin at ready na for pickup or delivery.",
       "",
       ...details(),
       "",
-      "Next Steps:",
-      "Please coordinate with our team to arrange your preferred pickup or delivery schedule.",
+      "✅ Next Steps",
+      "Message mo lang kami kung kailan ang preferred pickup or delivery schedule mo.",
       "",
-      "Kindly note that all outstanding shipping charges must be settled before your cargo can be released for pickup or delivery.",
+      "Paalala lang po: kailangan munang ma-settle ang lahat ng outstanding shipping charges bago ma-release ang cargo for pickup or delivery.",
       "",
       ...shippingCost,
       "",
       ...paymentInstructions,
       "",
-      thanks,
+      salamat,
     ]],
 
     ["out-for-delivery", "Out for Delivery", [
       hi,
       "",
-      "Your shipment is out for delivery! 🚚",
+      "Out for delivery na ang shipment mo! 🚚",
       "",
       ...details(),
       "",
-      "Next Steps:",
-      "Please make sure someone is available to receive your cargo, and keep your phone on in case our driver needs to reach you.",
+      "✅ Next Steps",
+      "Paki-siguro lang po na may tatanggap ng cargo, at naka-on ang phone mo in case tumawag ang driver namin.",
       "",
-      "We'll update you once your delivery is complete.",
+      "Mag-a-update kami once delivered na.",
       "",
-      thanks,
+      salamat,
     ]],
 
-    ["delivered", "Shipment Delivered", [
+    ["delivered", "Delivered", [
       hi,
       "",
-      "Your KargoDoor shipment has been delivered! 🎉",
+      "Delivered na ang KargoDoor shipment mo! 🎉📦",
       "",
       ...details(arrival && `Delivered: ${arrival}`),
       "",
-      "We hope everything arrived in great condition. If you have any concerns about your cargo, just reply to this message and we'll help you right away.",
+      "Sana nasa maayos na kondisyon ang lahat ng items mo. Kung may concern ka sa cargo, reply ka lang dito at tutulungan ka namin agad.",
       "",
-      thanks,
-      "",
-      "SOURCE • SHIP • RECEIVE",
+      salamat,
     ]],
 
     ["feedback", "Feedback / Referral", [
       hi,
       "",
-      "Thank you for choosing KargoDoor PH! We hope your shipping experience was smooth and easy.",
+      "Maraming salamat sa pag-choose sa KargoDoor PH! Sana naging smooth at hassle-free ang shipping experience mo. 🙏",
       "",
-      "⭐ We'd love to hear your feedback. Just reply here and let us know how we did.",
+      "⭐ Gusto naming malaman ang feedback mo. Reply ka lang dito at sabihin mo kung kumusta ang serbisyo namin.",
       "",
-      "🤝 Know a friend, business owner, online seller, or entrepreneur who imports from China? We'd really appreciate your referral.",
+      "🤝 May kakilala ka bang online seller, business owner, o nag-iimport from China? Malaking tulong sa amin kung ire-refer mo kami!",
       "",
-      "Thank you for supporting KargoDoor PH! 💚",
+      "Salamat sa pagsuporta sa KargoDoor PH! 💚",
     ]],
   ];
 

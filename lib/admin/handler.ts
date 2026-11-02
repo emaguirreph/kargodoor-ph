@@ -40,7 +40,8 @@ import { saveRecord, archiveOrCancelRecord } from "./data";
 import { page, esc, pesos, input, select, hidden, niHaoSourceTag } from "./ui";
 import { dashboard, finance, activity, saveStaffFollowUp } from "./reports";
 import { createPortal, disablePortal, portalFor, portalStatus, resetPortal } from "./customer-portal";
-import { shipmentStatusMessages } from "./customer-messages";
+import { notificationKeyForStatus, shipmentStatusMessages } from "./customer-messages";
+import { messageTabs } from "./message-tabs";
 import { copyButton, copyScript, customerPortalAccessMessage, customerWelcomeMessage, shipmentShippingInstructions, warehouseAddress, warehouseAddressBook } from "./shipping-instructions";
 import { leadsPage } from "./leads";
 import { manualShipmentRate, resolveManualShipmentCharge, syncVerifiedFreightToInvoice, verifiedShipmentFreight } from "./shipment-verified-pricing";
@@ -1718,6 +1719,8 @@ export async function handleAdmin(
           service: record.service_type,
           warehouse: record.china_warehouse,
           received: record.warehouse_received_date,
+          departure: record.departure_date,
+          eta: record.estimated_arrival,
           arrival: record.actual_arrival,
           paymentStatus: record.payment_status,
           declaredCbm: record.cbm,
@@ -1730,16 +1733,13 @@ export async function handleAdmin(
 
         return `<section>
           <h2>Customer Notifications</h2>
-          <p class="muted">Messages are personalized from this shipment. Review before sending. Copying a message does not change the shipment status.</p>
-          ${messages.map(([key,title,body]) => {
-            const messageId = `customer-notification-${id}-${key}`;
-            return `<details class="customer-notification">
-              <summary>${esc(title)}</summary>
-              <textarea id="${esc(messageId)}" readonly aria-label="${esc(title)} customer message" style="min-height:260px;white-space:pre-wrap">${esc(body)}</textarea>
-              <div class="actions">${copyButton(messageId, `Copy ${title}`)}</div>
-            </details>`;
-          }).join("")}
-          ${copyScript()}
+          <p class="muted">One tab per notification, personalized from this shipment. The tab for the current status opens first. Review and edit before sending. Copying a message does not change the shipment status.</p>
+          ${messageTabs({
+            groupId: `customer-notification-${id}`,
+            messages,
+            activeKey: notificationKeyForStatus[String(record.status || "")],
+            ariaLabelSuffix: "customer notification",
+          })}
         </section>`;
       })() : "";
 
