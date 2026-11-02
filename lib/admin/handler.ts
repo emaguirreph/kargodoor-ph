@@ -51,6 +51,7 @@ import { resolveNiHaoCost, shipmentNiHaoEstimate, type NiHaoEstimate } from "./n
 import { niHaoExpenseCategory, niHaoPaymentSection, readNiHaoPayment, recordNiHaoPayment } from "./nihao-payment";
 import { readShipmentStatement, shipmentStatementPdf, shipmentsLedgerCsv, statementFilename } from "./shipment-statement";
 import { autoDraftInvoice } from "./billing";
+import { readShipmentBilling, recordShipmentPayment, shipmentPaymentSection } from "./shipment-payment";
 
 /** Ni Hao cost input with the system estimate shown under it. Clearing the box saves the estimate. */
 const niHaoCostField = (record: RecordData, estimate: NiHaoEstimate | null) => {
@@ -482,6 +483,11 @@ export async function handleAdmin(
       }
 
       const action = form.get("action") ?? "";
+
+      if (entity === "shipments" && action === "customer_paid") {
+        await recordShipmentPayment(db, form, user);
+        return page("Saved", "", user.name, 303, { Location: `${path}?id=${encodeURIComponent(form.get("id") ?? "")}&customer_paid=1` });
+      }
 
       if (entity === "shipments" && action === "nihao_paid") {
         await recordNiHaoPayment(db, form, user);
@@ -1736,6 +1742,16 @@ export async function handleAdmin(
       const shippingInstructions = !canWrite ? "" : entity === "customers"
         ? `<section><h2>Send Account Setup</h2><p class="muted">Send this first so the customer has their Account/Cargo Code and portal login before their supplier ships any package. Click Create Customer Account or Generate New Temporary Password above, and the same message appears with the temporary password filled in.</p><textarea id="${accountMessageId}" readonly aria-label="Account setup message" style="min-height:260px;white-space:pre-wrap">${esc(accountMessage)}</textarea><div class="actions">${copyButton(accountMessageId, "Copy account setup message")}</div>${copyScript()}</section>`
         : entity === "shipments" ? "" : `<section><h2>Send Warehouse Instructions</h2><p class="muted">The address of this shipment’s China warehouse is added automatically.</p><textarea id="${instructionId}" readonly aria-label="Warehouse instructions" style="min-height:260px;white-space:pre-wrap">${esc(instructionMessage)}</textarea><div class="actions">${copyButton(instructionId, "Copy warehouse instructions")}</div>${copyScript()}</section>`;
+      const customerPayment = entity === "shipments" && !record.archived_at && record.status !== "Cancelled"
+        ? shipmentPaymentSection({
+            path,
+            csrf: csrfToken(env, user.id, path),
+            shipmentId: id,
+            billing: await readShipmentBilling(db, id, record),
+            canWrite,
+            justPaid: url.searchParams.get("customer_paid") === "1",
+          })
+        : "";
       const niHaoPayment = entity === "shipments" && !record.archived_at && record.status !== "Cancelled"
         ? niHaoPaymentSection({
             path,
@@ -1855,6 +1871,7 @@ export async function handleAdmin(
             </div>
           </section>
           ${portalSection}
+          ${customerPayment}
           ${niHaoPayment}
           ${shippingInstructions}
           ${customerNotifications}

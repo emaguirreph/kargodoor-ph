@@ -35,7 +35,7 @@ const invoiceStatuses = [
   "Paid",
 ] as const;
 
-const paymentMethods = [
+export const paymentMethods = [
   "Cash",
   "Bank Transfer",
   "GCash",

@@ -245,6 +245,24 @@ try {
   assert.ok(html.includes("Money In (not sales)") && html.includes("Starting cash"));
   step("4 pages: Money Today, Invoices & Payments (with payments), Expenses (with money in), Reports & BIR (with downloads)");
 
+  // 8c. A shipment not yet in the Philippines, paid from the shipment page.
+  html = await (await get(`/admin/shipments?new=1&customer_id=${cid}`)).text();
+  response = await post("/admin/shipments", { ...shipment, csrf: token(html), status: "China Warehouse", shipping_charge: "600", cbm: "0.05", weight_kg: "5" });
+  assert.equal(response.status, 303, await response.text());
+  const sid2 = new URL(response.headers.get("location"), origin).searchParams.get("id");
+  assert.equal(sqlRows(`SELECT COUNT(*) AS n FROM invoices WHERE shipment_id='${sid2}'`)[0].n, 0, "not ready to bill yet, so no Draft");
+  html = await (await get(`/admin/shipments?id=${sid2}`)).text();
+  assert.ok(html.includes("Customer payment") && html.includes('value="600.00"'));
+  response = await post("/admin/shipments", { csrf: token(html), action: "customer_paid", id: sid2, amount: "600", payment_method: "Cash", payment_date: "2026-11-02", reference_number: "", notes: "" });
+  assert.equal(response.status, 303, await response.text());
+  row = sqlRows(`SELECT i.status, i.issued_at, s.payment_status FROM invoices i JOIN shipments s ON s.id=i.shipment_id WHERE s.id='${sid2}'`)[0];
+  assert.deepEqual(row, { status: "Paid", issued_at: "2026-11-02", payment_status: "Paid" });
+  html = await (await get(response.headers.get("location"))).text();
+  assert.ok(html.includes("<strong>Paid</strong> · ₱600.00"));
+  html = await (await get("/admin/finance")).text();
+  assert.equal(money(html, "Money we have now"), "₱26,205.00");
+  step("Record payment on the shipment page (no invoice yet): invoice made, issued and Paid, shipment Paid, cash ₱26,205");
+
   // 9. Audit trail.
   const actions = sqlRows(`SELECT action FROM activity_log ORDER BY created_at`).map((r) => r.action);
   for (const a of ["create_invoice", "record_payment", "nihao_paid"]) assert.ok(actions.some((x) => x.includes(a.replace("_", " ")) || x === a), `activity log has ${a}: ${actions}`);

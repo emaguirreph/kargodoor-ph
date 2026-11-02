@@ -1,0 +1,118 @@
+import type { D1Database } from "@cloudflare/workers-types";
+import { AdminError, type AdminUser } from "./security";
+import { createInvoice, paymentMethods, recordPayment } from "./billing";
+import { esc, hidden, pesos } from "./ui";
+import { philippineToday } from "./finance-dates";
+
+/**
+ * "Customer payment" on the shipment page: one form that issues the invoice
+ * (making it first if needed), records the money and marks the shipment Paid.
+ * It goes through the same recordPayment as the invoice page, so cash,
+ * balances and the Activity Log stay the same everywhere.
+ */
+export type ShipmentBilling = {
+  invoiceId: string | null;
+  invoiceNumber: string | null;
+  status: string | null;
+  total: number;
+  paid: number;
+  lastPaymentDate: string | null;
+};
+
+export async function readShipmentBilling(db: D1Database, shipmentId: string, shipment: { shipping_charge?: unknown; delivery_charge?: unknown }): Promise<ShipmentBilling> {
+  const invoice = await db.prepare(`SELECT i.id, i.invoice_number, i.status, i.total + i.other_charge AS total,
+      COALESCE((SELECT SUM(amount) FROM payments WHERE invoice_id = i.id), 0) AS paid,
+      (SELECT MAX(payment_date) FROM payments WHERE invoice_id = i.id) AS last_payment
+    FROM invoices i WHERE i.shipment_id = ? AND i.status != 'Void' AND i.archived_at IS NULL
+    ORDER BY i.created_at DESC LIMIT 1`).bind(shipmentId)
+    .first<{ id: string; invoice_number: string; status: string; total: number; paid: number; last_payment: string | null }>();
+  if (!invoice) {
+    return {
+      invoiceId: null, invoiceNumber: null, status: null, paid: 0, lastPaymentDate: null,
+      total: Number(shipment.shipping_charge ?? 0) + Number(shipment.delivery_charge ?? 0),
+    };
+  }
+  return {
+    invoiceId: invoice.id, invoiceNumber: invoice.invoice_number, status: invoice.status,
+    total: Number(invoice.total), paid: Number(invoice.paid), lastPaymentDate: invoice.last_payment,
+  };
+}
+
+const allowedFields = ["csrf", "action", "id", "amount", "payment_method", "payment_date", "reference_number", "notes"];
+
+export async function recordShipmentPayment(db: D1Database, form: URLSearchParams, user: AdminUser) {
+  for (const key of form.keys()) {
+    if (!allowedFields.includes(key) || form.getAll(key).length !== 1)
+      throw new AdminError("Unexpected or repeated form field.");
+  }
+  const id = form.get("id") ?? "";
+  if (!/^[\da-f-]{36}$/i.test(id)) throw new AdminError("Invalid shipment ID.");
+  const shipment = await db.prepare("SELECT id, shipping_charge, delivery_charge, status, archived_at FROM shipments WHERE id = ?")
+    .bind(id).first<{ id: string; shipping_charge: number; delivery_charge: number; status: string; archived_at: string | null }>();
+  if (!shipment) throw new AdminError("Shipment not found.", 404);
+  if (shipment.status === "Cancelled" || shipment.archived_at) throw new AdminError("This shipment is cancelled or archived.");
+  if (!(Number(shipment.shipping_charge) > 0)) throw new AdminError("Add the KargoDoor charge before recording a payment.");
+
+  let { invoiceId } = await readShipmentBilling(db, id, shipment);
+  if (!invoiceId) {
+    invoiceId = await createInvoice(db, {
+      shipment_id: id,
+      delivery_charge: Number(shipment.delivery_charge ?? 0),
+      other_charge: 0,
+      status: "Draft",
+      issued_at: null,
+      due_at: null,
+    }, user.id);
+  }
+  // A Draft is issued on the payment date by recordPayment itself.
+  await recordPayment(db, {
+    invoice_id: invoiceId,
+    amount: form.get("amount") ?? "",
+    payment_method: form.get("payment_method") ?? "",
+    reference_number: form.get("reference_number") ?? "",
+    payment_date: form.get("payment_date") ?? "",
+    notes: form.get("notes") ?? "",
+  }, user.id);
+  return invoiceId;
+}
+
+export function shipmentPaymentSection(options: {
+  path: string;
+  csrf: string;
+  shipmentId: string;
+  billing: ShipmentBilling;
+  canWrite: boolean;
+  justPaid?: boolean;
+}) {
+  const { billing } = options;
+  const balance = Math.max(billing.total - billing.paid, 0);
+  const invoiceLink = billing.invoiceId
+    ? `<a href="/admin/invoices?id=${encodeURIComponent(billing.invoiceId)}">${esc(billing.invoiceNumber)}</a>`
+    : "";
+  const saved = options.justPaid ? '<p class="notice" role="status">Payment recorded. The invoice is issued and the shipment is updated.</p>' : "";
+  if (billing.status === "Paid" || (billing.invoiceId && balance === 0 && billing.paid > 0)) {
+    return `<section class="shipment-payment"><h2>Customer payment</h2>${saved}
+      <p><strong>Paid</strong> · ${esc(pesos(billing.paid))}${billing.lastPaymentDate ? ` on ${esc(billing.lastPaymentDate)}` : ""}. Invoice ${invoiceLink}. Counted in Money we have now.</p></section>`;
+  }
+  const summary = billing.invoiceId
+    ? `Invoice ${invoiceLink} (${esc(billing.status)}) · ${esc(pesos(billing.paid))} paid of ${esc(pesos(billing.total))}.`
+    : "No invoice yet. Recording a payment makes and issues it.";
+  if (!options.canWrite || billing.total <= 0) {
+    return `<section class="shipment-payment"><h2>Customer payment</h2>${saved}<p class="muted">${summary}${billing.total <= 0 ? " Add the KargoDoor charge first." : ""}</p></section>`;
+  }
+  const methods = paymentMethods.map((method) => `<option value="${esc(method)}"${method === "GCash" ? " selected" : ""}>${esc(method)}</option>`).join("");
+  return `<section class="shipment-payment">
+    <h2>Customer payment</h2>${saved}
+    <p class="muted">${summary} When the customer pays, save it here: the invoice is issued, the money is added to Money we have now and the shipment's Payment status updates.</p>
+    <form method="post" action="${esc(options.path)}">
+      ${hidden("csrf", options.csrf)}${hidden("action", "customer_paid")}${hidden("id", options.shipmentId)}
+      <div class="grid">
+        <label>Amount received (PHP) *<input name="amount" type="number" min="0.01" max="1000000000" step="0.01" required value="${esc((balance / 100).toFixed(2))}"></label>
+        <label>Payment method *<select name="payment_method" required>${methods}</select></label>
+        <label>Date received *<input name="payment_date" type="date" required value="${esc(philippineToday())}"></label>
+        <label>Reference no.<input name="reference_number" maxlength="160" placeholder="GCash or bank reference"></label>
+      </div>
+      <div class="actions"><button type="submit">Record payment</button></div>
+    </form>
+  </section>`;
+}
