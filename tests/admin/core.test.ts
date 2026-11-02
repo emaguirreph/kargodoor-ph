@@ -176,7 +176,8 @@ test("shipping instructions include the customer account code and supplier detai
   assert.match(addressMessage, /Account\/Cargo Code: KD-10025/);
   assert.ok(addressMessage.includes(warehouseAddress("Yiwu")));
   assert.doesNotMatch(addressMessage, /中文说明/);
-  assert.match(customerWarehouseAddressMessage({ name: "Maria", warehouse: "Hong Kong" }), /\[Add warehouse address\]/);
+  assert.match(customerWarehouseAddressMessage({ name: "Maria", warehouse: "Taiwan" }), /\[Add warehouse address\]/);
+  assert.match(warehouseAddress("Hong Kong"), /香港新界葵涌贷柜码头路51-63号葵顺工业中心9楼E室/);
 
   const shipmentMessage = shipmentShippingInstructions({
     name: "Maria",
