@@ -1533,7 +1533,7 @@ test("shipment status notifications follow Em's order and Nihao addresses end wi
 
 test("every customer message ends with the KargoDoorPH.com footer, once", () => {
   const all = [
-    ...shipmentStatusMessages({ customerName: "Maria", tracking: "KDSEA-1" }).map(([, , body]) => body),
+    ...shipmentStatusMessages({ customerName: "Maria", tracking: "KDSEA-1" }).filter(([key]) => key !== "rider-pickup").map(([, , body]) => body),
     customerShippingInstructions({ name: "Maria", customerCode: "KD-1", warehouse: "Yiwu" }),
     customerWarehouseAddressMessage({ name: "Maria", customerCode: "KD-1", warehouse: "Yiwu" }),
   ];
@@ -1544,12 +1544,12 @@ test("every customer message ends with the KargoDoorPH.com footer, once", () => 
   }
 });
 
-test("rider pickup message carries the shipment's KDOOR code", () => {
-  const rider = shipmentStatusMessages({ customerName: "Maria", cargoCode: "KDOOR-5560", tracking: "KDSEA-123456" })
+test("rider pickup message carries the shipment's KDOOR code and stays under 500 characters", () => {
+  const rider = shipmentStatusMessages({ customerName: "Maria", cargoCode: "KDOOR-0009", item: "RC Cars", tracking: "KDSEA-123456" })
     .find(([key]) => key === "rider-pickup")![2];
-  assert.match(rider, /Cargo Code: KDOOR-5560/);
-  assert.match(rider, /Customer\/Cargo Code: KDOOR-5560/);
-  assert.match(rider, /Tracking No\.: KDSEA-123456/);
-  assert.match(rider, /FSW COMMERCIAL WAREHOUSE RENTAL/);
-  assert.ok(rider.endsWith("Thank you for trusting KargoDoorPH.com! 💚 💙"));
+  assert.match(rider, /^Hi Rider! Pagdating po sa warehouse:\nAccount\/ Cargo Code: KDOOR-0009\nItem: RC Cars\n/);
+  assert.match(rider, /2 valid government IDs/);
+  assert.doesNotMatch(rider, /\*\*/);
+  assert.ok(rider.endsWith("Salamat po! 💚"));
+  assert.ok(rider.length < 500, String(rider.length));
 });
