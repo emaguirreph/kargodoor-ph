@@ -1647,3 +1647,40 @@ test("shipment statement PDF and ledger CSV join customer, KD billing and Ni Hao
   assert.equal(cells["Freight Profit PHP"], "300.00");
   assert.equal(cells["Margin %"], "30.0");
 });
+
+test("Ni Hao payment with a transfer fee saves the fee as its own Bank / Payment Fees expense", async () => {
+  const { db, sql, user } = database();
+  const { recordNiHaoPayment, readNiHaoPayment } = await import("../../lib/admin/nihao-payment");
+  const { readShipmentStatement, shipmentsLedgerCsv } = await import("../../lib/admin/shipment-statement");
+  const customerId = randomUUID();
+  const shipmentId = randomUUID();
+  sql.prepare("INSERT INTO customers (id, customer_code, full_name, mobile, created_at, updated_at) VALUES (?,?,?,?,?,?)")
+    .run(customerId, "KD-FEE", "Fee Tester", "+639170000002", "2026-10-01", "2026-10-01");
+  sql.prepare("INSERT INTO shipments (id, customer_id, tracking_number, service_type, china_warehouse, cbm, weight_kg, status, shipping_charge, delivery_charge, payment_status, nihao_cost, nihao_cost_source, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+    .run(shipmentId, customerId, "KDAIR-900002", "Air Freight", "Guangzhou", 0.01, 2, "Malabon Warehouse", 100000, 0, "Unpaid", 70000, "actual", "2026-10-01", "2026-10-01");
+  const actor = { id: user, name: "Admin", email: "admin@example.test", role: "admin" as const };
+  const form = new URLSearchParams({ csrf: "t", action: "nihao_paid", id: shipmentId, expense_date: "2026-11-02", amount: "700.00", paid_from: "GCash", transfer_fee: "10.00", reference_number: "GC-1", notes: "" });
+  await recordNiHaoPayment(db, form, actor);
+  const rows = sql.prepare("SELECT category, payee, amount, payment_method, tracking_number, description FROM expenses ORDER BY amount DESC").all();
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].category, "Freight / Ni Hao Cost");
+  assert.equal(rows[0].payment_method, "GCash");
+  assert.equal(rows[1].category, "Bank / Payment Fees");
+  assert.equal(rows[1].payee, "GCash");
+  assert.equal(rows[1].amount, 1000);
+  assert.equal(rows[1].tracking_number, "KDAIR-900002");
+  assert.match(String(rows[1].description), /GCash to Ni Hao/);
+  assert.equal((await readNiHaoPayment(db, "KDAIR-900002"))?.fees, 1000);
+  const statement = await readShipmentStatement(db, shipmentId);
+  assert.equal(statement.transferFees, 1000);
+  assert.equal(statement.profitAfterFees, 29000);
+  const csv = await (await shipmentsLedgerCsv(db, "2026-11-02")).text();
+  const [header, row] = csv.replace(/^﻿/, "").trim().split("\r\n");
+  const cells = Object.fromEntries(header.split(",").map((name, i) => [name, row.split(",")[i]]));
+  assert.equal(cells["Transfer Fees PHP"], "10.00");
+  assert.equal(cells["Profit After Fees PHP"], "290.00");
+  // A bad account or a second payment changes nothing.
+  await assert.rejects(recordNiHaoPayment(db, new URLSearchParams({ ...Object.fromEntries(form), paid_from: "Bitcoin" }), actor), /paid from/);
+  await assert.rejects(recordNiHaoPayment(db, form, actor), /already marked paid/);
+  assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM expenses").get()!.n, 2);
+});

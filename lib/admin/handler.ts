@@ -50,6 +50,7 @@ import { cargoCategory, cargoCategorySql, cargoItemSql, shipmentCargo, type Ship
 import { resolveNiHaoCost, shipmentNiHaoEstimate, type NiHaoEstimate } from "./nihao-estimate";
 import { niHaoExpenseCategory, niHaoPaymentSection, readNiHaoPayment, recordNiHaoPayment } from "./nihao-payment";
 import { readShipmentStatement, shipmentStatementPdf, shipmentsLedgerCsv, statementFilename } from "./shipment-statement";
+import { autoDraftInvoice } from "./billing";
 
 /** Ni Hao cost input with the system estimate shown under it. Clearing the box saves the estimate. */
 const niHaoCostField = (record: RecordData, estimate: NiHaoEstimate | null) => {
@@ -579,8 +580,11 @@ export async function handleAdmin(
       if (entity === "shipments") {
         const current = values as RecordData;
         const previous = id
-          ? await db.prepare("SELECT nihao_cost, nihao_cost_source, shipping_charge, shipping_charge_source, source_quotation_id FROM shipments WHERE id = ?").bind(id).first<RecordData>()
+          ? await db.prepare("SELECT nihao_cost, nihao_cost_source, shipping_charge, shipping_charge_source, source_quotation_id, payment_status FROM shipments WHERE id = ?").bind(id).first<RecordData>()
           : null;
+        // Only invoice payments change the payment status, so it can never say
+        // Paid without the money being recorded.
+        current.payment_status = previous?.payment_status ?? "Unpaid";
         const submittedCharge = current.shipping_charge === null || current.shipping_charge === undefined ? null : Number(current.shipping_charge);
         if (previous?.source_quotation_id) {
           // Re-price from the quotation with the warehouse-verified size, but keep a typed override.
@@ -631,6 +635,11 @@ export async function handleAdmin(
             ? "Invoice freight updated from verified warehouse measurements."
             : "Invoice freight updated from the shipment's edited shipping charge.",
         );
+      }
+
+      if (entity === "shipments") {
+        // Ready to bill (charge + verified size or arrived in PH): make the Draft invoice.
+        await autoDraftInvoice(db, recordId, user.id);
       }
 
       return page(
@@ -1153,16 +1162,9 @@ export async function handleAdmin(
             record,
             await shipmentNiHaoEstimate(db, String(record.id ?? ""), record),
           ) +
-          select(
-            "payment_status",
-            "Payment status",
-            record,
-            [
-              "Unpaid",
-              "Partial",
-              "Paid",
-            ],
-          );
+          // Payment status follows the invoice; it is shown here, not typed.
+          `<label>Payment status<input value="${esc(record.payment_status ?? "Unpaid")}" readonly aria-readonly="true" class="k-readonly"><small class="muted">Set automatically from the invoice when a payment is recorded.</small></label>` +
+          hidden("payment_status", record.payment_status ?? "Unpaid");
       }
 
       /*

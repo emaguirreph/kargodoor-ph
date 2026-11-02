@@ -71,7 +71,7 @@ const expenseDescriptions: Record<string, string> = {
   Utilities:
     "Electricity, water, internet, telephone, and similar utilities.",
   "Bank / Payment Fees":
-    "Bank, transfer, payment processing, and transaction fees.",
+    "Bank and GCash transfer fees (UnionBank or GCash to Ni Hao, GCash to UnionBank), payment processing and transaction fees.",
   "Repairs / Maintenance":
     "Repairs, servicing, maintenance, and business-property upkeep.",
   "Meals / Representation":

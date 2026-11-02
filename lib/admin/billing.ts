@@ -2550,3 +2550,39 @@ export async function handleBilling(
     );
   }
 }
+
+/** Statuses where the cargo is measured and in the Philippines, so it is ready to bill. */
+const readyToBillStatuses = ["Gatepass", "Malabon Warehouse", "Delivered", "Arrived in Philippines", "Ready for Release"];
+
+/**
+ * Makes the Draft invoice for a shipment as soon as it can be billed: it has
+ * a KargoDoor charge and either a verified size or has reached the
+ * Philippines. A shipment that already has an active invoice is left alone
+ * (that invoice is kept in step by syncVerifiedFreightToInvoice). Returns the
+ * new invoice id, or null when nothing was made.
+ */
+export async function autoDraftInvoice(db: D1Database, shipmentId: string, adminId: string) {
+  const shipment = await db.prepare(`SELECT s.id, s.shipping_charge, s.delivery_charge, s.status, s.archived_at,
+      s.verified_cbm, s.verified_weight_kg,
+      EXISTS (SELECT 1 FROM invoices i WHERE i.shipment_id = s.id AND i.status != 'Void' AND i.archived_at IS NULL) AS invoiced
+    FROM shipments s WHERE s.id = ?`).bind(shipmentId).first<RecordData>();
+  if (!shipment || shipment.archived_at || shipment.status === "Cancelled" || Number(shipment.invoiced)) return null;
+  if (!(Number(shipment.shipping_charge) > 0)) return null;
+  const measured = shipment.verified_cbm !== null && shipment.verified_cbm !== undefined
+    || shipment.verified_weight_kg !== null && shipment.verified_weight_kg !== undefined;
+  if (!measured && !readyToBillStatuses.includes(String(shipment.status))) return null;
+  try {
+    return await createInvoice(db, {
+      shipment_id: shipmentId,
+      delivery_charge: Number(shipment.delivery_charge ?? 0),
+      other_charge: 0,
+      status: "Draft",
+      issued_at: null,
+      due_at: null,
+    }, adminId);
+  } catch (error) {
+    // Two saves at once: the other one made the invoice.
+    if (error instanceof AdminError && error.status === 409) return null;
+    throw error;
+  }
+}
