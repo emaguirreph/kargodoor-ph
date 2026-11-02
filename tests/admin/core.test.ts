@@ -1553,3 +1553,55 @@ test("rider pickup message carries the shipment's KDOOR code and stays under 500
   assert.ok(rider.endsWith("Salamat po! 💚"));
   assert.ok(rider.length < 500, String(rider.length));
 });
+
+test("marking Ni Hao paid on a shipment creates one linked expense and no double count", async () => {
+  const { db, sql, user } = database();
+  const { recordNiHaoPayment, readNiHaoPayment, niHaoPaymentSection } = await import("../../lib/admin/nihao-payment");
+  const { readSimpleSummary } = await import("../../lib/admin/finance-summary");
+  const { readCashOnHand } = await import("../../lib/admin/finance-cash");
+  const customerId = randomUUID();
+  const shipmentId = randomUUID();
+  sql.prepare("INSERT INTO customers (id, customer_code, full_name, mobile, created_at, updated_at) VALUES (?,?,?,?,?,?)")
+    .run(customerId, "KD-NH", "Ni Hao Test", "+639170000000", "2026-10-01", "2026-10-01");
+  sql.prepare("INSERT INTO shipments (id, customer_id, tracking_number, service_type, china_warehouse, cbm, weight_kg, status, shipping_charge, delivery_charge, payment_status, nihao_cost, nihao_cost_source, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+    .run(shipmentId, customerId, "KDSEA777001", "Sea Freight", "Guangzhou", 1, 100, "Malabon Warehouse", 3000000, 0, "Unpaid", 2500000, "estimate", "2026-10-01", "2026-10-01");
+  const actor = { id: user, name: "Admin", email: "admin@example.test", role: "admin" as const };
+
+  const before = await readSimpleSummary(db);
+  assert.equal(before.goingOut, BigInt(2500000));
+  const cashBefore = await readCashOnHand(db, "2026-12-31");
+  const unpaid = niHaoPaymentSection({ path: "/admin/shipments", csrf: "t", shipmentId, trackingNumber: "KDSEA777001", nihaoCost: 2500000, payment: null, canWrite: true });
+  assert.match(unpaid, /Mark Ni Hao paid/);
+  assert.match(unpaid, /value="25000\.00"/);
+
+  const form = new URLSearchParams({ csrf: "t", action: "nihao_paid", id: shipmentId, expense_date: "2026-11-02", amount: "25415.00", payment_method: "Bank Transfer", reference_number: "SOA 9784", notes: "" });
+  await recordNiHaoPayment(db, form, actor);
+
+  const expense = sql.prepare("SELECT * FROM expenses").get()!;
+  assert.equal(expense.category, "Freight / Ni Hao Cost");
+  assert.equal(expense.payee, "Ni Hao");
+  assert.equal(expense.amount, 2541500);
+  assert.equal(expense.tracking_number, "KDSEA777001");
+  assert.equal(expense.reference_number, "SOA 9784");
+  const shipment = sql.prepare("SELECT nihao_cost, nihao_cost_source FROM shipments WHERE id = ?").get(shipmentId)!;
+  assert.equal(shipment.nihao_cost, 2541500);
+  assert.equal(shipment.nihao_cost_source, "actual");
+  assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM activity_log WHERE action = 'nihao_paid' AND entity_id = ?").get(shipmentId)!.n, 1);
+
+  // Cash goes down once; the shipment is no longer owed to Ni Hao; profit
+  // still counts the cost once (from the shipment, not the expense too).
+  const after = await readSimpleSummary(db);
+  assert.equal(after.goingOut, BigInt(0));
+  assert.equal(after.allTimeExpenses, before.allTimeExpenses);
+  assert.equal(after.expectedProfit, BigInt(3000000 - 2541500));
+  const cashAfter = await readCashOnHand(db, "2026-12-31");
+  assert.equal(cashBefore.total - cashAfter.total, BigInt(2541500));
+
+  const payment = await readNiHaoPayment(db, "kdsea777001");
+  assert.equal(payment?.amount, 2541500);
+  assert.match(niHaoPaymentSection({ path: "/admin/shipments", csrf: "t", shipmentId, trackingNumber: "KDSEA777001", nihaoCost: 2541500, payment, canWrite: true }), /Paid/);
+
+  await assert.rejects(recordNiHaoPayment(db, form, actor), /already marked paid/);
+  assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM expenses").get()!.n, 1);
+  await assert.rejects(recordNiHaoPayment(db, new URLSearchParams({ ...Object.fromEntries(form), extra: "x" }), actor), /Unexpected/);
+});
