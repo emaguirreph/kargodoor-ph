@@ -177,11 +177,14 @@ export async function expensesPage(db: D1Database, url: URL, user: AdminUser | s
     .all<RecordData>();
   // The list leaves out Reference number (Em, 2026-11-02); the add/edit form still has it.
   const listFields = fields.filter(([key]) => key !== "reference_number");
-  const table = results.length ? `<div class="table"><table><thead><tr>
-    ${canWrite ? "<th>Actions</th>" : ""}${listFields.map(([, label]) => `<th>${label}</th>`).join("")}</tr></thead><tbody>
-    ${results.map((row) => `<tr>${canWrite ? `<td><a href="${path}?edit=${esc(encodeURIComponent(String(row.id)))}">Edit</a>${canDelete ? ` <a href="${path}?delete=${esc(encodeURIComponent(String(row.id)))}">Delete</a>` : ""}</td>` : ""}
-      ${listFields.map(([key]) => `<td>${key === "amount" ? esc(pesos(row[key])) : esc(row[key]) || "—"}</td>`).join("")}</tr>`).join("")}
-    </tbody></table></div>` : "<p>No expenses found.</p>";
+  // Short columns never wrap; Description and Notes take the room that is left.
+  const cellClass = (key: string) => ["expense_date", "amount", "payment_method"].includes(key) ? ` class="exp-${key === "amount" ? "num" : "tight"}"` : key === "description" || key === "notes" ? ' class="exp-wide"' : "";
+  const table = results.length ? `<div class="table"><table class="expense-list"><thead><tr>
+    ${canWrite ? '<th class="exp-tight">Actions</th>' : ""}${listFields.map(([key, label]) => `<th${cellClass(key)}>${label}</th>`).join("")}</tr></thead><tbody>
+    ${results.map((row) => `<tr>${canWrite ? `<td class="exp-tight"><a href="${path}?edit=${esc(encodeURIComponent(String(row.id)))}">Edit</a>${canDelete ? `<br><a href="${path}?delete=${esc(encodeURIComponent(String(row.id)))}">Delete</a>` : ""}</td>` : ""}
+      ${listFields.map(([key]) => `<td${cellClass(key)}>${key === "amount" ? esc(pesos(row[key])) : esc(row[key]) || "—"}</td>`).join("")}</tr>`).join("")}
+    </tbody></table></div>
+    <style>.expense-list .exp-tight,.expense-list .exp-num{white-space:nowrap;overflow-wrap:normal;word-break:normal}.expense-list .exp-num{text-align:right;font-variant-numeric:tabular-nums}.expense-list th.exp-num{text-align:right}.expense-list .exp-wide{min-width:200px}.expense-list th{overflow-wrap:normal;word-break:normal}</style>` : "<p>No expenses found.</p>";
   const notice = url.searchParams.get("deleted") === "1" ? "Expense deleted." : url.searchParams.get("updated") === "1" ? "Expense updated." : url.searchParams.get("saved") === "1" ? "Expense saved." : "";
   // Owner money, opening cash and adjustments are not sales, but they are
   // money in, so they sit next to money out (staff only see their expenses).
