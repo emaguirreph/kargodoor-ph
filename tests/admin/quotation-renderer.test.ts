@@ -491,9 +491,9 @@ test("quotation detail uses the compact three-column layout and tolerates legacy
   assert.match(html, /Account number/);
   assert.match(html, /Legacy Customer/);
   assert.match(html, /Quotation Sent/);
-  assert.match(html, /INSTRUCTIONS TO SUPPLIER/);
-  assert.match(html, /will NOT accept packages with incomplete labels/);
-  assert.match(html, /发货前注意重要事项/);
+  assert.match(html, /IMPORTANT SUPPLIER INSTRUCTIONS/);
+  assert.match(html, /will NOT be accepted by the warehouse/);
+  assert.match(html, /中文说明（请转发供应商）/);
   assert.doesNotMatch(html, /Dimensions: Not provided/);
   assert.doesNotMatch(html, /Quantity:/);
   for (const action of ["Edit", "Download PDF", "Duplicate", "Archive quotation"])

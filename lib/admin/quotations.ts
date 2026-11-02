@@ -227,7 +227,7 @@ function quotationCustomerMessage(q: Row, accountNumber = "") {
       ],
     ],
   ];
-  const warehouseDetails = { name: customer.name, customerCode: accountNumber, warehouse };
+  const warehouseDetails = { name: customer.name, customerCode: accountNumber, service: q.freight_type, warehouse };
   messages.push(["shipping-instructions", "Shipping Instructions", []]);
   messages.push(["warehouse-address", "Warehouse Address", []]);
   messages.push(["formal-export", "Formal Export Request", ["Formal Export Request 出口报关", "", "For suppliers needing formal export through the supplier’s name, please contact via WeChat:", "出口报关请联系:", "Guangzhou 广州报关联系微信/电话：18150099580", "Yiwu 义乌报关联系微信/电话：18050882066"]]);
