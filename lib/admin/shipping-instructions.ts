@@ -1,4 +1,4 @@
-import { finishMessage } from "./customer-messages";
+import { finishMessage, messageFooter } from "./customer-messages";
 
 export type ShippingInstructionCustomer = {
   name?: unknown;
@@ -173,7 +173,7 @@ function shippingInstructionsMessage(details: ShippingInstructionCustomer): stri
     "",
     "📦 Shipping Reminder: Final shipping charges will be based on the actual CBM and weight verified by our China warehouse, using the applicable freight rates.",
     "",
-    "Thank you for trusting KargoDoorPH.com! 💚",
+    messageFooter,
   ].join("\n");
 }
 
@@ -204,7 +204,6 @@ export function customerWelcomeMessage(customer: PortalAccessMessage): string {
     "",
     "You can use the portal to view your shipment and payment updates anytime.",
     "",
-    "Thank you for choosing KargoDoor PH! 💚",
   ]);
 }
 
@@ -233,7 +232,6 @@ export function customerWarehouseAddressMessage(customer: ShippingInstructionCus
     "Next Steps:",
     `Please share this address with your supplier and ask them to place ${code} clearly on every package so we can receive and identify your cargo.`,
     "",
-    "Thank you for trusting KargoDoor PH! 💚",
   ]);
 }
 

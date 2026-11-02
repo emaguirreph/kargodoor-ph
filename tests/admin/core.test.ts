@@ -170,7 +170,7 @@ test("shipping instructions include the customer account code and supplier detai
   assert.ok(customerMessage.includes("AIR KD-10025"));
   assert.match(customerMessage, /will NOT be accepted by the warehouse/);
   assert.match(customerMessage, /ONCE SHIPPED, PLEASE SEND US/);
-  assert.match(customerMessage, /Thank you for trusting KargoDoorPH\.com! 💚$/);
+  assert.match(customerMessage, /Thank you for trusting KargoDoorPH\.com! 💚 💙$/);
 
   const addressMessage = customerWarehouseAddressMessage({ name: "Maria", customerCode: "KD-10025", warehouse: "Yiwu" });
   assert.match(addressMessage, /Hi Maria/);
@@ -1484,7 +1484,7 @@ test("shipment notifications include warehouse pickup instructions after Malabon
   assert.match(body, /36 Rivera St\., Brgy\. Tañong, Malabon City/);
   assert.match(body, /Wingvan Trucks\nAllowed only from 10:00 PM – 2:00 AM\./);
   assert.doesNotMatch(body, /\*\*/);
-  assert.match(body, /Thank you for trusting KargoDoorPH\.com! 💚$/);
+  assert.match(body, /Thank you for trusting KargoDoorPH\.com! 💚 💙$/);
 });
 
 test("shipment status notifications follow Em's order and Nihao addresses end with Malabon", () => {
@@ -1498,4 +1498,17 @@ test("shipment status notifications follow Em's order and Nihao addresses end wi
   assert.equal(notificationKeyFor("Sea Transit", "Sea Freight"), "sea-transit");
   const book = nihaoAddressBook().map(([name]) => name);
   assert.deepEqual(book, ["Guangzhou", "Yiwu", "Shishi", "Tongda Air Cargo", "Hong Kong", "Malabon Warehouse"]);
+});
+
+test("every customer message ends with the KargoDoorPH.com footer, once", () => {
+  const all = [
+    ...shipmentStatusMessages({ customerName: "Maria", tracking: "KDSEA-1" }).map(([, , body]) => body),
+    customerShippingInstructions({ name: "Maria", customerCode: "KD-1", warehouse: "Yiwu" }),
+    customerWarehouseAddressMessage({ name: "Maria", customerCode: "KD-1", warehouse: "Yiwu" }),
+  ];
+  for (const body of all) {
+    assert.ok(body.endsWith("Thank you for trusting KargoDoorPH.com! 💚 💙"), body.slice(-80));
+    assert.equal(body.split("Thank you for trusting KargoDoorPH.com!").length, 2);
+    assert.doesNotMatch(body, /China to PH, Made SIMPLE/);
+  }
 });
