@@ -104,16 +104,16 @@ export async function financeCashPage(db: D1Database, url: URL, user: string, cs
     .map(
       (payment) => `
         <tr>
+          <td>
+            <a href="/admin/invoices?id=${esc(payment.invoice_id)}">
+              ${esc(payment.invoice_number)}
+            </a>
+          </td>
           <td>${esc(payment.payment_date)}</td>
           <td>
             ${esc(payment.customer_name)}
             <br>
             <span class="muted">${esc(payment.customer_code)}</span>
-          </td>
-          <td>
-            <a href="/admin/invoices?id=${esc(payment.invoice_id)}">
-              ${esc(payment.invoice_number)}
-            </a>
           </td>
           <td>${esc(pesos(payment.amount))}</td>
           <td>${esc(payment.payment_method)}</td>
@@ -154,9 +154,9 @@ export async function financeCashPage(db: D1Database, url: URL, user: string, cs
         <table>
           <thead>
             <tr>
+              <th>Invoice</th>
               <th>Date</th>
               <th>Customer</th>
-              <th>Invoice</th>
               <th>Amount</th>
               <th>Method</th>
               <th>Reference</th>

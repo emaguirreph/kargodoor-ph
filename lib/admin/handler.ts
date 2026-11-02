@@ -48,7 +48,7 @@ import { manualShipmentRate, resolveManualShipmentCharge, resolveQuotationShipme
 import { airItems, itemCategories } from "./quotation-pricing";
 import { cargoCategory, cargoCategorySql, cargoItemSql, shipmentCargo, type ShipmentCargo } from "./shipment-cargo";
 import { resolveNiHaoCost, shipmentNiHaoEstimate, type NiHaoEstimate } from "./nihao-estimate";
-import { niHaoPaymentSection, readNiHaoPayment, recordNiHaoPayment } from "./nihao-payment";
+import { niHaoExpenseCategory, niHaoPaymentSection, readNiHaoPayment, recordNiHaoPayment } from "./nihao-payment";
 import { readShipmentStatement, shipmentStatementPdf, shipmentsLedgerCsv, statementFilename } from "./shipment-statement";
 
 /** Ni Hao cost input with the system estimate shown under it. Clearing the box saves the estimate. */
@@ -179,6 +179,7 @@ const labels: Record<string, string> = {
   tracking_remarks: "Tracking remarks",
   cargo_quantity: "Units",
   payment_status: "Payment status",
+  nihao_payment: "Ni Hao payment",
   cbm: "Declared CBM",
   weight_kg: "Declared weight (kg)",
   supplier_waybill_number: "Supplier waybill number",
@@ -2005,8 +2006,12 @@ export async function handleAdmin(
                 ${cargoCategorySql.item} AS cargo_category_item,
                 ${cargoCategorySql.group} AS cargo_category_group,
                 s.status,
-                s.cbm,
-                s.weight_kg
+                s.payment_status,
+                CASE WHEN EXISTS (
+                  SELECT 1 FROM expenses e
+                  WHERE e.category = '${niHaoExpenseCategory}'
+                    AND e.tracking_number = s.tracking_number COLLATE NOCASE
+                ) THEN 'Paid' ELSE 'Unpaid' END AS nihao_payment
               FROM shipments s
               JOIN customers c
                 ON c.id =
@@ -2076,8 +2081,8 @@ export async function handleAdmin(
             "cargo_item",
             "cargo_category",
             "status",
-            "cbm",
-            "weight_kg",
+            "payment_status",
+            "nihao_payment",
           ];
     if (entity === "shipments") {
       for (const row of rows) row.cargo_category = cargoCategory(row.cargo_category_item, row.cargo_category_group);
