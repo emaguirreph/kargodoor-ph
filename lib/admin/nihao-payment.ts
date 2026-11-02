@@ -161,26 +161,31 @@ export function niHaoPaymentSection(options: {
   payment: NiHaoPayment | null;
   canWrite: boolean;
   justPaid?: boolean;
+  /** Set when the box sits inside the Edit shipment form: a card with this heading, not a page section. */
+  title?: string;
   suggestedFee?: number | null;
 }) {
+  const open = options.title ? `<div class="shipment-pay-box" id="nihao-payment">` : `<section class="nihao-payment">`;
+  const close = options.title ? "</div>" : "</section>";
+  const heading = options.title ? `<h4>${esc(options.title)}</h4>` : "<h2>Ni Hao payment</h2>";
   const { payment } = options;
   const expensesLink = `/admin/finance/expenses?q=${encodeURIComponent(String(options.trackingNumber ?? ""))}`;
   if (payment) {
-    return `<section class="nihao-payment">
-      <h2>Ni Hao payment</h2>
+    return `${open}
+      ${heading}
       ${options.justPaid ? `<p class="notice" role="status">Ni Hao payment saved to Expenses.</p>` : ""}
       <p><strong>Paid</strong> · ${esc(pesos(payment.amount))} on ${esc(payment.lastDate)}${payment.count > 1 ? ` (${payment.count} expense records)` : ""}${payment.fees ? ` + ${esc(pesos(payment.fees))} transfer fee` : ""}.
       Counted in Expenses and Cash on Hand. <a href="${esc(expensesLink)}">View in Expenses</a></p>
-    </section>`;
+    ${close}`;
   }
   const cost = options.nihaoCost === null || options.nihaoCost === undefined || options.nihaoCost === "" ? null : Number(options.nihaoCost);
   if (!options.canWrite) {
-    return `<section class="nihao-payment"><h2>Ni Hao payment</h2><p class="muted">Not paid yet.</p></section>`;
+    return `${open}${heading}<p class="muted">Not paid yet.</p>${close}`;
   }
   const amountValue = cost === null ? "" : (cost / 100).toFixed(2);
   const accounts = Object.keys(paidFromAccounts).map((account) => `<option value="${esc(account)}"${account === "UnionBank" ? " selected" : ""}>${esc(account)}</option>`).join("");
-  return `<section class="nihao-payment">
-    <h2>Ni Hao payment</h2>
+  return `${open}
+    ${heading}
     <p class="muted">Not paid yet. When you pay Ni Hao for this shipment, save it here. It is added to Expenses as a Freight / Ni Hao Cost with this tracking number, so you don't need to enter it again there. The amount paid becomes the shipment's Ni Hao actual cost. A transfer fee is saved as its own Bank / Payment Fees expense.</p>
     <form method="post" action="${esc(options.path)}">
       ${hidden("csrf", options.csrf)}${hidden("action", "nihao_paid")}${hidden("id", options.shipmentId)}
@@ -195,5 +200,5 @@ export function niHaoPaymentSection(options: {
       </div>
       <div class="actions"><button type="submit">Mark Ni Hao paid</button></div>
     </form>
-  </section>`;
+  ${close}`;
 }

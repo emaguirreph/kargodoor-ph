@@ -194,16 +194,23 @@ try {
   assert.equal(money(html, "Money going out"), "₱2,805.00");
   step("₱3,420 GCash payment: invoice auto-issued and Paid, shipment Paid, cash ₱28,420, coming in ₱0");
 
-  // 6. Pay Ni Hao from the shipment page.
+  // 6. Pay Ni Hao from the Edit shipment form (orange Money out box).
   html = await (await get(`/admin/shipments?id=${sid}`)).text();
-  assert.ok(html.includes("Mark Ni Hao paid"));
-  assert.ok(html.includes('name="paid_from"') && html.includes('name="transfer_fee"'));
+  assert.ok(!html.includes('name="paid_from"') && !html.includes('action" value="nihao_paid"'), "shipment page has no payment forms");
+  assert.ok(html.includes("Ni Hao payment") && html.includes("Not paid") && html.includes("Record in Edit shipment"));
+  assert.ok(html.includes('<details class="customer-notification"') && html.includes("Copy Message"), "messages listed like the quotation");
+  html = await (await get(`/admin/shipments?id=${sid}&edit=1`)).text();
+  assert.ok(html.includes("shipment-money-kd") && html.includes("shipment-money-nh") && html.includes("Mark Ni Hao paid"));
+  assert.ok(html.includes('form="nihao-payment-form" name="paid_from"') && html.includes('<form id="nihao-payment-form"'));
+  assert.ok(html.includes('form="nihao-payment-form" name="transfer_fee"'));
   const niHao = { csrf: token(html), action: "nihao_paid", id: sid, expense_date: "2026-11-02", amount: "2805", paid_from: "UnionBank", transfer_fee: "10", reference_number: "UB-777", notes: "SOA 9999" };
   response = await post("/admin/shipments", niHao);
   assert.equal(response.status, 303, await response.text());
   assert.equal((await post("/admin/shipments", niHao)).status, 409, "second Ni Hao payment refused");
-  html = await (await get(`/admin/shipments?id=${sid}`)).text();
+  html = await (await get(`/admin/shipments?id=${sid}&edit=1`)).text();
   assert.ok(html.includes("<strong>Paid</strong> · ₱2,805.00") && html.includes("+ ₱10.00 transfer fee"));
+  html = await (await get(`/admin/shipments?id=${sid}`)).text();
+  assert.ok(/Ni Hao payment[\s\S]*?Paid<\/span> ₱2,805.00 on 2026-11-02/.test(html), "summary shows Ni Hao paid");
   const expenses = sqlRows(`SELECT category, payee, amount, payment_method, tracking_number FROM expenses ORDER BY amount DESC`);
   assert.deepEqual(expenses, [
     { category: "Freight / Ni Hao Cost", payee: "Ni Hao", amount: 280500, payment_method: "Bank Transfer", tracking_number: tracking },
@@ -245,14 +252,14 @@ try {
   assert.ok(html.includes("Money In (not sales)") && html.includes("Starting cash"));
   step("4 pages: Money Today, Invoices & Payments (payment date + method on each row), Expenses (with money in), Reports & BIR (with downloads)");
 
-  // 8c. A shipment not yet in the Philippines, paid from the shipment page.
+  // 8c. A shipment not yet in the Philippines, paid from the Edit shipment form.
   html = await (await get(`/admin/shipments?new=1&customer_id=${cid}`)).text();
   response = await post("/admin/shipments", { ...shipment, csrf: token(html), status: "China Warehouse", shipping_charge: "600", cbm: "0.05", weight_kg: "5" });
   assert.equal(response.status, 303, await response.text());
   const sid2 = new URL(response.headers.get("location"), origin).searchParams.get("id");
   assert.equal(sqlRows(`SELECT COUNT(*) AS n FROM invoices WHERE shipment_id='${sid2}'`)[0].n, 0, "not ready to bill yet, so no Draft");
-  html = await (await get(`/admin/shipments?id=${sid2}`)).text();
-  assert.ok(html.includes("Customer payment") && html.includes('value="600.00"'));
+  html = await (await get(`/admin/shipments?id=${sid2}&edit=1`)).text();
+  assert.ok(html.includes("Customer payment") && html.includes('form="customer-payment-form" name="amount"') && html.includes('value="600.00"'));
   response = await post("/admin/shipments", { csrf: token(html), action: "customer_paid", id: sid2, amount: "600", payment_method: "Cash", payment_date: "2026-11-02", reference_number: "", notes: "" });
   assert.equal(response.status, 303, await response.text());
   row = sqlRows(`SELECT i.status, i.issued_at, s.payment_status FROM invoices i JOIN shipments s ON s.id=i.shipment_id WHERE s.id='${sid2}'`)[0];

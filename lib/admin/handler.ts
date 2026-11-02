@@ -44,7 +44,7 @@ import { page, esc, pesos, input, select, hidden, niHaoSourceTag } from "./ui";
 import { dashboard, finance, activity, saveStaffFollowUp } from "./reports";
 import { createPortal, disablePortal, portalFor, portalStatus, resetPortal } from "./customer-portal";
 import { notificationKeyFor, shipmentStatusMessages } from "./customer-messages";
-import { messageTabs } from "./message-tabs";
+import { messageList } from "./message-list";
 import { copyButton, copyScript, customerPortalAccessMessage, customerWelcomeMessage, nihaoAddressBook, shipmentShippingInstructions, warehouseAddress } from "./shipping-instructions";
 import { leadsPage } from "./leads";
 import { manualShipmentRate, resolveManualShipmentCharge, resolveQuotationShipmentCharge, syncVerifiedFreightToInvoice, verifiedShipmentFreight } from "./shipment-verified-pricing";
@@ -55,6 +55,7 @@ import { lastNiHaoTransferFee, niHaoExpenseCategory, niHaoPaymentSection, readNi
 import { readShipmentStatement, shipmentStatementPdf, shipmentsLedgerCsv, statementFilename } from "./shipment-statement";
 import { autoDraftInvoice } from "./billing";
 import { readShipmentBilling, recordShipmentPayment, shipmentPaymentSection } from "./shipment-payment";
+import { detachForm } from "./detached-form";
 
 /** Ni Hao cost input with the system estimate shown under it. Clearing the box saves the estimate. */
 const niHaoCostField = (record: RecordData, estimate: NiHaoEstimate | null) => {
@@ -118,6 +119,27 @@ const shipmentStatusOptions = (record: RecordData): readonly string[] => {
 /** Shipment form page: like the default admin policy, plus fetch to this origin for the live estimate. */
 const shipmentFormCsp =
   "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
+
+/** Blue (KargoDoor, money in) and orange (Ni Hao, money out) parts of the Edit shipment form. */
+const shipmentMoneyCss = `<style>
+.shipment-money{border:1.5px solid;border-radius:16px;padding:20px 22px}
+.shipment-money>h3{margin:0 0 14px;font-size:1.15rem;display:flex;align-items:center;flex-wrap:wrap;gap:10px}
+.shipment-money-tag{font-size:.72rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;border-radius:999px;padding:3px 10px;color:#fff}
+.shipment-money input:not(.k-readonly),.shipment-money select,.shipment-money textarea{background:#fff}
+.shipment-pay-box{margin-top:18px;padding:16px 18px;border:1.5px solid;border-radius:12px;background:#fff;scroll-margin-top:20px}
+.shipment-pay-box h4{margin:0 0 4px;font-size:1rem}
+.shipment-pay-box>p{font-size:.92rem}
+.shipment-money-kd{background:#eaf2ff;border-color:#b9cff5}
+.shipment-money-kd>h3,.shipment-money-kd h4{color:#003b9d}
+.shipment-money-kd .shipment-money-tag{background:#003b9d}
+.shipment-money-kd .shipment-pay-box{border-color:#b9cff5}
+.shipment-money-nh{background:#fff4e6;border-color:#f6c58f}
+.shipment-money-nh>h3,.shipment-money-nh h4{color:#a14c00}
+.shipment-money-nh .shipment-money-tag{background:#d9700a}
+.shipment-money-nh .shipment-pay-box{border-color:#f6c58f}
+html body .shipment-money-nh .shipment-pay-box button{background:linear-gradient(135deg,#c25e00,#e8840f);box-shadow:0 10px 20px -12px rgba(194,94,0,.8)}
+@media(max-width:520px){.shipment-money{padding:14px}.shipment-pay-box{padding:12px}}
+</style>`;
 
 /** JSON with the KargoDoor charge (hand-added shipments) and Ni Hao estimate for the values on the shipment form. */
 async function shipmentLiveEstimate(db: D1Database, params: URLSearchParams) {
@@ -497,12 +519,12 @@ export async function handleAdmin(
 
       if (entity === "shipments" && action === "customer_paid") {
         await recordShipmentPayment(db, form, user);
-        return page("Saved", "", user.name, 303, { Location: `${path}?id=${encodeURIComponent(form.get("id") ?? "")}&customer_paid=1` });
+        return page("Saved", "", user.name, 303, { Location: `${path}?id=${encodeURIComponent(form.get("id") ?? "")}&edit=1&customer_paid=1#customer-payment` });
       }
 
       if (entity === "shipments" && action === "nihao_paid") {
         await recordNiHaoPayment(db, form, user);
-        return page("Saved", "", user.name, 303, { Location: `${path}?id=${encodeURIComponent(form.get("id") ?? "")}&nihao_paid=1` });
+        return page("Saved", "", user.name, 303, { Location: `${path}?id=${encodeURIComponent(form.get("id") ?? "")}&edit=1&nihao_paid=1#nihao-payment` });
       }
 
       if (action === "archive") {
@@ -812,6 +834,7 @@ export async function handleAdmin(
 
       let fields =
         "";
+      let paymentForms = "";
 
       /*
        * CUSTOMER FORM
@@ -1175,7 +1198,41 @@ export async function handleAdmin(
         /*
          * FINANCIAL DETAILS
          */
+        // Money in (KargoDoor, blue) and money out (Ni Hao, orange), each with
+        // its payment box. The payment boxes submit their own forms (see
+        // detachForm), placed after the Save shipment form.
+        const payable = Boolean(id) && !record.archived_at && record.status !== "Cancelled";
+        const customerBox = payable
+          ? detachForm(shipmentPaymentSection({
+              path,
+              csrf: csrfToken(env, user.id, path),
+              shipmentId: String(id),
+              billing: await readShipmentBilling(db, String(id), record),
+              canWrite,
+              justPaid: url.searchParams.get("customer_paid") === "1",
+              title: "Customer payment",
+            }), "customer-payment-form")
+          : { inline: "", form: "" };
+        const niHaoBox = payable
+          ? detachForm(niHaoPaymentSection({
+              path,
+              csrf: csrfToken(env, user.id, path),
+              shipmentId: String(id),
+              trackingNumber: record.tracking_number,
+              nihaoCost: record.nihao_cost,
+              payment: await readNiHaoPayment(db, record.tracking_number),
+              canWrite,
+              justPaid: url.searchParams.get("nihao_paid") === "1",
+              suggestedFee: canWrite ? await lastNiHaoTransferFee(db) : null,
+              title: "Ni Hao payment",
+            }), "nihao-payment-form")
+          : { inline: "", form: "" };
+        paymentForms = customerBox.form + niHaoBox.form;
+
         fields +=
+          `<div class="wide shipment-money shipment-money-kd">
+            <h3><span class="shipment-money-tag">Money in</span> KargoDoor · customer pays us</h3>
+            <div class="grid">` +
           shippingChargeField(record) +
           input(
             "delivery_charge",
@@ -1185,13 +1242,18 @@ export async function handleAdmin(
             true,
             30,
           ) +
+          // Payment status follows the invoice; it is shown here, not typed.
+          `<label>Payment status<input value="${esc(record.payment_status ?? "Unpaid")}" readonly aria-readonly="true" class="k-readonly"><small class="muted">Set automatically from the invoice when a payment is recorded.</small></label>` +
+          hidden("payment_status", record.payment_status ?? "Unpaid") +
+          `</div>${customerBox.inline}</div>
+          <div class="wide shipment-money shipment-money-nh">
+            <h3><span class="shipment-money-tag">Money out</span> Ni Hao · we pay Ni Hao</h3>
+            <div class="grid">` +
           niHaoCostField(
             record,
             await shipmentNiHaoEstimate(db, String(record.id ?? ""), record),
           ) +
-          // Payment status follows the invoice; it is shown here, not typed.
-          `<label>Payment status<input value="${esc(record.payment_status ?? "Unpaid")}" readonly aria-readonly="true" class="k-readonly"><small class="muted">Set automatically from the invoice when a payment is recorded.</small></label>` +
-          hidden("payment_status", record.payment_status ?? "Unpaid");
+          `</div>${niHaoBox.inline}</div>`;
       }
 
       /*
@@ -1317,13 +1379,14 @@ export async function handleAdmin(
 
               ${entity === "shipments" && cargoInfo?.quotationId ? `<p class="notice shipment-cargo-note"><strong>Cargo / Item:</strong> ${esc(cargoInfo.item) || "—"} · <strong>Category:</strong> ${esc(cargoInfo.category) || "—"}${cargoInfo.quotationId ? ` · From quotation <a href="/admin/quotations?id=${esc(cargoInfo.quotationId)}">${esc(cargoInfo.quotationNumber) || "View quotation"}</a>. To change the item or category, edit the quotation.` : ""}</p>` : ""}
 
+              ${entity === "shipments" ? shipmentMoneyCss : ""}
               <div class="grid">
                 ${fields}
               </div>
 
               <p class="muted">
                 * Required. Optional blank
-                values clear the saved field.
+                values clear the saved field.${paymentForms ? " Record payment and Mark Ni Hao paid save only their own box. If you changed other fields, click Save shipment first." : ""}
               </p>
 
               <div class="actions">
@@ -1351,6 +1414,7 @@ export async function handleAdmin(
                 </a>
               </div>
             </form>
+            ${paymentForms}
             ${entity === "shipments" ? '<script src="/admin-shipment-pricing.js" defer></script>' : ""}
           </section>
         `,
@@ -1562,6 +1626,27 @@ export async function handleAdmin(
           <dd>${value}</dd>
         </div>`;
 
+      // Where the money stands, shown in the summary. Payments are recorded in Edit shipment.
+      const paymentSummary = entity === "shipments" ? await (async () => {
+        const billing = await readShipmentBilling(db, id, record);
+        const niHao = await readNiHaoPayment(db, record.tracking_number);
+        const pill = (tone: string, text: string) => `<span class="k-pill" data-k="${tone}">${esc(text)}</span>`;
+        const balance = Math.max(billing.total - billing.paid, 0);
+        const customerPaid = billing.status === "Paid" || (Boolean(billing.invoiceId) && balance === 0 && billing.paid > 0);
+        const customer = customerPaid
+          ? `${pill("green", "Paid")} ${esc(pesos(billing.paid))}${billing.lastPaymentDate ? ` on ${esc(billing.lastPaymentDate)}` : ""}`
+          : billing.paid > 0
+            ? `${pill("amber", "Partly paid")} ${esc(pesos(billing.paid))} of ${esc(pesos(billing.total))}`
+            : pill("red", String(record.payment_status || "Unpaid"));
+        const nihao = niHao
+          ? `${pill("green", "Paid")} ${esc(pesos(niHao.amount))} on ${esc(niHao.lastDate)}`
+          : pill("red", "Not paid");
+        const editLink = record.archived_at || record.status === "Cancelled" || !canWrite
+          ? ""
+          : ` <a href="${path}?id=${esc(id)}&edit=1#customer-payment">Record in Edit shipment</a>`;
+        return { customer: customer + (customerPaid ? "" : editLink), nihao: nihao + (niHao ? "" : editLink.replace("#customer-payment", "#nihao-payment")) };
+      })() : null;
+
       const shipmentDetails = entity === "shipments" ? (() => {
         const status = String(record.status || "");
         const actualArrivalVisible = ["Malabon Warehouse", "Delivered"].includes(status);
@@ -1606,7 +1691,8 @@ export async function handleAdmin(
           ...(Number(record.delivery_charge || 0) > 0
             ? [shipmentDetail("Delivery charge", money("delivery_charge"))]
             : []),
-          shipmentDetail("Payment status", esc(record.payment_status) || "—"),
+          shipmentDetail("Customer payment", paymentSummary?.customer ?? (esc(record.payment_status) || "—")),
+          shipmentDetail("Ni Hao payment", paymentSummary?.nihao ?? "—"),
         ].join("");
 
         return `
@@ -1763,29 +1849,6 @@ export async function handleAdmin(
       const shippingInstructions = !canWrite ? "" : entity === "customers"
         ? `<section><h2>Send Account Setup</h2><p class="muted">Send this first so the customer has their Account/Cargo Code and portal login before their supplier ships any package. Click Create Customer Account or Generate New Temporary Password above, and the same message appears with the temporary password filled in.</p><textarea id="${accountMessageId}" readonly aria-label="Account setup message" style="min-height:260px;white-space:pre-wrap">${esc(accountMessage)}</textarea><div class="actions">${copyButton(accountMessageId, "Copy account setup message")}</div>${copyScript()}</section>`
         : entity === "shipments" ? "" : `<section><h2>Send Warehouse Instructions</h2><p class="muted">The address of this shipment’s China warehouse is added automatically.</p><textarea id="${instructionId}" readonly aria-label="Warehouse instructions" style="min-height:260px;white-space:pre-wrap">${esc(instructionMessage)}</textarea><div class="actions">${copyButton(instructionId, "Copy warehouse instructions")}</div>${copyScript()}</section>`;
-      const customerPayment = entity === "shipments" && !record.archived_at && record.status !== "Cancelled"
-        ? shipmentPaymentSection({
-            path,
-            csrf: csrfToken(env, user.id, path),
-            shipmentId: id,
-            billing: await readShipmentBilling(db, id, record),
-            canWrite,
-            justPaid: url.searchParams.get("customer_paid") === "1",
-          })
-        : "";
-      const niHaoPayment = entity === "shipments" && !record.archived_at && record.status !== "Cancelled"
-        ? niHaoPaymentSection({
-            path,
-            csrf: csrfToken(env, user.id, path),
-            shipmentId: id,
-            trackingNumber: record.tracking_number,
-            nihaoCost: record.nihao_cost,
-            payment: await readNiHaoPayment(db, record.tracking_number),
-            canWrite,
-            justPaid: url.searchParams.get("nihao_paid") === "1",
-            suggestedFee: canWrite ? await lastNiHaoTransferFee(db) : null,
-          })
-        : "";
       const customerNotifications = entity === "shipments" && canWrite ? (() => {
         const messages = shipmentStatusMessages({
           customerName: linkedCustomer?.full_name,
@@ -1823,27 +1886,27 @@ export async function handleAdmin(
 
         return `<section>
           <h2>Customer Notifications</h2>
-          <p class="muted">Personalized from this shipment. Review and edit before sending. Copying a message does not change the shipment.</p>
+          <p class="muted">Choose a message below. Review and edit before sending. Copying a message does not change the shipment.</p>
           <style>.message-category{padding-top:18px}.message-category+.message-category{margin-top:22px;border-top:2px solid var(--k-line,#d5e4ed)}.message-category-title{margin:0 0 4px;font-size:1.15rem;color:var(--k-blue,#0753ad)}</style>
-          ${category("1. Client", "Account details and the instructions the customer forwards to their supplier.", messageTabs({
+          ${category("1. Client", "Account details and the instructions the customer forwards to their supplier.", messageList({
             groupId: `client-messages-${id}`,
             messages: clientMessages,
-            activeLabel: "",
             ariaLabelSuffix: "client message",
           }))}
-          ${category("2. Status", "One message per shipment status. The tab for the current status opens first.", messageTabs({
+          ${category("2. Status", "One message per shipment status. The current status is open.", messageList({
             groupId: `customer-notification-${id}`,
             messages,
-            activeKey: notificationKeyFor(record.status, record.service_type),
+            openKey: notificationKeyFor(record.status, record.service_type),
             ariaLabelSuffix: "status notification",
           }))}
-          ${category("3. Nihao", "Warehouse addresses, ready to copy. This shipment's warehouse opens first.", messageTabs({
+          ${category("3. Nihao", "Warehouse addresses, ready to copy. This shipment's warehouse is open.", messageList({
             groupId: `nihao-addresses-${id}`,
             messages: nihaoAddressBook().map(([warehouse, address]) => [warehouse.replace(/\W+/g, "-").toLowerCase(), warehouse, address]),
-            activeKey: String(record.china_warehouse || "").replace(/\W+/g, "-").toLowerCase(),
-            activeLabel: "assigned",
+            openKey: String(record.china_warehouse || "").replace(/\W+/g, "-").toLowerCase(),
+            openLabel: "assigned",
             ariaLabelSuffix: "warehouse address",
           }))}
+          ${copyScript()}
         </section>`;
       })() : "";
 
@@ -1894,8 +1957,6 @@ export async function handleAdmin(
             </div>
           </section>
           ${portalSection}
-          ${customerPayment}
-          ${niHaoPayment}
           ${shippingInstructions}
           ${customerNotifications}
         `,

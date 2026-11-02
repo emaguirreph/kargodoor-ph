@@ -83,7 +83,12 @@ export function shipmentPaymentSection(options: {
   billing: ShipmentBilling;
   canWrite: boolean;
   justPaid?: boolean;
+  /** Set when the box sits inside the Edit shipment form: a card with this heading, not a page section. */
+  title?: string;
 }) {
+  const open = options.title ? `<div class="shipment-pay-box" id="customer-payment">` : `<section class="shipment-payment">`;
+  const close = options.title ? "</div>" : "</section>";
+  const heading = options.title ? `<h4>${esc(options.title)}</h4>` : "<h2>Customer payment</h2>";
   const { billing } = options;
   const balance = Math.max(billing.total - billing.paid, 0);
   const invoiceLink = billing.invoiceId
@@ -91,18 +96,18 @@ export function shipmentPaymentSection(options: {
     : "";
   const saved = options.justPaid ? '<p class="notice" role="status">Payment recorded. The invoice is issued and the shipment is updated.</p>' : "";
   if (billing.status === "Paid" || (billing.invoiceId && balance === 0 && billing.paid > 0)) {
-    return `<section class="shipment-payment"><h2>Customer payment</h2>${saved}
-      <p><strong>Paid</strong> · ${esc(pesos(billing.paid))}${billing.lastPaymentDate ? ` on ${esc(billing.lastPaymentDate)}` : ""}. Invoice ${invoiceLink}. Counted in Money we have now.</p></section>`;
+    return `${open}${heading}${saved}
+      <p><strong>Paid</strong> · ${esc(pesos(billing.paid))}${billing.lastPaymentDate ? ` on ${esc(billing.lastPaymentDate)}` : ""}. Invoice ${invoiceLink}. Counted in Money we have now.</p>${close}`;
   }
   const summary = billing.invoiceId
     ? `Invoice ${invoiceLink} (${esc(billing.status)}) · ${esc(pesos(billing.paid))} paid of ${esc(pesos(billing.total))}.`
     : "No invoice yet. Recording a payment makes and issues it.";
   if (!options.canWrite || billing.total <= 0) {
-    return `<section class="shipment-payment"><h2>Customer payment</h2>${saved}<p class="muted">${summary}${billing.total <= 0 ? " Add the KargoDoor charge first." : ""}</p></section>`;
+    return `${open}${heading}${saved}<p class="muted">${summary}${billing.total <= 0 ? " Add the KargoDoor charge first." : ""}</p>${close}`;
   }
   const methods = paymentMethods.map((method) => `<option value="${esc(method)}"${method === "GCash" ? " selected" : ""}>${esc(method)}</option>`).join("");
-  return `<section class="shipment-payment">
-    <h2>Customer payment</h2>${saved}
+  return `${open}
+    ${heading}${saved}
     <p class="muted">${summary} When the customer pays, save it here: the invoice is issued, the money is added to Money we have now and the shipment's Payment status updates.</p>
     <form method="post" action="${esc(options.path)}">
       ${hidden("csrf", options.csrf)}${hidden("action", "customer_paid")}${hidden("id", options.shipmentId)}
@@ -114,5 +119,5 @@ export function shipmentPaymentSection(options: {
       </div>
       <div class="actions"><button type="submit">Record payment</button></div>
     </form>
-  </section>`;
+  ${close}`;
 }
