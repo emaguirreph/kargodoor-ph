@@ -1052,7 +1052,7 @@ export async function handleAdmin(
             "Status",
             record,
             record.service_type === "Sea Freight" ? seaFreightStatuses : statuses,
-          ) + hidden("estimated_arrival", record.estimated_arrival ?? "");
+          ).replace("<label>", '<label class="k-status-red">') + hidden("estimated_arrival", record.estimated_arrival ?? "");
 
         // Actual arrival is an end-of-journey record. Keeping it out of the
         // earlier stages avoids implying that cargo has already reached Manila.
@@ -1533,7 +1533,7 @@ export async function handleAdmin(
           shipmentDetail("Declared weight (kg)", esc(record.weight_kg) || "—"),
           shipmentDetail("Origin warehouse", esc(record.china_warehouse) || "—"),
           shipmentDetail("China warehouse received", esc(record.warehouse_received_date) || "—"),
-          shipmentDetail("Status", status ? `<span class="k-status-red">${esc(status)}</span>` : "—"),
+          shipmentDetail("Status", esc(status) || "—"),
           ...(actualArrivalVisible
             ? [shipmentDetail("Actual arrival", esc(record.actual_arrival) || "Not recorded")]
             : []),
