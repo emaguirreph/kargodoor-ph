@@ -103,6 +103,33 @@ export function resolveManualShipmentCharge(
 }
 
 /**
+ * KargoDoor charge to save for a shipment made from a quotation. Without a
+ * verified size the typed charge (the quotation's, or an edit) is kept. With a
+ * verified size the charge follows the recalculated freight, the same way the
+ * Ni Hao cost follows its estimate: a blank box, or one still holding the last
+ * automatic amount, takes the new freight; a typed amount is kept as an override.
+ * Charges saved before the charge source was tracked (NULL) were always
+ * overwritten by the verified freight, so they are treated as automatic.
+ */
+export function resolveQuotationShipmentCharge(
+  submitted: number | null,
+  previous: Row | null,
+  recalculated: number | null,
+): { cost: number; source: "rate" | "manual" | null } {
+  if (recalculated === null) {
+    if (submitted === null) throw new AdminError("Enter the KargoDoor freight charge.");
+    const unchanged = previous !== null && previous.shipping_charge !== null && Number(previous.shipping_charge) === submitted;
+    return { cost: submitted, source: unchanged ? ((previous.shipping_charge_source as "rate" | "manual" | null) ?? null) : "manual" };
+  }
+  const charge = resolveNiHaoCost(
+    submitted,
+    previous ? { cost: previous.shipping_charge, source: previous.shipping_charge_source === "manual" ? "actual" : "estimate" } : null,
+    { cost: recalculated, basis: "" },
+  );
+  return { cost: Number(charge.cost), source: charge.source === "estimate" ? "rate" : "manual" };
+}
+
+/**
  * Reuses the quotation pricing engine with measurements confirmed by the
  * China warehouse. Shipments added by hand return null here: when their charge
  * was filled from the rates, the save path refreshes it with

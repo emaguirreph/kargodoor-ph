@@ -20,7 +20,7 @@ import { marginSummarySql, finance, activity, dashboard, saveStaffFollowUp } fro
 import { saveRecord } from "../../lib/admin/data";
 import { createShipmentFromApprovedQuotation } from "../../lib/admin/quotation-shipment";
 import { shipmentNiHaoEstimate } from "../../lib/admin/nihao-estimate";
-import { resolveManualShipmentCharge, syncVerifiedFreightToInvoice, verifiedShipmentFreight } from "../../lib/admin/shipment-verified-pricing";
+import { resolveManualShipmentCharge, resolveQuotationShipmentCharge, syncVerifiedFreightToInvoice, verifiedShipmentFreight } from "../../lib/admin/shipment-verified-pricing";
 import { shipmentCargo } from "../../lib/admin/shipment-cargo";
 import { archiveInvoice, createInvoice, issueInvoice, recordPayment, voidInvoice } from "../../lib/admin/billing";
 import {
@@ -1450,3 +1450,21 @@ import "./nihao-pricing.test";
 import "../messenger.test";
 
 import "./quotation-renderer.test";
+
+test("quotation shipments recalculate the KargoDoor charge from the verified size but keep a typed override", () => {
+  const quoted = { shipping_charge: 170000, shipping_charge_source: null };
+  // No verified size yet: the quotation's charge, or an edit to it, is saved as typed.
+  assert.deepEqual(resolveQuotationShipmentCharge(170000, quoted, null), { cost: 170000, source: null });
+  assert.deepEqual(resolveQuotationShipmentCharge(180000, quoted, null), { cost: 180000, source: "manual" });
+  assert.throws(() => resolveQuotationShipmentCharge(null, quoted, null), /Enter the KargoDoor freight charge/);
+  // Verified size with the charge untouched (or live-updated to the new rate): follows the rate.
+  assert.deepEqual(resolveQuotationShipmentCharge(170000, quoted, 950000), { cost: 950000, source: "rate" });
+  assert.deepEqual(resolveQuotationShipmentCharge(950000, quoted, 950000), { cost: 950000, source: "rate" });
+  // A typed override is saved and not replaced by the recalculation.
+  assert.deepEqual(resolveQuotationShipmentCharge(1000000, quoted, 950000), { cost: 1000000, source: "manual" });
+  assert.deepEqual(resolveQuotationShipmentCharge(1000000, { shipping_charge: 1000000, shipping_charge_source: "manual" }, 960000), { cost: 1000000, source: "manual" });
+  // Clearing the box goes back to the rate.
+  assert.deepEqual(resolveQuotationShipmentCharge(null, { shipping_charge: 1000000, shipping_charge_source: "manual" }, 960000), { cost: 960000, source: "rate" });
+  // A rate-following charge moves when the verified size changes again.
+  assert.deepEqual(resolveQuotationShipmentCharge(950000, { shipping_charge: 950000, shipping_charge_source: "rate" }, 990000), { cost: 990000, source: "rate" });
+});

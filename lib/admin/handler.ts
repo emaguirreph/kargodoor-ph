@@ -43,7 +43,7 @@ import { createPortal, disablePortal, portalFor, portalStatus, resetPortal } fro
 import { shipmentStatusMessages } from "./customer-messages";
 import { copyButton, copyScript, customerPortalAccessMessage, customerWelcomeMessage, shipmentShippingInstructions, warehouseAddress, warehouseAddressBook } from "./shipping-instructions";
 import { leadsPage } from "./leads";
-import { manualShipmentRate, resolveManualShipmentCharge, syncVerifiedFreightToInvoice, verifiedShipmentFreight } from "./shipment-verified-pricing";
+import { manualShipmentRate, resolveManualShipmentCharge, resolveQuotationShipmentCharge, syncVerifiedFreightToInvoice, verifiedShipmentFreight } from "./shipment-verified-pricing";
 import { airItems, itemCategories } from "./quotation-pricing";
 import { cargoCategory, cargoCategorySql, cargoItemSql, shipmentCargo, type ShipmentCargo } from "./shipment-cargo";
 import { resolveNiHaoCost, shipmentNiHaoEstimate, type NiHaoEstimate } from "./nihao-estimate";
@@ -80,7 +80,14 @@ const chargeSourceTag = (source: unknown) =>
 
 /** KargoDoor freight charge input. Hand-added shipments may leave it blank to use the KargoDoor rates. */
 const shippingChargeField = (record: RecordData) => {
-  if (record.source_quotation_id) return input("shipping_charge", "KargoDoor freight charge (PHP)", record, "text", true, 30);
+  if (record.source_quotation_id) {
+    // Quotation shipments: the quotation's charge until the warehouse verifies the size, then it follows the verified freight unless typed over.
+    const auto = record.shipping_charge_source !== "manual";
+    const amount = record.shipping_charge === null || record.shipping_charge === undefined ? "" : (Number(record.shipping_charge) / 100).toFixed(2);
+    return input("shipping_charge", "KargoDoor freight charge (PHP)", record, "text", false, 30)
+      .replace('name="shipping_charge"', `name="shipping_charge" data-live-amount="kargodoor" data-quotation${auto ? ` data-auto="${esc(amount)}"` : ""}`)
+      .replace("</label>", ` ${chargeSourceTag(record.shipping_charge_source)}<small class="muted" style="display:block" data-live-hint="kargodoor">From the quotation. When you enter the verified CBM and weight it is recalculated from the KargoDoor rates, like the Ni Hao cost. Type an amount to override it; clear the box to go back to the rate.</small></label>`);
+  }
   const field = input("shipping_charge", "KargoDoor freight charge (PHP)", record, "text", false, 30);
   const rate = manualShipmentRate(record);
   const hint = rate
@@ -125,7 +132,17 @@ async function shipmentLiveEstimate(db: D1Database, params: URLSearchParams) {
     values.cargo_category = shipmentCargoCategory(serviceType, cargoItem);
     values.cargo_quantity = number("cargo_quantity");
   }
-  const kargodoor = saved?.source_quotation_id ? null : manualShipmentRate(values);
+  let kargodoor: { cost: number; basis: string } | null = null;
+  if (!saved?.source_quotation_id) {
+    kargodoor = manualShipmentRate(values);
+  } else if (measured) {
+    try {
+      const freight = await verifiedShipmentFreight(db, id, verifiedCbm, verifiedWeight);
+      if (freight) kargodoor = { cost: freight.shippingCharge, basis: `${serviceType === "Air Freight" ? "Air" : "Sea"} · from the quotation · verified size` };
+    } catch {
+      kargodoor = null;
+    }
+  }
   const nihao = await shipmentNiHaoEstimate(db, id, values);
   const amount = (estimate: { cost: number; basis: string } | null) =>
     estimate ? { amount: (estimate.cost / 100).toFixed(2), label: `${pesos(estimate.cost)} · ${estimate.basis}` } : null;
@@ -549,35 +566,24 @@ export async function handleAdmin(
         );
       }
 
-      let verifiedFreight: Awaited<ReturnType<typeof verifiedShipmentFreight>> = null;
-      const shipmentValues = values as RecordData;
-      if (
-        entity === "shipments" &&
-        id &&
-        shipmentValues.verified_cbm !== null &&
-        shipmentValues.verified_weight_kg !== null
-      ) {
-        verifiedFreight = await verifiedShipmentFreight(
-          db,
-          String(id),
-          Number(shipmentValues.verified_cbm),
-          Number(shipmentValues.verified_weight_kg),
-        );
-        if (verifiedFreight) {
-          values = {
-            ...values,
-            shipping_charge: verifiedFreight.shippingCharge,
-          };
-        }
-      }
-
+      let measuredCharge = false;
       if (entity === "shipments") {
         const current = values as RecordData;
         const previous = id
           ? await db.prepare("SELECT nihao_cost, nihao_cost_source, shipping_charge, shipping_charge_source, source_quotation_id FROM shipments WHERE id = ?").bind(id).first<RecordData>()
           : null;
+        const submittedCharge = current.shipping_charge === null || current.shipping_charge === undefined ? null : Number(current.shipping_charge);
         if (previous?.source_quotation_id) {
-          if (current.shipping_charge === null) throw new AdminError("Enter the KargoDoor freight charge.");
+          // Re-price from the quotation with the warehouse-verified size, but keep a typed override.
+          const verifiedFreight =
+            current.verified_cbm !== null && current.verified_cbm !== undefined &&
+            current.verified_weight_kg !== null && current.verified_weight_kg !== undefined
+              ? await verifiedShipmentFreight(db, String(id), Number(current.verified_cbm), Number(current.verified_weight_kg))
+              : null;
+          const charge = resolveQuotationShipmentCharge(submittedCharge, previous, verifiedFreight?.shippingCharge ?? null);
+          current.shipping_charge = charge.cost;
+          current.shipping_charge_source = charge.source;
+          measuredCharge = Boolean(verifiedFreight) && charge.source === "rate";
         } else {
           const charge = resolveManualShipmentCharge(current, previous);
           current.shipping_charge = charge.cost;
@@ -601,25 +607,20 @@ export async function handleAdmin(
           revision,
         );
 
-      if (verifiedFreight) {
-        await syncVerifiedFreightToInvoice(
-          db,
-          recordId,
-          verifiedFreight.shippingCharge,
-          user.id,
-        );
-      } else if (
+      if (
         entity === "shipments" &&
         id &&
         Number.isSafeInteger((values as RecordData).shipping_charge)
       ) {
-        // Keep Draft and Unpaid invoices in step with an edited or rate-updated charge.
+        // Keep Draft and Unpaid invoices in step with a verified, rate-updated or edited charge.
         await syncVerifiedFreightToInvoice(
           db,
           recordId,
           Number((values as RecordData).shipping_charge),
           user.id,
-          "Invoice freight updated from the shipment's edited shipping charge.",
+          measuredCharge
+            ? "Invoice freight updated from verified warehouse measurements."
+            : "Invoice freight updated from the shipment's edited shipping charge.",
         );
       }
 
@@ -1532,7 +1533,7 @@ export async function handleAdmin(
           shipmentDetail("Declared weight (kg)", esc(record.weight_kg) || "—"),
           shipmentDetail("Origin warehouse", esc(record.china_warehouse) || "—"),
           shipmentDetail("China warehouse received", esc(record.warehouse_received_date) || "—"),
-          shipmentDetail("Status", esc(status) || "—"),
+          shipmentDetail("Status", status ? `<span class="k-status-red">${esc(status)}</span>` : "—"),
           ...(actualArrivalVisible
             ? [shipmentDetail("Actual arrival", esc(record.actual_arrival) || "Not recorded")]
             : []),
