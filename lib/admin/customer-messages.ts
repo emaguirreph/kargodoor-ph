@@ -365,9 +365,6 @@ export function pickupInstructionsMessage(customerName: string): string {
     "• Please coordinate your pickup schedule with our team in advance.",
     "",
     "Thank you for trusting KargoDoorPH.com! 💚",
-    "",
-    "KargoDoor PH",
-    "China to PH, Made SIMPLE.",
   ].join("\n");
 }
 

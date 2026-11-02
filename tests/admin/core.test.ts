@@ -1484,5 +1484,5 @@ test("shipment notifications include warehouse pickup instructions after Malabon
   assert.match(body, /36 Rivera St\., Brgy\. Tañong, Malabon City/);
   assert.match(body, /Wingvan Trucks\nAllowed only from 10:00 PM – 2:00 AM\./);
   assert.doesNotMatch(body, /\*\*/);
-  assert.match(body, /China to PH, Made SIMPLE\.$/);
+  assert.match(body, /Thank you for trusting KargoDoorPH\.com! 💚$/);
 });
