@@ -242,6 +242,14 @@ export function customerPortalAccessMessage(portal: PortalAccessMessage): string
 }
 
 /** Every China warehouse with its full address, for the bottom of the shipment page. */
+export const malabonWarehouseAddress = `KARGODOOR PH – MALABON WAREHOUSE
+36 Rivera St., Brgy. Tañong, Malabon City`;
+
+/** Addresses for Nihao: every China warehouse, Hong Kong, then our Malabon warehouse. */
+export function nihaoAddressBook(): Array<[string, string]> {
+  return [...warehouseAddressBook(), ["Malabon Warehouse", malabonWarehouseAddress]];
+}
+
 export function warehouseAddressBook(): Array<[WarehouseName, string]> {
   return warehouseNames.map((warehouse) => [warehouse, warehouseAddress(warehouse)]);
 }

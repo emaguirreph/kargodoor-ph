@@ -61,6 +61,12 @@ export const paymentInstructions = [
 
 const text = (value: unknown) => (value === null || value === undefined ? "" : String(value).trim());
 
+/** The notification tab for a shipment status; air shipments in transit open Air Transit. */
+export function notificationKeyFor(status: unknown, service: unknown): string | undefined {
+  const key = notificationKeyForStatus[String(status ?? "")];
+  return key === "sea-transit" && /air/i.test(String(service ?? "")) ? "air-transit" : key;
+}
+
 /** Which notification tab matches each shipment status, so the page opens on the right one. */
 export const notificationKeyForStatus: Record<string, string> = {
   "Awaiting Supplier Dispatch": "awaiting-supplier-dispatch",
@@ -85,6 +91,7 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
   const service = text(input.service);
   const warehouse = text(input.warehouse);
   const received = text(input.received);
+  const eta = text(input.eta);
   const arrival = text(input.arrival);
   const paymentStatus = text(input.paymentStatus);
   const declaredCbm = text(input.declaredCbm);
@@ -114,7 +121,7 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
   const track = `📍 Track your shipment anytime: ${trackLink}`;
 
   const messages: Array<[string, string, Array<string | false>]> = [
-    ["awaiting-supplier-dispatch", "Awaiting Supplier Dispatch", [
+    ["awaiting-supplier-dispatch", "Awaiting Supplier Package", [
       hi,
       "",
       `Your KargoDoor shipment is all set! We're now waiting for your supplier to send your package to our ${warehouse ? `${warehouse} warehouse` : "warehouse"} in China.`,
@@ -177,14 +184,27 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
     ["sea-transit", "Sea Transit", [
       hi,
       "",
-      isAir
-        ? "Your shipment is now on its flight to the Philippines. ✈️"
-        : "Your shipment is now on the vessel, sailing to the Philippines. 🚢🌊",
+      "Your shipment is now on the vessel, sailing to the Philippines. 🚢🌊",
       "",
-      ...details(service && `Service: ${service}`),
+      ...details(service && `Service: ${service}`, eta && `Estimated Arrival: ${eta}`),
       "",
       "Next Steps:",
-      `No action needed from you. We'll send another update once ${isAir ? "your shipment lands in Manila" : "the ship docks in Manila"}.`,
+      "No action needed from you. We'll send another update once the ship docks in Manila.",
+      "",
+      track,
+      "",
+      thanks,
+    ]],
+
+    ["air-transit", "Air Transit", [
+      hi,
+      "",
+      "Your shipment is now on its flight to the Philippines. ✈️",
+      "",
+      ...details(service && `Service: ${service}`, eta && `Estimated Arrival: ${eta}`),
+      "",
+      "Next Steps:",
+      "No action needed from you. We'll send another update once your shipment lands in Manila.",
       "",
       track,
       "",
@@ -219,25 +239,6 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
       thanks,
     ]],
 
-    ["payment-request", "Payment Request", [
-      hi,
-      "",
-      "Your shipment is almost ready for release! Just one more step before we can arrange your pickup or delivery.",
-      "",
-      ...details(paymentStatus && `Payment Status: ${paymentStatus}`),
-      "",
-      ...shippingCost,
-      "",
-      ...paymentInstructions,
-      "",
-      "Next Steps:",
-      "Please settle your shipping charges. You can also view your invoice in your KargoDoor customer portal: https://kargodoorph.com/customer/login",
-      "",
-      "Once your payment is confirmed, we'll schedule your pickup or delivery right away.",
-      "",
-      thanks,
-    ]],
-
     ["malabon-warehouse", "Malabon Warehouse", [
       hi,
       "",
@@ -257,6 +258,25 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
       thanks,
     ]],
 
+    ["payment-request", "Payment Instructions Reminder", [
+      hi,
+      "",
+      "Your shipment is almost ready for release! Just one more step before we can arrange your pickup or delivery.",
+      "",
+      ...details(paymentStatus && `Payment Status: ${paymentStatus}`),
+      "",
+      ...shippingCost,
+      "",
+      ...paymentInstructions,
+      "",
+      "Next Steps:",
+      "Please settle your shipping charges. You can also view your invoice in your KargoDoor customer portal: https://kargodoorph.com/customer/login",
+      "",
+      "Once your payment is confirmed, we'll schedule your pickup or delivery right away.",
+      "",
+      thanks,
+    ]],
+
     ["out-for-delivery", "Out for Delivery", [
       hi,
       "",
@@ -272,7 +292,7 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
       thanks,
     ]],
 
-    ["delivered", "Shipment Delivered", [
+    ["delivered", "Delivered", [
       hi,
       "",
       "Your KargoDoor shipment has been delivered! 🎉",

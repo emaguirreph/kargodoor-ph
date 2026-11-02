@@ -37,8 +37,8 @@ import {
   requireAdminMutation,
 } from "../../lib/admin/security";
 import { expensesPage, saveExpense, mutateExpense } from "../../lib/admin/expenses";
-import { customerShippingInstructions, customerWarehouseAddressMessage, shipmentShippingInstructions, warehouseAddress } from "../../lib/admin/shipping-instructions";
-import { shipmentStatusMessages } from "../../lib/admin/customer-messages";
+import { customerShippingInstructions, customerWarehouseAddressMessage, nihaoAddressBook, shipmentShippingInstructions, warehouseAddress } from "../../lib/admin/shipping-instructions";
+import { notificationKeyFor, shipmentStatusMessages } from "../../lib/admin/customer-messages";
 function database(includePhase1 = true) {
   const sql = new DatabaseSync(":memory:");
   sql.exec("PRAGMA foreign_keys=ON");
@@ -1485,4 +1485,17 @@ test("shipment notifications include warehouse pickup instructions after Malabon
   assert.match(body, /Wingvan Trucks\nAllowed only from 10:00 PM – 2:00 AM\./);
   assert.doesNotMatch(body, /\*\*/);
   assert.match(body, /Thank you for trusting KargoDoorPH\.com! 💚$/);
+});
+
+test("shipment status notifications follow Em's order and Nihao addresses end with Malabon", () => {
+  const titles = shipmentStatusMessages({ customerName: "Maria" }).map(([, title]) => title);
+  assert.deepEqual(titles, [
+    "Awaiting Supplier Package", "China Warehouse", "China Port", "Sea Transit", "Air Transit", "Manila Port",
+    "Gatepass", "Malabon Warehouse", "Pickup Instructions", "Payment Instructions Reminder", "Out for Delivery",
+    "Delivered", "Feedback / Referral",
+  ]);
+  assert.equal(notificationKeyFor("Sea Transit", "Air Freight"), "air-transit");
+  assert.equal(notificationKeyFor("Sea Transit", "Sea Freight"), "sea-transit");
+  const book = nihaoAddressBook().map(([name]) => name);
+  assert.deepEqual(book, ["Guangzhou", "Yiwu", "Shishi", "Tongda Air Cargo", "Hong Kong", "Malabon Warehouse"]);
 });

@@ -40,9 +40,9 @@ import { saveRecord, archiveOrCancelRecord } from "./data";
 import { page, esc, pesos, input, select, hidden, niHaoSourceTag } from "./ui";
 import { dashboard, finance, activity, saveStaffFollowUp } from "./reports";
 import { createPortal, disablePortal, portalFor, portalStatus, resetPortal } from "./customer-portal";
-import { notificationKeyForStatus, shipmentStatusMessages } from "./customer-messages";
+import { notificationKeyFor, shipmentStatusMessages } from "./customer-messages";
 import { messageTabs } from "./message-tabs";
-import { copyButton, copyScript, customerPortalAccessMessage, customerWelcomeMessage, shipmentShippingInstructions, warehouseAddress, warehouseAddressBook } from "./shipping-instructions";
+import { copyButton, copyScript, customerPortalAccessMessage, customerWelcomeMessage, nihaoAddressBook, shipmentShippingInstructions, warehouseAddress } from "./shipping-instructions";
 import { leadsPage } from "./leads";
 import { manualShipmentRate, resolveManualShipmentCharge, resolveQuotationShipmentCharge, syncVerifiedFreightToInvoice, verifiedShipmentFreight } from "./shipment-verified-pricing";
 import { airItems, itemCategories } from "./quotation-pricing";
@@ -1412,7 +1412,9 @@ export async function handleAdmin(
               `
               SELECT
                 customer_code,
-                full_name
+                full_name,
+                mobile,
+                email
               FROM customers
               WHERE id = ?
               `,
@@ -1705,14 +1707,7 @@ export async function handleAdmin(
         : "";
       const shippingInstructions = !canWrite ? "" : entity === "customers"
         ? `<section><h2>Send Account Setup</h2><p class="muted">Send this first so the customer has their Account/Cargo Code and portal login before their supplier ships any package. Click Create Customer Account or Generate New Temporary Password above, and the same message appears with the temporary password filled in.</p><textarea id="${accountMessageId}" readonly aria-label="Account setup message" style="min-height:260px;white-space:pre-wrap">${esc(accountMessage)}</textarea><div class="actions">${copyButton(accountMessageId, "Copy account setup message")}</div>${copyScript()}</section>`
-        : `<section><h2>Send Warehouse Instructions</h2><p class="muted">The address of this shipment’s China warehouse is added automatically.</p><textarea id="${instructionId}" readonly aria-label="Warehouse instructions" style="min-height:260px;white-space:pre-wrap">${esc(instructionMessage)}</textarea><div class="actions">${copyButton(instructionId, "Copy warehouse instructions")}</div>${copyScript()}</section>`;
-      const warehouseAddresses = entity === "shipments" && canWrite
-        ? `<section><h2>China Warehouse Addresses</h2><p class="muted">Every KargoDoor China warehouse, ready to copy.</p>${warehouseAddressBook().map(([warehouse, address]) => {
-            const addressId = `warehouse-address-${id}-${warehouse.replace(/\W+/g, "-").toLowerCase()}`;
-            return `<details class="customer-notification"><summary>${esc(warehouse)}</summary><textarea id="${esc(addressId)}" readonly aria-label="${esc(warehouse)} warehouse address" style="min-height:200px;white-space:pre-wrap">${esc(address)}</textarea><div class="actions">${copyButton(addressId, `Copy ${warehouse} address`)}</div></details>`;
-          }).join("")}${copyScript()}</section>`
-        : "";
-
+        : entity === "shipments" ? "" : `<section><h2>Send Warehouse Instructions</h2><p class="muted">The address of this shipment’s China warehouse is added automatically.</p><textarea id="${instructionId}" readonly aria-label="Warehouse instructions" style="min-height:260px;white-space:pre-wrap">${esc(instructionMessage)}</textarea><div class="actions">${copyButton(instructionId, "Copy warehouse instructions")}</div>${copyScript()}</section>`;
       const customerNotifications = entity === "shipments" && canWrite ? (() => {
         const messages = shipmentStatusMessages({
           customerName: linkedCustomer?.full_name,
@@ -1733,15 +1728,42 @@ export async function handleAdmin(
           deliveryCharge: record.delivery_charge,
         });
 
+        const clientMessages: Array<[string, string, string]> = [
+          ["customer-account-info", "Customer Account Info", customerWelcomeMessage({
+            name: linkedCustomer?.full_name,
+            customerCode: record.cargo_code || linkedCustomer?.customer_code,
+            login: linkedCustomer?.mobile || linkedCustomer?.email,
+            loginLabel: linkedCustomer?.mobile ? "mobile number" : "email",
+            temporaryPassword: "[Generate a temporary password on the customer page]",
+          })],
+          ["supplier-instructions", "Supplier Instructions", instructionMessage],
+        ];
+        const category = (heading: string, note: string, tabs: string) =>
+          `<div class="message-category"><h3 class="message-category-title">${esc(heading)}</h3><p class="muted">${esc(note)}</p>${tabs}</div>`;
+
         return `<section>
           <h2>Customer Notifications</h2>
-          <p class="muted">One tab per notification, personalized from this shipment. The tab for the current status opens first. Review and edit before sending. Copying a message does not change the shipment status.</p>
-          ${messageTabs({
+          <p class="muted">Personalized from this shipment. Review and edit before sending. Copying a message does not change the shipment.</p>
+          <style>.message-category{padding-top:18px}.message-category+.message-category{margin-top:22px;border-top:2px solid var(--k-line,#d5e4ed)}.message-category-title{margin:0 0 4px;font-size:1.15rem;color:var(--k-blue,#0753ad)}</style>
+          ${category("1. Client", "Account details and the instructions the customer forwards to their supplier.", messageTabs({
+            groupId: `client-messages-${id}`,
+            messages: clientMessages,
+            activeLabel: "",
+            ariaLabelSuffix: "client message",
+          }))}
+          ${category("2. Status", "One message per shipment status. The tab for the current status opens first.", messageTabs({
             groupId: `customer-notification-${id}`,
             messages,
-            activeKey: notificationKeyForStatus[String(record.status || "")],
-            ariaLabelSuffix: "customer notification",
-          })}
+            activeKey: notificationKeyFor(record.status, record.service_type),
+            ariaLabelSuffix: "status notification",
+          }))}
+          ${category("3. Nihao", "Warehouse addresses, ready to copy. This shipment's warehouse opens first.", messageTabs({
+            groupId: `nihao-addresses-${id}`,
+            messages: nihaoAddressBook().map(([warehouse, address]) => [warehouse.replace(/\W+/g, "-").toLowerCase(), warehouse, address]),
+            activeKey: String(record.china_warehouse || "").replace(/\W+/g, "-").toLowerCase(),
+            activeLabel: "assigned",
+            ariaLabelSuffix: "warehouse address",
+          }))}
         </section>`;
       })() : "";
 
@@ -1794,7 +1816,6 @@ export async function handleAdmin(
           ${portalSection}
           ${shippingInstructions}
           ${customerNotifications}
-          ${warehouseAddresses}
         `,
         user.name,
         200,

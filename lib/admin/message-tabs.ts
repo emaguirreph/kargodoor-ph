@@ -11,8 +11,10 @@ export function messageTabs(options: {
   messages: Array<[string, string, string]>;
   activeKey?: string;
   ariaLabelSuffix?: string;
+  /** Marker shown on the active tab's label; empty string hides it. */
+  activeLabel?: string;
 }): string {
-  const { messages, ariaLabelSuffix = "message" } = options;
+  const { messages, ariaLabelSuffix = "message", activeLabel = "current" } = options;
   if (!messages.length) return "";
   const group = options.groupId.replace(/[^A-Za-z0-9_-]/g, "-");
   const activeKey = messages.some(([key]) => key === options.activeKey) ? options.activeKey : messages[0]![0];
@@ -37,7 +39,7 @@ export function messageTabs(options: {
   const labels = messages
     .map(([key, title]) => {
       const k = safeKey(key);
-      return `<label class="message-tab" for="${group}-${k}" data-for="${k}">${esc(title)}${key === options.activeKey ? ' <span class="message-tab-current">• current</span>' : ""}</label>`;
+      return `<label class="message-tab" for="${group}-${k}" data-for="${k}">${esc(title)}${key === options.activeKey && activeLabel ? ` <span class="message-tab-current">• ${esc(activeLabel)}</span>` : ""}</label>`;
     })
     .join("");
 
