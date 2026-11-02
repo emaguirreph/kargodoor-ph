@@ -1720,7 +1720,7 @@ test("Record payment on the shipment page makes and issues the invoice, records 
   await assert.rejects(recordShipmentPayment(db, new URLSearchParams({ ...Object.fromEntries(pay("1")), extra: "x" }), actor), /Unexpected/);
 });
 
-test("₱30 transfer fee is inside every new shipping fee, shown only inside the admin, and reported as collected vs paid", async () => {
+test("₱30 transfer fee is inside every new admin shipping fee (not the website calculator), shown only inside the admin, and reported as collected vs paid", async () => {
   const { db, sql, user } = database();
   const { transferFeePesos, seaQuote, airQuote } = await import("../../lib/admin/quotation-pricing");
   const { getSeaEstimate, getAirEstimate } = await import("../../lib/shipping-estimate.mjs");
@@ -1729,8 +1729,9 @@ test("₱30 transfer fee is inside every new shipping fee, shown only inside the
   assert.equal(transferFeePesos, 30);
   assert.equal(seaQuote("LOW VALUE GOODS", 0.01, 1).final, 280, "KD Mini ₱250 + ₱30");
   assert.equal(airQuote("Mobile Phones", 0, 0, 1).final, 980, "1 phone ₱950 + ₱30");
-  assert.equal(getSeaEstimate(0.01, 1).amount, 280);
-  assert.equal(getAirEstimate(1).amount, 530);
+  // The public website calculator keeps the old prices (Em, 2026-11-02).
+  assert.equal(getSeaEstimate(0.01, 1).amount, 250);
+  assert.equal(getAirEstimate(1).amount, 500);
 
   // Existing shipments stay at 0; new ones get ₱30 (3000 centavos) by default.
   const customerId = randomUUID();

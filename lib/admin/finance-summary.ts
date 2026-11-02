@@ -1075,7 +1075,7 @@ export async function financeDashboard(
   const transferSection = `
     <section>
       <h2>Transfer fees</h2>
-      <p class="muted">Every shipping fee includes a ₱30 transfer fee. Customers see one shipping fee; this is the internal split.</p>
+      <p class="muted">Every admin quote and shipment fee includes a ₱30 transfer fee (the public website calculator does not). Customers see one shipping fee; this is the internal split.</p>
       <div class="cards">
         <div class="card"><span class="muted">Collected (invoiced shipments)</span><strong>${esc(financePesos(collectedFees))}</strong></div>
         <div class="card"><span class="muted">Paid (Bank / Payment Fees)</span><strong>${esc(financePesos(paidFees))}</strong></div>

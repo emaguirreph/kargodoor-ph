@@ -5,20 +5,20 @@ import { getAirEstimate, getSeaEstimate } from "../lib/shipping-estimate.mjs";
 test("small-package rates remain the minimum when the density charge is lower", () => {
   assert.deepEqual(getSeaEstimate(0.05, 24), {
     packageName: "KD Lite",
-    amount: 780,
+    amount: 750,
   });
 });
 
 test("small-package density charges become KD Max only when they exceed the minimum", () => {
   assert.deepEqual(getSeaEstimate(0.05, 40), {
     packageName: "KD Max",
-    amount: 790,
+    amount: 760,
   });
 });
 
 test("air estimates round billable weight up to the next whole kilogram", () => {
   assert.deepEqual(getAirEstimate(16.7), {
     packageName: "Air Freight",
-    amount: 8530,
+    amount: 8500,
   });
 });
