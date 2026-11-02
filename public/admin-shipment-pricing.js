@@ -38,6 +38,12 @@
     const box = form.querySelector(`[data-live-amount="${key}"]`);
     const hint = form.querySelector(`[data-live-hint="${key}"]`);
     if (!box) return;
+    if (hint && hint.dataset.initial === undefined) hint.dataset.initial = hint.textContent;
+    // A quotation's charge has nothing to recalculate until the verified size is in.
+    if (!result && box.dataset.quotation !== undefined) {
+      if (hint) hint.textContent = hint.dataset.initial;
+      return;
+    }
     const following = box.value.trim() === "" || box.dataset.auto === box.value.trim();
     if (result && following) {
       box.value = result.amount;

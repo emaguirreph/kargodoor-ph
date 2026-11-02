@@ -26,12 +26,15 @@
       const k = tone(pill.textContent || "");
       if (k) pill.dataset.k = k;
     });
+    // Shipments pages show the shipment status in red so it stands out.
+    const shipmentsPage = path === "/admin/shipments" || path.startsWith("/admin/shipments/");
     document.querySelectorAll("table").forEach((table) => {
       const heads = [...table.querySelectorAll("thead th, tr:first-child th")].map((th) => (th.textContent || "").trim().toLowerCase());
       heads.forEach((head, i) => {
         if (!/status|payment|contacted/.test(head)) return;
         table.querySelectorAll("tbody tr").forEach((tr) => {
           const td = tr.children[i];
+          if (td && shipmentsPage && head === "status") td.classList.add("k-status-red");
           if (!td || td.querySelector(".status-pill,select,input,form,a,button")) return;
           const k = tone(td.textContent || "");
           if (!k) return;
