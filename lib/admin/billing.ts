@@ -1586,13 +1586,6 @@ async function detail(
         </div>
       </section>
 
-      <section>
-        <h2>Payment history</h2>
-        ${paymentHistory}
-      </section>
-
-      ${canMutateAdmin(user) ? invoiceMessageSection(invoice, grand, paid) : ""}
-
       ${canMutateAdmin(user) ? issueForm(
         env,
         user.id,
@@ -1604,6 +1597,14 @@ async function detail(
         user.id,
         invoice,
       ) : ""}
+
+      <section>
+        <h2>Payment history</h2>
+        ${paymentHistory}
+      </section>
+
+      ${canMutateAdmin(user) ? invoiceMessageSection(invoice, grand, paid) : ""}
+
     `,
     user.name, 200, {}, canMutateAdmin(user),
   );
