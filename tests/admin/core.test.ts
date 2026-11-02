@@ -38,6 +38,7 @@ import {
 } from "../../lib/admin/security";
 import { expensesPage, saveExpense, mutateExpense } from "../../lib/admin/expenses";
 import { customerShippingInstructions, customerWarehouseAddressMessage, shipmentShippingInstructions, warehouseAddress } from "../../lib/admin/shipping-instructions";
+import { shipmentStatusMessages } from "../../lib/admin/customer-messages";
 function database(includePhase1 = true) {
   const sql = new DatabaseSync(":memory:");
   sql.exec("PRAGMA foreign_keys=ON");
@@ -1472,4 +1473,16 @@ test("quotation shipments recalculate the KargoDoor charge from the verified siz
   assert.deepEqual(resolveQuotationShipmentCharge(null, { shipping_charge: 1000000, shipping_charge_source: "manual" }, 960000), { cost: 960000, source: "rate" });
   // A rate-following charge moves when the verified size changes again.
   assert.deepEqual(resolveQuotationShipmentCharge(950000, { shipping_charge: 950000, shipping_charge_source: "rate" }, 990000), { cost: 990000, source: "rate" });
+});
+
+test("shipment notifications include warehouse pickup instructions after Malabon Warehouse", () => {
+  const messages = shipmentStatusMessages({ customerName: "Maria", tracking: "KDSEA-123456" });
+  const keys = messages.map(([key]) => key);
+  assert.equal(keys.indexOf("pickup-instructions"), keys.indexOf("malabon-warehouse") + 1);
+  const body = messages.find(([key]) => key === "pickup-instructions")![2];
+  assert.match(body, /^📦 KARGODOOR PH – WAREHOUSE PICKUP INSTRUCTIONS\n\nHi Maria! 😊/);
+  assert.match(body, /36 Rivera St\., Brgy\. Tañong, Malabon City/);
+  assert.match(body, /Wingvan Trucks\nAllowed only from 10:00 PM – 2:00 AM\./);
+  assert.doesNotMatch(body, /\*\*/);
+  assert.match(body, /China to PH, Made SIMPLE\.$/);
 });

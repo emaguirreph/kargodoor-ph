@@ -299,7 +299,76 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
     ]],
   ];
 
-  return messages.map(([key, title, lines]) => [key, title, finishMessage(lines)]);
+  const finished: Array<[string, string, string]> = messages.map(([key, title, lines]) => [key, title, finishMessage(lines)]);
+  const pickupAt = finished.findIndex(([key]) => key === "malabon-warehouse") + 1;
+  finished.splice(pickupAt, 0, ["pickup-instructions", "Pickup Instructions", pickupInstructionsMessage(text(input.customerName) || "there")]);
+  return finished;
+}
+
+/**
+ * Malabon warehouse pickup steps, worded by Em (2026-11-02). Plain text:
+ * Messenger shows **bold** markers literally, so they are left out.
+ */
+export function pickupInstructionsMessage(customerName: string): string {
+  return [
+    "📦 KARGODOOR PH – WAREHOUSE PICKUP INSTRUCTIONS",
+    "",
+    `Hi ${customerName}! 😊`,
+    "",
+    "Your shipment is ready for pickup! Please follow the instructions below for a smooth release.",
+    "",
+    "📍 PICKUP LOCATION",
+    "36 Rivera St., Brgy. Tañong, Malabon City",
+    "",
+    "━━━━━━━━━━━━━━",
+    "",
+    "📋 PICKUP PROCEDURE",
+    "",
+    "1️⃣ Proceed to Window 1",
+    "Upon arrival, fill out the Pickup Form with:",
+    "",
+    "• Date",
+    "• Representative's Full Name",
+    "• Vehicle Plate Number",
+    "• Customer/Cargo Code",
+    "• Number of Packages",
+    "",
+    "2️⃣ Submit Your Documents",
+    "Submit the completed form to the Front Desk together with two (2) valid government-issued IDs of the pickup representative.",
+    "",
+    "3️⃣ Wait for Verification",
+    "After verification, proceed to the designated waiting area and wait for your name or queue number to be called.",
+    "",
+    "4️⃣ Cargo Release",
+    "When called, proceed to the releasing area to collect your packages.",
+    "",
+    "━━━━━━━━━━━━━━",
+    "",
+    "🕒 PICKUP SCHEDULE & VEHICLE RESTRICTIONS",
+    "",
+    "✅ Recommended Off-Peak Hours",
+    "• 7:00 AM – 8:00 AM",
+    "• 4:00 PM – 7:00 PM",
+    "",
+    "🚚 Vehicles Over 16 Feet",
+    "Not allowed during peak hours: 9:00 AM – 4:00 PM.",
+    "",
+    "🚛 Wingvan Trucks",
+    "Allowed only from 10:00 PM – 2:00 AM.",
+    "",
+    "━━━━━━━━━━━━━━",
+    "",
+    "⚠️ IMPORTANT REMINDERS",
+    "",
+    "• Shipping charges must be fully settled before cargo release.",
+    "• Pickup representatives must bring two valid government-issued IDs.",
+    "• Please coordinate your pickup schedule with our team in advance.",
+    "",
+    "Thank you for trusting KargoDoorPH.com! 💚",
+    "",
+    "KargoDoor PH",
+    "China to PH, Made SIMPLE.",
+  ].join("\n");
 }
 
 export type InvoiceMessageInput = {
