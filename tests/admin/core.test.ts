@@ -1471,7 +1471,7 @@ test("expense filters and search combine with exact integer totals and clear res
     const response = await expensesPage(db, new URL(`https://admin.test/admin/finance/expenses?${query}`), "Admin", "token");
     assert.equal(response.status, 200);
     const html = await response.text();
-    for (const [i, row] of seed.entries()) assert.equal(html.includes(`<td>${row.description}</td>`), expected.includes(i), query);
+    for (const [i, row] of seed.entries()) assert.equal(html.includes(`<td class="exp-wide">${row.description}</td>`), expected.includes(i), query);
     assert.ok(html.includes(`<strong>₱${total}</strong>`), query + " total");
     assert.match(html, /href="\/admin\/finance\/expenses">Clear Filters/);
   }
@@ -1683,4 +1683,38 @@ test("Ni Hao payment with a transfer fee saves the fee as its own Bank / Payment
   await assert.rejects(recordNiHaoPayment(db, new URLSearchParams({ ...Object.fromEntries(form), paid_from: "Bitcoin" }), actor), /paid from/);
   await assert.rejects(recordNiHaoPayment(db, form, actor), /already marked paid/);
   assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM expenses").get()!.n, 2);
+});
+
+test("Record payment on the shipment page makes and issues the invoice, records the money and marks the shipment Paid", async () => {
+  const { db, sql, user } = database();
+  const { recordShipmentPayment, readShipmentBilling, shipmentPaymentSection } = await import("../../lib/admin/shipment-payment");
+  const customerId = randomUUID();
+  const shipmentId = randomUUID();
+  sql.prepare("INSERT INTO customers (id, customer_code, full_name, mobile, created_at, updated_at) VALUES (?,?,?,?,?,?)")
+    .run(customerId, "KD-PAY", "Pay Tester", "+639170000003", "2026-10-01", "2026-10-01");
+  sql.prepare("INSERT INTO shipments (id, customer_id, tracking_number, service_type, china_warehouse, cbm, weight_kg, status, shipping_charge, delivery_charge, payment_status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)")
+    .run(shipmentId, customerId, "KDSEA900003", "Sea Freight", "Guangzhou", 1, 100, "China Warehouse", 60000, 0, "Unpaid", "2026-10-01", "2026-10-01");
+  const actor = { id: user, name: "Admin", email: "admin@example.test", role: "admin" as const };
+  let billing = await readShipmentBilling(db, shipmentId, { shipping_charge: 60000, delivery_charge: 0 });
+  assert.equal(billing.invoiceId, null);
+  const form = shipmentPaymentSection({ path: "/admin/shipments", csrf: "t", shipmentId, billing, canWrite: true });
+  assert.match(form, /value="600\.00"/);
+  assert.match(form, /Record payment/);
+
+  const pay = (amount: string) => new URLSearchParams({ csrf: "t", action: "customer_paid", id: shipmentId, amount, payment_method: "GCash", payment_date: "2026-11-02", reference_number: "GC-9", notes: "" });
+  await recordShipmentPayment(db, pay("200.00"), actor);
+  billing = await readShipmentBilling(db, shipmentId, {});
+  assert.equal(billing.status, "Partial");
+  assert.equal(sql.prepare("SELECT issued_at FROM invoices").get()!.issued_at, "2026-11-02");
+  assert.equal(sql.prepare("SELECT payment_status FROM shipments").get()!.payment_status, "Partial");
+  await assert.rejects(recordShipmentPayment(db, pay("500.00"), actor), /remaining balance/);
+  await recordShipmentPayment(db, pay("400.00"), actor);
+  billing = await readShipmentBilling(db, shipmentId, {});
+  assert.equal(billing.status, "Paid");
+  assert.equal(billing.paid, 60000);
+  assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM invoices").get()!.n, 1);
+  assert.equal(sql.prepare("SELECT payment_status FROM shipments").get()!.payment_status, "Paid");
+  assert.match(shipmentPaymentSection({ path: "/admin/shipments", csrf: "t", shipmentId, billing, canWrite: true }), /<strong>Paid<\/strong>/);
+  await assert.rejects(recordShipmentPayment(db, pay("1.00"), actor), /already fully paid/);
+  await assert.rejects(recordShipmentPayment(db, new URLSearchParams({ ...Object.fromEntries(pay("1")), extra: "x" }), actor), /Unexpected/);
 });
