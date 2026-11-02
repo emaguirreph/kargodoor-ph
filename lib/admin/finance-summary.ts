@@ -742,6 +742,7 @@ export async function financeDashboard(
       <div class="actions">
         <h2>Cash on Hand</h2>
         <a href="/admin/finance/cash">Money In records</a>
+        <a href="/admin/finance/accounts">Bank Accounts</a>
       </div>
 
       <div class="table">

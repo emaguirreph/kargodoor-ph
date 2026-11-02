@@ -1,3 +1,7 @@
+import { paymentInstructions } from "../../lib/admin/customer-messages";
+import { financeAccountsPage } from "../../lib/admin/finance-accounts";
+import { kargodoorBankAccounts, nihaoBankAccounts } from "../../lib/admin/bank-accounts";
+import { mutateFinanceCash } from "../../lib/admin/finance-cash";
 import type { D1Database } from "@cloudflare/workers-types";
 import { itemCategories } from "../../lib/admin/quotation-pricing";
 import { calculateCbmConversion, calculateTotalCbm } from "../../lib/admin/quotation-cbm";
@@ -77,6 +81,7 @@ function database(includePhase1 = true) {
   if (includePhase1)
     sql.exec(readFileSync("migrations/admin/0031_manual_shipment_description_and_auto_charge.sql", "utf8"));
   sql.exec(readFileSync("migrations/admin/0033_transfer_fee_collected.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0034_bank_accounts.sql", "utf8"));
   const user = randomUUID();
   sql
     .prepare("INSERT INTO admin_users VALUES (?,?,?,?,?,?)")
@@ -1505,6 +1510,58 @@ test("quotation shipments recalculate the KargoDoor charge from the verified siz
   assert.deepEqual(resolveQuotationShipmentCharge(950000, { shipping_charge: 950000, shipping_charge_source: "rate" }, 990000), { cost: 990000, source: "rate" });
 });
 
+test("bank accounts: Ni Hao and KargoDoor tabs, account tags on expenses and cash records", async () => {
+  const { db, sql } = database();
+  // Exact Ni Hao 2026 account numbers and the KargoDoor accounts customers pay into.
+  assert.deepEqual(nihaoBankAccounts.map((a) => [a.bank, a.accountName, a.accountNumber]), [
+    ["Sterling Bank of Asia", "NIHAO EXPRESS LOGISTICS CORPORATION", "532600010047"],
+    ["Metrobank", "NIHAO EXPRESS LOGISTICS CORPORATION", "279-7-27901627-7"],
+    ["BDO", "NIHAO EXPRESS LOGISTICS CORPORATION", "0128 8800 1087"],
+  ]);
+  for (const account of kargodoorBankAccounts)
+    assert.ok(paymentInstructions.some((line) => line.includes(account.accountNumber)), account.accountNumber);
+
+  // Account fields are optional; unknown or mismatched accounts are rejected.
+  assert.equal(parseExpenseForm(new URLSearchParams(expenseInput)).paid_from_account, null);
+  assert.throws(() => parseExpenseForm(new URLSearchParams({ ...expenseInput, paid_to_account: "kd-gcash" })));
+  assert.throws(() => parseExpenseForm(new URLSearchParams({ ...expenseInput, paid_from_account: "nihao-bdo" })));
+
+  await saveExpense(db, parseExpenseForm(new URLSearchParams({ ...expenseInput, category: "Freight / Ni Hao Cost", description: "KDSEA000005 freight",
+    amount: "25415", paid_from_account: "kd-unionbank", paid_to_account: "nihao-bdo" })));
+  await saveExpense(db, parseExpenseForm(new URLSearchParams({ ...expenseInput, description: "Tape", amount: "100", paid_from_account: "kd-gcash" })));
+  const saved = sql.prepare("SELECT paid_from_account, paid_to_account FROM expenses WHERE description = 'KDSEA000005 freight'").get()!;
+  assert.deepEqual({ ...saved }, { paid_from_account: "kd-unionbank", paid_to_account: "nihao-bdo" });
+
+  const csrf = "token";
+  await mutateFinanceCash(db, new URLSearchParams({ csrf, entry_date: "2026-09-08", entry_type: "Owner Contribution", customer_id: "",
+    related_entry_id: "", amount: "5000", reference_number: "", notes: "Top up", bank_account: "kd-gcash" }));
+  await assert.rejects(mutateFinanceCash(db, new URLSearchParams({ csrf, entry_date: "2026-09-08", entry_type: "Owner Contribution", customer_id: "",
+    related_entry_id: "", amount: "5000", reference_number: "", notes: "Wrong", bank_account: "nihao-bdo" })));
+
+  const nihao = await (await financeAccountsPage(db, new URL("https://admin.test/admin/finance/accounts"), "Admin")).text();
+  assert.match(nihao, /aria-current="page">Ni Hao Bank Accounts/);
+  for (const number of ["532600010047", "279-7-27901627-7", "0128 8800 1087"]) assert.match(nihao, new RegExp(number));
+  assert.match(nihao, /KDSEA000005 freight/);
+  assert.match(nihao, /₱25,415\.00/);
+  assert.match(nihao, /paid_to_account=nihao-bdo/);
+  assert.doesNotMatch(nihao, /Tape/);
+
+  const kd = await (await financeAccountsPage(db, new URL("https://admin.test/admin/finance/accounts?tab=kargodoor"), "Admin")).text();
+  assert.match(kd, /aria-current="page">KargoDoor Bank Accounts/);
+  assert.match(kd, /002170017106/);
+  assert.match(kd, /0919 932 3077/);
+  assert.match(kd, /Top up/);
+  assert.match(kd, /Tape/);
+  assert.match(kd, /₱4,900\.00/); // GCash net: 5,000 in − 100 out
+
+  const form = await (await expensesPage(db, new URL("https://admin.test/admin/finance/expenses?new=1&paid_to_account=nihao-sterling&category=Freight%20%2F%20Ni%20Hao%20Cost"), "Admin", "token")).text();
+  assert.match(form, /<option value="nihao-sterling" selected>/);
+  assert.match(form, /<option value="Freight \/ Ni Hao Cost" selected>/);
+  assert.match(form, /value="NIHAO EXPRESS LOGISTICS CORPORATION"/);
+  const viewer = await (await financeAccountsPage(db, new URL("https://admin.test/admin/finance/accounts"), "Viewer", false)).text();
+  assert.doesNotMatch(viewer, /Record payment to Ni Hao/);
+});
+
 test("shipment notifications include warehouse pickup instructions after Malabon Warehouse", () => {
   const messages = shipmentStatusMessages({ customerName: "Maria", tracking: "KDSEA-123456" });
   const keys = messages.map(([key]) => key);
@@ -1660,8 +1717,11 @@ test("Ni Hao payment with a transfer fee saves the fee as its own Bank / Payment
   sql.prepare("INSERT INTO shipments (id, customer_id, tracking_number, service_type, china_warehouse, cbm, weight_kg, status, shipping_charge, delivery_charge, payment_status, nihao_cost, nihao_cost_source, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
     .run(shipmentId, customerId, "KDAIR-900002", "Air Freight", "Guangzhou", 0.01, 2, "Malabon Warehouse", 100000, 0, "Unpaid", 70000, "actual", "2026-10-01", "2026-10-01");
   const actor = { id: user, name: "Admin", email: "admin@example.test", role: "admin" as const };
-  const form = new URLSearchParams({ csrf: "t", action: "nihao_paid", id: shipmentId, expense_date: "2026-11-02", amount: "700.00", paid_from: "GCash", transfer_fee: "10.00", reference_number: "GC-1", notes: "" });
+  const form = new URLSearchParams({ csrf: "t", action: "nihao_paid", id: shipmentId, expense_date: "2026-11-02", amount: "700.00", paid_from: "GCash", paid_to_account: "nihao-bdo", transfer_fee: "10.00", reference_number: "GC-1", notes: "" });
   await recordNiHaoPayment(db, form, actor);
+  // The Bank Accounts page sees both rows as paid from GCash; only the freight went to Ni Hao's BDO.
+  assert.deepEqual(sql.prepare("SELECT paid_from_account, paid_to_account FROM expenses ORDER BY amount DESC").all().map((r) => [r.paid_from_account, r.paid_to_account]),
+    [["kd-gcash", "nihao-bdo"], ["kd-gcash", null]]);
   const rows = sql.prepare("SELECT category, payee, amount, payment_method, tracking_number, description FROM expenses ORDER BY amount DESC").all();
   assert.equal(rows.length, 2);
   assert.equal(rows[0].category, "Freight / Ni Hao Cost");
