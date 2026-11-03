@@ -95,7 +95,8 @@ export function deliveryPaymentSection(options: {
   canWrite: boolean;
   justPaid?: boolean;
 }) {
-  const open = `<div class="shipment-pay-box" id="delivery-payment"><h4>Delivery paid to rider</h4>`;
+  // A compact row right under the Delivery charge field.
+  const open = `<div class="shipment-pay-box shipment-pay-compact" id="delivery-payment"><h4>Delivery paid to rider</h4>`;
   const charge = Number(options.deliveryCharge ?? 0) || 0;
   if (options.payment) {
     const diff = charge - options.payment.amount;
@@ -111,7 +112,8 @@ export function deliveryPaymentSection(options: {
   }
   const accounts = (Object.keys(paidFrom) as PaidFrom[]).map((key) => `<option value="${key}"${key === "GCash" ? " selected" : ""}>${key === "Cash" ? "Cash (owners)" : key}</option>`).join("");
   return `${open}
-    <p class="muted">When you pay Lalamove or the rider, save it here. It goes to Expenses with this tracking number.</p>
+    <details class="shipment-record-payment"${options.justPaid ? " open" : ""}><summary>Mark delivery paid${charge ? ` · ${esc(pesos(charge))}` : ""}</summary>
+    <p class="muted">Saved to Expenses and Money In &amp; Out with this tracking number.</p>
     <form method="post" action="${esc(options.path)}">
       ${hidden("csrf", options.csrf)}${hidden("action", "delivery_paid")}${hidden("id", options.shipmentId)}
       <div class="grid">
@@ -123,5 +125,6 @@ export function deliveryPaymentSection(options: {
       </div>
       <div class="actions"><button type="submit">Mark delivery paid</button></div>
     </form>
+    </details>
   </div>`;
 }

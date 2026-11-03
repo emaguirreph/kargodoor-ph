@@ -198,7 +198,8 @@ try {
   // 6. Pay Ni Hao from the Edit shipment form (orange Money out box).
   html = await (await get(`/admin/shipments?id=${sid}`)).text();
   assert.ok(!html.includes('name="paid_from"') && !html.includes('action" value="nihao_paid"'), "shipment page has no payment forms");
-  assert.ok(html.includes("Ni Hao payment") && html.includes("Not paid") && html.includes("Record in Edit shipment"));
+  assert.ok(html.includes("Ni Hao cost") && html.includes("Not paid") && html.includes("Record in Edit shipment"));
+  assert.ok(html.includes("KargoDoor base fee") && html.includes("Transfer fee (standard)") && html.includes("Delivery fee") && !html.includes("Verified cargo"), "fee rows shown once, no Verified cargo card");
   assert.ok(html.includes('<details class="customer-notification"') && !html.includes("Copy Message"), "messages listed like the quotation, no copy buttons");
   html = await (await get(`/admin/shipments?id=${sid}&edit=1`)).text();
   assert.ok(html.includes("shipment-money-kd") && html.includes("shipment-money-nh") && html.includes("Mark Ni Hao paid"));
@@ -209,9 +210,11 @@ try {
   assert.equal(response.status, 303, await response.text());
   assert.equal((await post("/admin/shipments", niHao)).status, 409, "second Ni Hao payment refused");
   html = await (await get(`/admin/shipments?id=${sid}&edit=1`)).text();
-  assert.ok(html.includes("<strong>Paid</strong> · ₱2,805.00") && html.includes("+ ₱10.00 transfer fee"));
+  assert.ok(html.includes("Total paid out</dt><dd class=\"total\">₱2,815.00") && html.includes("<strong>Paid</strong> on 2026-11-02"), "Ni Hao summary: cost + actual fee, paid");
   html = await (await get(`/admin/shipments?id=${sid}`)).text();
-  assert.ok(/Ni Hao payment[\s\S]*?Paid<\/span> ₱2,805.00 on 2026-11-02/.test(html), "summary shows Ni Hao paid");
+  assert.ok(/Ni Hao cost[\s\S]*?₱2,805.00[\s\S]*?Paid<\/span> on 2026-11-02/.test(html), "summary shows Ni Hao paid");
+  assert.ok(/Actual transfer fee[\s\S]*?₱10.00 UnionBank to Ni Hao/.test(html), "actual transfer fee under Ni Hao");
+  assert.ok(/Profit<\/dt><dd><strong>₱605.00<\/strong>/.test(html), "profit = ₱3,420 − ₱2,805 − ₱10");
   const expenses = sqlRows(`SELECT category, payee, amount, payment_method, tracking_number FROM expenses ORDER BY amount DESC`);
   assert.deepEqual(expenses, [
     { category: "Freight / Ni Hao Cost", payee: "Ni Hao", amount: 280500, payment_method: "Bank Transfer", tracking_number: tracking },
@@ -261,6 +264,7 @@ try {
   assert.equal(sqlRows(`SELECT COUNT(*) AS n FROM invoices WHERE shipment_id='${sid2}'`)[0].n, 0, "not ready to bill yet, so no Draft");
   html = await (await get(`/admin/shipments?id=${sid2}&edit=1`)).text();
   assert.ok(html.includes("Customer payment") && html.includes('form="customer-payment-form" name="amount"') && html.includes('value="600.00"'));
+  assert.ok(html.includes("Total customer pays") && html.includes("Change the KargoDoor charge") && !html.includes("Payments received · proof"), "one fee summary; payment details live on the invoice");
   response = await post("/admin/shipments", { csrf: token(html), action: "customer_paid", id: sid2, amount: "600", payment_method: "Cash", payment_date: "2026-11-02", reference_number: "", notes: "" });
   assert.equal(response.status, 303, await response.text());
   row = sqlRows(`SELECT i.status, i.issued_at, s.payment_status FROM invoices i JOIN shipments s ON s.id=i.shipment_id WHERE s.id='${sid2}'`)[0];

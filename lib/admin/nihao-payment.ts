@@ -174,8 +174,9 @@ export function niHaoPaymentSection(options: {
     return `${open}
       ${heading}
       ${options.justPaid ? `<p class="notice" role="status">Ni Hao payment saved to Expenses.</p>` : ""}
-      <p><strong>Paid</strong> · ${esc(pesos(payment.amount))} on ${esc(payment.lastDate)}${payment.count > 1 ? ` (${payment.count} expense records)` : ""}${payment.fees ? ` + ${esc(pesos(payment.fees))} transfer fee` : ""}.
-      Counted in Expenses and Cash on Hand. <a href="${esc(expensesLink)}">View in Expenses</a></p>
+      <p><strong>Paid</strong> · ${esc(pesos(payment.amount))} on ${esc(payment.lastDate)}${payment.count > 1 ? ` (${payment.count} expense records)` : ""}.</p>
+      <p><strong>Actual transfer fee</strong> · ${payment.fees ? esc(pesos(payment.fees)) : '<span class="muted">none saved</span>'}</p>
+      <p class="muted">Both are in Expenses and Money In &amp; Out. <a href="${esc(expensesLink)}">View in Expenses</a></p>
     ${close}`;
   }
   const cost = options.nihaoCost === null || options.nihaoCost === undefined || options.nihaoCost === "" ? null : Number(options.nihaoCost);
@@ -186,7 +187,8 @@ export function niHaoPaymentSection(options: {
   const accounts = Object.keys(paidFromAccounts).map((account) => `<option value="${esc(account)}"${account === "UnionBank" ? " selected" : ""}>${esc(account)}</option>`).join("");
   return `${open}
     ${heading}
-    <p class="muted">Not paid yet. When you pay Ni Hao for this shipment, save it here. It is added to Expenses as a Freight / Ni Hao Cost with this tracking number, so you don't need to enter it again there. The amount paid becomes the shipment's Ni Hao actual cost. A transfer fee is saved as its own Bank / Payment Fees expense.</p>
+    <details class="shipment-record-payment"><summary>Mark Ni Hao paid${amountValue ? ` · ${esc(pesos(Number(cost)))}` : ""}</summary>
+    <p class="muted">Saves the payment and the actual transfer fee to Expenses and Money In &amp; Out with this tracking number.</p>
     <form method="post" action="${esc(options.path)}">
       ${hidden("csrf", options.csrf)}${hidden("action", "nihao_paid")}${hidden("id", options.shipmentId)}
       <div class="grid">
@@ -194,11 +196,11 @@ export function niHaoPaymentSection(options: {
         <label>Amount paid (PHP) *<input name="amount" type="number" min="0.01" max="1000000000" step="0.01" required value="${esc(amountValue)}"></label>
         <label>Paid from<select name="paid_from">${accounts}</select></label>
         ${bankAccountSelect("paid_to_account", "Paid to (Ni Hao account)", nihaoBankAccounts, "", "Not recorded")}
-        <label>Transfer fee (PHP)<input name="transfer_fee" type="number" min="0" max="1000000" step="0.01" placeholder="e.g. 10.00" value="${options.suggestedFee ? esc((options.suggestedFee / 100).toFixed(2)) : ""}"><small class="muted" style="display:block">${options.suggestedFee ? "Filled in from your last transfer. Change it or clear it if there was no fee." : "Bank or GCash fee for this transfer, if any."}</small></label>
+        <label>Actual transfer fee (PHP)<input name="transfer_fee" type="number" min="0" max="1000000" step="0.01" placeholder="e.g. 10.00" value="${options.suggestedFee ? esc((options.suggestedFee / 100).toFixed(2)) : ""}"><small class="muted" style="display:block">${options.suggestedFee ? "From your last transfer. Clear it if there was no fee." : "Bank or GCash fee, if any."}</small></label>
         <label>Reference / receipt no.<input name="reference_number" maxlength="160"></label>
-        <label class="wide">Notes<textarea name="notes" maxlength="4000" placeholder="e.g. Ni Hao SOA number or Drive location"></textarea></label>
       </div>
       <div class="actions"><button type="submit">Mark Ni Hao paid</button></div>
     </form>
+    </details>
   ${close}`;
 }

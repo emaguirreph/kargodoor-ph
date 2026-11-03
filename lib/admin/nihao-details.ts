@@ -86,15 +86,12 @@ export function niHaoCopyText(details: Partial<NiHaoDetails> | null, record: Rec
 const kb = (size: number | null) => (size ? `${Math.max(1, Math.round(size / 1024)).toLocaleString("en-US")} KB` : "");
 
 /**
- * The Ni Hao details card for the Edit shipment form. `inline` goes inside the
- * form (its four fields save with Save shipment); `form` is the separate
+ * The Ni Hao file card for the Edit shipment form. `inline` goes inside the
+ * form; `form` is the separate
  * upload form, placed after the main form (see detachForm).
  */
 export function niHaoDetailsBox(options: { shipmentId: string; record: RecordData; details: NiHaoDetails | null; customerName: string; csrf: string; canWrite: boolean; uploaded?: boolean; supplierFields?: string }) {
-  const { details, record, shipmentId } = options;
-  const field = (key: (typeof niHaoDetailKeys)[number], label: string, attrs: string) =>
-    `<label>${esc(label)}<input name="${key}" value="${esc(details?.[key] ?? "")}" ${attrs}${options.canWrite ? "" : " readonly"}></label>`;
-  const copyId = `nihao-copy-${shipmentId || "new"}`;
+  const { details, shipmentId } = options;
   const fileUrl = `${niHaoFilePath}?id=${encodeURIComponent(shipmentId)}`;
   const fileLine = details?.file_name
     ? `<span>📄 <strong>${esc(details.file_name)}</strong> <span class="muted">· ${esc(kb(details.file_size))} · uploaded ${esc(dateLabel(String(details.file_uploaded_at ?? "").slice(0, 10)))}</span></span>
@@ -105,15 +102,14 @@ export function niHaoDetailsBox(options: { shipmentId: string; record: RecordDat
         <label class="nihao-file-pick">${details?.file_name ? "Replace file" : "⬆ Upload Ni Hao file"}<input type="file" name="file" accept="application/pdf,image/jpeg,image/png,image/webp" required></label>
         <button type="submit" class="nihao-file-upload">Upload</button><span class="muted">or drag the file here · PDF or photo, up to 1.5 MB</span><span class="nihao-drop-status" data-nihao-drop-status role="status"></span></form>`, "nihao-file-form")
     : { inline: "", form: "" };
-  const inline = `<div class="shipment-pay-box nihao-details" id="nihao-details"><h4>Ni Hao details</h4>
+  // Only Ni Hao's uploaded file (Em, 2026-11-03). The typed No. / Doc No. /
+  // date / tracking fields are no longer shown; what is saved stays saved.
+  // supplierFields (waybill, courier) come in as hidden inputs so Save
+  // shipment keeps them.
+  const inline = `<div class="shipment-pay-box nihao-details" id="nihao-details"><h4>Ni Hao file</h4>
     ${options.uploaded ? `<p class="notice" role="status">Ni Hao file uploaded.</p>` : ""}
-    <p class="muted">From Ni Hao's paper. Amount = Ni Hao freight cost above. CBM and weight = Verified CBM and weight. Saved with <strong>Save shipment</strong>.</p>
-    <div class="grid">${field("nihao_no", "Ni Hao No.", 'maxlength="40" placeholder="9945"')}${field("nihao_doc_no", "Ni Hao Doc No. (optional)", 'maxlength="40" placeholder="0040385"')}
-    ${field("nihao_date", "Ni Hao date", 'type="date"')}${field("nihao_tracking", "Ni Hao Tracking No.", 'maxlength="80" placeholder="2610040014-1"')}</div>
-    ${options.supplierFields ? `<details class="nihao-supplier-more"${record.supplier_waybill_number || record.supplier_courier ? " open" : ""}><summary>Supplier waybill &amp; courier (optional)</summary><div class="grid">${options.supplierFields}</div></details>` : ""}
+    ${options.supplierFields ?? ""}
     ${shipmentId ? `<div class="nihao-file-row">${fileLine}${upload.inline}</div>` : `<p class="muted">Save the shipment first, then upload Ni Hao's file.</p>`}
-    ${shipmentId ? `<pre hidden id="${copyId}">${esc(niHaoCopyText(details, record, options.customerName))}</pre>
-    <div class="actions"><button type="button" class="nihao-copy" data-copy-source="${copyId}">📋 Copy Ni Hao details</button></div>` : ""}
   </div>`;
   return { inline, form: upload.form };
 }
