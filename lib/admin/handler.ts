@@ -52,6 +52,7 @@ import { airItems, itemCategories } from "./quotation-pricing";
 import { cargoCategory, cargoCategorySql, cargoItemSql, shipmentCargo, type ShipmentCargo } from "./shipment-cargo";
 import { resolveNiHaoCost, shipmentNiHaoEstimate, type NiHaoEstimate } from "./nihao-estimate";
 import { lastNiHaoTransferFee, niHaoExpenseCategory, niHaoPaymentSection, readNiHaoPayment, recordNiHaoPayment } from "./nihao-payment";
+import { arrivalWindow, arrivalWindowDone, formatArrivalWindow, shortArrivalWindow } from "./arrival-window";
 import { readShipmentStatement, shipmentStatementPdf, shipmentsLedgerCsv, statementFilename } from "./shipment-statement";
 import { autoDraftInvoice } from "./billing";
 import { readShipmentBilling, recordShipmentPayment, shipmentPaymentSection } from "./shipment-payment";
@@ -120,6 +121,17 @@ const shipmentStatusOptions = (record: RecordData): readonly string[] => {
 /** Shipment form page: like the default admin policy, plus fetch to this origin for the live estimate. */
 const shipmentFormCsp =
   "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
+
+/** Read-only estimated arrival shown right after the CH warehouse received date in Edit shipment; /admin-arrival-window.js keeps it current. */
+const arrivalEstimateField = (record: RecordData) => {
+  const window = arrivalWindow(record.service_type, record.warehouse_received_date);
+  return `<div class="arrival-estimate" data-arrival-estimate${arrivalWindowDone(record.status) ? " hidden" : ""}>
+    <span class="arrival-estimate-label">Estimated arrival</span>
+    <output data-arrival-estimate-value>${window ? esc(formatArrivalWindow(window)) : "Enter the CH warehouse received date"}</output>
+    <small class="muted" data-arrival-estimate-note>${window ? `Estimate only · ${esc(window.span)} after CH warehouse received date` : "Sea and FCL: 3–5 weeks after · Air: 5–7 days after"}</small>
+  </div>
+  <style>.arrival-estimate{display:flex;flex-direction:column;gap:4px;padding:10px 14px;border:1px dashed #94a3b8;border-radius:12px;background:#f8fafc}.arrival-estimate[hidden]{display:none}.arrival-estimate-label{font-weight:600}.arrival-estimate output{font-weight:600;color:#1e3a8a}</style>`;
+};
 
 /** Green (KargoDoor, money in) and red (Ni Hao, money out) parts of the Edit shipment form. */
 const shipmentMoneyCss = `<style>
@@ -208,10 +220,11 @@ const labels: Record<string, string> = {
   cargo_item: "Cargo / Item",
   cargo_category: "Category",
   service_type: "Service type",
-  warehouse_received_date: "Warehouse received date",
+  warehouse_received_date: "CH warehouse received date",
   departure_date: "Departure date",
   status: "Status",
   estimated_arrival: "Estimated arrival",
+  arrival_window: "Est. arrival",
   actual_arrival: "Actual arrival",
   tracking_remarks: "Tracking remarks",
   cargo_quantity: "Units",
@@ -1102,22 +1115,18 @@ export async function handleAdmin(
         /*
          * TRACKING DATES
          */
+        // Order (two columns): CH warehouse received date | Estimated arrival,
+        // Declared CBM | Declared weight, Verified CBM | Verified weight,
+        // Status (| Flight date for Air). Supplier waybill and courier sit in
+        // the Ni Hao details box below.
         fields +=
           input(
             "warehouse_received_date",
-            "Warehouse received date",
+            "CH warehouse received date",
             record,
             "date",
-          ) +
-          // Air Freight shows its flight date here; Sea Freight keeps it hidden.
-          (record.service_type === "Air Freight"
-            ? input("departure_date", "Flight date", record, "date")
-            : hidden("departure_date", record.departure_date ?? ""));
-
-        /*
-         * SHIPPING DETAILS
-         */
-        fields +=
+          ).replace("<label>", '<label style="grid-column-start:1">') +
+          arrivalEstimateField(record) +
           input(
             "cbm",
             "Declared CBM",
@@ -1134,41 +1143,6 @@ export async function handleAdmin(
             "number",
             true,
           ) +
-          select(
-            "status",
-            "Status",
-            record,
-            shipmentStatusOptions(record),
-          ).replace("<label>", '<label class="k-status-red">') + hidden("estimated_arrival", record.estimated_arrival ?? "");
-
-        // Actual arrival is an end-of-journey record. Keeping it out of the
-        // earlier stages avoids implying that cargo has already reached Manila.
-        if (["Malabon Warehouse", "Delivered"].includes(String(record.status || ""))) {
-          fields += input(
-            "actual_arrival",
-            "Actual arrival",
-            record,
-            "date",
-          );
-        }
-
-        fields +=
-          input(
-            "supplier_waybill_number",
-            "Supplier waybill number",
-            record,
-            "text",
-            false,
-            120,
-          ) +
-          input(
-            "supplier_courier",
-            "Supplier courier",
-            record,
-            "text",
-            false,
-            120,
-          ) +
           input(
             "verified_cbm",
             "Verified CBM (number only, e.g. 0.36)",
@@ -1184,7 +1158,28 @@ export async function handleAdmin(
             record,
             "number",
             false,
+          ) +
+          select(
+            "status",
+            "Status",
+            record,
+            shipmentStatusOptions(record),
+          ).replace("<label>", '<label class="k-status-red">') + hidden("estimated_arrival", record.estimated_arrival ?? "") +
+          // Air Freight shows its flight date next to the status; Sea Freight keeps it hidden.
+          (record.service_type === "Air Freight"
+            ? input("departure_date", "Flight date", record, "date")
+            : hidden("departure_date", record.departure_date ?? ""));
+
+        // Actual arrival is an end-of-journey record. Keeping it out of the
+        // earlier stages avoids implying that cargo has already reached Manila.
+        if (["Malabon Warehouse", "Delivered"].includes(String(record.status || ""))) {
+          fields += input(
+            "actual_arrival",
+            "Actual arrival",
+            record,
+            "date",
           );
+        }
 
         /*
          * PUBLIC TRACKING REMARKS
@@ -1245,6 +1240,9 @@ export async function handleAdmin(
           csrf: csrfToken(env, user.id, path),
           canWrite,
           uploaded: url.searchParams.get("nihao_file") === "1",
+          supplierFields:
+            input("supplier_waybill_number", "Supplier waybill number", record, "text", false, 120) +
+            input("supplier_courier", "Supplier courier", record, "text", false, 120),
         });
         paymentForms = customerBox.form + niHaoBox.form + niHaoDetailsCard.form;
 
@@ -1433,7 +1431,7 @@ export async function handleAdmin(
               </div>
             </form>
             ${paymentForms}
-            ${entity === "shipments" ? '<script src="/admin-shipment-pricing.js" defer></script>' : ""}
+            ${entity === "shipments" ? '<script src="/admin-shipment-pricing.js" defer></script><script src="/admin-arrival-window.js" defer></script>' : ""}
           </section>
         `,
         user.name,
@@ -1687,7 +1685,13 @@ export async function handleAdmin(
           shipmentDetail("Declared CBM", esc(record.cbm) || "—"),
           shipmentDetail("Declared weight (kg)", esc(record.weight_kg) || "—"),
           shipmentDetail("Origin warehouse", esc(record.china_warehouse) || "—"),
-          shipmentDetail("China warehouse received", esc(record.warehouse_received_date) || "—"),
+          shipmentDetail("CH warehouse received date", esc(record.warehouse_received_date) || "—"),
+          ...(arrivalWindowDone(status) ? [] : [shipmentDetail("Estimated arrival", (() => {
+            const window = arrivalWindow(record.service_type, record.warehouse_received_date);
+            return window
+              ? `${esc(formatArrivalWindow(window))}<small class="muted" style="display:block">Estimate only · ${esc(window.span)} after CH warehouse received date</small>`
+              : '<span class="muted">Shows once the CH warehouse received date is entered</span>';
+          })())]),
           shipmentDetail("Status", esc(status) || "—"),
           ...(actualArrivalVisible
             ? [shipmentDetail("Actual arrival", esc(record.actual_arrival) || "Not recorded")]
@@ -1878,7 +1882,10 @@ export async function handleAdmin(
           received: record.warehouse_received_date,
           departure: record.departure_date,
           flightDate: record.service_type === "Air Freight" ? record.departure_date : null,
-          eta: record.estimated_arrival,
+          eta: record.estimated_arrival || (() => {
+            const window = arrivalWindow(record.service_type, record.warehouse_received_date);
+            return window ? `${formatArrivalWindow(window)} (estimate)` : null;
+          })(),
           arrival: record.actual_arrival,
           paymentStatus: record.payment_status,
           declaredCbm: record.cbm,
@@ -2129,6 +2136,8 @@ export async function handleAdmin(
                 ${cargoCategorySql.item} AS cargo_category_item,
                 ${cargoCategorySql.group} AS cargo_category_group,
                 s.status,
+                s.service_type,
+                s.warehouse_received_date,
                 s.payment_status,
                 CASE WHEN EXISTS (
                   SELECT 1 FROM expenses e
@@ -2204,11 +2213,16 @@ export async function handleAdmin(
             "cargo_item",
             "cargo_category",
             "status",
+            "arrival_window",
             "payment_status",
             "nihao_payment",
           ];
     if (entity === "shipments") {
-      for (const row of rows) row.cargo_category = cargoCategory(row.cargo_category_item, row.cargo_category_group);
+      for (const row of rows) {
+        row.cargo_category = cargoCategory(row.cargo_category_item, row.cargo_category_group);
+        const window = arrivalWindowDone(row.status) ? null : arrivalWindow(row.service_type, row.warehouse_received_date);
+        row.arrival_window = window ? shortArrivalWindow(window) : null;
+      }
     }
 
     const table =

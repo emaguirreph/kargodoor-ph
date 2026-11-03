@@ -1907,3 +1907,20 @@ test("Ni Hao details on Edit shipment: No. 9945 for KDSEA000006, copy text uses 
   assert.equal(viewer.form, "");
   assert.match(viewer.inline, /name="nihao_no" value="" maxlength="40" placeholder="9945" readonly/);
 });
+
+test("estimated arrival window counts from the China warehouse received date", async () => {
+  const { arrivalWindow, arrivalWindowDone, formatArrivalWindow, shortArrivalWindow } = await import("../../lib/admin/arrival-window");
+  const sea = arrivalWindow("Sea Freight", "2026-10-22");
+  assert.deepEqual(sea, { from: "2026-11-12", to: "2026-11-26", span: "3–5 weeks" });
+  assert.equal(formatArrivalWindow(sea!), "Nov 12 – Nov 26, 2026");
+  assert.equal(shortArrivalWindow(sea!), "Nov 12 – 26");
+  assert.deepEqual(arrivalWindow("FCL", "2026-10-22"), sea);
+  const air = arrivalWindow("Air Freight", "2026-10-29");
+  assert.deepEqual(air, { from: "2026-11-03", to: "2026-11-05", span: "5–7 days" });
+  assert.equal(shortArrivalWindow(arrivalWindow("Air Freight", "2026-10-27")!), "Nov 1 – 3");
+  assert.equal(formatArrivalWindow(arrivalWindow("Sea Freight", "2026-12-10")!), "Dec 31, 2026 – Jan 14, 2027");
+  assert.equal(arrivalWindow("Sea Freight", null), null);
+  assert.equal(arrivalWindow("Sea Freight", ""), null);
+  assert.equal(arrivalWindowDone("Delivered"), true);
+  assert.equal(arrivalWindowDone("Sea Transit"), false);
+});
