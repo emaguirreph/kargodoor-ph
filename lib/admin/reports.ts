@@ -342,12 +342,17 @@ export async function dashboard(
         .dashboard-panel table{margin-bottom:0}
         .dashboard-panel th,.dashboard-panel td{vertical-align:middle}
         .status-pill{display:inline-block;border-radius:999px;padding:3px 8px;background:#eef4f8;font-size:.78rem;white-space:nowrap}
-        .attention-list{list-style:none;margin:0;padding:0;display:grid;gap:10px}
-        .attention-list li{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 14px;border:1px solid #dbe5ec;border-left:4px solid #1356c9;border-radius:10px;background:#f8fbfd}
-        .attention-list li.attention-warn{border-left-color:#c62828;background:#fff6f6}
-        .attention-list strong{display:block;color:#0b1f45}
-        .attention-list span{display:block;color:#64748b;font-size:.9rem;margin-top:2px}
-        .attention-list .button{white-space:nowrap;flex:0 0 auto}
+        .dashboard-attention{padding:16px 20px}
+        .dashboard-attention .dashboard-panel-header{margin-bottom:10px}
+        .attention-count{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;padding:0 7px;margin-left:6px;border-radius:999px;background:#e5383b;color:#fff;font-size:.8rem;vertical-align:middle}
+        .attention-list{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+        .attention-list a{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;border-left:3px solid #1356c9;background:#f8fbfd;color:#0b1f45;text-decoration:none;min-width:0}
+        .attention-list a:hover{background:#eef4ff}
+        .attention-list li.attention-warn a{border-left-color:#c62828;background:#fff6f6}
+        .attention-list li.attention-warn a:hover{background:#ffecec}
+        .attention-list strong{flex:0 0 auto;font-size:.95rem}
+        .attention-detail{flex:1 1 auto;min-width:0;color:#64748b;font-size:.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .attention-go{flex:0 0 auto;margin-left:auto;color:#1356c9;font-weight:700;font-size:.85rem;white-space:nowrap}
         .money-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
         .money-card{border:1px solid #dbe5ec;border-top:4px solid #1356c9;border-radius:10px;padding:14px 16px;min-width:0}
         .money-card.money-have{border-top-color:#2e7d32}
@@ -366,7 +371,8 @@ export async function dashboard(
           .dashboard-actions{justify-content:flex-start}
           .money-cards{grid-template-columns:1fr}
           .dashboard-pipeline{grid-template-columns:1fr 1fr}
-          .attention-list li{flex-direction:column;align-items:stretch}
+          .attention-detail{display:none}
+          .attention-list strong{flex:1 1 auto;white-space:normal}
         }
         @media(max-width:480px){.dashboard-pipeline{grid-template-columns:1fr}}
       </style>
@@ -397,7 +403,7 @@ export async function dashboard(
 
       <section class="dashboard-panel dashboard-attention">
         <div class="dashboard-panel-header">
-          <h2>Needs Attention</h2>
+          <h2>Needs Attention${attention.length ? `<span class="attention-count">${attention.length}</span>` : ""}</h2>
         </div>
         ${
           attention.length
@@ -405,11 +411,11 @@ export async function dashboard(
                 .map(
                   (item) => `
                     <li class="${"warn" in item && item.warn ? "attention-warn" : ""}">
-                      <div>
+                      <a href="${esc(item.href)}" title="${esc(item.detail)}">
                         <strong>${esc(item.label)}</strong>
-                        <span>${esc(item.detail)}</span>
-                      </div>
-                      <a class="button" href="${esc(item.href)}">${esc(item.action)}</a>
+                        <span class="attention-detail">${esc(item.detail)}</span>
+                        <span class="attention-go">${esc(item.action)} ›</span>
+                      </a>
                     </li>`,
                 )
                 .join("")}</ul>`
