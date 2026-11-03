@@ -60,7 +60,53 @@ function HowToImport({ act }: { act: (key: string) => void }) {
   return <>
     <p>It&apos;s easy! Here&apos;s how it works: 👇</p>
     <ol className="kc-steps">{steps.map(([title, text], i) => <li key={title}><i>{i + 1}</i><span><b>{title}</b>{text}</span></li>)}</ol>
-    <div className="kc-quick"><button type="button" onClick={() => act("calc")}>🧮 Compute my rate</button><button type="button" onClick={() => act("book")}>📦 Book now</button></div>
+    <div className="kc-quick"><button type="button" onClick={() => act("calc")}>🧮 Compute my rate</button><button type="button" onClick={() => act("book")}>📦 Book now</button><button type="button" onClick={() => act("supplier")}>📝 Supplier instructions</button></div>
+  </>;
+}
+
+// Instructions for the customer's supplier in China: steps, code format, a sample carton label, and a copy-ready message.
+function supplierMessage(mark: string, address: string) {
+  return [
+    "Hi! Please ship my order to my forwarder's warehouse:",
+    address,
+    "",
+    `Write this shipping mark on EVERY carton: ${mark}`,
+    "Please include a packing list (item, quantity, number of cartons) and send me the courier tracking number after shipping. Thank you!",
+    "",
+    "您好！请把货发到我们的货代仓库：",
+    address,
+    "",
+    `每一箱都必须写上唛头：${mark}`,
+    "请附上装箱单（品名、数量、箱数），发货后请把快递单号发给我。谢谢！",
+  ].join("\n");
+}
+
+function SupplierGuide({ act, code, air, warehouse, name }: { act: (key: string, data?: Record<string, string>) => void; code?: string; air?: boolean; warehouse?: string; name?: string }) {
+  const sample = code ?? "KDOOR-1234";
+  const mark = air ? `AIR ${sample}` : sample;
+  const address = warehouse && warehouse in warehouseAddresses ? warehouseAddresses[warehouse as WarehouseName] : "";
+  return <>
+    <p><b>Shipping instructions for your supplier</b> 📝</p>
+    <ol className="kc-steps">
+      <li><i>1</i><span><b>Book and get your cargo code</b>Book here in the chat. Once approved, we send your cargo code (KDOOR-####) and warehouse.</span></li>
+      <li><i>2</i><span><b>Send the address to your supplier</b>Copy the warehouse address for your route and send it to your supplier.</span></li>
+      <li><i>3</i><span><b>Label every box</b>Your supplier writes your cargo code on EVERY box and adds a packing list.</span></li>
+    </ol>
+    <p className="kc-lbl">USE THE RIGHT CODE FOR YOUR ROUTE</p>
+    <div className="kc-fmt"><span className="kc-tag-sea">Sea → Manila</span><code>{code ?? "KDOOR-1234"}</code><small className="kc-small">3–5 weeks</small></div>
+    <div className="kc-fmt"><span className="kc-tag-air">Air → Manila</span><code>AIR {code ?? "KDOOR-1234"}</code><small className="kc-small">Add &quot;AIR&quot; before the code · 5–7 days</small></div>
+    <p className="kc-lbl">{code ? "YOUR BOX LABEL" : "EXAMPLE BOX LABEL"}</p>
+    <div className="kc-label"><b>{mark}</b><span>{name ?? "Juan Dela Cruz"}</span><span>CTN 1 / 5</span></div>
+    {code
+      ? <>
+        <p className="kc-small">Send this to your supplier (English + Chinese):</p>
+        <pre className="kc-addr">{supplierMessage(mark, address || "(KargoDoor warehouse address)")}</pre>
+        <CopyButton text={supplierMessage(mark, address || "(KargoDoor warehouse address)")} label="Copy message for supplier" />
+      </>
+      : <>
+        <p className="kc-warn">⚠️ <b>1234 is only an example.</b> Use your own cargo code. You get it once you book and we approve it. Boxes without a code can&apos;t be identified.</p>
+        <div className="kc-quick"><button type="button" onClick={() => act("book")}>📦 Book now</button><button type="button" onClick={() => act("warehouse")}>🏭 Warehouse addresses</button></div>
+      </>}
   </>;
 }
 
@@ -80,6 +126,7 @@ function WarehouseAddress({ name, act }: { name: WarehouseName; act: (key: strin
     <CopyButton text={address} label="Copy address" />
     <p className="kc-warn">⚠️ <b>You need a cargo code</b> (KDOOR-XXXX). You get it once you book and we approve it. Your supplier must write it on <b>every box</b>, or we can&apos;t identify your package.</p>
     <button type="button" className="kc-btn kc-green" onClick={() => act("book")}>📦 Book a shipment to get your code</button>
+    <button type="button" className="kc-btn kc-line" onClick={() => act("supplier")}>📝 Instructions for your supplier</button>
   </>;
 }
 
@@ -157,19 +204,34 @@ function Calculator({ act }: { act: (key: string, data?: Record<string, string>)
   const [service, setService] = useState<"sea" | "air">("sea");
   const [cbm, setCbm] = useState("");
   const [weight, setWeight] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [item, setItem] = useState("");
+  const [consent, setConsent] = useState(false);
   const [result, setResult] = useState<{ amount: number; tier: string } | null>(null);
   const [error, setError] = useState("");
   const calculate = (event: FormEvent) => {
     event.preventDefault();
     const c = Number(cbm), w = Number(weight);
-    if (!(w > 0) || (service === "sea" && !(c > 0)) || c < 0) { setError(service === "sea" ? "Please enter the CBM and weight." : "Please enter the weight (and CBM if you know it)."); return; }
+    if (fullName.trim().length < 2) return setError("Please enter your name.");
+    if (!normalizePhMobile(phone)) return setError("Please enter a valid PH mobile number (09XX XXX XXXX).");
+    if (item.trim().length < 2) return setError("What are you shipping?");
+    if (!(w > 0) || (service === "sea" && !(c > 0)) || c < 0) return setError(service === "sea" ? "Please enter the CBM and weight." : "Please enter the weight (and CBM if you know it).");
+    if (!consent) return setError("Please tick the box so we can contact you.");
     setError("");
     const estimate = service === "sea" ? getSeaEstimate(c, w) : getAirEstimate(Math.max(w, (c || 0) * 167));
     setResult({ amount: estimate.amount, tier: estimate.packageName });
     trackEvent("calculate_shipping");
+    // Saved to admin Leads; the rate shows even if saving fails.
+    void fetch("/api/leads", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fullName: fullName.trim(), phone: phone.trim(), consent: true, service, cbm: c, weight: w, item: item.trim(), source: "chat" }) }).catch(() => undefined);
   };
   return <form className="kc-calc" onSubmit={calculate}>
     <div className="kc-seg">{(["sea", "air"] as const).map((s) => <button type="button" key={s} className={service === s ? "on" : ""} onClick={() => { setService(s); setResult(null); }}>{s === "sea" ? "🚢 Sea" : "✈️ Air"}</button>)}</div>
+    <label><span className="kc-lbl">YOUR NAME</span><input value={fullName} onChange={(e) => setFullName(e.target.value)} autoComplete="name" maxLength={160} /></label>
+    <div className="kc-two">
+      <label><span className="kc-lbl">MOBILE</span><input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" autoComplete="tel" placeholder="09XX XXX XXXX" maxLength={20} /></label>
+      <label><span className="kc-lbl">ITEM</span><input value={item} onChange={(e) => setItem(e.target.value)} placeholder="e.g. Phone cases" maxLength={300} /></label>
+    </div>
     {service === "sea" && <>
       <div className="kc-lbl">PICK A SIZE OR TYPE YOUR OWN</div>
       <div className="kc-sizes">{sizes.map((size) => <button type="button" key={size.name} className={Number(cbm) === size.cbm ? "on" : ""} onClick={() => { setCbm(String(size.cbm)); setResult(null); }}>{size.name}<small>{peso(size.price)}</small></button>)}</div>
@@ -178,6 +240,7 @@ function Calculator({ act }: { act: (key: string, data?: Record<string, string>)
       <label><span className="kc-lbl">CBM{service === "air" ? " (optional)" : ""}</span><input inputMode="decimal" value={cbm} onChange={(e) => { setCbm(e.target.value); setResult(null); }} placeholder="0.5" /></label>
       <label><span className="kc-lbl">WEIGHT (KG)</span><input inputMode="decimal" value={weight} onChange={(e) => { setWeight(e.target.value); setResult(null); }} placeholder="60" /></label>
     </div>
+    <label className="kc-check"><input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} /> I agree that KargoDoor may contact me about this rate.</label>
     {error && <p className="kc-err">{error}</p>}
     <button className="kc-btn kc-blue">Calculate</button>
     {result && <div className="kc-res">
@@ -185,7 +248,7 @@ function Calculator({ act }: { act: (key: string, data?: Record<string, string>)
       <div className="kc-big">{peso(result.amount)}</div>
       <p><span className="kc-pill">{result.tier.toUpperCase()}</span> {service === "sea" ? "Sea, 3–5 weeks" : "Air, 5–7 days"}</p>
       <p className="kc-small">Includes freight, customs, duties and taxes. The final price is set after we measure your cargo at the warehouse.</p>
-      <button type="button" className="kc-btn kc-green" onClick={() => act("book", { service, cbm, weight })}>📦 Book this shipment</button>
+      <button type="button" className="kc-btn kc-green" onClick={() => act("book", { service, cbm, weight, fullName, phone, item })}>📦 Book this shipment</button>
       <TeamButton label="💬 Ask our team" className="kc-btn kc-line" />
     </div>}
     <p className="kc-small"><a href="/rates-calculator">Open the full calculator and size guide →</a></p>
@@ -215,7 +278,7 @@ type BookingDraft = Record<string, string>;
 
 function BookingForm({ preset, done }: { preset?: Record<string, string>; done: (ref: string, phone: string) => void }) {
   const [step, setStep] = useState(1);
-  const [d, setD] = useState<BookingDraft>({ service: preset?.service ?? "sea", deliveryMode: "pickup", cbm: preset?.cbm ?? "", weight: preset?.weight ?? "", warehouse: "" });
+  const [d, setD] = useState<BookingDraft>({ service: preset?.service ?? "sea", deliveryMode: "pickup", cbm: preset?.cbm ?? "", weight: preset?.weight ?? "", warehouse: "", fullName: preset?.fullName ?? "", phone: preset?.phone ?? "", item: preset?.item ?? "" });
   const [photos, setPhotos] = useState<File[]>([]);
   const [packing, setPacking] = useState<File | null>(null);
   const [consent, setConsent] = useState(false);
@@ -395,6 +458,7 @@ function StatusAnswer({ bookingRef, last4, act }: { bookingRef: string; last4: s
       <div className="kc-card"><div><span>Warehouse</span><b>{routeLabel(sh.warehouse)}</b></div><div><span>Estimated rate</span><b>{peso(sh.approvedAmount)}</b></div><div><span>Tracking no.</span><b>{sh.trackingNumber}</b></div><div><span>Status</span><b>{sh.status}</b></div></div>
       <p className="kc-small">💡 <b>Nothing to pay yet.</b> You pay once your cargo arrives in Malabon, before it is released or delivered.</p>
       {sh.warehouse in warehouseAddresses && <button type="button" className="kc-btn kc-green" onClick={() => act("address", { name: sh.warehouse })}>🏭 Get {routeLabel(sh.warehouse)} address</button>}
+      <button type="button" className="kc-btn kc-line" onClick={() => act("supplier", { code: sh.cargoCode, air: air ? "1" : "", warehouse: sh.warehouse, name: s.name })}>📝 Instructions for your supplier</button>
     </>}
     {s.bill && !paid && <>
       <p>📦 Bill for <b>{sh.trackingNumber}</b>. Please pay before release or delivery:</p>
@@ -419,6 +483,7 @@ const intents: Array<[RegExp, string]> = [
   [/\b(track|tracking|nasaan|status|asan)\b/i, "track"],
   [/\b(rate|rates|magkano|presyo|price|calculat|cbm|singil|how much)\b/i, "calc"],
   [/\bmalabon|pick ?up|pickup|kunin\b/i, "malabon"],
+  [/\b(supplier|label|labels|marking|shipping mark|cargo code|kdoor)\b/i, "supplier"],
   [/\b(warehouse|address|bodega|guangzhou|yiwu|shishi|hong ?kong)\b/i, "warehouse"],
   [/\b(paano|how to|process|import|steps?|mag-?import)\b/i, "how"],
   [/\b(bayad|payment|pay|gcash|bank|unionbank|bill|invoice)\b/i, "payment"],
@@ -463,6 +528,7 @@ export function ChatAssistant() {
       case "how": return say(<HowToImport act={act} />);
       case "warehouse": return say(<WarehouseList pick={(name) => { say(routeLabel(name), "me"); say(<WarehouseAddress name={name} act={act} />); }} />);
       case "address": return say(<WarehouseAddress name={data!.name as WarehouseName} act={act} />);
+      case "supplier": return say(<SupplierGuide act={act} code={data?.code} air={data?.air === "1"} warehouse={data?.warehouse} name={data?.name} />);
       case "malabon": return say(<Malabon />);
       case "payment": return say(<Payment act={act} />);
       case "status": setWaiting({ kind: "ref" }); return say(<p>Type your tracking number (e.g. <b>KDSEA-123456</b>). 🔎</p>);
@@ -588,9 +654,9 @@ export function ChatAssistant() {
         <button type="button" onClick={chip("calc", "🧮 Rate Calculator")}>🧮 Rate Calculator</button>
         <button type="button" onClick={chip("how", "📋 How to Import")}>📋 How to Import</button>
         <button type="button" onClick={chip("warehouse", "🏭 China Warehouses")}>🏭 China Warehouses</button>
+        <button type="button" onClick={chip("supplier", "📝 Supplier instructions")}>📝 Supplier instructions</button>
         <button type="button" onClick={chip("malabon", "🏠 Malabon Warehouse")}>🏠 Malabon Warehouse</button>
         <button type="button" onClick={chip("payment", "💳 Payment")}>💳 Payment</button>
-        <button type="button" onClick={chip("status", "🔎 My Booking")}>🔎 My Booking</button>
         <button type="button" onClick={chip("transit", "⏱️ How long?")}>⏱️ How long?</button>
         <button type="button" onClick={chip("restricted", "🚫 Restricted items")}>🚫 Restricted items</button>
       </div>
