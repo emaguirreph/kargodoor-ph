@@ -9,7 +9,7 @@ import { trackEvent } from "@/lib/analytics";
 import { getAirEstimate, getSeaEstimate } from "@/lib/shipping-estimate.mjs";
 import { warehouseAddresses, type WarehouseName } from "@/lib/warehouse-addresses";
 import { kargodoorBankAccounts } from "@/lib/admin/bank-accounts";
-import { bookingMaxPhotos, normalizePhMobile } from "@/lib/booking-rules";
+import { bookingMaxPhotos, normalizeBookingRef, normalizePhMobile } from "@/lib/booking-rules";
 
 type Msg = { id: number; from: "bot" | "me"; body: ReactNode };
 type Say = (body: ReactNode, from?: "bot" | "me") => void;
@@ -17,7 +17,6 @@ type Say = (body: ReactNode, from?: "bot" | "me") => void;
 const unionBank = kargodoorBankAccounts.find((account) => account.id === "kd-unionbank")!;
 const peso = (n: number) => `₱${n.toLocaleString("en-PH", Number.isInteger(n) ? { maximumFractionDigits: 0 } : { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const trackingPattern = /^(KD-?(SEA|AIR|FCL)-?\d{6,}|(AIR-?)?KDOOR-?\d{4,})$/i;
-const bookingPattern = /^KD-?BOOK-?(\d{4,})$/i;
 
 function copy(text: string) {
   try { void navigator.clipboard?.writeText(text); } catch { /* clipboard blocked: the text is still on screen */ }
@@ -115,9 +114,9 @@ function Payment({ act }: { act: (key: string) => void }) {
 
 // ---------- live answers ----------
 
-type TrackResult = { tracking_number: string; freight_type: string; origin_warehouse: string | null; current_status: string; status_message: string | null; last_updated: string; standard_transit: string };
+type TrackResult = { chat_booking?: boolean; tracking_number: string; freight_type: string; origin_warehouse: string | null; current_status: string; status_message: string | null; last_updated: string; standard_transit: string };
 
-function TrackAnswer({ code }: { code: string }) {
+function TrackAnswer({ code, act }: { code: string; act: (key: string, data?: Record<string, string>) => void }) {
   const [state, setState] = useState<{ data?: TrackResult; error?: string }>({});
   useEffect(() => {
     let alive = true;
@@ -139,6 +138,7 @@ function TrackAnswer({ code }: { code: string }) {
       <div><span>Usual transit</span><b>{s.standard_transit}</b></div>
       <div><span>Last update</span><b>{new Date(s.last_updated).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}</b></div>
     </div>
+    {s.chat_booking && <button type="button" className="kc-btn" onClick={() => act("bill", { ref: s.tracking_number })}>🔎 My booking, bill &amp; payment</button>}
     <a className="kc-btn kc-line" href={`/track?code=${encodeURIComponent(s.tracking_number)}`}>Open full tracking page</a>
   </>;
 }
@@ -461,17 +461,19 @@ export function ChatAssistant() {
       case "address": return say(<WarehouseAddress name={data!.name as WarehouseName} act={act} />);
       case "malabon": return say(<Malabon />);
       case "payment": return say(<Payment act={act} />);
-      case "status": setWaiting({ kind: "ref" }); return say(<p>Type your booking number (e.g. <b>KD-BOOK-0012</b>). 🔎</p>);
+      case "status": setWaiting({ kind: "ref" }); return say(<p>Type your tracking number (e.g. <b>KDSEA-123456</b>). 🔎</p>);
+      case "bill": setWaiting({ kind: "last4", ref: data!.ref }); return say(<p>For privacy, type the <b>last 4 digits</b> of the mobile number you used for the booking. 🔒</p>);
       case "book": return say(<>
         <p>Let&apos;s book it! 🙌 Just 2 steps. Our team reviews it and sends your cargo code once approved.</p>
         <BookingForm preset={data} done={(ref, phone) => {
           say(<>
             <p>Booking sent! 🎉 Thank you!</p>
-            <div className="kc-code"><small>BOOKING NUMBER</small><div>{ref}</div><CopyButton text={ref} label="Copy" /></div>
+            <div className="kc-code"><small>YOUR TRACKING NUMBER</small><div>{ref}</div><CopyButton text={ref} label="Copy" /></div>
+            <p className="kc-small">This is also your booking number. Use it to track your shipment from start to delivery.</p>
             <p>Our team will review it and compute your rate. Once <b>approved</b>, you&apos;ll get your <b>cargo code</b>, <b>warehouse address</b> and <b>estimated rate</b>.</p>
             <p><b>To confirm faster:</b> send <b>{ref}</b> to our Messenger page. 👇</p>
             <TeamButton label={`💬 Send ${ref} on Messenger`} />
-            <p className="kc-small">Check the status anytime: type <b>{ref}</b> here, then the last 4 digits of your mobile ({phone.slice(-4)}).</p>
+            <p className="kc-small">Track it anytime: type <b>{ref}</b> here. To see your bill, you&apos;ll also need the last 4 digits of your mobile ({phone.slice(-4)}).</p>
           </>);
         }} />
       </>);
@@ -499,23 +501,23 @@ export function ChatAssistant() {
     setText("");
     say(value, "me");
     const compact = value.replace(/\s+/g, "").toUpperCase();
-    const booking = bookingPattern.exec(compact);
+    const ref = normalizeBookingRef(compact);
     if (waiting?.kind === "last4") {
       const digits = value.replace(/\D/g, "");
       if (digits.length !== 4) return say(<p>Please type just 4 digits, e.g. 4567.</p>);
       setWaiting(null);
       return say(<StatusAnswer bookingRef={waiting.ref} last4={digits} act={act} />);
     }
-    if (booking) {
-      const ref = `KD-BOOK-${booking[1]}`;
+    // My Booking (or an old KD-BOOK number): go straight to the private booking/bill lookup.
+    if (ref && (waiting?.kind === "ref" || ref.startsWith("KD-BOOK-"))) {
       setWaiting({ kind: "last4", ref });
       return say(<p>For privacy, type the <b>last 4 digits</b> of the mobile number you used for the booking. 🔒</p>);
     }
     if (trackingPattern.test(compact) || waiting?.kind === "track") {
       setWaiting(null);
-      return say(<TrackAnswer code={compact} />);
+      return say(<TrackAnswer code={ref || compact} act={act} />);
     }
-    if (waiting?.kind === "ref") return say(<p>A booking number looks like this: <b>KD-BOOK-0012</b>. Please type it again. 🙏</p>);
+    if (waiting?.kind === "ref") return say(<p>A tracking number looks like this: <b>KDSEA-123456</b>. Please type it again. 🙏</p>);
     const intent = intents.find(([pattern]) => pattern.test(value));
     run(intent ? intent[1] : "unknown");
   };

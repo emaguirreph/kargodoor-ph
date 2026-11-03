@@ -15,3 +15,12 @@ export function normalizePhMobile(raw: unknown): string | null {
       : digits;
   return /^09\d{9}$/.test(local) ? local : null;
 }
+
+/** Accepts spacing/dash variants people type ("kdsea 123456", "KD-SEA-123456"). */
+export function normalizeBookingRef(raw: unknown) {
+  const compact = String(raw ?? "").replace(/[\s-]+/g, "").toUpperCase();
+  const tracking = /^KD(SEA|AIR)(\d{6})$/.exec(compact);
+  if (tracking) return `KD${tracking[1]}-${tracking[2]}`;
+  const legacy = /^KDBOOK(\d{4,})$/.exec(compact);
+  return legacy ? `KD-BOOK-${legacy[1]}` : "";
+}

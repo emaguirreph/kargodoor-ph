@@ -3,8 +3,8 @@
 import { z } from "zod";
 import { getAirEstimate, getSeaEstimate } from "./shipping-estimate.mjs";
 
-import { bookingWarehouses, normalizePhMobile } from "./booking-rules";
-export { bookingWarehouses, bookingFileMaxBytes, bookingMaxPhotos, bookingDailyLimit, normalizePhMobile } from "./booking-rules";
+import { bookingWarehouses, normalizeBookingRef, normalizePhMobile } from "./booking-rules";
+export { bookingWarehouses, bookingFileMaxBytes, bookingMaxPhotos, bookingDailyLimit, normalizeBookingRef, normalizePhMobile } from "./booking-rules";
 
 const text = (max: number) => z.string().trim().max(max);
 const positive = (max: number) => z.coerce.number().finite().min(0).max(max);
@@ -43,15 +43,12 @@ export function bookingEstimate(service: "sea" | "air", cbm: number, weight: num
   return { amount: Math.round(estimate.amount * 100), tier: estimate.packageName };
 }
 
-export const bookingRefPattern = /^KD-BOOK-\d{4,}$/i;
-export const formatBookingRef = (n: number) => `KD-BOOK-${String(n).padStart(4, "0")}`;
-export const nextBookingNumber = (refs: string[]) =>
-  refs.reduce((max, ref) => Math.max(max, Number(String(ref).replace(/^KD-BOOK-/i, "")) || 0), 0) + 1;
-
+/** A booking's number is its tracking number (KDSEA-123456 / KDAIR-123456); early bookings used KD-BOOK-0001. */
+export const bookingRefPattern = /^(KD(SEA|AIR)-\d{6}|KD-BOOK-\d{4,})$/i;
 /** A booking is looked up with its reference plus the last 4 digits of the phone used. */
 export function bookingLookup(raw: unknown) {
   const value = (raw ?? {}) as { ref?: unknown; last4?: unknown };
-  const ref = String(value.ref ?? "").trim().toUpperCase();
+  const ref = normalizeBookingRef(value.ref);
   const last4 = String(value.last4 ?? "").replace(/\D/g, "");
   if (!bookingRefPattern.test(ref) || last4.length !== 4) return null;
   return { ref, last4 };
