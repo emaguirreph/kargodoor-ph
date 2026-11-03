@@ -739,24 +739,17 @@ html:has(.v5) body{background:#f4f7fc}
 .v5 .stable .cat{display:block;color:var(--muted);font-size:.76rem;font-weight:600;margin-top:1px}
 /* KargoDoor Assistant (chat window behind the Message Us button) */
 .v5 .fab .kc-fab{border:0;padding:0;cursor:pointer;overflow:hidden}
-/* Chat button: solid orange so it stands out on white and on the navy calculator band. */
-html .v5 .fab .kc-fab{width:66px;height:66px;background:#ff6b00;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;box-shadow:0 0 0 3px #fff,0 12px 26px -8px rgba(0,0,0,.45);animation:kc-pulse 2.4s infinite}
-html .v5 .fab .kc-fab svg{width:30px;height:30px;transform:none}
-html .v5 .fab .kc-fab span{font:800 .62rem/1 var(--f-b);letter-spacing:.04em;text-transform:uppercase}
-html .v5 .fab .kc-fab:hover{background:#ff7f1f}
-@keyframes kc-pulse{50%{box-shadow:0 0 0 3px #fff,0 0 0 11px rgba(255,107,0,.28),0 12px 26px -8px rgba(0,0,0,.45)}}
-@media (max-width:760px){html .v5 .fab .kc-fab{width:62px;height:62px}}
-@media (prefers-reduced-motion:reduce){html .v5 .fab .kc-fab{animation:none}}
-.v5 .kc-tease{position:fixed;z-index:61;right:calc(max(18px,env(safe-area-inset-right,0px)) + 108px);bottom:calc(36px + env(safe-area-inset-bottom,0px));max-width:230px;text-align:left;background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:16px 16px 4px 16px;padding:10px 30px 10px 13px;font:700 .8rem/1.4 var(--f-b);box-shadow:var(--shadow-s);cursor:pointer;animation:v5-viewIn .3s both}
-.v5 .kc-tease span{position:absolute;top:4px;right:8px;font-size:1.05rem;color:var(--muted)}
+.v5 .fab .kc-fab video{display:block;width:100%;height:100%;object-fit:cover}
+.v5 .kc-tease{position:fixed;z-index:61;right:calc(max(18px,env(safe-area-inset-right,0px)) + 108px);bottom:calc(36px + env(safe-area-inset-bottom,0px));max-width:230px;text-align:left;background:#ff6b00;color:#fff;border:2px solid #fff;border-radius:16px 16px 4px 16px;padding:10px 30px 10px 13px;font:700 .8rem/1.4 var(--f-b);box-shadow:0 14px 30px -10px rgba(255,107,0,.7);cursor:pointer;animation:v5-viewIn .3s both}
+.v5 .kc-tease span{position:absolute;top:4px;right:8px;font-size:1.05rem;color:#fff}
 .v5 .kdchat{position:fixed;z-index:80;right:max(18px,env(safe-area-inset-right,0px));bottom:calc(22px + env(safe-area-inset-bottom,0px));width:400px;height:min(680px,calc(100dvh - 44px));display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:22px;overflow:hidden;box-shadow:0 30px 70px -20px rgba(0,30,90,.55);font:500 .82rem/1.5 var(--f-b);color:var(--fg);animation:v5-viewIn .25s both}
 .v5 .kdchat *{box-sizing:border-box}
 .v5 .kdchat :where(button,input,select){font:inherit;color:inherit}
-.v5 .kc-hd{display:flex;align-items:center;gap:9px;padding:12px 12px 12px 14px;background:linear-gradient(135deg,var(--navy),var(--brand));color:#fff}
+.v5 .kc-hd{display:flex;align-items:center;gap:9px;padding:12px 12px 12px 14px;background:linear-gradient(135deg,#ff6b00,#ff8a1f);color:#fff}
 .v5 .kc-hd img{width:40px;height:40px;border-radius:50%;background:#fff;flex:none}
-.v5 .kc-t{flex:1;min-width:0}.v5 .kc-t b{display:block;font:800 .86rem/1.2 var(--f-h)}.v5 .kc-t small{display:flex;align-items:center;gap:5px;font-size:.66rem;color:#c8d6f3}
-.v5 .kc-dot{width:7px;height:7px;border-radius:50%;background:#7fd34c;display:inline-block}
-.v5 .kc-live{background:var(--green);color:#fff;border-radius:999px;padding:8px 10px;font:800 .64rem/1.1 var(--f-b);text-decoration:none;white-space:nowrap}
+.v5 .kc-t{flex:1;min-width:0}.v5 .kc-t b{display:block;font:800 .86rem/1.2 var(--f-h)}.v5 .kc-t small{display:flex;align-items:center;gap:5px;font-size:.66rem;color:#fff3e6}
+.v5 .kc-dot{width:7px;height:7px;border-radius:50%;background:#fff;display:inline-block}
+.v5 .kc-live{background:#fff;color:#e85d00;border-radius:999px;padding:8px 10px;font:800 .64rem/1.1 var(--f-b);text-decoration:none;white-space:nowrap}
 .v5 .kc-x{background:none;border:0;color:#fff;font-size:1.5rem;line-height:1;padding:2px 4px;cursor:pointer;opacity:.85}
 .v5 .kc-body{flex:1;overflow-y:auto;overscroll-behavior:contain;padding:14px 12px;display:flex;flex-direction:column;gap:9px;background:var(--bg)}
 .v5 .kc-b{max-width:90%;padding:10px 13px;border-radius:18px;overflow-wrap:anywhere}
