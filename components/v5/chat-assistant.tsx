@@ -4,6 +4,7 @@
 // Buttons and simple keyword answers only (no AI), so it is free to run.
 // Live data comes from /api/track (shipment status) and /api/bookings/*.
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { preload } from "react-dom";
 import { MessengerLink } from "@/components/messenger-link";
 import { trackEvent } from "@/lib/analytics";
 import { getAirEstimate, getSeaEstimate } from "@/lib/shipping-estimate.mjs";
@@ -65,46 +66,59 @@ function HowToImport({ act }: { act: (key: string) => void }) {
 }
 
 // Instructions for the customer's supplier in China: steps, code format, a sample carton label, and a copy-ready message.
-function supplierMessage(mark: string, address: string) {
+type BoxLabel = { mark: string; item: string; supplier: string; phone: string };
+const labelLines = (l: BoxLabel) => [l.mark, `Item: ${l.item}`, `Supplier no.: ${l.supplier}`, `PH phone: ${l.phone}`];
+
+function supplierMessage(label: BoxLabel, address: string) {
   return [
     "Hi! Please ship my order to my forwarder's warehouse:",
     address,
     "",
-    `Write this shipping mark on EVERY carton: ${mark}`,
+    "Write this shipping mark on EVERY carton:",
+    ...labelLines(label),
+    "",
     "Please include a packing list (item, quantity, number of cartons) and send me the courier tracking number after shipping. Thank you!",
     "",
     "您好！请把货发到我们的货代仓库：",
     address,
     "",
-    `每一箱都必须写上唛头：${mark}`,
+    "每一箱都必须写上以下唛头：",
+    label.mark,
+    `品名：${label.item}`,
+    `供应商电话：${label.supplier}`,
+    `菲律宾电话：${label.phone}`,
+    "",
     "请附上装箱单（品名、数量、箱数），发货后请把快递单号发给我。谢谢！",
   ].join("\n");
 }
 
-function SupplierGuide({ act, code, air, warehouse, name }: { act: (key: string, data?: Record<string, string>) => void; code?: string; air?: boolean; warehouse?: string; name?: string }) {
+function SupplierGuide({ act, code, air, warehouse, item, supplier, phone }: { act: (key: string, data?: Record<string, string>) => void; code?: string; air?: boolean; warehouse?: string; item?: string; supplier?: string; phone?: string }) {
   const sample = code ?? "KDOOR-1234";
   const mark = air ? `AIR ${sample}` : sample;
   const address = warehouse && warehouse in warehouseAddresses ? warehouseAddresses[warehouse as WarehouseName] : "";
+  const label: BoxLabel = code
+    ? { mark, item: item || "(item name)", supplier: supplier || "(supplier phone)", phone: phone || "(your mobile)" }
+    : { mark, item: "Phone cases", supplier: "138 0000 0000", phone: "0917 123 4567" };
   return <>
     <p><b>Shipping instructions for your supplier</b> 📝</p>
     <ol className="kc-steps">
       <li><i>1</i><span><b>Book and get your cargo code</b>Book here in the chat. Once approved, we send your cargo code (KDOOR-####) and warehouse.</span></li>
       <li><i>2</i><span><b>Send the address to your supplier</b>Copy the warehouse address for your route and send it to your supplier.</span></li>
-      <li><i>3</i><span><b>Label every box</b>Your supplier writes your cargo code on EVERY box and adds a packing list.</span></li>
+      <li><i>3</i><span><b>Label every box</b>Your supplier writes your cargo code, item name, supplier number and your PH phone on EVERY box, and adds a packing list.</span></li>
     </ol>
     <p className="kc-lbl">USE THE RIGHT CODE FOR YOUR ROUTE</p>
     <div className="kc-fmt"><span className="kc-tag-sea">Sea → Manila</span><code>{code ?? "KDOOR-1234"}</code><small className="kc-small">3–5 weeks</small></div>
     <div className="kc-fmt"><span className="kc-tag-air">Air → Manila</span><code>AIR {code ?? "KDOOR-1234"}</code><small className="kc-small">Add &quot;AIR&quot; before the code · 5–7 days</small></div>
     <p className="kc-lbl">{code ? "YOUR BOX LABEL" : "EXAMPLE BOX LABEL"}</p>
-    <div className="kc-label"><b>{mark}</b><span>{name ?? "Juan Dela Cruz"}</span><span>CTN 1 / 5</span></div>
+    <div className="kc-label"><b>{label.mark}</b><span>Item: {label.item}</span><span>Supplier no.: {label.supplier}</span><span>PH phone: {label.phone}</span></div>
     {code
       ? <>
         <p className="kc-small">Send this to your supplier (English + Chinese):</p>
-        <pre className="kc-addr">{supplierMessage(mark, address || "(KargoDoor warehouse address)")}</pre>
-        <CopyButton text={supplierMessage(mark, address || "(KargoDoor warehouse address)")} label="Copy message for supplier" />
+        <pre className="kc-addr">{supplierMessage(label, address || "(KargoDoor warehouse address)")}</pre>
+        <CopyButton text={supplierMessage(label, address || "(KargoDoor warehouse address)")} label="Copy message for supplier" />
       </>
       : <>
-        <p className="kc-warn">⚠️ <b>1234 is only an example.</b> Use your own cargo code. You get it once you book and we approve it. Boxes without a code can&apos;t be identified.</p>
+        <p className="kc-warn">⚠️ <b>This is only an example.</b> Use your own cargo code. You get it once you book and we approve it. Boxes without a code can&apos;t be identified.</p>
         <div className="kc-quick"><button type="button" onClick={() => act("book")}>📦 Book now</button><button type="button" onClick={() => act("warehouse")}>🏭 Warehouse addresses</button></div>
       </>}
   </>;
@@ -387,7 +401,7 @@ function Thumb({ file }: { file: File }) {
 
 type Status = {
   ref: string; name: string; status: "New" | "Approved" | "Declined"; messengerConfirmed: boolean; service: string; warehouse: string; estimate: number;
-  shipment: { cargoCode: string; trackingNumber: string; status: string; warehouse: string; approvedAmount: number } | null;
+  shipment: { cargoCode: string; trackingNumber: string; status: string; warehouse: string; approvedAmount: number; item?: string; supplier?: string; phone?: string } | null;
   bill: { invoiceNumber: string; total: number; paid: number; balance: number; status: string } | null;
   proof: { status: string; uploadedAt: string } | null;
 };
@@ -458,7 +472,7 @@ function StatusAnswer({ bookingRef, last4, act }: { bookingRef: string; last4: s
       <div className="kc-card"><div><span>Warehouse</span><b>{routeLabel(sh.warehouse)}</b></div><div><span>Estimated rate</span><b>{peso(sh.approvedAmount)}</b></div><div><span>Tracking no.</span><b>{sh.trackingNumber}</b></div><div><span>Status</span><b>{sh.status}</b></div></div>
       <p className="kc-small">💡 <b>Nothing to pay yet.</b> You pay once your cargo arrives in Malabon, before it is released or delivered.</p>
       {sh.warehouse in warehouseAddresses && <button type="button" className="kc-btn kc-green" onClick={() => act("address", { name: sh.warehouse })}>🏭 Get {routeLabel(sh.warehouse)} address</button>}
-      <button type="button" className="kc-btn kc-line" onClick={() => act("supplier", { code: sh.cargoCode, air: air ? "1" : "", warehouse: sh.warehouse, name: s.name })}>📝 Instructions for your supplier</button>
+      <button type="button" className="kc-btn kc-line" onClick={() => act("supplier", { code: sh.cargoCode, air: air ? "1" : "", warehouse: sh.warehouse, item: sh.item ?? "", supplier: sh.supplier ?? "", phone: sh.phone ?? "" })}>📝 Instructions for your supplier</button>
     </>}
     {s.bill && !paid && <>
       <p>📦 Bill for <b>{sh.trackingNumber}</b>. Please pay before release or delivery:</p>
@@ -492,7 +506,11 @@ const intents: Array<[RegExp, string]> = [
   [/\b(hi|hello|hey|good (morning|afternoon|evening)|kumusta)\b/i, "hello"],
 ];
 
+const fabPoster = "/assets/kargodoor-message-us-poster.webp";
+
 export function ChatAssistant() {
+  // Fetch the button picture first so the button shows right away, before the video loads.
+  preload(fabPoster, { as: "image", fetchPriority: "high" });
   const [open, setOpen] = useState(false);
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [text, setText] = useState("");
@@ -528,7 +546,7 @@ export function ChatAssistant() {
       case "how": return say(<HowToImport act={act} />);
       case "warehouse": return say(<WarehouseList pick={(name) => { say(routeLabel(name), "me"); say(<WarehouseAddress name={name} act={act} />); }} />);
       case "address": return say(<WarehouseAddress name={data!.name as WarehouseName} act={act} />);
-      case "supplier": return say(<SupplierGuide act={act} code={data?.code} air={data?.air === "1"} warehouse={data?.warehouse} name={data?.name} />);
+      case "supplier": return say(<SupplierGuide act={act} code={data?.code} air={data?.air === "1"} warehouse={data?.warehouse} item={data?.item} supplier={data?.supplier} phone={data?.phone} />);
       case "malabon": return say(<Malabon />);
       case "payment": return say(<Payment act={act} />);
       case "status": setWaiting({ kind: "ref" }); return say(<p>Type your tracking number (e.g. <b>KDSEA-123456</b>). 🔎</p>);
@@ -633,7 +651,8 @@ export function ChatAssistant() {
     {teaser && !open && <button type="button" className="kc-tease" onClick={openChat}>Hi! 👋 Have a question? Tracking, rates or booking, I can help.<span aria-hidden="true" onClick={(e) => { e.stopPropagation(); setTeaser(false); try { sessionStorage.setItem("kd-chat-tease-closed", "1"); } catch { /* storage blocked */ } }}>×</span></button>}
     <div className="fab">
       <button type="button" className="kc-fab" aria-label="Open the KargoDoor chat assistant" aria-expanded={open} onClick={() => (open ? setOpen(false) : openChat())}>
-        <video autoPlay loop muted playsInline preload="auto" poster="/assets/kargodoor-message-us-poster.webp" aria-hidden="true">
+        <video autoPlay loop muted playsInline preload="auto" poster={fabPoster} aria-hidden="true">
+          <source src="/assets/kargodoor-message-us-small.mp4" type="video/mp4" />
           <source src="/assets/kargodoor-message-us-small.webm" type="video/webm" />
         </video>
       </button>

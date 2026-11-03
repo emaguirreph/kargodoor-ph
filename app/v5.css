@@ -738,7 +738,7 @@ html:has(.v5) body{background:#f4f7fc}
 .v5 .stable .item{color:var(--fg);font-weight:700}
 .v5 .stable .cat{display:block;color:var(--muted);font-size:.76rem;font-weight:600;margin-top:1px}
 /* KargoDoor Assistant (chat window behind the Message Us button) */
-.v5 .fab .kc-fab{border:0;padding:0;cursor:pointer;overflow:hidden}
+.v5 .fab .kc-fab{border:0;padding:0;cursor:pointer;overflow:hidden;background:#fff url(/assets/kargodoor-message-us-poster.webp) center/cover no-repeat}
 .v5 .fab .kc-fab video{display:block;width:100%;height:100%;object-fit:cover}
 .v5 .kc-tease{position:fixed;z-index:61;right:calc(max(18px,env(safe-area-inset-right,0px)) + 108px);bottom:calc(36px + env(safe-area-inset-bottom,0px));max-width:230px;text-align:left;background:#ff6b00;color:#fff;border:2px solid #fff;border-radius:16px 16px 4px 16px;padding:10px 30px 10px 13px;font:700 .8rem/1.4 var(--f-b);box-shadow:0 14px 30px -10px rgba(255,107,0,.7);cursor:pointer;animation:v5-viewIn .3s both}
 .v5 .kc-tease span{position:absolute;top:4px;right:8px;font-size:1.05rem;color:#fff}
