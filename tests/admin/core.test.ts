@@ -2014,11 +2014,12 @@ test("proof of payment: upload and replace on a customer payment and an expense,
   assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM payment_proofs WHERE entity_type = 'expense'").get()!.n, 0);
 });
 
-test("Transfer fee box splits the ₱30 from the base fee and saves the GCash to UnionBank fee as a linked Bank / Payment Fees expense", async () => {
+test("Transfer fee: ₱30 split on the shipment, Ni Hao fee merged into its Expenses row, GCash to UnionBank saved once per transfer", async () => {
   const { db, sql, user } = database();
-  const { recordGcashTransferFee, readTransferFeesPaid, splitFreightCharge, transferFeeSection, transferFeesPaidSummary, lastGcashTransferFee } = await import("../../lib/admin/transfer-fees");
+  const { recordGcashTransfer, readTransferFeesPaid, splitFreightCharge, transferFeeSection, transferFeesPaidSummary, lastGcashTransferFee, gcashTransferSection } = await import("../../lib/admin/transfer-fees");
   const { recordNiHaoPayment } = await import("../../lib/admin/nihao-payment");
   const { readShipmentStatement } = await import("../../lib/admin/shipment-statement");
+  const { mergeNiHaoFees, expensesPage } = await import("../../lib/admin/expenses");
   const customerId = randomUUID();
   const shipmentId = randomUUID();
   sql.prepare("INSERT INTO customers (id, customer_code, full_name, mobile, created_at, updated_at) VALUES (?,?,?,?,?,?)")
@@ -2029,29 +2030,43 @@ test("Transfer fee box splits the ₱30 from the base fee and saves the GCash to
   assert.deepEqual(splitFreightCharge(53000, 3000), { base: 50000, fee: 3000, charge: 53000 });
   assert.deepEqual(splitFreightCharge(2000, 3000), { base: 0, fee: 2000, charge: 2000 });
 
-  let box = transferFeeSection({ path: "/admin/shipments", csrf: "t", shipmentId, shippingCharge: 53000, transferFeeCollected: 3000, fees: [], canWrite: true });
+  let box = transferFeeSection({ shippingCharge: 53000, transferFeeCollected: 3000, fees: [] });
   assert.match(box, /₱500\.00<\/strong> KargoDoor base fee \+ <strong>₱30\.00<\/strong> transfer fee/);
-  assert.match(box, /gcash_transfer_fee/);
-  assert.equal(await lastGcashTransferFee(db), null);
+  assert.doesNotMatch(box, /<form/);
 
-  await recordNiHaoPayment(db, new URLSearchParams({ csrf: "t", action: "nihao_paid", id: shipmentId, expense_date: "2026-11-03", amount: "350.00", paid_from: "UnionBank", transfer_fee: "15.00", reference_number: "", notes: "" }), actor);
-  const form = new URLSearchParams({ csrf: "t", action: "gcash_transfer_fee", id: shipmentId, expense_date: "2026-11-03", amount: "15.00", reference_number: "GC-1" });
-  await recordGcashTransferFee(db, form, actor);
+  await recordNiHaoPayment(db, new URLSearchParams({ csrf: "t", action: "nihao_paid", id: shipmentId, expense_date: "2026-11-03", amount: "350.00", paid_from: "UnionBank", transfer_fee: "10.00", reference_number: "", notes: "" }), actor);
   const fees = await readTransferFeesPaid(db, "kdair-900009");
-  assert.equal(fees.length, 2);
-  assert.deepEqual(transferFeesPaidSummary(fees).split(" · ").sort(), ["₱15.00 GCash to UnionBank", "₱15.00 UnionBank to Ni Hao"]);
-  assert.equal(await lastGcashTransferFee(db), 1500);
+  assert.equal(transferFeesPaidSummary(fees), "₱10.00 UnionBank to Ni Hao");
+  box = transferFeeSection({ shippingCharge: 53000, transferFeeCollected: 3000, fees });
+  assert.match(box, /Paid ₱10\.00 of ₱30\.00 collected \(₱20\.00 left over\)/);
+  assert.equal((await readShipmentStatement(db, shipmentId)).profitAfterFees, 17000);
+
+  // GCash to UnionBank: one expense per transfer, no tracking number.
+  assert.equal(await lastGcashTransferFee(db), null);
+  const move = new URLSearchParams({ csrf: "t", action: "gcash_to_unionbank", expense_date: "2026-11-03", moved_amount: "2500", amount: "15.00", reference_number: "GC-1", notes: "" });
+  await recordGcashTransfer(db, move, actor);
   const expense = sql.prepare("SELECT * FROM expenses WHERE description LIKE 'Transfer fee: GCash to UnionBank%'").get()!;
+  assert.equal(expense.description, "Transfer fee: GCash to UnionBank (moved ₱2,500.00)");
   assert.equal(expense.category, "Bank / Payment Fees");
+  assert.equal(expense.amount, 1500);
   assert.equal(expense.paid_from_account, "kd-gcash");
-  assert.equal(expense.tracking_number, "KDAIR-900009");
-  assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM activity_log WHERE action = 'transfer_fee_paid'").get()!.n, 1);
-  box = transferFeeSection({ path: "/admin/shipments", csrf: "t", shipmentId, shippingCharge: 53000, transferFeeCollected: 3000, fees, canWrite: true });
-  assert.match(box, /Paid ₱30\.00 of ₱30\.00 collected\./);
-  // The statement already counts it: ₱530 − ₱350 − ₱30 fees = ₱150.
-  const statement = await readShipmentStatement(db, shipmentId);
-  assert.equal(statement.transferFees, 3000);
-  assert.equal(statement.profitAfterFees, 15000);
-  await assert.rejects(recordGcashTransferFee(db, new URLSearchParams({ ...Object.fromEntries(form), extra: "x" }), actor), /Unexpected/);
-  await assert.rejects(recordGcashTransferFee(db, new URLSearchParams({ ...Object.fromEntries(form), amount: "0" }), actor));
+  assert.equal(expense.tracking_number, null);
+  assert.equal(await lastGcashTransferFee(db), 1500);
+  assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM activity_log WHERE action = 'gcash_to_unionbank'").get()!.n, 1);
+  assert.match(gcashTransferSection({ path: "/x", csrf: "t", suggestedFee: 1500 }), /value="15\.00"/);
+  await assert.rejects(recordGcashTransfer(db, new URLSearchParams({ ...Object.fromEntries(move), id: "x" }), actor), /Unexpected/);
+  await assert.rejects(recordGcashTransfer(db, new URLSearchParams({ ...Object.fromEntries(move), moved_amount: "-5" }), actor), /amount moved/);
+  await assert.rejects(recordGcashTransfer(db, new URLSearchParams({ ...Object.fromEntries(move), amount: "0" }), actor));
+
+  // Expenses list: Ni Hao ₱350 + ₱10 fee is one row; the GCash transfer is its own row.
+  const all = sql.prepare("SELECT * FROM expenses ORDER BY expense_date DESC, created_at DESC").all() as Record<string, unknown>[];
+  const merged = mergeNiHaoFees(all);
+  assert.equal(all.length, 3);
+  assert.equal(merged.length, 2);
+  assert.equal(merged.find((row) => row.category === "Freight / Ni Hao Cost")!.fee!.amount, 1000);
+  const html = (await (await expensesPage(db, new URL("http://x/admin/finance/expenses"), actor, "t")).text());
+  assert.match(html, /₱360\.00<small class="muted exp-split">₱350\.00 \+ ₱10\.00 fee<\/small>/);
+  assert.match(html, /Edit fee/);
+  assert.match(html, /₱375\.00/, "total still counts every record");
+  assert.match(html, /Moved GCash to UnionBank/);
 });
