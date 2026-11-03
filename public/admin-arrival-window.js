@@ -26,7 +26,7 @@
     ? `${months[a.getUTCMonth()]} ${a.getUTCDate()} – ${months[b.getUTCMonth()]} ${b.getUTCDate()}, ${b.getUTCFullYear()}`
     : `${months[a.getUTCMonth()]} ${a.getUTCDate()}, ${a.getUTCFullYear()} – ${months[b.getUTCMonth()]} ${b.getUTCDate()}, ${b.getUTCFullYear()}`;
   const update = () => {
-    box.hidden = ["Malabon Warehouse", "Delivered", "Cancelled"].includes(status?.value || "");
+    box.hidden = status?.value === "Cancelled";
     const window = windows[service?.value || ""];
     const date = received?.value || "";
     if (!window || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
