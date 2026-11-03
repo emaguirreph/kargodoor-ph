@@ -37,11 +37,13 @@ export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
 
-    const trackingNumber =
+    const rawCode =
       url.searchParams
         .get("code")
         ?.trim()
         .toUpperCase();
+    const trackingNumber =
+      rawCode?.replace(/^KD-?(SEA|AIR|FCL)-?(\d{6,})$/, "KD$1-$2");
 
     if (!trackingNumber) {
       return Response.json(
@@ -97,6 +99,27 @@ export async function GET(request: Request) {
         .first<Shipment>();
 
     if (!shipment) {
+      // A chat booking gets its tracking number right away; before approval it has no shipment yet.
+      const booking = await env.ADMIN_DB
+        .prepare("SELECT booking_ref, service_type, status, created_at FROM bookings WHERE booking_ref = ? AND status = 'New' LIMIT 1")
+        .bind(trackingNumber)
+        .first<{ booking_ref: string; service_type: string; status: string; created_at: string }>()
+        .catch(() => null);
+      if (booking) {
+        return Response.json({
+          chat_booking: true,
+          tracking_number: booking.booking_ref,
+          freight_type: booking.service_type,
+          origin_warehouse: null,
+          warehouse_received_date: null,
+          current_status: "Booking Under Review",
+          status_message: "We received your booking and our team is reviewing it. You'll get your cargo code and warehouse address once it is approved.",
+          flight_date: null,
+          remarks: null,
+          last_updated: booking.created_at,
+          standard_transit: booking.service_type === "Air Freight" ? "5–7 days from departure" : "3–5 weeks from departure",
+        });
+      }
       return Response.json(
         {
           error:
@@ -108,7 +131,15 @@ export async function GET(request: Request) {
       );
     }
 
+    const chatBooking = await env.ADMIN_DB
+      .prepare("SELECT 1 AS found FROM bookings WHERE booking_ref = ? LIMIT 1")
+      .bind(shipment.tracking_number)
+      .first()
+      .catch(() => null);
+
     return Response.json({
+      chat_booking: Boolean(chatBooking),
+
       tracking_number:
         shipment.tracking_number,
 

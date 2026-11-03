@@ -140,7 +140,10 @@ async function approveBooking(db: D1Database, user: AdminUser, booking: Row, for
   const now = new Date().toISOString();
   const customerId = existing ? String(existing.id) : randomUUID();
   const customerCode = existing ? String(existing.customer_code) : await generatedIdentifier(db, "customers", {});
-  const trackingNumber = await generatedIdentifier(db, "shipments", { service_type: String(booking.service_type) });
+  // The booking number is already the tracking number (KDSEA-/KDAIR-); keep it unless a shipment took it.
+  const ref = String(booking.booking_ref ?? "");
+  const refFree = /^KD(SEA|AIR)-\d{6}$/.test(ref) && !(await db.prepare("SELECT 1 FROM shipments WHERE tracking_number = ?").bind(ref).first());
+  const trackingNumber = refFree ? ref : await generatedIdentifier(db, "shipments", { service_type: String(booking.service_type) });
   if (!customerCode || !trackingNumber) throw new AdminError("Unable to reserve an identifier. Please try again.", 409);
   const shipmentId = randomUUID();
   const air = booking.service_type === "Air Freight";

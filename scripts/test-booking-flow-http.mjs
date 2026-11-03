@@ -86,12 +86,15 @@ try {
   res = await api("/api/bookings", bookingForm(booking));
   assert.equal(res.status, 200, await res.clone().text());
   const made = await res.json();
-  assert.equal(made.ref, "KD-BOOK-0001");
+  assert.match(made.ref, /^KDSEA-\d{6}$/, "booking number is a sea tracking number");
+  let tracked = await (await retry(() => fetch(`${origin}/api/track?code=${made.ref.replace("-", "")}`))).json();
+  assert.equal(tracked.current_status, "Booking Under Review");
+  assert.equal(tracked.chat_booking, true);
   assert.ok(made.estimate > 0);
   const saved = sqlRows("SELECT id, phone, status, estimate_amount FROM bookings")[0];
   assert.equal(saved.phone, "09171234567");
   assert.equal(sqlRows("SELECT COUNT(*) AS n FROM booking_files")[0].n, 1);
-  step(`Booking ${made.ref} saved (phone stored as 09171234567, 1 photo, estimate ₱${made.estimate})`);
+  step(`Booking ${made.ref} saved; tracking shows Booking Under Review (phone stored as 09171234567, 1 photo, estimate ₱${made.estimate})`);
 
   // 3. Chat lookup needs the last 4 digits; no cargo code before approval.
   res = await api("/api/bookings/status", { ref: made.ref, last4: "0000" });
@@ -131,7 +134,10 @@ try {
   assert.equal(approved.status, "Approved");
   assert.ok(approved.messenger_confirmed_at);
   assert.match(approved.customer_code, /^KDOOR-\d{4}$/);
-  assert.match(approved.tracking_number, /^KDSEA-/);
+  assert.equal(approved.tracking_number, made.ref, "shipment keeps the booking's tracking number");
+  tracked = await (await retry(() => fetch(`${origin}/api/track?code=${made.ref}`))).json();
+  assert.equal(tracked.current_status, "Awaiting Supplier Dispatch");
+  assert.equal(tracked.chat_booking, true);
   assert.equal(approved.sstatus, "Awaiting Supplier Dispatch");
   assert.equal(approved.shipping_charge, approved.approved_amount);
   html = await (await get(`/admin/bookings?id=${saved.id}`)).text();

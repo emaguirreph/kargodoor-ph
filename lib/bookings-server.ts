@@ -3,10 +3,10 @@
 // back the paid invoice PDF. Every customer-facing answer uses only the
 // booking's own records.
 import type { D1Database, D1PreparedStatement } from "@cloudflare/workers-types";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomInt, randomUUID } from "node:crypto";
 import {
   bookingDailyLimit, bookingEstimate, bookingFileMaxBytes, bookingInput, bookingMaxPhotos,
-  firstName, formatBookingRef, nextBookingNumber, type BookingInput,
+  firstName, type BookingInput,
 } from "./bookings";
 import { sniffNiHaoFile } from "./admin/nihao-details";
 import { readShipmentBilling } from "./admin/shipment-payment";
@@ -69,9 +69,16 @@ export async function createBooking(db: D1Database, form: FormData, ip: string |
   const estimate = bookingEstimate(input.service, input.cbm, input.weight);
   const id = randomUUID();
   const now = new Date().toISOString();
+  // The booking number is the shipment's tracking number from day one; approval keeps it.
+  const prefix = input.service === "air" ? "KDAIR" : "KDSEA";
+  const taken = new Set([
+    ...(await db.prepare("SELECT tracking_number AS n FROM shipments WHERE tracking_number IS NOT NULL").all<{ n: string }>()).results,
+    ...(await db.prepare("SELECT booking_ref AS n FROM bookings").all<{ n: string }>()).results,
+  ].map((row) => String(row.n).toUpperCase()));
   for (let attempt = 0; attempt < 5; attempt++) {
-    const refs = (await db.prepare("SELECT booking_ref FROM bookings").all<{ booking_ref: string }>()).results.map((row) => row.booking_ref);
-    const ref = formatBookingRef(nextBookingNumber(refs) + attempt);
+    let ref = "";
+    for (let tries = 0; tries < 100 && (!ref || taken.has(ref)); tries++) ref = `${prefix}-${randomInt(100_000, 1_000_000)}`;
+    taken.add(ref);
     const statements: D1PreparedStatement[] = [
       db.prepare(`INSERT INTO bookings (id, booking_ref, full_name, phone, email, service_type, delivery_mode, delivery_address, item_description,
           quantity_text, est_cbm, est_weight_kg, item_value, china_warehouse, supplier_contact, notes, estimate_amount, status, client_key, created_at, updated_at)
