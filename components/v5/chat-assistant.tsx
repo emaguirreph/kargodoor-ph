@@ -35,13 +35,13 @@ function TeamButton({ label = "💬 Talk to our team", className = "kc-btn kc-gr
 // ---------- static answers ----------
 
 const steps: Array<[string, string]> = [
-  ["Source your products", "Bili ka sa supplier mo sa 1688, Alibaba o Made-in-China."],
-  ["Book your shipment", "I-book dito sa chat: details, photos at size ng cargo mo."],
-  ["Ipa-pack nang maayos", "Strong box, bubble wrap sa fragile items, sealed nang maayos."],
-  ["Get your warehouse + cargo code", "Pag approved, ibibigay namin ang address at KDOOR code. Isusulat ito sa BAWAT box."],
-  ["Supplier sends to our warehouse", "Imi-measure at ive-verify namin ang cargo mo."],
-  ["We ship to PH", "Sea 3–5 weeks, Air 5–7 days. All-in na ang freight, customs, duties at taxes."],
-  ["Pay, then receive", "Pag dumating sa Malabon, bayaran ang bill (UnionBank), then pickup o delivery. FREE delivery for 2 CBM+ within 20 km."],
+  ["Source your products", "Buy from your supplier on 1688, Alibaba or Made-in-China."],
+  ["Book your shipment", "Book here in the chat with your details, photos and cargo size."],
+  ["Pack it well", "Use strong boxes, bubble wrap fragile items and seal everything properly."],
+  ["Get your warehouse + cargo code", "Once approved, we send the warehouse address and your KDOOR code. It must be written on EVERY box."],
+  ["Supplier sends to our warehouse", "We measure and check your cargo."],
+  ["We ship to PH", "Sea 3–5 weeks, Air 5–7 days. Freight, customs, duties and taxes are all included."],
+  ["Pay, then receive", "When it arrives in Malabon, pay the bill (UnionBank), then pick it up or we deliver. FREE delivery for 2 CBM+ within 20 km."],
 ];
 
 const routes: Array<{ name: WarehouseName; label: string; who: string }> = [
@@ -55,7 +55,7 @@ const routeLabel = (name: string) => (name === "Tongda Air Cargo" ? "Air (Fujian
 
 function HowToImport({ act }: { act: (key: string) => void }) {
   return <>
-    <p>Madali lang! Ganito ang process: 👇</p>
+    <p>It&apos;s easy! Here&apos;s how it works: 👇</p>
     <ol className="kc-steps">{steps.map(([title, text], i) => <li key={title}><i>{i + 1}</i><span><b>{title}</b>{text}</span></li>)}</ol>
     <div className="kc-quick"><button type="button" onClick={() => act("calc")}>🧮 Compute my rate</button><button type="button" onClick={() => act("book")}>📦 Book now</button></div>
   </>;
@@ -63,9 +63,9 @@ function HowToImport({ act }: { act: (key: string) => void }) {
 
 function WarehouseList({ pick }: { pick: (name: WarehouseName) => void }) {
   return <>
-    <p>Saan ang supplier mo? Piliin ang warehouse na pinakamalapit: 👇</p>
+    <p>Where is your supplier? Pick the closest warehouse: 👇</p>
     <div className="kc-routes">{routes.map((r) => <button type="button" key={r.name} onClick={() => pick(r.name)}><span>{r.label}</span><b>{r.who}</b></button>)}</div>
-    <p className="kc-small">Di sure kung saan? <TeamButton label="💬 Ask our team" className="kc-link" /></p>
+    <p className="kc-small">Not sure which one? <TeamButton label="💬 Ask our team" className="kc-link" /></p>
   </>;
 }
 
@@ -75,7 +75,7 @@ function WarehouseAddress({ name, act }: { name: WarehouseName; act: (key: strin
     <p><b>{routeLabel(name)} warehouse</b> 🏭</p>
     <pre className="kc-addr">{address}</pre>
     <CopyButton text={address} label="Copy address" />
-    <p className="kc-warn">⚠️ <b>Kailangan ng cargo code</b> (KDOOR-XXXX). Makukuha mo ito pag nag-book ka at na-approve. Isusulat ito ng supplier sa <b>bawat box</b>, o hindi namin makikilala ang package mo.</p>
+    <p className="kc-warn">⚠️ <b>You need a cargo code</b> (KDOOR-XXXX). You get it once you book and we approve it. Your supplier must write it on <b>every box</b>, or we can&apos;t identify your package.</p>
     <button type="button" className="kc-btn kc-green" onClick={() => act("book")}>📦 Book a shipment to get your code</button>
   </>;
 }
@@ -83,14 +83,14 @@ function WarehouseAddress({ name, act }: { name: WarehouseName; act: (key: strin
 function Malabon() {
   const text = "KargoDoor Malabon Warehouse\nPIN: FSW Commercial Warehouse Rental\nOld 59, New 36 Rivera St, Brgy Tañong, Malabon City\nGate: Gray · Landmark: McDonald's Rizal Ave";
   return <>
-    <p>Dito dumarating ang cargo mo sa Pilipinas: 🇵🇭</p>
+    <p>This is where your cargo arrives in the Philippines: 🇵🇭</p>
     <pre className="kc-addr">{text}{"\n\n"}🕖 Mon–Sat, 7:00 AM – 7:00 PM{"\n"}📞 0917 518 8335 · 0917 518 8339</pre>
     <div className="kc-row">
       <CopyButton text={text} label="Copy address" />
       <a className="kc-copy" href="https://www.google.com/maps/search/?api=1&query=36+Rivera+St+Ta%C3%B1ong+Malabon+City" target="_blank" rel="noopener noreferrer">📍 Google Maps</a>
     </div>
-    <p className="kc-warn">Pag pickup, dalhin ang <b>valid ID</b> at <b>invoice / proof of shipment</b>. Bawal ang truck na lampas 16 ft mula 9 AM–4 PM.</p>
-    <p className="kc-ok">🚚 FREE delivery for 2 CBM+ within 20 km ng Malabon.</p>
+    <p className="kc-warn">For pickup, bring a <b>valid ID</b> and your <b>invoice / proof of shipment</b>. Trucks over 16 ft are not allowed from 9 AM to 4 PM.</p>
+    <p className="kc-ok">🚚 FREE delivery for 2 CBM+ within 20 km of Malabon.</p>
   </>;
 }
 
@@ -105,10 +105,10 @@ function BankBox() {
 
 function Payment({ act }: { act: (key: string) => void }) {
   return <>
-    <p>Babayaran mo lang ang shipping fee <b>pag dumating na sa Malabon</b> ang cargo mo, bago i-release o i-deliver. Final amount ay base sa actual size na na-measure namin. 📏</p>
-    <p>Bayad via <b>bank transfer</b>:</p>
+    <p>You only pay the shipping fee <b>once your cargo arrives in Malabon</b>, before it is released or delivered. The final amount is based on the actual size we measure. 📏</p>
+    <p>Pay by <b>bank transfer</b>:</p>
     <BankBox />
-    <p>May bill ka na? I-check at i-upload ang proof of payment dito:</p>
+    <p>Already have a bill? Check it and upload your proof of payment here:</p>
     <button type="button" className="kc-btn" onClick={() => act("status")}>🔎 Check my booking / bill</button>
   </>;
 }
@@ -128,7 +128,7 @@ function TrackAnswer({ code }: { code: string }) {
     return () => { alive = false; };
   }, [code]);
   if (state.error) return <><p>{state.error}</p><TeamButton label="💬 Ask our team" /></>;
-  if (!state.data) return <p className="kc-wait">Hinahanap ko… 🔎</p>;
+  if (!state.data) return <p className="kc-wait">Looking it up… 🔎</p>;
   const s = state.data;
   return <>
     <p><span className="kc-pill">{s.current_status.toUpperCase()}</span></p>
@@ -158,7 +158,7 @@ function Calculator({ act }: { act: (key: string, data?: Record<string, string>)
   const calculate = (event: FormEvent) => {
     event.preventDefault();
     const c = Number(cbm), w = Number(weight);
-    if (!(w > 0) || (service === "sea" && !(c > 0)) || c < 0) { setError(service === "sea" ? "Ilagay ang CBM at kilo." : "Ilagay ang kilo (at CBM kung alam mo)."); return; }
+    if (!(w > 0) || (service === "sea" && !(c > 0)) || c < 0) { setError(service === "sea" ? "Please enter the CBM and weight." : "Please enter the weight (and CBM if you know it)."); return; }
     setError("");
     const estimate = service === "sea" ? getSeaEstimate(c, w) : getAirEstimate(Math.max(w, (c || 0) * 167));
     setResult({ amount: estimate.amount, tier: estimate.packageName });
@@ -180,7 +180,7 @@ function Calculator({ act }: { act: (key: string, data?: Record<string, string>)
       <div className="kc-small">Estimated all-in rate</div>
       <div className="kc-big">{peso(result.amount)}</div>
       <p><span className="kc-pill">{result.tier.toUpperCase()}</span> {service === "sea" ? "Sea, 3–5 weeks" : "Air, 5–7 days"}</p>
-      <p className="kc-small">Kasama na ang freight, customs, duties at taxes. Final price after namin ma-measure sa warehouse.</p>
+      <p className="kc-small">Includes freight, customs, duties and taxes. The final price is set after we measure your cargo at the warehouse.</p>
       <button type="button" className="kc-btn kc-green" onClick={() => act("book", { service, cbm, weight })}>📦 Book this shipment</button>
       <TeamButton label="💬 Ask our team" className="kc-btn kc-line" />
     </div>}
@@ -224,20 +224,20 @@ function BookingForm({ preset, done }: { preset?: Record<string, string>; done: 
 
   const next = (event: FormEvent) => {
     event.preventDefault();
-    if ((d.fullName ?? "").trim().length < 2) return setError("Pakilagay ang full name mo.");
-    if (!normalizePhMobile(d.phone)) return setError("Pakilagay ang tamang PH mobile number (09XX XXX XXXX).");
-    if (d.deliveryMode === "delivery" && (d.deliveryAddress ?? "").trim().length < 8) return setError("Pakilagay ang delivery address.");
+    if ((d.fullName ?? "").trim().length < 2) return setError("Please enter your full name.");
+    if (!normalizePhMobile(d.phone)) return setError("Please enter a valid PH mobile number (09XX XXX XXXX).");
+    if (d.deliveryMode === "delivery" && (d.deliveryAddress ?? "").trim().length < 8) return setError("Please enter your delivery address.");
     setError(""); setStep(2);
   };
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if ((d.item ?? "").trim().length < 2) return setError("Ano ang ipapadala mo?");
-    if (!(d.quantity ?? "").trim()) return setError("Pakilagay ang quantity.");
-    if (!(Number(d.weight) > 0) || (d.service === "sea" && !(Number(d.cbm) > 0))) return setError("Pakilagay ang estimated CBM at kilo. Di sure? Tap Talk to our team.");
-    if (!d.warehouse) return setError("Pumili ng warehouse (o Not sure).");
-    if ((d.supplier ?? "").trim().length < 2) return setError("Pakilagay ang supplier name o contact.");
-    if (!photos.length) return setError("Mag-add ng kahit 1 product photo.");
-    if (!consent) return setError("Paki-check ang box para ma-contact ka namin.");
+    if ((d.item ?? "").trim().length < 2) return setError("What are you shipping?");
+    if (!(d.quantity ?? "").trim()) return setError("Please enter the quantity.");
+    if (!(Number(d.weight) > 0) || (d.service === "sea" && !(Number(d.cbm) > 0))) return setError("Please enter the estimated CBM and weight. Not sure? Tap Talk to our team.");
+    if (!d.warehouse) return setError("Please choose a warehouse (or Not sure).");
+    if ((d.supplier ?? "").trim().length < 2) return setError("Please enter your supplier's name or contact.");
+    if (!photos.length) return setError("Please add at least 1 product photo.");
+    if (!consent) return setError("Please tick the box so we can contact you.");
     setError(""); setSending(true);
     try {
       const form = new FormData();
@@ -252,16 +252,16 @@ function BookingForm({ preset, done }: { preset?: Record<string, string>; done: 
       if (packing) form.append("packing", packing, packing.name);
       const response = await fetch("/api/bookings", { method: "POST", body: form });
       const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(body.error || "Hindi na-send ang booking. Please try again.");
+      if (!response.ok) throw new Error(body.error || "Your booking was not sent. Please try again.");
       trackEvent("generate_lead");
       done(body.ref, normalizePhMobile(d.phone) ?? "");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Hindi na-send ang booking. Please try again.");
+      setError(err instanceof Error ? err.message : "Your booking was not sent. Please try again.");
     } finally {
       setSending(false);
     }
   };
-  const unsure = <p className="kc-small">🤔 Di sure sa CBM, value o warehouse? <TeamButton label="💬 Talk to our team" className="kc-link" /></p>;
+  const unsure = <p className="kc-small">🤔 Not sure about the CBM, value or warehouse? <TeamButton label="💬 Talk to our team" className="kc-link" /></p>;
 
   if (step === 1) return <form className="kc-form" onSubmit={next}>
     <div className="kc-stp">STEP 1 OF 2 · YOUR DETAILS</div>
@@ -337,10 +337,10 @@ function ProofUpload({ bookingRef, last4, sent }: { bookingRef: string; last4: s
       form.append("file", file.type.startsWith("image/") ? await compressPhoto(file) : file, file.name);
       const r = await fetch("/api/bookings/proof", { method: "POST", body: form });
       const body = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(body.error || "Hindi na-upload. Please try again.");
+      if (!r.ok) throw new Error(body.error || "The upload failed. Please try again.");
       sent();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Hindi na-upload. Please try again.");
+      setError(err instanceof Error ? err.message : "The upload failed. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -357,8 +357,8 @@ function StatusAnswer({ bookingRef, last4, act }: { bookingRef: string; last4: s
   useEffect(() => {
     let alive = true;
     fetch("/api/bookings/status", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ref: bookingRef, last4 }) })
-      .then(async (r) => { const body = await r.json().catch(() => ({})); if (alive) setState(r.ok ? { data: body } : { error: body.error || "Hindi ko makita ang booking." }); })
-      .catch(() => alive && setState({ error: "Hindi ma-check ngayon. Please try again." }));
+      .then(async (r) => { const body = await r.json().catch(() => ({})); if (alive) setState(r.ok ? { data: body } : { error: body.error || "We couldn't find that booking." }); })
+      .catch(() => alive && setState({ error: "We can't check right now. Please try again." }));
     return () => { alive = false; };
   }, [bookingRef, last4, reload]);
   const download = async () => {
@@ -370,40 +370,40 @@ function StatusAnswer({ bookingRef, last4, act }: { bookingRef: string; last4: s
     window.setTimeout(() => URL.revokeObjectURL(url), 5000);
   };
   if (state.error) return <><p>{state.error}</p><TeamButton label="💬 Ask our team" /></>;
-  if (!state.data) return <p className="kc-wait">Chine-check ko… 🔎</p>;
+  if (!state.data) return <p className="kc-wait">Checking… 🔎</p>;
   const s = state.data;
-  if (s.status === "Declined") return <><p>Pasensya, {s.name}. Hindi namin ma-proceed ang booking na <b>{s.ref}</b> online. 🙏</p><TeamButton label="💬 Message our team" /></>;
+  if (s.status === "Declined") return <><p>Sorry, {s.name}. We can&apos;t process booking <b>{s.ref}</b> online. 🙏</p><TeamButton label="💬 Message our team" /></>;
   if (s.status === "New") return <>
     <p><span className="kc-pill kc-amber">FOR REVIEW</span></p>
-    <p>Salamat, {s.name}! Nire-review pa ng team ang booking <b>{s.ref}</b>. Estimated rate: <b>{peso(s.estimate)}</b>.</p>
-    {!s.messengerConfirmed && <><p>Para mas mabilis: send mo ang <b>{s.ref}</b> sa Messenger page namin para ma-confirm. 👇</p><TeamButton label={`💬 Send ${s.ref} on Messenger`} /></>}
+    <p>Thanks, {s.name}! Our team is still reviewing booking <b>{s.ref}</b>. Estimated rate: <b>{peso(s.estimate)}</b>.</p>
+    {!s.messengerConfirmed && <><p>To speed things up, send <b>{s.ref}</b> to our Messenger page to confirm. 👇</p><TeamButton label={`💬 Send ${s.ref} on Messenger`} /></>}
   </>;
   const sh = s.shipment!;
   const air = s.service === "Air Freight";
   const paid = s.bill?.status === "Paid";
   return <>
     <p><span className={`kc-pill${paid ? "" : " kc-blue-pill"}`}>{paid ? "PAID ✅" : s.bill ? "BILL READY" : "APPROVED ✅"}</span></p>
-    {!s.bill && <p>Approved na ang booking mo, {s.name}! 🎉</p>}
+    {!s.bill && <p>Your booking is approved, {s.name}! 🎉</p>}
     <div className="kc-code"><small>YOUR KARGODOOR CARGO CODE</small><div>{sh.cargoCode}</div><CopyButton text={air ? `AIR ${sh.cargoCode}` : sh.cargoCode} label="Copy code" /></div>
     {!s.bill && <>
-      <p><b>Ipasulat sa supplier sa BAWAT box:</b></p>
+      <p><b>Ask your supplier to write this on EVERY box:</b></p>
       <div className="kc-fmt"><span className={air ? "kc-tag-air" : "kc-tag-sea"}>{air ? "Air → Manila" : "Sea → Manila"}</span><code>{air ? `AIR ${sh.cargoCode}` : sh.cargoCode}</code></div>
       <div className="kc-card"><div><span>Warehouse</span><b>{routeLabel(sh.warehouse)}</b></div><div><span>Estimated rate</span><b>{peso(sh.approvedAmount)}</b></div><div><span>Tracking no.</span><b>{sh.trackingNumber}</b></div><div><span>Status</span><b>{sh.status}</b></div></div>
-      <p className="kc-small">💡 <b>Wala ka pang babayaran ngayon.</b> Babayaran mo lang pag dumating na sa Malabon ang cargo mo, bago i-release o i-deliver.</p>
+      <p className="kc-small">💡 <b>Nothing to pay yet.</b> You pay once your cargo arrives in Malabon, before it is released or delivered.</p>
       {sh.warehouse in warehouseAddresses && <button type="button" className="kc-btn kc-green" onClick={() => act("address", { name: sh.warehouse })}>🏭 Get {routeLabel(sh.warehouse)} address</button>}
     </>}
     {s.bill && !paid && <>
-      <p>📦 Bill para sa <b>{sh.trackingNumber}</b>. Bayaran bago i-release o i-deliver:</p>
+      <p>📦 Bill for <b>{sh.trackingNumber}</b>. Please pay before release or delivery:</p>
       <div className="kc-card"><div><span>Invoice</span><b>{s.bill.invoiceNumber}</b></div><div><span>Amount to pay</span><b className="kc-due">{peso(s.bill.balance)}</b></div>{s.bill.paid > 0 && <div><span>Paid so far</span><b>{peso(s.bill.paid)}</b></div>}</div>
       <BankBox />
       {s.proof?.status === "Pending"
-        ? <p className="kc-ok">✅ Na-receive namin ang proof of payment mo. Iche-check namin ito, then ire-release ang cargo mo.</p>
-        : <>{s.proof?.status === "Rejected" && <p className="kc-warn">Hindi pa namin nakita ang bayad sa huling proof. Paki-check at i-upload ulit, o message us.</p>}<ProofUpload bookingRef={s.ref} last4={last4} sent={() => setReload((n) => n + 1)} /></>}
+        ? <p className="kc-ok">✅ We received your proof of payment. We&apos;ll check it, then release your cargo.</p>
+        : <>{s.proof?.status === "Rejected" && <p className="kc-warn">We couldn&apos;t match your last proof to a payment. Please check and upload it again, or message us.</p>}<ProofUpload bookingRef={s.ref} last4={last4} sent={() => setReload((n) => n + 1)} /></>}
     </>}
     {paid && <>
       <div className="kc-card"><div><span>Invoice</span><b>{s.bill!.invoiceNumber}</b></div><div><span>Amount paid</span><b className="kc-paid">{peso(s.bill!.paid)}</b></div><div><span>Tracking no.</span><b>{sh.trackingNumber}</b></div></div>
       <button type="button" className="kc-btn kc-green" onClick={() => void download()}>📄 Download paid invoice (PDF)</button>
-      <p className="kc-small">Salamat, {s.name}! 🙏 Ire-release na namin ang cargo mo. I-message ka namin para sa pickup o delivery schedule.</p>
+      <p className="kc-small">Thank you, {s.name}! 🙏 Your cargo is ready for release. We&apos;ll message you about the pickup or delivery schedule.</p>
     </>}
   </>;
 }
@@ -444,48 +444,48 @@ export function ChatAssistant() {
 
   function welcome() {
     say(<>
-      <p>Hi! 👋 Welcome sa <b>KargoDoor PH</b>.</p>
-      <p>Ako ang KargoDoor Assistant. Pwede mo akong tanungin about <b>shipping rates</b>, <b>tracking</b>, <b>warehouse address</b>, at kung paano mag-import from China.</p>
-      <p>Kung di ko masagot, tap <b>Talk to our team</b> at sasagutin ka namin sa Messenger.</p>
-      <p><b>Ano&apos;ng maitutulong ko today?</b></p>
+      <p>Hi! 👋 Welcome to <b>KargoDoor PH</b>.</p>
+      <p>I&apos;m the KargoDoor Assistant. Ask me about <b>shipping rates</b>, <b>tracking</b>, <b>warehouse addresses</b>, and how to import from China.</p>
+      <p>If I can&apos;t answer, tap <b>Talk to our team</b> and we&apos;ll reply on Messenger.</p>
+      <p><b>How can I help you today?</b></p>
     </>);
   }
 
   function run(key: string, data?: Record<string, string>) {
     setWaiting(null);
     switch (key) {
-      case "track": setWaiting({ kind: "track" }); return say(<p>Sige! Type mo lang ang tracking number mo (e.g. KDSEA-123456 o KDOOR-1234). 📦</p>);
+      case "track": setWaiting({ kind: "track" }); return say(<p>Sure! Type your tracking number (e.g. KDSEA-123456 or KDOOR-1234). 📦</p>);
       case "calc": return say(<Calculator act={act} />);
       case "how": return say(<HowToImport act={act} />);
       case "warehouse": return say(<WarehouseList pick={(name) => { say(routeLabel(name), "me"); say(<WarehouseAddress name={name} act={act} />); }} />);
       case "address": return say(<WarehouseAddress name={data!.name as WarehouseName} act={act} />);
       case "malabon": return say(<Malabon />);
       case "payment": return say(<Payment act={act} />);
-      case "status": setWaiting({ kind: "ref" }); return say(<p>Type mo ang booking number mo (e.g. <b>KD-BOOK-0012</b>). 🔎</p>);
+      case "status": setWaiting({ kind: "ref" }); return say(<p>Type your booking number (e.g. <b>KD-BOOK-0012</b>). 🔎</p>);
       case "book": return say(<>
-        <p>Tara, i-book natin! 🙌 2 steps lang. Pagkatapos, ire-review ng team at ibibigay ang cargo code mo pag approved.</p>
+        <p>Let&apos;s book it! 🙌 Just 2 steps. Our team reviews it and sends your cargo code once approved.</p>
         <BookingForm preset={data} done={(ref, phone) => {
           say(<>
-            <p>Booking sent! 🎉 Salamat!</p>
+            <p>Booking sent! 🎉 Thank you!</p>
             <div className="kc-code"><small>BOOKING NUMBER</small><div>{ref}</div><CopyButton text={ref} label="Copy" /></div>
-            <p>Ire-review at ico-compute ng team ang rate mo. Pag <b>approved</b>, makukuha mo ang <b>cargo code</b>, <b>warehouse address</b> at <b>estimated rate</b>.</p>
-            <p><b>Para ma-confirm agad:</b> send mo ang <b>{ref}</b> sa Messenger page namin. 👇</p>
+            <p>Our team will review it and compute your rate. Once <b>approved</b>, you&apos;ll get your <b>cargo code</b>, <b>warehouse address</b> and <b>estimated rate</b>.</p>
+            <p><b>To confirm faster:</b> send <b>{ref}</b> to our Messenger page. 👇</p>
             <TeamButton label={`💬 Send ${ref} on Messenger`} />
-            <p className="kc-small">Pwede mo i-check ang status anytime: type <b>{ref}</b> dito, then ang last 4 digits ng mobile mo ({phone.slice(-4)}).</p>
+            <p className="kc-small">Check the status anytime: type <b>{ref}</b> here, then the last 4 digits of your mobile ({phone.slice(-4)}).</p>
           </>);
         }} />
       </>);
       case "transit": return say(<>
-        <p>🚢 <b>Sea Freight:</b> mga <b>3–5 weeks</b></p><p>✈️ <b>Air Freight:</b> mga <b>5–7 days</b></p>
-        <p className="kc-small">Estimates lang ito. Pwedeng magbago dahil sa schedule, customs, weather o holidays.</p>
+        <p>🚢 <b>Sea Freight:</b> about <b>3–5 weeks</b></p><p>✈️ <b>Air Freight:</b> about <b>5–7 days</b></p>
+        <p className="kc-small">These are estimates. Times can change because of schedules, customs, weather or holidays.</p>
       </>);
       case "restricted": return say(<>
-        <p>Kailangan munang i-check ng team ang mga item gaya ng <b>batteries, liquids, chemicals, food, medicines, cosmetics at branded goods</b>. 🙏</p>
-        <p>Send mo sa amin ang photo o details ng item bago bumili o mag-ship:</p><TeamButton />
+        <p>Our team needs to check items like <b>batteries, liquids, chemicals, food, medicines, cosmetics and branded goods</b> first. 🙏</p>
+        <p>Send us a photo or details of the item before you buy or ship:</p><TeamButton />
       </>);
-      case "hello": return say(<p>Hello! 😊 Pili ka lang sa mga button sa baba, o i-type ang tanong mo.</p>);
+      case "hello": return say(<p>Hello! 😊 Pick a button below, or type your question.</p>);
       default: return say(<>
-        <p>Ay, hindi ko pa masagot &apos;yan. 🙏 Ang team namin ang sasagot sa Messenger (8 AM – 10 PM, 7 days a week):</p><TeamButton />
+        <p>Sorry, I can&apos;t answer that yet. 🙏 Our team will reply on Messenger (8 AM – 10 PM, 7 days a week):</p><TeamButton />
       </>);
     }
   }
@@ -502,20 +502,20 @@ export function ChatAssistant() {
     const booking = bookingPattern.exec(compact);
     if (waiting?.kind === "last4") {
       const digits = value.replace(/\D/g, "");
-      if (digits.length !== 4) return say(<p>4 digits lang po, e.g. 4567.</p>);
+      if (digits.length !== 4) return say(<p>Please type just 4 digits, e.g. 4567.</p>);
       setWaiting(null);
       return say(<StatusAnswer bookingRef={waiting.ref} last4={digits} act={act} />);
     }
     if (booking) {
       const ref = `KD-BOOK-${booking[1]}`;
       setWaiting({ kind: "last4", ref });
-      return say(<p>Para sa privacy, type mo ang <b>last 4 digits</b> ng mobile number na ginamit mo sa booking. 🔒</p>);
+      return say(<p>For privacy, type the <b>last 4 digits</b> of the mobile number you used for the booking. 🔒</p>);
     }
     if (trackingPattern.test(compact) || waiting?.kind === "track") {
       setWaiting(null);
       return say(<TrackAnswer code={compact} />);
     }
-    if (waiting?.kind === "ref") return say(<p>Ang booking number ay ganito: <b>KD-BOOK-0012</b>. Paki-type ulit. 🙏</p>);
+    if (waiting?.kind === "ref") return say(<p>A booking number looks like this: <b>KD-BOOK-0012</b>. Please type it again. 🙏</p>);
     const intent = intents.find(([pattern]) => pattern.test(value));
     run(intent ? intent[1] : "unknown");
   };
@@ -559,7 +559,7 @@ export function ChatAssistant() {
   }, [open]);
 
   return <>
-    {teaser && !open && <button type="button" className="kc-tease" onClick={openChat}>Hi! 👋 May tanong ka? Track, rates o booking, andito ako.<span aria-hidden="true" onClick={(e) => { e.stopPropagation(); setTeaser(false); try { sessionStorage.setItem("kd-chat-seen", "1"); } catch { /* storage blocked */ } }}>×</span></button>}
+    {teaser && !open && <button type="button" className="kc-tease" onClick={openChat}>Hi! 👋 Have a question? Tracking, rates or booking, I can help.<span aria-hidden="true" onClick={(e) => { e.stopPropagation(); setTeaser(false); try { sessionStorage.setItem("kd-chat-seen", "1"); } catch { /* storage blocked */ } }}>×</span></button>}
     <div className="fab">
       <button type="button" className="kc-fab" aria-label="Open the KargoDoor chat assistant" aria-expanded={open} onClick={() => (open ? setOpen(false) : openChat())}>
         <video autoPlay loop muted playsInline preload="auto" poster="/assets/kargodoor-message-us-poster.webp" aria-hidden="true">
@@ -586,11 +586,11 @@ export function ChatAssistant() {
         <button type="button" onClick={chip("malabon", "🏠 Malabon Warehouse")}>🏠 Malabon Warehouse</button>
         <button type="button" onClick={chip("payment", "💳 Payment")}>💳 Payment</button>
         <button type="button" onClick={chip("status", "🔎 My Booking")}>🔎 My Booking</button>
-        <button type="button" onClick={chip("transit", "⏱️ Gaano katagal?")}>⏱️ Gaano katagal?</button>
-        <button type="button" onClick={chip("restricted", "🚫 Bawal ipadala?")}>🚫 Bawal ipadala?</button>
+        <button type="button" onClick={chip("transit", "⏱️ How long?")}>⏱️ How long?</button>
+        <button type="button" onClick={chip("restricted", "🚫 Restricted items")}>🚫 Restricted items</button>
       </div>
       <form className="kc-in" onSubmit={send}>
-        <input ref={input} value={text} onChange={(e) => setText(e.target.value)} placeholder={waiting?.kind === "last4" ? "Last 4 digits ng mobile" : waiting?.kind === "track" ? "Tracking number" : "Type your question or tracking no."} inputMode={waiting?.kind === "last4" ? "numeric" : "text"} maxLength={120} aria-label="Type your question" />
+        <input ref={input} value={text} onChange={(e) => setText(e.target.value)} placeholder={waiting?.kind === "last4" ? "Last 4 digits of your mobile" : waiting?.kind === "track" ? "Tracking number" : "Type your question or tracking no."} inputMode={waiting?.kind === "last4" ? "numeric" : "text"} maxLength={120} aria-label="Type your question" />
         <button aria-label="Send">➤</button>
       </form>
       <div className="kc-foot">Team replies 8 AM – 10 PM, 7 days a week</div>
