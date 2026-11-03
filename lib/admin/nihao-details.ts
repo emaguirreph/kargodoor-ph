@@ -90,7 +90,7 @@ const kb = (size: number | null) => (size ? `${Math.max(1, Math.round(size / 102
  * form (its four fields save with Save shipment); `form` is the separate
  * upload form, placed after the main form (see detachForm).
  */
-export function niHaoDetailsBox(options: { shipmentId: string; record: RecordData; details: NiHaoDetails | null; customerName: string; csrf: string; canWrite: boolean; uploaded?: boolean }) {
+export function niHaoDetailsBox(options: { shipmentId: string; record: RecordData; details: NiHaoDetails | null; customerName: string; csrf: string; canWrite: boolean; uploaded?: boolean; supplierFields?: string }) {
   const { details, record, shipmentId } = options;
   const field = (key: (typeof niHaoDetailKeys)[number], label: string, attrs: string) =>
     `<label>${esc(label)}<input name="${key}" value="${esc(details?.[key] ?? "")}" ${attrs}${options.canWrite ? "" : " readonly"}></label>`;
@@ -109,7 +109,7 @@ export function niHaoDetailsBox(options: { shipmentId: string; record: RecordDat
     ${options.uploaded ? `<p class="notice" role="status">Ni Hao file uploaded.</p>` : ""}
     <p class="muted">From Ni Hao's paper. Amount = Ni Hao freight cost above. CBM and weight = Verified CBM and weight. Saved with <strong>Save shipment</strong>.</p>
     <div class="grid">${field("nihao_no", "Ni Hao No.", 'maxlength="40" placeholder="9945"')}${field("nihao_doc_no", "Ni Hao Doc No. (optional)", 'maxlength="40" placeholder="0040385"')}
-    ${field("nihao_date", "Ni Hao date", 'type="date"')}${field("nihao_tracking", "Ni Hao Tracking No.", 'maxlength="80" placeholder="2610040014-1"')}</div>
+    ${field("nihao_date", "Ni Hao date", 'type="date"')}${field("nihao_tracking", "Ni Hao Tracking No.", 'maxlength="80" placeholder="2610040014-1"')}${options.supplierFields ?? ""}</div>
     ${shipmentId ? `<div class="nihao-file-row">${fileLine}${upload.inline}</div>` : `<p class="muted">Save the shipment first, then upload Ni Hao's file.</p>`}
     ${shipmentId ? `<pre hidden id="${copyId}">${esc(niHaoCopyText(details, record, options.customerName))}</pre>
     <div class="actions"><button type="button" class="nihao-copy" data-copy-source="${copyId}">📋 Copy Ni Hao details</button></div>` : ""}

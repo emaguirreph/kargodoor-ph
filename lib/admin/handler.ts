@@ -1115,23 +1115,18 @@ export async function handleAdmin(
         /*
          * TRACKING DATES
          */
+        // Order (two columns): CH warehouse received date | Estimated arrival,
+        // Declared CBM | Declared weight, Verified CBM | Verified weight,
+        // Status (| Flight date for Air). Supplier waybill and courier sit in
+        // the Ni Hao details box below.
         fields +=
           input(
             "warehouse_received_date",
             "CH warehouse received date",
             record,
             "date",
-          ) +
+          ).replace("<label>", '<label style="grid-column-start:1">') +
           arrivalEstimateField(record) +
-          // Air Freight shows its flight date here; Sea Freight keeps it hidden.
-          (record.service_type === "Air Freight"
-            ? input("departure_date", "Flight date", record, "date")
-            : hidden("departure_date", record.departure_date ?? ""));
-
-        /*
-         * SHIPPING DETAILS
-         */
-        fields +=
           input(
             "cbm",
             "Declared CBM",
@@ -1148,41 +1143,6 @@ export async function handleAdmin(
             "number",
             true,
           ) +
-          select(
-            "status",
-            "Status",
-            record,
-            shipmentStatusOptions(record),
-          ).replace("<label>", '<label class="k-status-red">') + hidden("estimated_arrival", record.estimated_arrival ?? "");
-
-        // Actual arrival is an end-of-journey record. Keeping it out of the
-        // earlier stages avoids implying that cargo has already reached Manila.
-        if (["Malabon Warehouse", "Delivered"].includes(String(record.status || ""))) {
-          fields += input(
-            "actual_arrival",
-            "Actual arrival",
-            record,
-            "date",
-          );
-        }
-
-        fields +=
-          input(
-            "supplier_waybill_number",
-            "Supplier waybill number",
-            record,
-            "text",
-            false,
-            120,
-          ) +
-          input(
-            "supplier_courier",
-            "Supplier courier",
-            record,
-            "text",
-            false,
-            120,
-          ) +
           input(
             "verified_cbm",
             "Verified CBM (number only, e.g. 0.36)",
@@ -1198,7 +1158,28 @@ export async function handleAdmin(
             record,
             "number",
             false,
+          ) +
+          select(
+            "status",
+            "Status",
+            record,
+            shipmentStatusOptions(record),
+          ).replace("<label>", '<label class="k-status-red">') + hidden("estimated_arrival", record.estimated_arrival ?? "") +
+          // Air Freight shows its flight date next to the status; Sea Freight keeps it hidden.
+          (record.service_type === "Air Freight"
+            ? input("departure_date", "Flight date", record, "date")
+            : hidden("departure_date", record.departure_date ?? ""));
+
+        // Actual arrival is an end-of-journey record. Keeping it out of the
+        // earlier stages avoids implying that cargo has already reached Manila.
+        if (["Malabon Warehouse", "Delivered"].includes(String(record.status || ""))) {
+          fields += input(
+            "actual_arrival",
+            "Actual arrival",
+            record,
+            "date",
           );
+        }
 
         /*
          * PUBLIC TRACKING REMARKS
@@ -1259,6 +1240,9 @@ export async function handleAdmin(
           csrf: csrfToken(env, user.id, path),
           canWrite,
           uploaded: url.searchParams.get("nihao_file") === "1",
+          supplierFields:
+            input("supplier_waybill_number", "Supplier waybill number", record, "text", false, 120) +
+            input("supplier_courier", "Supplier courier", record, "text", false, 120),
         });
         paymentForms = customerBox.form + niHaoBox.form + niHaoDetailsCard.form;
 
