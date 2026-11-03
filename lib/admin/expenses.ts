@@ -4,6 +4,7 @@ import { expenseSchema, expenseCategories, expensePaymentMethods, parseExpenseFo
 import { AdminError, canDeleteAdmin, isRestrictedStaff, type AdminUser } from "./security";
 import { page, esc, pesos, input, hidden } from "./ui";
 import { philippineToday } from "./finance-dates";
+import { proofCell, proofCss, readProofs } from "./payment-proof";
 import { bankAccountLabel, bankAccountSelect, kargodoorBankAccounts, nihaoBankAccounts } from "./bank-accounts";
 
 const path = "/admin/finance/expenses";
@@ -64,6 +65,9 @@ export async function mutateExpense(db: D1Database, form: URLSearchParams, user:
         .bind(crypto.randomUUID(), user.id, new Date().toISOString(), metadata.id, metadata.revision),
       db.prepare("DELETE FROM expenses WHERE id = ? AND updated_at = ?")
         .bind(metadata.id, metadata.revision),
+      // Its proof of payment goes too, but only when the expense really was deleted.
+      db.prepare("DELETE FROM payment_proofs WHERE entity_type = 'expense' AND entity_id = ? AND NOT EXISTS (SELECT 1 FROM expenses WHERE id = ?)")
+        .bind(metadata.id, metadata.id),
     ]);
     if (result.meta.changes !== 1) throw new AdminError("Expense changed or no longer exists. Reload Expenses before trying again.", 409);
     return "deleted";
@@ -182,7 +186,15 @@ export async function expensesPage(db: D1Database, url: URL, user: AdminUser | s
       ${hidden("csrf", csrf)}${edit !== null ? hidden("action", "edit") + hidden("id", record.id) + hidden("revision", record.updated_at) : ""}
       <div class="grid">${form}</div><p class="muted">* Required. For a Freight / Ni Hao Cost expense, enter the shipment's tracking number if its Ni Hao cost is already saved on the shipment, so it is not counted twice. Leave it blank for lump-sum Ni Hao payments.</p>
       <div class="actions"><button type="submit">Save expense</button><a href="${path}">Cancel</a></div>
-      </form></section>`, actor.name, 200, {}, canWrite, staff);
+      </form></section>${edit !== null ? await (async () => {
+        const id = String(record.id);
+        const proof = (await readProofs(db, "expense", [id])).get(id);
+        const cell = proofCell({ kind: "expense", id, proof, csrf, canWrite, back: `${path}?edit=${id}#expense-proof` });
+        return `<section id="expense-proof"><h2>Proof of payment</h2>
+          ${url.searchParams.get("proof") === "1" ? '<p class="notice" role="status">Proof of payment uploaded.</p>' : ""}
+          <p class="muted">The receipt, GCash or bank screenshot, or PDF for this expense. Drag it onto the box or click Add proof. PDF or photo, up to 1.5 MB. Uploading again replaces it.</p>
+          ${cell.inline}${proofCss}</section>`;
+      })() : ""}`, actor.name, 200, {}, canWrite, staff);
   }
   const filters = filterSchema.parse(Object.fromEntries(
     ["from", "to", "category", "payment_method", "q"].map((key) => [key, url.searchParams.get(key) ?? ""]),
@@ -203,13 +215,16 @@ export async function expensesPage(db: D1Database, url: URL, user: AdminUser | s
   const listFields = fields.filter(([key]) => key !== "reference_number");
   // Short columns never wrap; Description and Notes take the room that is left.
   const cellClass = (key: string) => ["expense_date", "amount", "payment_method"].includes(key) ? ` class="exp-${key === "amount" ? "num" : "tight"}"` : key === "description" || key === "notes" ? ' class="exp-wide"' : "";
-  const table = results.length ? `<div class="table"><table class="expense-list"><thead><tr>
-    ${canWrite ? '<th class="exp-tight">Actions</th>' : ""}${listFields.map(([key, label]) => `<th${cellClass(key)}>${label}</th>`).join("")}</tr></thead><tbody>
+  const proofs = await readProofs(db, "expense", results.map((row) => String(row.id)));
+  // Keep the filters when an upload comes back to the list.
+  const listBack = `${path}${url.search ? `?${new URLSearchParams([...url.searchParams].filter(([key]) => ["from", "to", "category", "payment_method", "q"].includes(key)))}` : ""}`.replace(/\?$/, "");
+  const table = results.length ? `${canWrite ? '<p class="muted proof-hint">Proof of payment: drag the receipt or screenshot onto an expense\'s Proof box, or click Add proof.</p>' : ""}<div class="table"><table class="expense-list"><thead><tr>
+    ${canWrite ? '<th class="exp-tight">Actions</th>' : ""}${listFields.map(([key, label]) => `<th${cellClass(key)}>${label}</th>${key === "amount" ? '<th class="exp-tight">Proof</th>' : ""}`).join("")}</tr></thead><tbody>
     ${results.map((row) => `<tr>${canWrite ? `<td class="exp-tight"><a href="${path}?edit=${esc(encodeURIComponent(String(row.id)))}">Edit</a>${canDelete ? `<br><a href="${path}?delete=${esc(encodeURIComponent(String(row.id)))}">Delete</a>` : ""}</td>` : ""}
-      ${listFields.map(([key]) => `<td${cellClass(key)}>${key === "amount" ? esc(pesos(row[key])) : key === "paid_from_account" || key === "paid_to_account" ? esc(bankAccountLabel(row[key])) || "—" : esc(row[key]) || "—"}</td>`).join("")}</tr>`).join("")}
-    </tbody></table></div>
+      ${listFields.map(([key]) => `<td${cellClass(key)}>${key === "amount" ? esc(pesos(row[key])) : key === "paid_from_account" || key === "paid_to_account" ? esc(bankAccountLabel(row[key])) || "—" : esc(row[key]) || "—"}</td>${key === "amount" ? `<td>${proofCell({ kind: "expense", id: String(row.id), proof: proofs.get(String(row.id)), csrf, canWrite, back: listBack }).inline}</td>` : ""}`).join("")}</tr>`).join("")}
+    </tbody></table></div>${proofCss}
     <style>.expense-list .exp-tight,.expense-list .exp-num{white-space:nowrap;overflow-wrap:normal;word-break:normal}.expense-list .exp-num{text-align:right;font-variant-numeric:tabular-nums}.expense-list th.exp-num{text-align:right}.expense-list .exp-wide{min-width:200px}.expense-list th,.expense-list td{overflow-wrap:break-word;word-break:normal}</style>` : "<p>No expenses found.</p>";
-  const notice = url.searchParams.get("deleted") === "1" ? "Expense deleted." : url.searchParams.get("updated") === "1" ? "Expense updated." : url.searchParams.get("saved") === "1" ? "Expense saved." : "";
+  const notice = url.searchParams.get("deleted") === "1" ? "Expense deleted." : url.searchParams.get("updated") === "1" ? "Expense updated." : url.searchParams.get("saved") === "1" ? "Expense saved. Drop its proof of payment on the Proof box in the list." : url.searchParams.get("proof") === "1" ? "Proof of payment uploaded." : "";
   // Owner money, opening cash and adjustments are not sales, but they are
   // money in, so they sit next to money out (staff only see their expenses).
   const moneyIn = staff ? [] : (await db.prepare(`SELECT id, entry_date, entry_type, amount, reference_number, notes

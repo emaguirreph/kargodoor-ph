@@ -85,6 +85,8 @@ export function shipmentPaymentSection(options: {
   justPaid?: boolean;
   /** Set when the box sits inside the Edit shipment form: a card with this heading, not a page section. */
   title?: string;
+  /** Payments already received, with their proof of payment boxes (already detached). */
+  paymentsList?: string;
 }) {
   const open = options.title ? `<div class="shipment-pay-box" id="customer-payment">` : `<section class="shipment-payment">`;
   const close = options.title ? "</div>" : "</section>";
@@ -97,13 +99,13 @@ export function shipmentPaymentSection(options: {
   const saved = options.justPaid ? '<p class="notice" role="status">Payment recorded. The invoice is issued and the shipment is updated.</p>' : "";
   if (billing.status === "Paid" || (billing.invoiceId && balance === 0 && billing.paid > 0)) {
     return `${open}${heading}${saved}
-      <p><strong>Paid</strong> · ${esc(pesos(billing.paid))}${billing.lastPaymentDate ? ` on ${esc(billing.lastPaymentDate)}` : ""}. Invoice ${invoiceLink}. Counted in Money we have now.</p>${close}`;
+      <p><strong>Paid</strong> · ${esc(pesos(billing.paid))}${billing.lastPaymentDate ? ` on ${esc(billing.lastPaymentDate)}` : ""}. Invoice ${invoiceLink}. Counted in Money we have now.</p>${options.paymentsList ?? ""}${close}`;
   }
   const summary = billing.invoiceId
     ? `Invoice ${invoiceLink} (${esc(billing.status)}) · ${esc(pesos(billing.paid))} paid of ${esc(pesos(billing.total))}.`
     : "No invoice yet. Recording a payment makes and issues it.";
   if (!options.canWrite || billing.total <= 0) {
-    return `${open}${heading}${saved}<p class="muted">${summary}${billing.total <= 0 ? " Add the KargoDoor charge first." : ""}</p>${close}`;
+    return `${open}${heading}${saved}<p class="muted">${summary}${billing.total <= 0 ? " Add the KargoDoor charge first." : ""}</p>${options.paymentsList ?? ""}${close}`;
   }
   const methods = paymentMethods.map((method) => `<option value="${esc(method)}"${method === "GCash" ? " selected" : ""}>${esc(method)}</option>`).join("");
   return `${open}
@@ -119,5 +121,24 @@ export function shipmentPaymentSection(options: {
       </div>
       <div class="actions"><button type="submit">Record payment</button></div>
     </form>
+    ${options.paymentsList ?? ""}
   ${close}`;
+}
+
+export type ShipmentPaymentRow = { id: string; payment_date: string; amount: number; payment_method: string; reference_number: string | null };
+
+export async function readShipmentPayments(db: D1Database, invoiceId: string | null) {
+  if (!invoiceId) return [];
+  return (await db.prepare(`SELECT id, payment_date, amount, payment_method, reference_number FROM payments
+    WHERE invoice_id = ? ORDER BY payment_date DESC, created_at DESC, id`).bind(invoiceId).all<ShipmentPaymentRow>()).results;
+}
+
+/** "Payments received" list for the Customer payment box: one row per payment, each with its proof box. */
+export function shipmentPaymentsList(rows: ShipmentPaymentRow[], proofCells: string[]) {
+  if (!rows.length) return "";
+  return `<div class="shipment-payments-received"><h5>Payments received · proof of payment</h5>
+    <p class="muted">Drag the GCash or bank screenshot (or PDF) onto a payment's box, or click Add proof.</p>
+    <div class="table"><table><thead><tr><th>Date</th><th>Amount</th><th>Proof</th><th>Method</th><th>Reference</th></tr></thead><tbody>
+    ${rows.map((row, index) => `<tr><td>${esc(row.payment_date)}</td><td>${esc(pesos(row.amount))}</td><td>${proofCells[index] ?? ""}</td><td>${esc(row.payment_method)}</td><td>${esc(row.reference_number) || "—"}</td></tr>`).join("")}
+    </tbody></table></div></div>`;
 }
