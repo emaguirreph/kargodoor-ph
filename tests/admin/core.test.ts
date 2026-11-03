@@ -2002,11 +2002,10 @@ test("proof of payment: upload and replace on a customer payment and an expense,
   await saveProof(db, "expense", staffExpense, png, staff);
   await assert.rejects(saveProof(db, "expense", ownerExpense, png, staff), /Expense not found/);
   const list = await (await expensesPage(db, new URL("https://admin.test/admin/finance/expenses?category=Office+%2F+Rent"), admin, "token")).text();
-  assert.match(list, /<th class="exp-tight">Proof<\/th>/);
-  assert.match(list, /href="\/admin\/finance\/proof\?type=expense&amp;id=/);
-  assert.match(list, /name="back" value="\/admin\/finance\/expenses\?category=Office\+%2F\+Rent"/);
+  assert.doesNotMatch(list, /View proof|proof-drop/, "the proof lives in Edit expense, not the list (Em, 2026-11-03)");
   const editPage = await (await expensesPage(db, new URL(`https://admin.test/admin/finance/expenses?edit=${staffExpense}`), admin, "token")).text();
   assert.match(editPage, /<h2>Proof of payment<\/h2>/);
+  assert.match(editPage, /href="\/admin\/finance\/proof\?type=expense&amp;id=/);
 
   // Deleting an expense removes its proof file too.
   const revision = String(sql.prepare("SELECT updated_at FROM expenses WHERE id = ?").get(staffExpense)!.updated_at);
@@ -2064,7 +2063,16 @@ test("Transfer fee: ₱30 split on the shipment, Ni Hao fee merged into its Expe
   const all = sql.prepare("SELECT * FROM expenses ORDER BY expense_date DESC, created_at DESC").all() as Record<string, unknown>[];
   assert.equal(all.length, 3);
   const html = (await (await expensesPage(db, new URL("http://x/admin/finance/expenses"), actor, "t")).text());
-  assert.doesNotMatch(html, /Edit fee/);
+  // One row for KDAIR-900009 (Ni Hao + fee in their own columns), one for the GCash transfer.
+  const { groupExpenses } = await import("../../lib/admin/expenses");
+  const lines = groupExpenses(all);
+  assert.equal(lines.length, 2);
+  const shipmentLine = lines.find((line) => line.niHao)!;
+  assert.equal(shipmentLine.fee!.amount, 1000);
+  assert.equal(shipmentLine.total, 36000);
+  assert.match(html, /Edit Ni Hao[\s\S]*Edit fee/);
+  assert.match(html, /<th class="exp-num">Ni Hao cost<\/th><th class="exp-num">Transfer fee<\/th><th class="exp-num">Delivery fee<\/th><th class="exp-num">Total<\/th>/);
+  assert.match(html, /₱350\.00<\/td><td class="exp-num">₱10\.00<\/td><td class="exp-num"><span class="muted">—<\/span><\/td>\s*<td class="exp-num"><strong>₱360\.00/);
   assert.match(html, /Ni Hao cost<\/span><strong>₱350\.00/);
   assert.match(html, /Transfer fees<\/span><strong>₱25\.00/);
   assert.match(html, /Delivery fees<\/span><strong>₱0\.00/);
