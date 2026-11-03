@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { pendingProofsPanel } from "./booking-proofs-panel";
 import { philippineToday } from "./finance-dates";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type {
@@ -2119,9 +2120,10 @@ export async function list(
     `
     : "<p>No matching invoices.</p>";
 
+  const proofsPanel = await pendingProofsPanel(db);
   return page(
     "Invoices & Payments",
-    `
+    `${proofsPanel}
       <section>
         <form
           method="get"

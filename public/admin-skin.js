@@ -44,30 +44,37 @@
       });
     });
   };
-  // Red number next to Leads in the menu, like unread messages on a phone: leads not contacted yet.
-  const leadsCount = () => {
-    const badge = document.querySelector("[data-leads-count]");
-    if (!badge || !window.fetch) return;
-    fetch("/admin/leads?count=1", { credentials: "same-origin", headers: { accept: "application/json" } })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        const n = Number(data && data.toContact);
-        if (!n) return;
-        badge.textContent = n > 99 ? "99+" : String(n);
-        badge.setAttribute("aria-label", n + " lead" + (n === 1 ? "" : "s") + " to contact");
-        badge.hidden = false;
-        // On a phone the menu starts closed, so show the same number on the Menu button.
-        const toggle = document.querySelector(".mobile-nav-toggle");
-        if (toggle && !toggle.querySelector(".nav-count")) {
-          const copy = badge.cloneNode(true);
-          copy.removeAttribute("data-leads-count");
-          copy.style.marginLeft = "8px";
-          toggle.appendChild(copy);
-        }
-      })
-      .catch(() => {});
+  // Red numbers in the menu, like unread messages on a phone: leads not contacted
+  // yet, new bookings to review, and customer proofs of payment to check.
+  const showCount = (selector, n, label) => {
+    const badge = document.querySelector(selector);
+    if (!badge || !n) return 0;
+    badge.textContent = n > 99 ? "99+" : String(n);
+    badge.setAttribute("aria-label", label);
+    badge.hidden = false;
+    return n;
   };
-  const start = () => { run(); leadsCount(); };
+  const getJson = (url) => fetch(url, { credentials: "same-origin", headers: { accept: "application/json" } })
+    .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  const menuCounts = () => {
+    if (!window.fetch || !document.querySelector("[data-leads-count]")) return;
+    Promise.all([getJson("/admin/leads?count=1"), getJson("/admin/bookings?count=1")]).then(([leads, bookings]) => {
+      const n = Number(leads && leads.toContact) || 0, b = Number(bookings && bookings.bookings) || 0, p = Number(bookings && bookings.proofs) || 0;
+      const total = showCount("[data-leads-count]", n, n + " lead" + (n === 1 ? "" : "s") + " to contact")
+        + showCount("[data-bookings-count]", b, b + " booking" + (b === 1 ? "" : "s") + " to review")
+        + showCount("[data-proofs-count]", p, p + " proof" + (p === 1 ? "" : "s") + " of payment to check");
+      // On a phone the menu starts closed, so show the total on the Menu button.
+      const toggle = document.querySelector(".mobile-nav-toggle");
+      if (total && toggle && !toggle.querySelector(".nav-count")) {
+        const copy = document.createElement("span");
+        copy.className = "nav-count";
+        copy.textContent = total > 99 ? "99+" : String(total);
+        copy.style.marginLeft = "8px";
+        toggle.appendChild(copy);
+      }
+    });
+  };
+  const start = () => { run(); menuCounts(); };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
   else start();
 })();
