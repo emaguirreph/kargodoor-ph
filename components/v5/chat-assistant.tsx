@@ -523,15 +523,14 @@ export function ChatAssistant() {
   function openChat() {
     setOpen(true);
     setTeaser(false);
-    try { sessionStorage.setItem("kd-chat-seen", "1"); } catch { /* storage blocked */ }
     if (!msgs.length) welcome();
   }
 
   useEffect(() => {
     let seen = false;
-    try { seen = sessionStorage.getItem("kd-chat-seen") === "1"; } catch { /* storage blocked */ }
+    try { seen = sessionStorage.getItem("kd-chat-tease-closed") === "1"; } catch { /* storage blocked */ }
     if (seen) return;
-    const timer = window.setTimeout(() => setTeaser(true), 4000);
+    const timer = window.setTimeout(() => setTeaser(true), 2000);
     return () => window.clearTimeout(timer);
   }, []);
 
@@ -559,7 +558,7 @@ export function ChatAssistant() {
   }, [open]);
 
   return <>
-    {teaser && !open && <button type="button" className="kc-tease" onClick={openChat}>Hi! 👋 Have a question? Tracking, rates or booking, I can help.<span aria-hidden="true" onClick={(e) => { e.stopPropagation(); setTeaser(false); try { sessionStorage.setItem("kd-chat-seen", "1"); } catch { /* storage blocked */ } }}>×</span></button>}
+    {teaser && !open && <button type="button" className="kc-tease" onClick={openChat}>Hi! 👋 Have a question? Tracking, rates or booking, I can help.<span aria-hidden="true" onClick={(e) => { e.stopPropagation(); setTeaser(false); try { sessionStorage.setItem("kd-chat-tease-closed", "1"); } catch { /* storage blocked */ } }}>×</span></button>}
     <div className="fab">
       <button type="button" className="kc-fab" aria-label="Open the KargoDoor chat assistant" aria-expanded={open} onClick={() => (open ? setOpen(false) : openChat())}>
         <video autoPlay loop muted playsInline preload="auto" poster="/assets/kargodoor-message-us-poster.webp" aria-hidden="true">
