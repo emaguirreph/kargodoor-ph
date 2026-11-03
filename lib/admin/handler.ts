@@ -694,6 +694,9 @@ export async function handleAdmin(
           measuredCharge
             ? "Invoice freight updated from verified warehouse measurements."
             : "Invoice freight updated from the shipment's edited shipping charge.",
+          Number.isSafeInteger((values as RecordData).delivery_charge)
+            ? Number((values as RecordData).delivery_charge)
+            : undefined,
         );
       }
 

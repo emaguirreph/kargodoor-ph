@@ -1297,6 +1297,19 @@ test("editing a shipment charge updates its Draft or Unpaid invoice once", async
   assert.equal(sql.prepare("SELECT notes FROM activity_log WHERE action='update_verified_freight'").get()!.notes, "Edited charge.");
 });
 
+test("editing a shipment delivery charge updates its Draft or Unpaid invoice", async () => {
+  const { sql, db, user } = database();
+  const customerId = await saveRecord(db, "customers", customer, user, "", "");
+  const shipmentId = await saveRecord(db, "shipments", { ...shipment(customerId), shipping_charge: 53000 }, user, "", "");
+  const invoiceId = await createInvoice(db, { shipment_id: shipmentId, delivery_charge: "247", other_charge: "0", status: "Draft", issued_at: "", due_at: "" }, user);
+  assert.equal(await syncVerifiedFreightToInvoice(db, shipmentId, 53000, user, "Edited charge.", 24700), 0);
+  assert.equal(await syncVerifiedFreightToInvoice(db, shipmentId, 53000, user, "Edited charge.", 23100), 1);
+  const invoice = sql.prepare("SELECT subtotal, delivery_charge, total FROM invoices WHERE id=?").get(invoiceId)!;
+  assert.equal(invoice.subtotal, 53000);
+  assert.equal(invoice.delivery_charge, 23100);
+  assert.equal(invoice.total, 76100);
+});
+
 test("draft invoices can be issued and reject invalid charges, dates and overpayments", async () => {
   const { sql, db, user } = database();
   const customerId = await saveRecord(db, "customers", customer, user, "", "");
