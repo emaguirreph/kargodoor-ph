@@ -56,6 +56,7 @@ import { arrivalWindow, arrivalWindowDone, formatArrivalWindow, shortArrivalWind
 import { readShipmentStatement, shipmentStatementPdf, shipmentsLedgerCsv, statementFilename } from "./shipment-statement";
 import { autoDraftInvoice } from "./billing";
 import { readShipmentBilling, readShipmentPayments, recordShipmentPayment, shipmentPaymentSection, shipmentPaymentsList } from "./shipment-payment";
+import { lastGcashTransferFee, readTransferFeesPaid, recordGcashTransferFee, splitFreightCharge, transferFeeSection, transferFeesPaidSummary } from "./transfer-fees";
 import { proofCell, proofCss, readProofs } from "./payment-proof";
 import { detachForm } from "./detached-form";
 import { niHaoDetailsBox, niHaoDetailsCss, readNiHaoDetails, saveNiHaoDetails, takeNiHaoDetails } from "./nihao-details";
@@ -537,6 +538,11 @@ export async function handleAdmin(
       if (entity === "shipments" && action === "customer_paid") {
         await recordShipmentPayment(db, form, user);
         return page("Saved", "", user.name, 303, { Location: `${path}?id=${encodeURIComponent(form.get("id") ?? "")}&edit=1&customer_paid=1#customer-payment` });
+      }
+
+      if (entity === "shipments" && action === "gcash_transfer_fee") {
+        await recordGcashTransferFee(db, form, user);
+        return page("Saved", "", user.name, 303, { Location: `${path}?id=${encodeURIComponent(form.get("id") ?? "")}&edit=1&transfer_fee=1#transfer-fee` });
       }
 
       if (entity === "shipments" && action === "nihao_paid") {
@@ -1236,6 +1242,19 @@ export async function handleAdmin(
               }), "customer-payment-form");
             })()
           : { inline: "", form: "" };
+        const transferFeeBox = payable
+          ? detachForm(transferFeeSection({
+              path,
+              csrf: csrfToken(env, user.id, path),
+              shipmentId: String(id),
+              shippingCharge: record.shipping_charge,
+              transferFeeCollected: record.transfer_fee_collected,
+              fees: await readTransferFeesPaid(db, record.tracking_number),
+              canWrite: canWrite && Boolean(record.tracking_number),
+              justSaved: url.searchParams.get("transfer_fee") === "1",
+              suggestedFee: canWrite ? await lastGcashTransferFee(db) : null,
+            }), "transfer-fee-form")
+          : { inline: "", form: "" };
         const niHaoBox = payable
           ? detachForm(niHaoPaymentSection({
               path,
@@ -1265,7 +1284,7 @@ export async function handleAdmin(
             input("supplier_waybill_number", "Supplier waybill number", record, "text", false, 120) +
             input("supplier_courier", "Supplier courier", record, "text", false, 120),
         });
-        paymentForms = customerBox.form + proofForms + niHaoBox.form + niHaoDetailsCard.form;
+        paymentForms = customerBox.form + proofForms + transferFeeBox.form + niHaoBox.form + niHaoDetailsCard.form;
 
         fields +=
           `<div class="wide shipment-money shipment-money-kd">
@@ -1282,7 +1301,7 @@ export async function handleAdmin(
           ) +
           // Payment status follows the invoice; it is shown here, not typed.
           hidden("payment_status", record.payment_status ?? "Unpaid") +
-          `</div>${customerBox.inline}</div>
+          `</div>${customerBox.inline}${transferFeeBox.inline}</div>
           <div class="wide shipment-money shipment-money-nh">
             <h3><span class="shipment-money-tag">Money out</span> Ni Hao · we pay Ni Hao</h3>
             <div class="grid">` +
@@ -1684,6 +1703,8 @@ export async function handleAdmin(
         return { customer: customer + (customerPaid ? "" : editLink), nihao: nihao + (niHao ? "" : editLink.replace("#customer-payment", "#nihao-payment")) };
       })() : null;
 
+      const transferFeesPaid = entity === "shipments" ? await readTransferFeesPaid(db, record.tracking_number) : [];
+
       const shipmentDetails = entity === "shipments" ? (() => {
         const status = String(record.status || "");
         const actualArrivalVisible = ["Malabon Warehouse", "Delivered"].includes(status);
@@ -1727,10 +1748,19 @@ export async function handleAdmin(
           shipmentDetail("Verified weight (kg)", esc(record.verified_weight_kg) || "—"),
         ].join("");
 
+        const split = splitFreightCharge(record.shipping_charge, record.transfer_fee_collected);
         const finance = [
-          shipmentDetail("KargoDoor freight charge", `${money("shipping_charge")} ${chargeSourceTag(record.shipping_charge_source)}`),
-          ...(Number(record.transfer_fee_collected || 0) > 0
-            ? [shipmentDetail("Transfer fee (internal)", `${pesos(record.transfer_fee_collected)} <small class="muted">included in the freight charge; the customer sees one shipping fee</small>`)]
+          ...(split.fee > 0 && record.shipping_charge !== null
+            ? [
+                shipmentDetail("KargoDoor base fee", pesos(split.base)),
+                shipmentDetail("Transfer fee", `${pesos(split.fee)} <small class="muted">covers the bank fees below</small>`),
+              ]
+            : []),
+          shipmentDetail(split.fee > 0 ? "KargoDoor shipping fee (customer sees)" : "KargoDoor freight charge", `${money("shipping_charge")} ${chargeSourceTag(record.shipping_charge_source)}`),
+          ...(split.fee > 0 || transferFeesPaid.length
+            ? [shipmentDetail("Transfer fees paid", transferFeesPaid.length
+                ? `${esc(transferFeesPaidSummary(transferFeesPaid))} <small class="muted">in Expenses</small>`
+                : '<span class="muted">None saved yet</span>')]
             : []),
           shipmentDetail("Ni Hao freight cost", `${money("nihao_cost")} ${record.nihao_cost === null ? "" : niHaoSourceTag(record.nihao_cost_source)}`),
           shipmentDetail("Freight margin", marginValue),
