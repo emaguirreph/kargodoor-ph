@@ -33,6 +33,7 @@ export type ShipmentMessageInput = {
   flightDate?: unknown;
   eta?: unknown;
   arrival?: unknown;
+  delivered?: unknown;
   paymentStatus?: unknown;
   declaredCbm?: unknown;
   declaredWeight?: unknown;
@@ -97,6 +98,7 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
   const eta = text(input.eta);
   const flightDate = text(input.flightDate);
   const arrival = text(input.arrival);
+  const delivered = text(input.delivered) || arrival;
   const paymentStatus = text(input.paymentStatus);
   const declaredCbm = text(input.declaredCbm);
   const declaredWeight = text(input.declaredWeight);
@@ -291,7 +293,7 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
       "",
       "Your KargoDoor shipment has been delivered! 🎉",
       "",
-      ...details(arrival && `Delivered: ${arrival}`),
+      ...details(delivered && `Delivered: ${delivered}`),
       "",
       "We hope everything arrived in great condition. If you have any concerns about your cargo, just reply to this message and we'll help you right away.",
       "",

@@ -86,6 +86,7 @@ function database(includePhase1 = true) {
   if (includePhase1)
     sql.exec(readFileSync("migrations/admin/0035_air_transit_status.sql", "utf8"));
   sql.exec(readFileSync("migrations/admin/0036_shipment_nihao_details.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0037_shipment_delivered_date.sql", "utf8"));
   const user = randomUUID();
   sql
     .prepare("INSERT INTO admin_users VALUES (?,?,?,?,?,?)")
@@ -155,6 +156,7 @@ const shipmentInput = (id: string) =>
     status: "China Warehouse",
     estimated_arrival: "2026-10-01",
     actual_arrival: "",
+    delivered_date: "",
     tracking_remarks: "",
     shipping_charge: "6500.25",
     nihao_cost: "",
@@ -1923,4 +1925,18 @@ test("estimated arrival window counts from the China warehouse received date", a
   assert.equal(arrivalWindow("Sea Freight", ""), null);
   assert.equal(arrivalWindowDone("Delivered"), true);
   assert.equal(arrivalWindowDone("Sea Transit"), false);
+});
+
+test("Malabon warehouse received date and Delivered date are saved and checked in order", async () => {
+  const { db, user } = database();
+  const customerId = await saveRecord(db, "customers", { ...customer, customer_code: "KD-DELIV", email: "deliv@example.test" }, user, "", "");
+  const { tracking_number: _t, cargo_code: _c, ...formInput } = shipmentInput(customerId);
+  void _t; void _c;
+  const form = (values: Record<string, string>) => parseForm("shipments", new URLSearchParams(Object.entries({ ...formInput, ...values }))) as RecordData;
+  assert.throws(() => form({ status: "Delivered", actual_arrival: "2026-11-20", delivered_date: "2026-11-18" }), /Delivered date cannot be before/);
+  const values = form({ status: "Delivered", actual_arrival: "2026-11-20", delivered_date: "2026-11-22" });
+  assert.equal(values.delivered_date, "2026-11-22");
+  const id = await saveRecord(db, "shipments", values, user, "", "");
+  const saved = await db.prepare("SELECT actual_arrival, delivered_date FROM shipments WHERE id = ?").bind(id).first<RecordData>();
+  assert.deepEqual({ ...saved }, { actual_arrival: "2026-11-20", delivered_date: "2026-11-22" });
 });
