@@ -592,7 +592,7 @@ export function simpleSummarySection(
         After everything is collected and Ni Hao is paid:
         ${esc(financePesos(cash))} + ${esc(financePesos(comingIn))} − ${esc(financePesos(goingOut))} =
         <strong>${esc(financePesos(cash + comingIn - goingOut))}</strong>${goingOutUnknown ? ", less the Ni Hao costs not entered yet" : ""}.
-        When you pay Ni Hao, use Mark Ni Hao paid on the shipment page, so it moves out of Money going out and into Money we have now.
+        When you pay Ni Hao, use Mark Ni Hao paid in Edit shipment › Ni Hao tab, so it moves out of Money going out and into Money we have now.
       </p>
 
     </section>
@@ -1447,8 +1447,8 @@ async function moneyTodayPage(
   const niHaoSection = `
     <section id="finance-nihao">
       <h2>Ni Hao to Pay</h2>
-      ${niHaoDue.length ? `<div class="table"><table><thead><tr><th>Tracking</th><th>Customer</th><th>Status</th><th class="finance-number">Ni Hao cost</th><th></th></tr></thead><tbody>${niHaoDue.map((row) => `<tr><td>${esc(row.tracking_number || "No tracking yet")}</td><td>${esc(row.full_name)}</td><td>${esc(row.status)}</td><td class="finance-number">${row.nihao_cost === null ? '<span class="muted">Not entered</span>' : `<strong>${esc(financePesos(BigInt(row.nihao_cost)))}</strong>${row.nihao_cost_source === "estimate" ? ' <span class="muted">(estimate)</span>' : ""}`}</td><td><a href="/admin/shipments?id=${encodeURIComponent(row.id)}">${canWrite ? "Mark Ni Hao paid" : "View"}</a></td></tr>`).join("")}</tbody></table></div>` : '<p class="muted">Ni Hao is paid for every active shipment.</p>'}
-      <p class="muted">Pay from the shipment page with Mark Ni Hao paid. Add the transfer fee there too.</p>
+      ${niHaoDue.length ? `<div class="table"><table><thead><tr><th>Tracking</th><th>Customer</th><th>Status</th><th class="finance-number">Ni Hao cost</th><th></th></tr></thead><tbody>${niHaoDue.map((row) => `<tr><td>${esc(row.tracking_number || "No tracking yet")}</td><td>${esc(row.full_name)}</td><td>${esc(row.status)}</td><td class="finance-number">${row.nihao_cost === null ? '<span class="muted">Not entered</span>' : `<strong>${esc(financePesos(BigInt(row.nihao_cost)))}</strong>${row.nihao_cost_source === "estimate" ? ' <span class="muted">(estimate)</span>' : ""}`}</td><td><a href="/admin/shipments?id=${encodeURIComponent(row.id)}${canWrite ? "&amp;edit=1#nihao-payment" : ""}">${canWrite ? "Mark Ni Hao paid" : "View"}</a></td></tr>`).join("")}</tbody></table></div>` : '<p class="muted">Ni Hao is paid for every active shipment.</p>'}
+      <p class="muted">Pay with Mark Ni Hao paid in Edit shipment › Ni Hao tab. Add the transfer fee there too.</p>
     </section>`;
 
   return page(
