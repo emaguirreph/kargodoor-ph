@@ -248,7 +248,7 @@ try {
   html = await (await get("/admin/finance/reports?preset=month")).text();
   for (const t of ["Downloads for your CPA", "Finance Overview", "Shipping Performance", "Monthly Summary"]) assert.ok(html.includes(t), t);
   html = await (await get("/admin/invoices")).text();
-  assert.ok(html.includes("2026-11-02 · GCash") && !html.includes("Payments Received"), "payment date and method shown on the invoice row");
+  assert.ok(/<td>GCash<\/td>/.test(html) && html.includes("<th>Payment method</th>") && !html.includes("Payments Received"), "payment method shown on the invoice row");
   html = await (await get("/admin/finance/expenses")).text();
   assert.ok(html.includes("Money In (not sales)") && html.includes("Starting cash"));
   step("4 pages: Money Today, Invoices & Payments (payment date + method on each row), Expenses (with money in), Reports & BIR (with downloads)");
@@ -270,6 +270,28 @@ try {
   html = await (await get("/admin/finance")).text();
   assert.equal(money(html, "Money we have now"), "₱26,205.00");
   step("Record payment on the shipment page (no invoice yet): invoice made, issued and Paid, shipment Paid, cash ₱26,205");
+
+  // 8d. Paying the rider, then every page agrees: Expenses (one row per shipment), Money In & Out and Money Today.
+  html = await (await get(`/admin/shipments?id=${sid}&edit=1`)).text();
+  assert.ok(html.includes('id="delivery-payment"'), "Delivery paid to rider box on Edit shipment");
+  const delivery = { csrf: token(html), action: "delivery_paid", id: sid, expense_date: "2026-11-03", amount: "200", payee: "Lalamove", paid_from: "GCash", reference_number: "" };
+  response = await post("/admin/shipments", delivery);
+  assert.equal(response.status, 303, await response.text());
+  assert.equal((await post("/admin/shipments", delivery)).status, 409, "second delivery payment refused");
+  assert.deepEqual(sqlRows(`SELECT category, amount, paid_from_account FROM expenses WHERE description LIKE 'Delivery for %'`), [{ category: "Local Delivery / Trucking", amount: 20000, paid_from_account: "kd-gcash" }]);
+  html = await (await get("/admin/finance/expenses")).text();
+  assert.ok(/₱2,805\.00<\/a><\/td><td class="exp-num"><a[^>]*>₱10\.00<\/a><\/td><td class="exp-num"><a[^>]*>₱200\.00<\/a><\/td>\s*<td class="exp-num"><strong>₱3,015\.00/.test(html), "Ni Hao, fee and delivery share one Expenses row");
+  for (const [label, amount] of [["Ni Hao cost", "₱2,805.00"], ["Transfer fees", "₱10.00"], ["Delivery fees", "₱200.00"], ["Total expenses", "₱3,015.00"]])
+    assert.ok(html.includes(`${label}</span><strong>${amount}`), `${label} card ${amount}`);
+  html = await (await get("/admin/finance/ledger")).text();
+  assert.ok(html.includes("<th>Date</th><th>Category</th>") && html.includes("Delivery for "), "Money In & Out lists the delivery");
+  assert.ok(html.includes("Total money out</span><strong>₱3,015.00"), "Money In & Out counts the same ₱3,015 out");
+  html = await (await get("/admin/finance")).text();
+  assert.equal(money(html, "Money we have now"), "₱26,005.00");
+  const wallet = (label) => Number(new RegExp(`<span class="k-pill">${label.replace(/[()+]/g, "\\$&")}</span><strong>(-?)₱([\\d,.]+)`).exec(html)?.slice(1).join("").replace(/,/g, ""));
+  const accounts = wallet("UnionBank") + wallet("GCash") + wallet("Cash (owners)");
+  assert.equal(Math.round(accounts * 100), 2600500, `UnionBank + GCash + Cash = Money we have now (got ${accounts})`);
+  step("Delivery ₱200 paid to the rider from GCash: one Expenses row ₱2,805 + ₱10 + ₱200 = ₱3,015, same ₱3,015 out in Money In & Out, accounts add up to cash ₱26,005");
 
   // 9. Audit trail.
   const actions = sqlRows(`SELECT action FROM activity_log ORDER BY created_at`).map((r) => r.action);
