@@ -11,10 +11,9 @@ import { transferFeeCategory } from "./nihao-payment";
  * The customer pays one shipping fee that already includes ₱30 (rule agreed
  * with Em 2026-11-03). Inside the admin we show it apart from the KargoDoor
  * base fee, and next to it the fees KargoDoor actually paid for that
- * shipment: the bank fee to Ni Hao (saved by Mark Ni Hao paid) and the fee
- * for moving the customer's GCash money to UnionBank (saved here). Both are
- * "Bank / Payment Fees" expenses carrying the shipment's tracking number, so
- * Expenses, the statement and Reports & BIR already count them.
+ * shipment: the bank fee to Ni Hao (saved by Mark Ni Hao paid, with the
+ * tracking number). GCash to UnionBank fees are saved once per transfer on
+ * the Expenses page, so they count in Reports & BIR but not per shipment.
  */
 export type TransferFeePaid = { date: string; description: string; amount: number };
 
@@ -47,36 +46,36 @@ export function splitFreightCharge(shippingCharge: unknown, transferFeeCollected
 export async function lastGcashTransferFee(db: D1Database): Promise<number | null> {
   const row = await db.prepare(`SELECT amount FROM expenses WHERE category = ? AND description LIKE ?
     ORDER BY expense_date DESC, created_at DESC LIMIT 1`)
-    .bind(transferFeeCategory, `Transfer fee: ${gcashToUnionBankLabel} for %`).first<{ amount: number }>();
+    .bind(transferFeeCategory, `Transfer fee: ${gcashToUnionBankLabel}%`).first<{ amount: number }>();
   return row ? Number(row.amount) : null;
 }
 
-const allowedFields = ["csrf", "action", "id", "expense_date", "amount", "reference_number"];
+const allowedFields = ["csrf", "action", "expense_date", "moved_amount", "amount", "reference_number", "notes"];
 
-/** Saves the GCash to UnionBank fee for one shipment as a Bank / Payment Fees expense. */
-export async function recordGcashTransferFee(db: D1Database, form: URLSearchParams, user: AdminUser) {
+/**
+ * Moving customer GCash money to UnionBank is recorded once per transfer,
+ * not per shipment (one transfer usually covers several customers; Em,
+ * 2026-11-03). Only the fee is an expense; the money moved stays KargoDoor's.
+ */
+export async function recordGcashTransfer(db: D1Database, form: URLSearchParams, user: AdminUser) {
   for (const key of form.keys()) {
     if (!allowedFields.includes(key) || form.getAll(key).length !== 1)
       throw new AdminError("Unexpected or repeated form field.");
   }
-  const id = form.get("id") ?? "";
-  if (!/^[\da-f-]{36}$/i.test(id)) throw new AdminError("Invalid shipment ID.");
-  const shipment = await db.prepare("SELECT id, tracking_number, status, archived_at FROM shipments WHERE id = ?")
-    .bind(id).first<{ id: string; tracking_number: string | null; status: string; archived_at: string | null }>();
-  if (!shipment) throw new AdminError("Shipment not found.", 404);
-  if (shipment.status === "Cancelled" || shipment.archived_at) throw new AdminError("This shipment is cancelled or archived.");
-  if (!shipment.tracking_number) throw new AdminError("Add a tracking number before saving a transfer fee.");
-
+  const movedRaw = (form.get("moved_amount") ?? "").trim();
+  if (movedRaw && !(/^\d{1,9}(\.\d{1,2})?$/.test(movedRaw) && Number(movedRaw) > 0))
+    throw new AdminError("Enter the amount moved in pesos, like 2500.00.");
+  const moved = movedRaw ? ` (moved ${pesos(Math.round(Number(movedRaw) * 100))})` : "";
   const values = expenseSchema.parse({
     expense_date: form.get("expense_date") ?? "",
     category: transferFeeCategory,
     payee: "GCash",
-    description: `Transfer fee: ${gcashToUnionBankLabel} for ${shipment.tracking_number}`,
+    description: `Transfer fee: ${gcashToUnionBankLabel}${moved}`,
     amount: form.get("amount") ?? "",
     payment_method: "GCash",
     reference_number: form.get("reference_number") ?? "",
-    tracking_number: shipment.tracking_number,
-    notes: "",
+    tracking_number: "",
+    notes: form.get("notes") ?? "",
     paid_from_account: "kd-gcash",
     paid_to_account: "",
   });
@@ -86,16 +85,32 @@ export async function recordGcashTransferFee(db: D1Database, form: URLSearchPara
     db.prepare(`INSERT INTO expenses
       (id, expense_date, category, payee, description, amount, payment_method,
        reference_number, tracking_number, notes, paid_from_account, created_by_admin_user_id, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)`)
       .bind(expenseId, values.expense_date, values.category, values.payee, values.description, values.amount,
-        values.payment_method, values.reference_number, values.tracking_number, values.notes,
-        values.paid_from_account, user.id || null, now, now),
+        values.payment_method, values.reference_number, values.notes, values.paid_from_account, user.id || null, now, now),
     db.prepare(`INSERT INTO activity_log (id,admin_user_id,action,entity_type,entity_id,old_value,new_value,notes,created_at)
-      VALUES (?, ?, 'transfer_fee_paid', 'shipments', ?, NULL, ?, 'GCash to UnionBank fee saved as an expense.', ?)`)
-      .bind(crypto.randomUUID(), user.id || null, id,
-        JSON.stringify({ expense_id: expenseId, amount: values.amount, expense_date: values.expense_date }), now),
+      VALUES (?, ?, 'gcash_to_unionbank', 'expenses', ?, NULL, ?, 'GCash moved to UnionBank; fee saved as an expense.', ?)`)
+      .bind(crypto.randomUUID(), user.id || null, expenseId,
+        JSON.stringify({ amount: values.amount, moved: movedRaw ? Math.round(Number(movedRaw) * 100) : null, expense_date: values.expense_date }), now),
   ]);
   return expenseId;
+}
+
+/** "Moved GCash to UnionBank" box on the Expenses page. */
+export function gcashTransferSection(options: { path: string; csrf: string; suggestedFee: number | null; justSaved?: boolean }) {
+  return `<section id="gcash-transfer"><h2>Moved GCash to UnionBank</h2>
+    ${options.justSaved ? '<p class="notice" role="status">Transfer saved. Its fee is in the list as Bank / Payment Fees.</p>' : ""}
+    <p class="muted">Record each transfer once, even if it covers several customers. Only the fee is an expense.</p>
+    <form method="post" action="${esc(options.path)}">
+      ${hidden("csrf", options.csrf)}${hidden("action", "gcash_to_unionbank")}
+      <div class="grid">
+        <label>Date moved *<input name="expense_date" type="date" required value="${esc(philippineToday())}"></label>
+        <label>Amount moved (PHP)<input name="moved_amount" type="number" min="0.01" max="999999999" step="0.01" placeholder="e.g. 2500.00"></label>
+        <label>Transfer fee (PHP) *<input name="amount" type="number" min="0.01" max="1000000" step="0.01" required placeholder="e.g. 15.00" value="${options.suggestedFee ? esc((options.suggestedFee / 100).toFixed(2)) : ""}"></label>
+        <label>Reference no.<input name="reference_number" maxlength="160"></label>
+      </div>
+      <div class="actions"><button type="submit">Save transfer</button></div>
+    </form></section>`;
 }
 
 /** One line for the shipment page: "₱15.00 UnionBank to Ni Hao · ₱15.00 GCash to UnionBank". */
@@ -106,15 +121,9 @@ export function transferFeesPaidSummary(fees: TransferFeePaid[]) {
 
 /** "Transfer fee" box in the green KargoDoor part of Edit shipment. */
 export function transferFeeSection(options: {
-  path: string;
-  csrf: string;
-  shipmentId: string;
   shippingCharge: unknown;
   transferFeeCollected: unknown;
   fees: TransferFeePaid[];
-  canWrite: boolean;
-  justSaved?: boolean;
-  suggestedFee?: number | null;
 }) {
   const { base, fee, charge } = splitFreightCharge(options.shippingCharge, options.transferFeeCollected);
   const paid = options.fees.reduce((sum, row) => sum + row.amount, 0);
@@ -124,23 +133,10 @@ export function transferFeeSection(options: {
   const list = options.fees.length
     ? `<ul class="transfer-fee-list">${options.fees.map((row) => `<li>${esc(row.date)} · ${esc(transferFeeLeg(row.description))} · ${esc(pesos(row.amount))}</li>`).join("")}</ul>
       <p class="muted">Paid ${esc(pesos(paid))}${fee > 0 ? ` of ${esc(pesos(fee))} collected${paid > fee ? ` (${esc(pesos(paid - fee))} more than collected)` : paid < fee ? ` (${esc(pesos(fee - paid))} left over)` : ""}` : ""}.</p>`
-    : `<p class="muted">No transfer fees paid yet for this shipment. The fee to Ni Hao is saved with Mark Ni Hao paid.</p>`;
-  const form = options.canWrite
-    ? `<form method="post" action="${esc(options.path)}">
-      ${hidden("csrf", options.csrf)}${hidden("action", "gcash_transfer_fee")}${hidden("id", options.shipmentId)}
-      <div class="grid">
-        <label>Date moved *<input name="expense_date" type="date" required value="${esc(philippineToday())}"></label>
-        <label>GCash to UnionBank fee (PHP) *<input name="amount" type="number" min="0.01" max="1000000" step="0.01" required placeholder="e.g. 15.00" value="${options.suggestedFee ? esc((options.suggestedFee / 100).toFixed(2)) : ""}"></label>
-        <label>Reference no.<input name="reference_number" maxlength="160"></label>
-      </div>
-      <div class="actions"><button type="submit">Save GCash to UnionBank fee</button></div>
-    </form>`
-    : "";
+    : `<p class="muted">No transfer fee to Ni Hao saved yet. It is saved with Mark Ni Hao paid.</p>`;
   return `<div class="shipment-pay-box" id="transfer-fee">
     <h4>Transfer fee</h4>
-    ${options.justSaved ? '<p class="notice" role="status">Transfer fee saved to Expenses (Bank / Payment Fees).</p>' : ""}
     ${split}${list}
-    ${options.canWrite ? '<p class="muted">Moved this customer\'s GCash payment to UnionBank? Save the fee here. It goes to Expenses as Bank / Payment Fees with this tracking number.</p>' : ""}
-    ${form}
+    <p class="muted">GCash to UnionBank transfers are saved once per transfer on the <a href="/admin/finance/expenses#gcash-transfer">Expenses</a> page.</p>
   </div>`;
 }
