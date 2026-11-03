@@ -616,6 +616,17 @@ export function ChatAssistant() {
     if (!msgs.length) welcome();
   }
 
+  // kargodoorph.com/chat (→ /?chat=1) opens the assistant right away, for links shared on Facebook or Messenger.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("chat") !== "1") return;
+    url.searchParams.delete("chat");
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    const timer = window.setTimeout(() => openChat(), 0);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     let seen = false;
     try { seen = sessionStorage.getItem("kd-chat-tease-closed") === "1"; } catch { /* storage blocked */ }
