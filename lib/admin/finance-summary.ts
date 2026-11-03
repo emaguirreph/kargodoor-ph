@@ -1445,7 +1445,7 @@ async function moneyTodayPage(
     </section>`;
 
   const niHaoSection = `
-    <section>
+    <section id="finance-nihao">
       <h2>Ni Hao to Pay</h2>
       ${niHaoDue.length ? `<div class="table"><table><thead><tr><th>Tracking</th><th>Customer</th><th>Status</th><th class="finance-number">Ni Hao cost</th><th></th></tr></thead><tbody>${niHaoDue.map((row) => `<tr><td>${esc(row.tracking_number || "No tracking yet")}</td><td>${esc(row.full_name)}</td><td>${esc(row.status)}</td><td class="finance-number">${row.nihao_cost === null ? '<span class="muted">Not entered</span>' : `<strong>${esc(financePesos(BigInt(row.nihao_cost)))}</strong>${row.nihao_cost_source === "estimate" ? ' <span class="muted">(estimate)</span>' : ""}`}</td><td><a href="/admin/shipments?id=${encodeURIComponent(row.id)}">${canWrite ? "Mark Ni Hao paid" : "View"}</a></td></tr>`).join("")}</tbody></table></div>` : '<p class="muted">Ni Hao is paid for every active shipment.</p>'}
       <p class="muted">Pay from the shipment page with Mark Ni Hao paid. Add the transfer fee there too.</p>

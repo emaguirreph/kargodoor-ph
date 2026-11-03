@@ -44,6 +44,30 @@
       });
     });
   };
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", run);
-  else run();
+  // Red number next to Leads in the menu, like unread messages on a phone: leads not contacted yet.
+  const leadsCount = () => {
+    const badge = document.querySelector("[data-leads-count]");
+    if (!badge || !window.fetch) return;
+    fetch("/admin/leads?count=1", { credentials: "same-origin", headers: { accept: "application/json" } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        const n = Number(data && data.toContact);
+        if (!n) return;
+        badge.textContent = n > 99 ? "99+" : String(n);
+        badge.setAttribute("aria-label", n + " lead" + (n === 1 ? "" : "s") + " to contact");
+        badge.hidden = false;
+        // On a phone the menu starts closed, so show the same number on the Menu button.
+        const toggle = document.querySelector(".mobile-nav-toggle");
+        if (toggle && !toggle.querySelector(".nav-count")) {
+          const copy = badge.cloneNode(true);
+          copy.removeAttribute("data-leads-count");
+          copy.style.marginLeft = "8px";
+          toggle.appendChild(copy);
+        }
+      })
+      .catch(() => {});
+  };
+  const start = () => { run(); leadsCount(); };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
+  else start();
 })();
