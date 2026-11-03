@@ -2268,3 +2268,28 @@ test("Invoices list: KargoDoor charge, ₱30 transfer fee and delivery fee in th
   assert.match(html, /₱500\.00<\/td>\s*<td class="inv-num">₱30\.00<\/td>\s*<td class="inv-num">₱231\.00<\/td>\s*<td class="inv-num"><strong>₱761\.00<\/strong><small class="muted">Paid<\/small>/);
   assert.match(html, /<td>GCash<\/td>/);
 });
+
+test("Costs paid before the opening cash count under Cash (owners), which goes negative; columns Date, Category, Customer / Payee, Description, Account", async () => {
+  const { db, sql } = database();
+  const { readLedger, walletBalances, walletBalancesSection, moneyLedgerPage } = await import("../../lib/admin/money-ledger");
+  sql.prepare("INSERT INTO finance_cash_entries (id, entry_date, entry_type, amount, notes, bank_account, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)")
+    .run(randomUUID(), "2026-10-16", "Opening Cash Balance", 2500000, "Opening", "kd-unionbank", "2026-10-16", "2026-10-16");
+  const expense = sql.prepare("INSERT INTO expenses (id, expense_date, category, payee, description, amount, payment_method, paid_from_account, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)");
+  expense.run(randomUUID(), "2026-08-28", "Permits / Government Fees", "DTI", "DTI Registration", 203000, "GCash", null, "2026-08-28", "2026-08-28");
+  expense.run(randomUUID(), "2026-09-16", "Marketing / Advertising", "Great Image", "Tarpaulin", 90000, "Cash", null, "2026-09-16", "2026-09-16");
+  expense.run(randomUUID(), "2026-11-02", "Freight / Ni Hao Cost", "Ni Hao", "Ni Hao freight cost", 70000, "GCash", null, "2026-11-02", "2026-11-02");
+  const { rows } = await readLedger(db, "2026-11-30");
+  const { byWallet } = walletBalances(rows);
+  assert.equal(byWallet.cash, -293000, "owners paid ₱2,930 before opening: KargoDoor owes them");
+  assert.equal(byWallet["kd-gcash"], -70000, "only the KargoDoor GCash payment after opening");
+  assert.equal(byWallet["kd-unionbank"], 2500000);
+  const cards = await walletBalancesSection(db);
+  assert.match(cards, /-₱2,930\.00|₱-2,930\.00|\(₱2,930\.00\)|−₱2,930\.00/);
+  assert.match(cards, /Pay it back from UnionBank/);
+  const gcashTab = await (await moneyLedgerPage(db, new URL("http://x/admin/finance/ledger?account=kd-gcash"), "Admin", true)).text();
+  assert.doesNotMatch(gcashTab, /DTI Registration|Tarpaulin/);
+  const cashTab = await (await moneyLedgerPage(db, new URL("http://x/admin/finance/ledger?account=cash"), "Admin", true)).text();
+  assert.match(cashTab, /DTI Registration/);
+  assert.match(cashTab, /<th>Date<\/th><th>Category<\/th><th>Customer \/ Payee<\/th><th>Description<\/th><th>Account<\/th>/);
+  assert.match(cashTab, /data-href="\/admin\/finance\/expenses\?edit=/);
+});
