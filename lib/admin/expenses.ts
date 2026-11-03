@@ -5,18 +5,12 @@ import { AdminError, canDeleteAdmin, isRestrictedStaff, type AdminUser } from ".
 import { page, esc, pesos, input, hidden } from "./ui";
 import { philippineToday } from "./finance-dates";
 import { proofCell, proofCss, readProofs } from "./payment-proof";
+import { deliveryCategory, niHaoCategory, transferFeesCategory } from "./cost-breakdown";
 import { gcashTransferSection, lastGcashTransferFee } from "./transfer-fees";
 import { costBreakdown, costBreakdownCards } from "./cost-breakdown";
 import { bankAccountLabel, bankAccountSelect, kargodoorBankAccounts, nihaoBankAccounts } from "./bank-accounts";
 
 const path = "/admin/finance/expenses";
-const fields = [
-  ["expense_date", "Expense date"], ["category", "Category"],
-  ["payee", "Payee"], ["description", "Description"], ["amount", "Amount"],
-  ["payment_method", "Payment method"], ["paid_from_account", "Paid from"], ["paid_to_account", "Paid to"],
-  ["reference_number", "Reference number"], ["notes", "Notes"],
-] as const;
-
 export async function saveExpense(db: D1Database, values: z.infer<typeof expenseSchema>, createdBy?: string) {
   const now = new Date().toISOString();
   await db.prepare(`INSERT INTO expenses
@@ -207,23 +201,35 @@ export async function expensesPage(db: D1Database, url: URL, user: AdminUser | s
     .bind(...(staff ? [actor.id] : []), filters.from, filters.from, filters.to, filters.to, filters.category, filters.category,
       filters.payment_method, filters.payment_method, filters.q, filters.q, filters.q, filters.q, filters.q)
     .all<RecordData>();
-  // The list leaves out Reference number (Em, 2026-11-02); the add/edit form still has it.
-  const listFields = fields.filter(([key]) => key !== "reference_number");
-  // Short columns never wrap; Description and Notes take the room that is left.
-  const cellClass = (key: string) => ["expense_date", "amount", "payment_method"].includes(key) ? ` class="exp-${key === "amount" ? "num" : "tight"}"` : key === "description" || key === "notes" ? ' class="exp-wide"' : "";
-  // Ni Hao cost, transfer fees and delivery fees are separate rows, each
-  // counted on its own in the cards above the list (Em, 2026-11-03).
-  const rows = results;
-  const proofs = await readProofs(db, "expense", rows.map((row) => String(row.id)));
-  // Keep the filters when an upload comes back to the list.
-  const listBack = `${path}${url.search ? `?${new URLSearchParams([...url.searchParams].filter(([key]) => ["from", "to", "category", "payment_method", "q"].includes(key)))}` : ""}`.replace(/\?$/, "");
-  const table = results.length ? `${canWrite ? '<p class="muted proof-hint">Proof of payment: drag the receipt or screenshot onto an expense\'s Proof box, or click Add proof.</p>' : ""}<div class="table"><table class="expense-list"><thead><tr>
-    ${canWrite ? '<th class="exp-tight">Actions</th>' : ""}${listFields.map(([key, label]) => `<th${cellClass(key)}>${label}</th>${key === "amount" ? '<th class="exp-tight">Proof</th>' : ""}`).join("")}</tr></thead><tbody>
-    ${rows.map((row) => `<tr>${canWrite ? `<td class="exp-tight"><a href="${path}?edit=${esc(encodeURIComponent(String(row.id)))}">Edit</a>${canDelete ? `<br><a href="${path}?delete=${esc(encodeURIComponent(String(row.id)))}">Delete</a>` : ""}</td>` : ""}
-      ${listFields.map(([key]) => `<td${cellClass(key)}>${key === "amount" ? esc(pesos(row[key])) : key === "paid_from_account" || key === "paid_to_account" ? esc(bankAccountLabel(row[key])) || "—" : esc(row[key]) || "—"}</td>${key === "amount" ? `<td>${proofCell({ kind: "expense", id: String(row.id), proof: proofs.get(String(row.id)), csrf, canWrite, back: listBack }).inline}</td>` : ""}`).join("")}</tr>`).join("")}
-    </tbody></table></div>${proofCss}
-    <style>.expense-list .exp-tight,.expense-list .exp-num{white-space:nowrap;overflow-wrap:normal;word-break:normal}.expense-list .exp-num{text-align:right;font-variant-numeric:tabular-nums}.expense-list th.exp-num{text-align:right}.expense-list .exp-wide{min-width:200px}.expense-list .exp-split{display:block;font-size:.8rem}.expense-list th,.expense-list td{overflow-wrap:break-word;word-break:normal}</style>` : "<p>No expenses found.</p>";
-  const notice = url.searchParams.get("deleted") === "1" ? "Expense deleted." : url.searchParams.get("updated") === "1" ? "Expense updated." : url.searchParams.get("saved") === "1" ? "Expense saved. Drop its proof of payment on the Proof box in the list." : url.searchParams.get("proof") === "1" ? "Proof of payment uploaded." : "";
+  // Columns Em asked for (2026-11-03): Amount (the cost itself: Ni Hao
+  // shipping, marketing...), transfer fee and delivery fee each in its own
+  // column, one row per shipment, then the total. The
+  // proof lives in Edit expense, not the list.
+  const lines = groupExpenses(results);
+  const editLink = (label: string, row: RecordData | undefined) => row ? `<a href="${path}?edit=${esc(encodeURIComponent(String(row.id)))}">${label}</a>` : "";
+  const deleteLink = (label: string, row: RecordData | undefined) => row && canDelete ? `<a href="${path}?delete=${esc(encodeURIComponent(String(row.id)))}">${label}</a>` : "";
+  const many = (line: ExpenseLine) => line.records.length > 1;
+  const actions = (line: ExpenseLine) => {
+    if (!many(line)) return [editLink("Edit", line.records[0]), deleteLink("Delete", line.records[0])].filter(Boolean).join("<br>");
+    return [editLink("Edit Ni Hao", line.niHao), editLink("Edit fee", line.fee), editLink("Edit delivery", line.delivery),
+      deleteLink("Delete Ni Hao", line.niHao), deleteLink("Delete fee", line.fee), deleteLink("Delete delivery", line.delivery)].filter(Boolean).join("<br>");
+  };
+  const money = (row: RecordData | undefined) => row ? esc(pesos(row.amount)) : '<span class="muted">—</span>';
+  const accounts = (line: ExpenseLine, key: "paid_from_account" | "paid_to_account") => [...new Set(line.records.map((row) => bankAccountLabel(row[key])).filter(Boolean))].map(esc).join("<br>") || "—";
+  const notes = (line: ExpenseLine) => line.records.map((row) => String(row.notes ?? "").trim()).filter(Boolean).map(esc).join("<br>") || "—";
+  const table = results.length ? `<div class="table"><table class="expense-list"><thead><tr>
+    ${canWrite ? '<th class="exp-tight">Actions</th>' : ""}<th class="exp-tight">Date</th><th>Category</th><th>Payee</th><th class="exp-wide">Description</th>
+    <th class="exp-num">Amount</th><th class="exp-num">Transfer fee</th><th class="exp-num">Delivery fee</th><th class="exp-num">Total</th>
+    <th>Paid from</th><th>Paid to</th><th class="exp-wide">Notes</th></tr></thead><tbody>
+    ${lines.map((line) => `<tr>${canWrite ? `<td class="exp-tight">${actions(line)}</td>` : ""}
+      <td class="exp-tight">${esc(line.main.expense_date)}</td><td>${esc(line.main.category)}</td><td>${esc(line.main.payee) || "—"}</td>
+      <td class="exp-wide">${esc(line.main.description)}</td>
+      <td class="exp-num">${money(line.niHao ?? line.other)}</td><td class="exp-num">${money(line.fee)}</td><td class="exp-num">${money(line.delivery)}</td>
+      <td class="exp-num"><strong>${esc(pesos(line.total))}</strong></td>
+      <td>${accounts(line, "paid_from_account")}</td><td>${accounts(line, "paid_to_account")}</td><td class="exp-wide">${notes(line)}</td></tr>`).join("")}
+    </tbody></table></div>
+    <style>.expense-list .exp-tight,.expense-list .exp-num{white-space:nowrap;overflow-wrap:normal;word-break:normal}.expense-list .exp-num{text-align:right;font-variant-numeric:tabular-nums}.expense-list .exp-wide{min-width:200px}.expense-list .exp-split{display:block;font-size:.8rem}.expense-list th,.expense-list td{overflow-wrap:break-word;word-break:normal;vertical-align:top}</style>` : "<p>No expenses found.</p>";
+  const notice = url.searchParams.get("deleted") === "1" ? "Expense deleted." : url.searchParams.get("updated") === "1" ? "Expense updated." : url.searchParams.get("saved") === "1" ? "Expense saved. To add its proof of payment, click Edit." : url.searchParams.get("proof") === "1" ? "Proof of payment uploaded." : "";
   // Owner money, opening cash and adjustments are not sales, but they are
   // money in, so they sit next to money out (staff only see their expenses).
   const moneyIn = staff ? [] : (await db.prepare(`SELECT id, entry_date, entry_type, amount, reference_number, notes
@@ -234,7 +240,7 @@ export async function expensesPage(db: D1Database, url: URL, user: AdminUser | s
     ${moneyIn.length ? `<div class="table"><table><thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Notes</th></tr></thead><tbody>${moneyIn.map((row) => `<tr><td>${esc(row.entry_date)}</td><td>${esc(row.entry_type)}</td><td><strong>${esc(pesos(row.amount))}</strong></td><td>${esc(row.notes) || "—"}</td></tr>`).join("")}</tbody></table></div>` : '<p class="muted">No money-in records yet.</p>'}</section>`;
   return page("Expenses", `${notice ? `<p class="notice" role="status">${notice}</p>` : ""}
     <section><div class="actions">${staff ? "" : `<a href="/admin/finance">Money Today</a>`}<a href="${path}"><strong>Expenses</strong></a>${staff ? "" : `<a href="/admin/finance/accounts">Bank Accounts</a>`}${canWrite ? `<a class="button" href="${path}?new=1">Add Expense</a>` : ""}</div>
-    ${staff ? "" : `<p class="muted">Paying Ni Hao? Use Mark Ni Hao paid in Edit shipment › Ni Hao tab. Its transfer fee is saved with it as its own row. Moving GCash to UnionBank? Use the box below.</p>`}</section>
+    ${staff ? "" : `<p class="muted">Paying Ni Hao? Use Mark Ni Hao paid in Edit shipment › Ni Hao tab. Its transfer fee and the rider delivery show in the same row, each in its own column. Moving GCash to UnionBank? Use the box below.</p>`}</section>
     <section><form method="get" action="${path}" class="search">
       ${input("q", "Search", filters)}${input("from", "From Date", filters, "date")}${input("to", "To Date", filters, "date")}
       ${dropdown("category", "Category", expenseCategories, filters.category, "All Categories")}
@@ -244,4 +250,48 @@ export async function expensesPage(db: D1Database, url: URL, user: AdminUser | s
     ${costBreakdownCards(costBreakdown(results))}
     <section>${table}</section>
     ${moneyInSection}`, actor.name, 200, {}, canWrite, staff);
+}
+
+export type ExpenseLine = {
+  main: RecordData;
+  records: RecordData[];
+  niHao?: RecordData;
+  fee?: RecordData;
+  delivery?: RecordData;
+  /** Any other expense (marketing, rent...): its amount goes in the Amount column. */
+  other?: RecordData;
+  total: number;
+};
+
+/**
+ * One list row per shipment: its Ni Hao payment, the transfer fee to Ni Hao
+ * and the rider delivery (same tracking number) share a row, each in its own
+ * column. Every other expense is its own row. The records stay separate.
+ */
+export function groupExpenses(results: RecordData[]): ExpenseLine[] {
+  const key = (row: RecordData) => String(row.tracking_number ?? "").trim().toLowerCase();
+  const isFee = (row: RecordData) => row.category === transferFeesCategory;
+  const isShipmentFee = (row: RecordData) => isFee(row) && / to Ni Hao for /.test(String(row.description ?? ""));
+  const isDelivery = (row: RecordData) => row.category === deliveryCategory;
+  const lines: ExpenseLine[] = [];
+  const byTracking = new Map<string, ExpenseLine>();
+  const slot = (row: RecordData): "niHao" | "fee" | "delivery" | null =>
+    row.category === niHaoCategory ? "niHao" : isFee(row) ? "fee" : isDelivery(row) ? "delivery" : null;
+  for (const row of results) {
+    const kind = slot(row);
+    const groupable = key(row) && (kind === "niHao" || isShipmentFee(row) || (kind === "delivery" && /^Delivery for /.test(String(row.description ?? ""))));
+    const existing = groupable ? byTracking.get(key(row)) : undefined;
+    if (existing && kind && !existing[kind]) {
+      existing[kind] = row;
+      existing.records.push(row);
+      existing.total += Number(row.amount ?? 0) || 0;
+      if (kind === "niHao") existing.main = row;
+      continue;
+    }
+    const line: ExpenseLine = { main: row, records: [row], total: Number(row.amount ?? 0) || 0 };
+    line[kind ?? "other"] = row;
+    lines.push(line);
+    if (groupable && !existing) byTracking.set(key(row), line);
+  }
+  return lines;
 }
