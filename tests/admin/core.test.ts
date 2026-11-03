@@ -2293,3 +2293,22 @@ test("Costs paid before the opening cash count under Cash (owners), which goes n
   assert.match(cashTab, /<th>Date<\/th><th>Category<\/th><th>Customer \/ Payee<\/th><th>Description<\/th><th>Account<\/th>/);
   assert.match(cashTab, /data-href="\/admin\/finance\/expenses\?edit=/);
 });
+
+test("Money In & Out profit card: customer payments minus Ni Hao, transfer fees and delivery; owner money left out", async () => {
+  const { shipmentProfit } = await import("../../lib/admin/money-ledger");
+  const row = (direction: "in" | "out", type: string, amount: number, link: string, transfer = false) =>
+    ({ date: "2026-11-01", created: "", direction, type, who: "", details: "", tracking: "", method: "", account: "", reference: "", amount, link, wallet: "kd-unionbank" as const, balance: null, walletBalance: null, transfer });
+  const result = shipmentProfit([
+    row("in", "Customer payment", 3076600, "/admin/invoices?id=1"),
+    row("in", "Opening Cash Balance", 2500000, "/admin/finance/cash"),
+    row("in", "Owner Contribution", 100000, "/admin/finance/cash"),
+    row("out", "Freight / Ni Hao Cost", 2706500, "/admin/finance/expenses?edit=1"),
+    row("out", "Bank / Payment Fees", 2000, "/admin/finance/expenses?edit=2"),
+    row("out", "Local Delivery / Trucking", 23100, "/admin/finance/expenses?edit=3"),
+    row("out", "Permits / Government Fees", 1211380, "/admin/finance/expenses?edit=4"),
+    row("out", "Transfer", 50000, "/admin/finance/expenses#gcash-transfer", true),
+  ]);
+  assert.equal(result.customerPayments, 3076600);
+  assert.equal(result.profit, 3076600 - 2706500 - 2000 - 23100);
+  assert.equal(result.otherCosts, 1211380);
+});
