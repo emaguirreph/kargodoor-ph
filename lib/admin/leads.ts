@@ -1,7 +1,7 @@
 import type { D1Database } from "@cloudflare/workers-types";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { randomUUID } from "node:crypto";
-import { authenticate, AdminError, canMutateAdmin, checkCsrf, csrfToken, type AdminEnv } from "./security";
+import { authenticate, AdminError, canMutateAdmin, checkCsrf, csrfToken, isRestrictedStaff, type AdminEnv } from "./security";
 import { esc, page, pesos } from "./ui";
 import { copyButton, copyScript } from "./shipping-instructions";
 import { finishMessage } from "./customer-messages";
@@ -80,6 +80,11 @@ export async function leadsPage(request: Request, envOverride?: AdminEnv): Promi
     const env = envOverride ?? ((await getCloudflareContext()).env as unknown as AdminEnv);
     const user = await authenticate(request, env);
     const db = env.ADMIN_DB, url = new URL(request.url), path = "/admin/leads";
+    // Count for the red number next to Leads in the menu: leads not contacted yet.
+    if (request.method === "GET" && url.searchParams.get("count") === "1") {
+      const row = isRestrictedStaff(user) ? null : await db.prepare("SELECT COUNT(*) AS n FROM leads WHERE archived_at IS NULL AND contacted_status='No'").first<{ n: number }>();
+      return new Response(JSON.stringify({ toContact: Number(row?.n ?? 0) }), { headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
+    }
     if (request.method === "POST") {
       if (!canMutateAdmin(user)) throw new AdminError("Viewer access is read-only.", 403);
       const form = await request.formData();

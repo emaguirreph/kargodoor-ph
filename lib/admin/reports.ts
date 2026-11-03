@@ -135,7 +135,6 @@ export async function dashboard(
   const summary = await db
     .prepare(
       `SELECT
-      (SELECT COUNT(*) FROM customers) AS customers,
       (SELECT COUNT(*) FROM shipments WHERE status NOT IN ('Delivered','Cancelled') AND archived_at IS NULL) AS active,
       (SELECT COUNT(*) FROM leads WHERE archived_at IS NULL AND contacted_status='No') AS new_leads,
       (SELECT COUNT(*) FROM shipments WHERE nihao_cost_source='estimate' AND status != 'Cancelled' AND archived_at IS NULL) AS estimated_costs,
@@ -175,70 +174,63 @@ export async function dashboard(
     ).results.map((row) => [row.status, Number(row.n)]),
   );
 
-  const { readSimpleSummary, simpleSummarySection, financePesos } = await import("./finance-summary");
+  const { readSimpleSummary, financePesos } = await import("./finance-summary");
+  const { niHaoExpenseCategory } = await import("./nihao-payment");
   const simple = await readSimpleSummary(db);
 
+  // Recently updated shipments with where the money stands on each, like the shipment page.
   const recent = (
     await db
       .prepare(
-        `SELECT s.id,s.tracking_number,c.full_name,s.status,s.updated_at
+        `SELECT s.id,s.tracking_number,c.full_name,s.status,
+          (SELECT i.total + i.other_charge FROM invoices i
+            WHERE i.shipment_id=s.id AND i.status != 'Void' AND i.archived_at IS NULL
+            ORDER BY i.created_at DESC LIMIT 1) AS invoice_total,
+          (SELECT i.status FROM invoices i
+            WHERE i.shipment_id=s.id AND i.status != 'Void' AND i.archived_at IS NULL
+            ORDER BY i.created_at DESC LIMIT 1) AS invoice_status,
+          (SELECT COALESCE(SUM(p.amount),0) FROM payments p JOIN invoices i ON i.id=p.invoice_id
+            WHERE i.shipment_id=s.id AND i.status != 'Void' AND i.archived_at IS NULL) AS customer_paid,
+          EXISTS (SELECT 1 FROM expenses e WHERE e.category=? AND s.tracking_number IS NOT NULL
+            AND e.tracking_number = s.tracking_number COLLATE NOCASE) AS nihao_paid
         FROM shipments s
         JOIN customers c ON c.id=s.customer_id
         WHERE s.archived_at IS NULL
         ORDER BY s.updated_at DESC,s.id
         LIMIT 6`,
       )
+      .bind(niHaoExpenseCategory)
       .all<RecordData>()
   ).results;
 
-  const [followUp, recentInvoices] = await Promise.all([
-    db
-      .prepare(
-        `SELECT f.note,f.updated_at,u.name AS updater_name,u.email AS updater_email
-        FROM staff_follow_up f
-        JOIN admin_users u ON u.id=f.updated_by_admin_user_id
-        WHERE f.id=1`,
-      )
-      .first<RecordData>(),
-
-    db
-      .prepare(
-        `SELECT
-          i.id,
-          i.invoice_number,
-          i.total,
-          i.status,
-          i.created_at,
-          c.full_name,
-          COALESCE(
-            (SELECT SUM(p.amount) FROM payments p WHERE p.invoice_id=i.id),
-            0
-          ) AS paid_amount
-        FROM invoices i
-        JOIN customers c ON c.id=i.customer_id
-        WHERE i.archived_at IS NULL
-        ORDER BY i.created_at DESC,i.id
-        LIMIT 6`,
-      )
-      .all<RecordData>(),
-  ]);
+  const followUp = await db
+    .prepare(
+      `SELECT f.note,f.updated_at,u.name AS updater_name,u.email AS updater_email
+      FROM staff_follow_up f
+      JOIN admin_users u ON u.id=f.updated_by_admin_user_id
+      WHERE f.id=1`,
+    )
+    .first<RecordData>();
 
   const note = String(followUp?.note ?? "");
-  const invoiceRows = recentInvoices.results;
 
-  const invoiceStatus = (row: RecordData) => {
-    const total = Number(row.total ?? 0);
-    const paid = Number(row.paid_amount ?? 0);
-
-    if (total > 0 && paid >= total) return "Paid";
-    if (paid > 0) return "Partial";
-    return String(row.status || "Unpaid");
+  const pill = (tone: string, text: string) =>
+    `<span class="k-pill" data-k="${tone}">${esc(text)}</span>`;
+  const customerPaidPill = (row: RecordData) => {
+    const total = Number(row.invoice_total ?? 0);
+    const paid = Number(row.customer_paid ?? 0);
+    if (row.invoice_status === "Paid" || (total > 0 && paid >= total)) return pill("green", "Paid");
+    if (paid > 0) return pill("amber", "Partly paid");
+    return pill("red", "Not paid");
   };
 
   const count = (value: unknown) => Number(value ?? 0);
   const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
   const statusLink = (status: string) =>
     `/admin/shipments?status=${encodeURIComponent(status)}`;
+
+  // Shipments still missing Ni Hao's actual cost: no cost at all, or only the estimate.
+  const needCost = simple.goingOutUnknown + count(summary?.estimated_costs);
 
   const attention = [
     {
@@ -251,9 +243,9 @@ export async function dashboard(
     {
       show: simple.unbilled.results.length > 0,
       label: `${plural(simple.unbilled.results.length, "shipment", "shipments")} to bill · ${financePesos(simple.unbilledTotal)}`,
-      detail: "No invoice issued yet.",
+      detail: "Not sent to the customer yet. Check the draft invoice and send it.",
       href: "/admin/finance#finance-unbilled",
-      action: "Create Invoices",
+      action: "Open list",
     },
     {
       show: count(unpaid?.n) > 0,
@@ -268,22 +260,18 @@ export async function dashboard(
     {
       show: simple.goingOut > BigInt(0),
       label: `Ni Hao to pay · ${financePesos(simple.goingOut)}`,
-      detail: "When paid, add it under Expenses as Freight / Ni Hao Cost with the tracking number.",
-      href: "/admin/finance/expenses",
-      action: "Open Expenses",
-    },
-    {
-      show: simple.goingOutUnknown > 0,
-      label: `${plural(simple.goingOutUnknown, "shipment has", "shipments have")} no Ni Hao cost yet`,
-      detail: "Add the cost so profit is correct.",
+      detail: "Use Mark Ni Hao paid inside Edit shipment.",
       warn: true,
-      href: "/admin/shipments",
-      action: "Open Shipments",
+      href: "/admin/finance#finance-nihao",
+      action: "Open list",
     },
     {
-      show: count(summary?.estimated_costs) > 0,
-      label: `${plural(count(summary?.estimated_costs), "shipment uses", "shipments use")} an estimated Ni Hao cost`,
-      detail: "Replace it with Ni Hao's actual quote once they send it.",
+      show: needCost > 0,
+      label: `${plural(needCost, "shipment needs", "shipments need")} Ni Hao's actual cost`,
+      detail: simple.goingOutUnknown > 0
+        ? `${simple.goingOutUnknown} with no cost yet, so profit is not correct. Add it in Edit shipment.`
+        : "Estimate only. Add Ni Hao's actual cost in Edit shipment once they send it.",
+      warn: simple.goingOutUnknown > 0,
       href: "/admin/shipments",
       action: "Open Shipments",
     },
@@ -314,314 +302,97 @@ export async function dashboard(
     };
   });
 
+  const noteEditor = canWrite
+    ? `<details class="team-note-editor">
+        <summary>Edit note</summary>
+        <form action="/admin/dashboard" method="post">
+          <input name="csrf" type="hidden" value="${esc(csrf)}">
+          <label>
+            Team note
+            <textarea name="note" maxlength="4000" placeholder="An announcement, reminder, urgent note or task for the team...">${esc(note)}</textarea>
+          </label>
+          <div class="actions"><button>Save note</button></div>
+        </form>
+      </details>`
+    : "";
+
   return page(
     "Dashboard",
     `
       <style>
-        .dashboard-topbar{
-          display:flex;
-          align-items:flex-start;
-          justify-content:space-between;
-          gap:20px;
-          margin-bottom:22px
-        }
-        .dashboard-date{
-          margin:0;
-          color:#64748b
-        }
-        .dashboard-actions{
-          display:flex;
-          flex-wrap:wrap;
-          justify-content:flex-end;
-          gap:10px
-        }
-        .dashboard-actions .button{
-          white-space:nowrap
-        }
-        .dashboard-heading{
-          margin:8px 0 12px
-        }
-        .dashboard-snapshot{
-          display:grid;
-          grid-template-columns:repeat(3,minmax(0,1fr));
-          gap:14px;
-          margin-bottom:22px
-        }
-        .dashboard-stat{
-          background:#fff;
-          border:1px solid #dbe5ec;
-          border-radius:12px;
-          padding:18px;
-          min-width:0
-        }
-        .dashboard-stat span{
-          display:block;
-          color:#64748b;
-          font-size:.88rem;
-          margin-bottom:8px
-        }
-        .dashboard-stat strong{
-          display:block;
-          color:#154876;
-          font-size:1.55rem;
-          line-height:1.1;
-          white-space:nowrap;
-          overflow:hidden;
-          text-overflow:ellipsis
-        }
-        .dashboard-stat-new-leads{
-          background:#fff7f7;
-          border-color:#fecaca
-        }
-        .dashboard-stat-new-leads span,
-        .dashboard-stat-new-leads strong{
-          color:#b91c1c
-        }
-        .dashboard-middle{
-          display:grid;
-          grid-template-columns:minmax(0,1.7fr) minmax(280px,.8fr);
-          gap:20px;
-          margin-bottom:20px
-        }
-        .dashboard-panel{
-          background:#fff;
-          border:1px solid #dbe5ec;
-          border-radius:12px;
-          padding:22px;
-          min-width:0
-        }
-        .dashboard-panel-header{
-          display:flex;
-          align-items:center;
-          justify-content:space-between;
-          gap:16px;
-          margin-bottom:16px
-        }
-        .dashboard-panel-header h2{
-          margin:0
-        }
-        .communication-note{
-          border:1px solid #dbe5ec;
-          border-radius:10px;
-          padding:18px;
-          background:#f8fbfd;
-          min-height:130px
-        }
-        .communication-note p{
-          margin-top:0
-        }
-        .communication-note-text{
-          white-space:pre-wrap;
-          font-size:16px;
-          line-height:1.55;
-          font-weight:600;
-          color:#B45309
-        }
-        .communication-badge{
-          display:inline-block;
-          padding:4px 9px;
-          border-radius:999px;
-          background:#e8f1f8;
-          color:#154876;
-          font-size:.78rem;
-          font-weight:700;
-          margin-bottom:10px
-        }
-        .communication-editor{
-          margin-top:16px
-        }
-        .communication-editor summary{
-          cursor:pointer;
-          color:#154876;
-          font-weight:700
-        }
-        .communication-editor textarea{
-          min-height:120px
-        }
-        .freight-grid{
-          display:grid;
-          gap:12px
-        }
-        .freight-row{
-          display:flex;
-          justify-content:space-between;
-          gap:16px;
-          padding-bottom:10px;
-          border-bottom:1px solid #edf2f5
-        }
-        .freight-row:last-child{
-          border-bottom:0;
-          padding-bottom:0
-        }
-        .freight-row span{
-          color:#64748b
-        }
-        .freight-row strong{
-          white-space:nowrap;
-          text-align:right
-        }
-        .dashboard-bottom{
-          display:grid;
-          grid-template-columns:minmax(0,1fr) minmax(0,1fr);
-          gap:20px
-        }
-        .dashboard-panel .table{
-          margin-top:8px
-        }
-        .dashboard-panel table{
-          margin-bottom:0
-        }
-        .dashboard-panel th,
-        .dashboard-panel td{
-          vertical-align:middle
-        }
-        .dashboard-panel .panel-link{
-          white-space:nowrap
-        }
-        .status-pill{
-          display:inline-block;
-          border-radius:999px;
-          padding:3px 8px;
-          background:#eef4f8;
-          font-size:.78rem;
-          white-space:nowrap
-        }
-        .dashboard-attention{
-          margin-bottom:20px
-        }
-        .attention-list{
-          list-style:none;
-          margin:0;
-          padding:0;
-          display:grid;
-          gap:10px
-        }
-        .attention-list li{
-          display:flex;
-          align-items:center;
-          justify-content:space-between;
-          gap:16px;
-          padding:12px 14px;
-          border:1px solid #dbe5ec;
-          border-left:4px solid #1356c9;
-          border-radius:10px;
-          background:#f8fbfd
-        }
-        .attention-list li.attention-warn{
-          border-left-color:#b45309;
-          background:#fffaf0
-        }
-        .attention-list strong{
-          display:block;
-          color:#0b1f45
-        }
-        .attention-list span{
-          display:block;
-          color:#64748b;
-          font-size:.9rem;
-          margin-top:2px
-        }
-        .attention-list .button{
-          white-space:nowrap;
-          flex:0 0 auto
-        }
-        .dashboard-money{
-          margin:20px 0
-        }
-        .dashboard-money .finance-simple{
-          margin-bottom:6px
-        }
-        .dashboard-pipeline{
-          display:grid;
-          grid-template-columns:repeat(5,minmax(0,1fr));
-          gap:14px;
-          margin-bottom:22px
-        }
-        .pipeline-stage{
-          display:block;
-          background:#fff;
-          border:1px solid #dbe5ec;
-          border-radius:12px;
-          padding:16px;
-          min-width:0;
-          text-decoration:none;
-          color:inherit
-        }
-        .pipeline-stage:hover{
-          border-color:#1356c9
-        }
-        .pipeline-stage span{
-          display:block;
-          color:#64748b;
-          font-size:.88rem;
-          margin-bottom:6px
-        }
-        .pipeline-stage strong{
-          display:block;
-          color:#154876;
-          font-size:1.55rem;
-          line-height:1.1
-        }
-        .pipeline-stage small{
-          display:block;
-          color:#64748b;
-          margin-top:6px;
-          font-size:.78rem
-        }
-        @media(max-width:1000px){
-          .dashboard-snapshot{
-            grid-template-columns:repeat(2,minmax(0,1fr))
-          }
-          .dashboard-pipeline{
-            grid-template-columns:repeat(3,minmax(0,1fr))
-          }
-          .dashboard-middle,
-          .dashboard-bottom{
-            grid-template-columns:1fr
-          }
-        }
+        .dashboard-topbar{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:16px}
+        .dashboard-date{margin:0;color:#64748b}
+        .dashboard-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px}
+        .dashboard-actions .button{white-space:nowrap}
+        .team-note{display:flex;flex-wrap:wrap;align-items:flex-start;gap:6px 12px;background:#fffbe6;border:1px solid #f0d77a;border-radius:12px;padding:12px 16px;margin-bottom:16px}
+        .team-note-body{flex:1 1 300px;min-width:0}
+        .team-note-text{margin:0;white-space:pre-wrap;font-weight:600;color:#8a4b00}
+        .team-note-body .muted{margin:2px 0 0;font-size:.82rem}
+        .team-note-editor{flex:0 0 auto}
+        .team-note-editor summary{cursor:pointer;color:#0753ad;font-weight:700;list-style:none}
+        .team-note-editor summary::-webkit-details-marker{display:none}
+        .team-note-editor[open]{flex:1 1 100%}
+        .team-note-editor[open] summary{margin-bottom:8px}
+        .team-note-editor textarea{min-height:100px}
+        .dashboard-panel{background:#fff;border:1px solid #dbe5ec;border-radius:12px;padding:20px;min-width:0;margin-bottom:16px}
+        .dashboard-panel-header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px}
+        .dashboard-panel-header h2{margin:0}
+        .dashboard-panel .panel-link{white-space:nowrap;font-weight:600}
+        .dashboard-panel .table{margin-top:14px}
+        .dashboard-panel table{margin-bottom:0}
+        .dashboard-panel th,.dashboard-panel td{vertical-align:middle}
+        .status-pill{display:inline-block;border-radius:999px;padding:3px 8px;background:#eef4f8;font-size:.78rem;white-space:nowrap}
+        .attention-list{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+        .attention-list li{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 14px;border:1px solid #dbe5ec;border-left:4px solid #1356c9;border-radius:10px;background:#f8fbfd}
+        .attention-list li.attention-warn{border-left-color:#c62828;background:#fff6f6}
+        .attention-list strong{display:block;color:#0b1f45}
+        .attention-list span{display:block;color:#64748b;font-size:.9rem;margin-top:2px}
+        .attention-list .button{white-space:nowrap;flex:0 0 auto}
+        .money-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+        .money-card{border:1px solid #dbe5ec;border-top:4px solid #1356c9;border-radius:10px;padding:14px 16px;min-width:0}
+        .money-card.money-have{border-top-color:#2e7d32}
+        .money-card.money-out{border-top-color:#c62828}
+        .money-card span{display:block;color:#64748b;font-size:.88rem}
+        .money-card strong{display:block;color:#154876;font-size:1.5rem;line-height:1.2;margin-top:4px;overflow-wrap:anywhere}
+        .dashboard-pipeline{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+        .pipeline-stage{display:block;background:#fff;border:1px solid #dbe5ec;border-radius:12px;padding:14px;min-width:0;text-decoration:none;color:inherit}
+        .pipeline-stage:hover{border-color:#1356c9}
+        .pipeline-stage span{display:block;color:#64748b;font-size:.88rem;margin-bottom:6px}
+        .pipeline-stage strong{display:block;color:#154876;font-size:1.5rem;line-height:1.1}
+        .pipeline-stage small{display:block;color:#64748b;margin-top:6px;font-size:.78rem}
+        @media(max-width:1000px){.dashboard-pipeline{grid-template-columns:repeat(3,minmax(0,1fr))}}
         @media(max-width:760px){
-          .dashboard-topbar{
-            flex-direction:column
-          }
-          .dashboard-actions{
-            justify-content:flex-start
-          }
-          .dashboard-snapshot{
-            grid-template-columns:1fr 1fr
-          }
-          .dashboard-pipeline{
-            grid-template-columns:1fr 1fr
-          }
-          .attention-list li{
-            flex-direction:column;
-            align-items:stretch
-          }
+          .dashboard-topbar{flex-direction:column;align-items:stretch}
+          .dashboard-actions{justify-content:flex-start}
+          .money-cards{grid-template-columns:1fr}
+          .dashboard-pipeline{grid-template-columns:1fr 1fr}
+          .attention-list li{flex-direction:column;align-items:stretch}
         }
-        @media(max-width:480px){
-          .dashboard-snapshot,
-          .dashboard-pipeline{
-            grid-template-columns:1fr
-          }
-        }
+        @media(max-width:480px){.dashboard-pipeline{grid-template-columns:1fr}}
       </style>
 
       <div class="dashboard-topbar">
-        <div>
-          <p class="dashboard-date">
-            Welcome back, ${esc(user.name)}.
-          </p>
-        </div>
+        <p class="dashboard-date">Welcome back, ${esc(user.name)}.</p>
         ${
           canWrite
             ? `<div class="dashboard-actions">
                 <a class="button" href="/admin/quotations?new=1">+ New Quotation</a>
                 <a class="button" href="/admin/shipments?new=1">+ Add Shipment</a>
-                <a class="button" href="/admin/invoices?new=1">+ Create Invoice</a>
-                <a class="button" href="/admin/invoices">Record Payment</a>
               </div>`
             : ""
         }
+      </div>
+
+      <div class="team-note">
+        <div class="team-note-body">
+          ${
+            note
+              ? `<p class="team-note-text">📌 ${esc(note)}</p>
+                 <p class="muted">Updated ${esc(followUp?.updated_at || "—")} by ${esc(followUp?.updater_name || followUp?.updater_email || "—")}</p>`
+              : `<p class="muted" style="margin:0">📌 <strong>Team note:</strong> No note yet.</p>`
+          }
+        </div>
+        ${noteEditor}
       </div>
 
       <section class="dashboard-panel dashboard-attention">
@@ -642,223 +413,82 @@ export async function dashboard(
                     </li>`,
                 )
                 .join("")}</ul>`
-            : `<p class="muted">All caught up. Nothing needs attention right now.</p>`
+            : `<p class="muted">All caught up. Nothing needs action right now.</p>`
         }
       </section>
 
-      <section class="dashboard-panel">
+      <section class="dashboard-panel dashboard-money">
         <div class="dashboard-panel-header">
-          <h2>Staff Communication</h2>
-          ${
-            canWrite
-              ? `<span class="communication-badge">Shared Team Note</span>`
-              : ""
-          }
+          <h2>Money</h2>
+          <a class="panel-link" href="/admin/finance">Open Money Today →</a>
+        </div>
+        <div class="money-cards">
+          <div class="money-card money-have">
+            <span>Money we have now</span>
+            <strong>${esc(financePesos(simple.cash))}</strong>
+          </div>
+          <div class="money-card">
+            <span>Coming in from customers</span>
+            <strong>${esc(financePesos(simple.comingIn))}</strong>
+          </div>
+          <div class="money-card money-out">
+            <span>Going out to Ni Hao</span>
+            <strong>${esc(financePesos(simple.goingOut))}</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="dashboard-panel dashboard-shipments">
+        <div class="dashboard-panel-header">
+          <h2>Shipments · ${esc(count(summary?.active))} active</h2>
+          <a class="panel-link" href="/admin/shipments">All shipments →</a>
         </div>
 
-        <div class="communication-note">
-          ${
-            note
-              ? `
-                  <div class="communication-badge">Important</div>
-                  <p class="communication-note-text">${esc(note)}</p>
-
-                  <p class="muted">
-                    Last updated ${esc(followUp?.updated_at || "—")}
-                    by ${esc(
-                      followUp?.updater_name ||
-                        followUp?.updater_email ||
-                        "—",
-                    )}
-                  </p>
-                `
-              : `
-                  <p class="muted">
-                    No staff communication has been added yet.
-                  </p>
-                `
-          }
+        <div class="dashboard-pipeline">
+          ${pipeline
+            .map(
+              (stage) => `
+                <a class="pipeline-stage" href="${esc(stage.href)}">
+                  <span>${esc(stage.label)}</span>
+                  <strong>${esc(stage.total)}</strong>
+                  <small>${stage.parts.length ? esc(stage.parts.map((part) => `${part.n} ${part.status}`).join(" · ")) : "None"}</small>
+                </a>`,
+            )
+            .join("")}
         </div>
 
         ${
-          canWrite
-            ? `
-                <details class="communication-editor">
-                  <summary>+ Add / Edit Message</summary>
-
-                  <form action="/admin/dashboard" method="post">
-                    <input
-                      name="csrf"
-                      type="hidden"
-                      value="${esc(csrf)}"
-                    >
-
-                    <label>
-                      Message
-                      <textarea
-                        name="note"
-                        maxlength="4000"
-                        placeholder="Add an announcement, reminder, urgent note, task, or general staff message..."
-                      >${esc(note)}</textarea>
-                    </label>
-
-                    <div class="actions">
-                      <button>Save Communication</button>
-                    </div>
-                  </form>
-                </details>
-              `
-            : ""
+          recent.length
+            ? `<div class="table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Recently updated</th>
+                      <th>Customer</th>
+                      <th>Status</th>
+                      <th>Customer paid</th>
+                      <th>Ni Hao paid</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${recent
+                      .map(
+                        (r) => `
+                          <tr>
+                            <td>${recordLink("shipments", r.id, r.tracking_number)}</td>
+                            <td>${esc(r.full_name)}</td>
+                            <td><span class="status-pill">${esc(r.status)}</span></td>
+                            <td>${customerPaidPill(r)}</td>
+                            <td>${Number(r.nihao_paid) ? pill("green", "Paid") : pill("red", "Not paid")}</td>
+                          </tr>`,
+                      )
+                      .join("")}
+                  </tbody>
+                </table>
+              </div>`
+            : `<p class="muted">No shipments yet.</p>`
         }
       </section>
-
-      <div class="dashboard-money">
-        ${simpleSummarySection(simple, "Money", "Where the business stands today.")}
-        <p><a class="panel-link" href="/admin/finance">View Finance →</a></p>
-      </div>
-
-      <h2 class="dashboard-heading">Shipments</h2>
-
-      <div class="dashboard-snapshot">
-        <div class="dashboard-stat dashboard-stat-new-leads">
-          <span>New Leads</span>
-          <strong>${esc(summary?.new_leads ?? 0)}</strong>
-        </div>
-
-        <div class="dashboard-stat">
-          <span>Customers</span>
-          <strong>${esc(summary?.customers ?? 0)}</strong>
-        </div>
-
-        <div class="dashboard-stat">
-          <span>Active Shipments</span>
-          <strong>${esc(summary?.active ?? 0)}</strong>
-        </div>
-      </div>
-
-      <div class="dashboard-pipeline">
-        ${pipeline
-          .map(
-            (stage) => `
-              <a class="pipeline-stage" href="${esc(stage.href)}">
-                <span>${esc(stage.label)}</span>
-                <strong>${esc(stage.total)}</strong>
-                <small>${stage.parts.length ? esc(stage.parts.map((part) => `${part.n} ${part.status}`).join(" · ")) : "None"}</small>
-              </a>`,
-          )
-          .join("")}
-      </div>
-
-      <div class="dashboard-bottom">
-        <section class="dashboard-panel">
-          <div class="dashboard-panel-header">
-            <h2>Recently Updated Shipments</h2>
-            <a class="panel-link" href="/admin/shipments">
-              View All →
-            </a>
-          </div>
-
-          ${
-            recent.length
-              ? `
-                <div class="table">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Tracking</th>
-                        <th>Customer</th>
-                        <th>Status</th>
-                      </tr>
-                    </thead>
-
-                    <tbody>
-                      ${recent
-                        .map(
-                          (r) => `
-                            <tr>
-                              <td>
-                                ${recordLink(
-                                  "shipments",
-                                  r.id,
-                                  r.tracking_number,
-                                )}
-                              </td>
-
-                              <td>${esc(r.full_name)}</td>
-
-                              <td>
-                                <span class="status-pill">
-                                  ${esc(r.status)}
-                                </span>
-                              </td>
-                            </tr>
-                          `,
-                        )
-                        .join("")}
-                    </tbody>
-                  </table>
-                </div>
-              `
-              : `<p class="muted">No shipments yet.</p>`
-          }
-        </section>
-
-        <section class="dashboard-panel">
-          <div class="dashboard-panel-header">
-            <h2>Recent Invoices &amp; Payments</h2>
-            <a class="panel-link" href="/admin/invoices">
-              View All →
-            </a>
-          </div>
-
-          ${
-            invoiceRows.length
-              ? `
-                <div class="table">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Customer</th>
-                        <th>Invoice</th>
-                        <th>Amount</th>
-                        <th>Status</th>
-                      </tr>
-                    </thead>
-
-                    <tbody>
-                      ${invoiceRows
-                        .map(
-                          (r) => `
-                            <tr>
-                              <td>${esc(r.full_name)}</td>
-
-                              <td>
-                                ${recordLink(
-                                  "invoices",
-                                  r.id,
-                                  r.invoice_number,
-                                )}
-                              </td>
-
-                              <td>${esc(pesos(r.total))}</td>
-
-                              <td>
-                                <span class="status-pill">
-                                  ${esc(invoiceStatus(r))}
-                                </span>
-                              </td>
-                            </tr>
-                          `,
-                        )
-                        .join("")}
-                    </tbody>
-                  </table>
-                </div>
-              `
-              : `<p class="muted">No invoices yet.</p>`
-          }
-        </section>
-      </div>
     `,
     user.name,
     200,
