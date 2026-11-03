@@ -201,8 +201,9 @@ export async function expensesPage(db: D1Database, url: URL, user: AdminUser | s
     .bind(...(staff ? [actor.id] : []), filters.from, filters.from, filters.to, filters.to, filters.category, filters.category,
       filters.payment_method, filters.payment_method, filters.q, filters.q, filters.q, filters.q, filters.q)
     .all<RecordData>();
-  // Columns Em asked for (2026-11-03): Ni Hao cost, transfer fee and delivery
-  // fee each in its own column, one row per shipment, then the total. The
+  // Columns Em asked for (2026-11-03): Amount (the cost itself: Ni Hao
+  // shipping, marketing...), transfer fee and delivery fee each in its own
+  // column, one row per shipment, then the total. The
   // proof lives in Edit expense, not the list.
   const lines = groupExpenses(results);
   const editLink = (label: string, row: RecordData | undefined) => row ? `<a href="${path}?edit=${esc(encodeURIComponent(String(row.id)))}">${label}</a>` : "";
@@ -218,12 +219,12 @@ export async function expensesPage(db: D1Database, url: URL, user: AdminUser | s
   const notes = (line: ExpenseLine) => line.records.map((row) => String(row.notes ?? "").trim()).filter(Boolean).map(esc).join("<br>") || "—";
   const table = results.length ? `<div class="table"><table class="expense-list"><thead><tr>
     ${canWrite ? '<th class="exp-tight">Actions</th>' : ""}<th class="exp-tight">Date</th><th>Category</th><th>Payee</th><th class="exp-wide">Description</th>
-    <th class="exp-num">Ni Hao cost</th><th class="exp-num">Transfer fee</th><th class="exp-num">Delivery fee</th><th class="exp-num">Total</th>
+    <th class="exp-num">Amount</th><th class="exp-num">Transfer fee</th><th class="exp-num">Delivery fee</th><th class="exp-num">Total</th>
     <th>Paid from</th><th>Paid to</th><th class="exp-wide">Notes</th></tr></thead><tbody>
     ${lines.map((line) => `<tr>${canWrite ? `<td class="exp-tight">${actions(line)}</td>` : ""}
       <td class="exp-tight">${esc(line.main.expense_date)}</td><td>${esc(line.main.category)}</td><td>${esc(line.main.payee) || "—"}</td>
       <td class="exp-wide">${esc(line.main.description)}</td>
-      <td class="exp-num">${money(line.niHao)}</td><td class="exp-num">${money(line.fee)}</td><td class="exp-num">${money(line.delivery)}</td>
+      <td class="exp-num">${money(line.niHao ?? line.other)}</td><td class="exp-num">${money(line.fee)}</td><td class="exp-num">${money(line.delivery)}</td>
       <td class="exp-num"><strong>${esc(pesos(line.total))}</strong></td>
       <td>${accounts(line, "paid_from_account")}</td><td>${accounts(line, "paid_to_account")}</td><td class="exp-wide">${notes(line)}</td></tr>`).join("")}
     </tbody></table></div>
@@ -257,6 +258,8 @@ export type ExpenseLine = {
   niHao?: RecordData;
   fee?: RecordData;
   delivery?: RecordData;
+  /** Any other expense (marketing, rent...): its amount goes in the Amount column. */
+  other?: RecordData;
   total: number;
 };
 
@@ -286,7 +289,7 @@ export function groupExpenses(results: RecordData[]): ExpenseLine[] {
       continue;
     }
     const line: ExpenseLine = { main: row, records: [row], total: Number(row.amount ?? 0) || 0 };
-    if (kind) line[kind] = row;
+    line[kind ?? "other"] = row;
     lines.push(line);
     if (groupable && !existing) byTracking.set(key(row), line);
   }
