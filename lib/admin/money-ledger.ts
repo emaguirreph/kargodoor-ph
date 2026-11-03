@@ -216,6 +216,8 @@ export async function moneyLedgerPage(db: D1Database, url: URL, userName: string
   const tabbed = Boolean(filters.account && filters.account !== "untagged");
   const shownBalance = (row: LedgerRow) => (tabbed ? row.walletBalance : row.balance);
   const balances = walletBalances(rows);
+  // Profit ignores the in/out and account filters: it always uses every customer payment and shipment cost in the dates shown.
+  const profit = shipmentProfit(filterLedger(rows, { ...filters, show: "", account: "" }));
 
   if (url.searchParams.get("download") === "csv") {
     const header = ["Date", "In / Out", "Category", "Customer / Payee", "Description", "Tracking No.", "Method", "Account", "Reference", "Money In PHP", "Money Out PHP", tabbed ? `${walletLabel(filters.account!)} Balance PHP` : "Balance PHP"];
@@ -275,11 +277,46 @@ export async function moneyLedgerPage(db: D1Database, url: URL, userName: string
       <div class="card"><span class="muted">In minus out</span><strong>${esc(pesos(totalIn - totalOut))}</strong></div>
       <div class="card"><span class="muted">${tabbed ? `${esc(walletLabel(filters.account!))} now` : "Cash on Hand now"}</span><strong>${esc(pesos(tabbed ? balances.byWallet[filters.account as Exclude<Wallet, "">] : cashNow))}</strong></div>
     </div>
+    ${profitCard(profit, Boolean(filters.from || filters.to || filters.q))}
     ${filters.show === "in" ? "" : costBreakdownCards(costBreakdown(shown.filter((row) => counted(row) && row.direction === "out" && !row.transfer).map((row) => ({ category: row.type, amount: row.amount }))), "Total money out")}
     <section>${shown.length ? `<div class="table"><table class="ledger"><thead><tr>
       <th>Date</th><th>Category</th><th>Customer / Payee</th><th>Description</th><th>Account</th>
       <th class="ledger-num">Money in</th><th class="ledger-num">Money out</th><th class="ledger-num">${tabbed ? `${esc(walletLabel(filters.account!))} balance` : "Balance"}</th>
     </tr></thead><tbody>${body}</tbody></table></div><script src="/admin-row-link.js" defer></script>` : "<p>No money in or out for these filters.</p>"}</section>`, userName, 200, {}, canWrite);
+}
+
+export type ShipmentProfit = { customerPayments: number; niHao: number; transferFees: number; delivery: number; profit: number; otherCosts: number };
+
+/**
+ * Profit from shipments (Em, 2026-11-03): customer payments minus Ni Hao
+ * cost, transfer fees and delivery paid to riders. Owner money (opening cash,
+ * owner contributions) and paying the owners back are not income or cost, so
+ * they are left out. Other costs (marketing, permits, website) are shown
+ * apart, not subtracted.
+ */
+export function shipmentProfit(rows: LedgerRow[]): ShipmentProfit {
+  const customerPayments = rows.filter((row) => row.direction === "in" && row.type === "Customer payment").reduce((sum, row) => sum + row.amount, 0);
+  const costs = costBreakdown(rows.filter((row) => row.direction === "out" && !row.transfer && row.link.startsWith("/admin/finance/expenses")).map((row) => ({ category: row.type, amount: row.amount })));
+  return {
+    customerPayments, niHao: costs.niHao, transferFees: costs.transferFees, delivery: costs.delivery,
+    profit: customerPayments - costs.niHao - costs.transferFees - costs.delivery, otherCosts: costs.other,
+  };
+}
+
+function profitCard(p: ShipmentProfit, filtered: boolean) {
+  const line = (label: string, amount: number, sign: string) => `<tr><td>${sign} ${esc(label)}</td><td class="ledger-num">${esc(pesos(amount))}</td></tr>`;
+  return `<section class="card profit-card">
+    <h2>Where is our profit?${filtered ? ' <small class="muted">(filters shown)</small>' : ""}</h2>
+    <table class="profit-calc"><tbody>
+      ${line("Customer payments", p.customerPayments, "")}
+      ${line("Ni Hao cost", p.niHao, "−")}
+      ${line("Transfer fees", p.transferFees, "−")}
+      ${line("Delivery paid to riders", p.delivery, "−")}
+      <tr class="profit-total"><td>= Profit from shipments</td><td class="ledger-num">${esc(pesos(p.profit))}</td></tr>
+    </tbody></table>
+    <p class="muted">"In minus out" above is cash movement, not profit. Money the owners put in, and the costs they paid from their own pockets that KargoDoor owes back to them, are not counted as profit. Other costs (marketing, permits, website: ${esc(pesos(p.otherCosts))}) are not subtracted here.</p>
+  </section>
+  <style>.profit-card{margin:0 0 16px}.profit-card h2{margin:0 0 8px;font-size:1.1rem}.profit-calc{width:auto;min-width:280px;border-collapse:collapse}.profit-calc td{padding:3px 12px 3px 0;border:0}.profit-calc .profit-total td{border-top:1.5px solid #c6dce9;font-weight:700;color:#1d6b3a;padding-top:6px}.profit-card p{margin:8px 0 0;font-size:.9rem}</style>`;
 }
 
 /** Balance of each account now, plus the records whose account is unknown. */
