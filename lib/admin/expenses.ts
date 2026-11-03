@@ -214,21 +214,23 @@ export async function expensesPage(db: D1Database, url: URL, user: AdminUser | s
     return [editLink("Edit Ni Hao", line.niHao), editLink("Edit fee", line.fee), editLink("Edit delivery", line.delivery),
       deleteLink("Delete Ni Hao", line.niHao), deleteLink("Delete fee", line.fee), deleteLink("Delete delivery", line.delivery)].filter(Boolean).join("<br>");
   };
-  const money = (row: RecordData | undefined) => row ? esc(pesos(row.amount)) : '<span class="muted">—</span>';
+  const editHref = (row: RecordData) => `${path}?edit=${encodeURIComponent(String(row.id))}`;
+  // Each amount opens its own record; the rest of the row opens the main one.
+  const money = (row: RecordData | undefined) => !row ? '<span class="muted">—</span>' : canWrite ? `<a href="${esc(editHref(row))}" title="Edit">${esc(pesos(row.amount))}</a>` : esc(pesos(row.amount));
   const accounts = (line: ExpenseLine, key: "paid_from_account" | "paid_to_account") => [...new Set(line.records.map((row) => bankAccountLabel(row[key])).filter(Boolean))].map(esc).join("<br>") || "—";
   const notes = (line: ExpenseLine) => line.records.map((row) => String(row.notes ?? "").trim()).filter(Boolean).map(esc).join("<br>") || "—";
   const table = results.length ? `<div class="table"><table class="expense-list"><thead><tr>
     ${canWrite ? '<th class="exp-tight">Actions</th>' : ""}<th class="exp-tight">Date</th><th>Category</th><th>Payee</th><th class="exp-wide">Description</th>
     <th class="exp-num">Amount</th><th class="exp-num">Transfer fee</th><th class="exp-num">Delivery fee</th><th class="exp-num">Total</th>
     <th>Paid from</th><th>Paid to</th><th class="exp-wide">Notes</th></tr></thead><tbody>
-    ${lines.map((line) => `<tr>${canWrite ? `<td class="exp-tight">${actions(line)}</td>` : ""}
+    ${lines.map((line) => `<tr${canWrite ? ` class="exp-row" data-href="${esc(editHref(line.main))}" tabindex="0" title="Click to edit"` : ""}>${canWrite ? `<td class="exp-tight">${actions(line)}</td>` : ""}
       <td class="exp-tight">${esc(line.main.expense_date)}</td><td>${esc(line.main.category)}</td><td>${esc(line.main.payee) || "—"}</td>
       <td class="exp-wide">${esc(line.main.description)}</td>
       <td class="exp-num">${money(line.niHao ?? line.other)}</td><td class="exp-num">${money(line.fee)}</td><td class="exp-num">${money(line.delivery)}</td>
       <td class="exp-num"><strong>${esc(pesos(line.total))}</strong></td>
       <td>${accounts(line, "paid_from_account")}</td><td>${accounts(line, "paid_to_account")}</td><td class="exp-wide">${notes(line)}</td></tr>`).join("")}
     </tbody></table></div>
-    <style>.expense-list .exp-tight,.expense-list .exp-num{white-space:nowrap;overflow-wrap:normal;word-break:normal}.expense-list .exp-num{text-align:right;font-variant-numeric:tabular-nums}.expense-list .exp-wide{min-width:200px}.expense-list .exp-split{display:block;font-size:.8rem}.expense-list th,.expense-list td{overflow-wrap:break-word;word-break:normal;vertical-align:top}</style>` : "<p>No expenses found.</p>";
+    <style>.expense-list .exp-tight,.expense-list .exp-num{white-space:nowrap;overflow-wrap:normal;word-break:normal}.expense-list .exp-num{text-align:right;font-variant-numeric:tabular-nums}.expense-list .exp-wide{min-width:200px}.expense-list .exp-split{display:block;font-size:.8rem}.expense-list th,.expense-list td{overflow-wrap:break-word;word-break:normal;vertical-align:top}.expense-list tr.exp-row{cursor:pointer}.expense-list tr.exp-row:hover td{background:#f1f7ff}</style><script src="/admin-row-link.js" defer></script>` : "<p>No expenses found.</p>";
   const notice = url.searchParams.get("deleted") === "1" ? "Expense deleted." : url.searchParams.get("updated") === "1" ? "Expense updated." : url.searchParams.get("saved") === "1" ? "Expense saved. To add its proof of payment, click Edit." : url.searchParams.get("proof") === "1" ? "Proof of payment uploaded." : "";
   // Owner money, opening cash and adjustments are not sales, but they are
   // money in, so they sit next to money out (staff only see their expenses).
