@@ -2188,3 +2188,36 @@ test("Account balances: UnionBank, GCash and Cash each keep their own running ba
   assert.match(box, /Bank Transfer \(UnionBank\)/);
   assert.doesNotMatch(box, /<option value="Cash"/);
 });
+
+test("Delivery paid to rider: saved once as an expense with the tracking number and the account it was paid from", async () => {
+  const { db, sql, user } = database();
+  const { recordDeliveryPayment, readDeliveryPayment, deliveryPaymentSection } = await import("../../lib/admin/delivery-payment");
+  const { readLedger, walletBalances } = await import("../../lib/admin/money-ledger");
+  const actor = { id: user, name: "Admin", email: "admin@example.test", role: "admin" as const };
+  const customerId = randomUUID();
+  const shipmentId = randomUUID();
+  sql.prepare("INSERT INTO customers (id, customer_code, full_name, mobile, created_at, updated_at) VALUES (?,?,?,?,?,?)")
+    .run(customerId, "KD-DL", "Delivery Tester", "+639170000012", "2026-10-01", "2026-10-01");
+  sql.prepare("INSERT INTO shipments (id, customer_id, tracking_number, service_type, china_warehouse, cbm, weight_kg, status, shipping_charge, delivery_charge, payment_status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)")
+    .run(shipmentId, customerId, "KDAIR-900012", "Air Freight", "Guangzhou", 0, 1, "Delivered", 53000, 23100, "Paid", "2026-10-01", "2026-10-01");
+  let box = deliveryPaymentSection({ path: "/admin/shipments", csrf: "t", shipmentId, trackingNumber: "KDAIR-900012", deliveryCharge: 23100, payment: null, canWrite: true });
+  assert.match(box, /value="231\.00"/);
+  assert.match(box, /delivery_paid/);
+  const form = new URLSearchParams({ csrf: "t", action: "delivery_paid", id: shipmentId, expense_date: "2026-11-03", amount: "220.00", payee: "", paid_from: "GCash", reference_number: "LM-1" });
+  await recordDeliveryPayment(db, form, actor);
+  const expense = sql.prepare("SELECT * FROM expenses").get()!;
+  assert.equal(expense.category, "Transportation / Fuel / Parking");
+  assert.equal(expense.payee, "Lalamove");
+  assert.equal(expense.description, "Delivery for KDAIR-900012");
+  assert.equal(expense.tracking_number, "KDAIR-900012");
+  assert.equal(expense.paid_from_account, "kd-gcash");
+  assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM activity_log WHERE action = 'delivery_paid'").get()!.n, 1);
+  const paid = await readDeliveryPayment(db, "kdair-900012");
+  assert.equal(paid!.amount, 22000);
+  box = deliveryPaymentSection({ path: "/admin/shipments", csrf: "t", shipmentId, trackingNumber: "KDAIR-900012", deliveryCharge: 23100, payment: paid, canWrite: true });
+  assert.match(box, /₱11\.00 extra kept/);
+  await assert.rejects(recordDeliveryPayment(db, form, actor), /already marked paid/);
+  await assert.rejects(recordDeliveryPayment(db, new URLSearchParams({ ...Object.fromEntries(form), paid_from: "Bitcoin" }), actor), /paid from/);
+  const { byWallet } = walletBalances((await readLedger(db, "2026-11-30")).rows);
+  assert.equal(byWallet["kd-gcash"], -22000, "the delivery comes out of GCash");
+});
