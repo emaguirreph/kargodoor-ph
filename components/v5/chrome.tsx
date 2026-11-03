@@ -6,6 +6,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { trackEvent } from "@/lib/analytics";
 import { MessengerLink } from "@/components/messenger-link";
 import { TrackedAnchor } from "@/components/tracked-link";
+import { ChatAssistant } from "@/components/v5/chat-assistant";
 
 const navigation = [
   { label: "HOME", href: "/" },
@@ -123,13 +124,7 @@ export function Footer() {
         <div className="wrap copy">© 2026 KARGODOOR PH. ALL RIGHTS RESERVED.</div>
       </footer>
 
-      <div className="fab">
-        <MessengerLink target="_blank" rel="noopener noreferrer" aria-label="Message KargoDoor PH" analyticsEvent="contact">
-          <video autoPlay loop muted playsInline preload="auto" poster="/assets/kargodoor-message-us-poster.webp" aria-hidden="true">
-            <source src="/assets/kargodoor-message-us-small.webm" type="video/webm" />
-          </video>
-        </MessengerLink>
-      </div>
+      <ChatAssistant />
       <div className="mbar">
         <MessengerLink className="btn btn-green" target="_blank" rel="noopener noreferrer" analyticsEvent="generate_lead">GET A QUOTE</MessengerLink>
         <Link className="btn btn-outline" href="/rates-calculator">CALCULATOR</Link>

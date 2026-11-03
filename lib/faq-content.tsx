@@ -555,7 +555,7 @@ export const faqs = [
         </p>
 
         <p>
-          <b>Pickup Hours:</b> 7:00 AM – 5:00 PM
+          <b>Pickup Hours:</b> 7:00 AM – 7:00 PM
         </p>
 
         <p>For cargo pickup, please bring:</p>
