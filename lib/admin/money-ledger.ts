@@ -138,11 +138,29 @@ export async function readLedger(db: D1Database, asOf = philippineToday()): Prom
   // Cash on Hand starts at the latest Opening Cash Balance on or before today.
   const opening = rows.filter((row) => row.type === "Opening Cash Balance").at(-1);
   const openingDate = opening?.date ?? "";
+  // Before the opening cash, the owners paid KargoDoor's costs from their own
+  // pockets (even when they used their own GCash). Those count under Cash
+  // (owners), which goes negative: what KargoDoor owes the owners, to be paid
+  // back from UnionBank (Em, 2026-11-03).
+  for (const row of rows) {
+    if (openingDate && row.date < openingDate && row.direction === "out" && !row.transfer && row.link.startsWith("/admin/finance/expenses")) {
+      row.wallet = "cash";
+      row.account = "Paid by owners";
+    }
+  }
   let balance = 0;
   // Every account starts at zero on the opening date; the opening balance sits in its own account.
   const walletTotals = new Map<Wallet, number>();
   for (const row of rows) {
-    if (row.date < openingDate) continue;
+    if (row.date < openingDate) {
+      // Not in Cash on Hand, but it is in the owners' Cash balance.
+      if (row.wallet === "cash") {
+        const next = (walletTotals.get("cash") ?? 0) - row.amount;
+        walletTotals.set("cash", next);
+        row.walletBalance = next;
+      }
+      continue;
+    }
     if (row.type === "Opening Cash Balance" && row !== opening) continue; // older openings are history
     const change = row.direction === "in" ? row.amount : -row.amount;
     balance = row === opening ? row.amount : balance + change;
@@ -200,7 +218,7 @@ export async function moneyLedgerPage(db: D1Database, url: URL, userName: string
   const balances = walletBalances(rows);
 
   if (url.searchParams.get("download") === "csv") {
-    const header = ["Date", "In / Out", "Type", "Customer / Payee", "Details", "Tracking No.", "Method", "Account", "Reference", "Money In PHP", "Money Out PHP", tabbed ? `${walletLabel(filters.account!)} Balance PHP` : "Balance PHP"];
+    const header = ["Date", "In / Out", "Category", "Customer / Payee", "Description", "Tracking No.", "Method", "Account", "Reference", "Money In PHP", "Money Out PHP", tabbed ? `${walletLabel(filters.account!)} Balance PHP` : "Balance PHP"];
     const lines = shown.map((row) => [row.date, row.direction === "in" ? "In" : "Out", row.type, row.who, row.details, row.tracking,
       row.method, walletLabel(row.wallet), row.reference, row.direction === "in" ? php(row.amount) : "", row.direction === "out" ? php(row.amount) : "", php(shownBalance(row))]
       .map(csvCell).join(","));
@@ -217,9 +235,8 @@ export async function moneyLedgerPage(db: D1Database, url: URL, userName: string
   const csvLink = `${path}?${new URLSearchParams([...params, ["download", "csv"]])}`;
   const showOption = (value: string, label: string) => `<option value="${value}"${filters.show === value ? " selected" : ""}>${label}</option>`;
   // Newest first on screen; the balance is still the running one.
-  const body = [...shown].reverse().map((row) => `<tr class="ledger-${row.direction}">
+  const body = [...shown].reverse().map((row) => `<tr class="ledger-${row.direction} ledger-row" data-href="${esc(row.link)}" tabindex="0" title="Click to open">
       <td class="ledger-tight">${esc(row.date)}</td>
-      <td class="ledger-tight"><span class="k-pill" data-k="${row.direction === "in" ? "green" : "red"}">${row.direction === "in" ? "In" : "Out"}</span></td>
       <td>${esc(row.type)}</td>
       <td>${esc(row.who) || "—"}</td>
       <td class="ledger-wide"><a href="${esc(row.link)}">${esc(row.details) || "—"}</a>${row.tracking ? `<small class="muted">${esc(row.tracking)}</small>` : ""}</td>
@@ -234,7 +251,7 @@ export async function moneyLedgerPage(db: D1Database, url: URL, userName: string
       .ledger-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px}
       .ledger-cards .card strong{display:block;font-size:1.4rem;margin-top:4px}
       .ledger-cards .in strong{color:#1d6b3a}.ledger-cards .out strong{color:#a3261f}
-      table.ledger td,table.ledger th{vertical-align:top}
+      table.ledger td,table.ledger th{vertical-align:top}table.ledger tr.ledger-row{cursor:pointer}table.ledger tr.ledger-row:hover td{background:#f1f7ff}
       .ledger-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}.ledger-tabs a{padding:9px 18px;border:1.5px solid #c6dce9;border-radius:999px;font-weight:700;text-decoration:none;background:#fff}
       .ledger-tabs a[aria-current="page"]{background:#003b9d;color:#fff;border-color:#003b9d}
       table.ledger .ledger-tight,table.ledger .ledger-num{white-space:nowrap}
@@ -243,7 +260,7 @@ export async function moneyLedgerPage(db: D1Database, url: URL, userName: string
       table.ledger .ledger-in-amt{color:#1d6b3a;font-weight:600}table.ledger .ledger-out-amt{color:#a3261f;font-weight:600}
     </style>
     <section><div class="actions"><a href="/admin/finance">Money Today</a><a href="${path}"><strong>Money In &amp; Out</strong></a><a href="/admin/finance/expenses">Expenses</a><a href="/admin/finance/reports">Reports &amp; BIR</a></div>
-      <p class="muted">Every peso in and out, newest first: customer payments, owner money and opening cash, Ni Hao payments, fees and all other expenses. The Balance column is Cash on Hand after each row${openingDate ? `, counted from the opening cash on ${esc(openingDate)}` : ""}. Click a row's details to open the record.</p></section>
+      <p class="muted">Every peso in and out, newest first: customer payments, owner money and opening cash, Ni Hao payments, fees and all other expenses. The Balance column is Cash on Hand after each row (on an account tab, that account&#39;s balance). Costs the owners paid before the opening cash are under Cash (owners)${openingDate ? `, counted from the opening cash on ${esc(openingDate)}` : ""}. Click a row's details to open the record.</p></section>
     <nav class="ledger-tabs">${[["", "All"], ...wallets.map((w) => [w.id, w.label]), ...(balances.untagged.length ? [["untagged", `Not tagged (${balances.untagged.length})`]] : [])]
       .map(([id, label]) => `<a href="${path}?${new URLSearchParams([...[...params].filter(([key]) => key !== "account"), ...(id ? [["account", id]] : [])])}"${(filters.account ?? "") === id ? ' aria-current="page"' : ""}>${esc(label!)}</a>`).join("")}</nav>
     <section><form method="get" action="${path}" class="search">${filters.account ? `<input type="hidden" name="account" value="${esc(filters.account)}">` : ""}
@@ -260,9 +277,9 @@ export async function moneyLedgerPage(db: D1Database, url: URL, userName: string
     </div>
     ${filters.show === "in" ? "" : costBreakdownCards(costBreakdown(shown.filter((row) => counted(row) && row.direction === "out" && !row.transfer).map((row) => ({ category: row.type, amount: row.amount }))), "Total money out")}
     <section>${shown.length ? `<div class="table"><table class="ledger"><thead><tr>
-      <th>Date</th><th>In / Out</th><th>Type</th><th>Customer / Payee</th><th>Details</th><th>Account</th>
+      <th>Date</th><th>Category</th><th>Customer / Payee</th><th>Description</th><th>Account</th>
       <th class="ledger-num">Money in</th><th class="ledger-num">Money out</th><th class="ledger-num">${tabbed ? `${esc(walletLabel(filters.account!))} balance` : "Balance"}</th>
-    </tr></thead><tbody>${body}</tbody></table></div>` : "<p>No money in or out for these filters.</p>"}</section>`, userName, 200, {}, canWrite);
+    </tr></thead><tbody>${body}</tbody></table></div><script src="/admin-row-link.js" defer></script>` : "<p>No money in or out for these filters.</p>"}</section>`, userName, 200, {}, canWrite);
 }
 
 /** Balance of each account now, plus the records whose account is unknown. */
@@ -277,7 +294,7 @@ export function walletBalances(rows: LedgerRow[]) {
 /** "Money we have now" per account, for Money Today. */
 export async function walletBalancesSection(db: D1Database) {
   const { rows, openingDate } = await readLedger(db);
-  const { byWallet, untagged, total } = walletBalances(rows);
+  const { byWallet, untagged } = walletBalances(rows);
   const untaggedTotal = untagged.reduce((sum, row) => sum + (row.direction === "in" ? row.amount : -row.amount), 0);
   const card = (label: string, amount: number, note: string, link: string) => `<a class="card wallet-card" href="${esc(link)}"><span class="k-pill">${esc(label)}</span><strong>${esc(pesos(amount))}</strong><small class="muted">${esc(note)}</small></a>`;
   return `<section id="finance-accounts">
@@ -285,8 +302,8 @@ export async function walletBalancesSection(db: D1Database) {
     <div class="wallet-cards">
       ${card("UnionBank", byWallet["kd-unionbank"], openingDate ? `Since ${openingDate}` : "", `${path}?account=kd-unionbank`)}
       ${card("GCash", byWallet["kd-gcash"], openingDate ? `Since ${openingDate}` : "", `${path}?account=kd-gcash`)}
-      ${card("Cash (owners)", byWallet.cash, "Owner money in, owner spending out", `${path}?account=cash`)}
-      ${card("Total", total, "Same as Cash on Hand", path)}
+      ${card("Cash (owners)", byWallet.cash, byWallet.cash < 0 ? "KargoDoor owes the owners this. Pay it back from UnionBank." : "Owner money in, owner spending out", `${path}?account=cash`)}
+      ${card("UnionBank + GCash", byWallet["kd-unionbank"] + byWallet["kd-gcash"], "Money KargoDoor has now", path)}
     </div>
     ${untagged.length ? `<p class="notice wallet-warn" role="status"><strong>${untagged.length} record${untagged.length === 1 ? "" : "s"} need${untagged.length === 1 ? "s" : ""} an account</strong> (${esc(pesos(untaggedTotal))} in the total but not in any account). Open each one and choose UnionBank, GCash or Cash. <a href="${path}?account=untagged">See them</a></p>` : ""}
     <p class="muted">Compare each card with your UnionBank and GCash apps. If one doesn't match, something wasn't recorded.</p>
