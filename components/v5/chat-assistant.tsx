@@ -148,7 +148,7 @@ function Malabon() {
   const text = "KargoDoor Malabon Warehouse\nPIN: FSW Commercial Warehouse Rental\nOld 59, New 36 Rivera St, Brgy Tañong, Malabon City\nGate: Gray · Landmark: McDonald's Rizal Ave";
   return <>
     <p>This is where your cargo arrives in the Philippines: 🇵🇭</p>
-    <pre className="kc-addr">{text}{"\n\n"}🕖 Mon–Sat, 7:00 AM – 7:00 PM{"\n"}📞 0917 518 8335 · 0917 518 8339</pre>
+    <pre className="kc-addr">{text}{"\n\n"}🕖 Mon–Sat, 7:00 AM – 7:00 PM</pre>
     <div className="kc-row">
       <CopyButton text={text} label="Copy address" />
       <a className="kc-copy" href="https://www.google.com/maps/search/?api=1&query=36+Rivera+St+Ta%C3%B1ong+Malabon+City" target="_blank" rel="noopener noreferrer">📍 Google Maps</a>
