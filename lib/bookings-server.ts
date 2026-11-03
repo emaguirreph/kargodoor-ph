@@ -134,6 +134,10 @@ export async function bookingStatus(db: D1Database, lookup: { ref: string; last4
       status: String(shipment.status),
       warehouse: String(shipment.china_warehouse),
       approvedAmount: pesos(Number(booking.approved_amount ?? shipment.shipping_charge ?? 0)),
+      // For the box label (the customer already proved the phone with its last 4 digits).
+      item: String(booking.item_description ?? ""),
+      supplier: String(booking.supplier_contact ?? ""),
+      phone: String(booking.phone ?? ""),
     },
     bill: billing.invoiceId ? {
       invoiceNumber: String(billing.invoiceNumber),
