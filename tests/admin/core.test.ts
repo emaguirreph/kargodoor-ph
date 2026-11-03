@@ -42,6 +42,8 @@ import {
   requireAdminMutation,
 } from "../../lib/admin/security";
 import { expensesPage, saveExpense, mutateExpense } from "../../lib/admin/expenses";
+import { proofCell, readProofFile, readProofs, saveProof } from "../../lib/admin/payment-proof";
+import { readShipmentPayments, shipmentPaymentsList } from "../../lib/admin/shipment-payment";
 import { customerShippingInstructions, customerWarehouseAddressMessage, nihaoAddressBook, shipmentShippingInstructions, warehouseAddress } from "../../lib/admin/shipping-instructions";
 import { notificationKeyFor, shipmentStatusMessages } from "../../lib/admin/customer-messages";
 function database(includePhase1 = true) {
@@ -87,6 +89,7 @@ function database(includePhase1 = true) {
     sql.exec(readFileSync("migrations/admin/0035_air_transit_status.sql", "utf8"));
   sql.exec(readFileSync("migrations/admin/0036_shipment_nihao_details.sql", "utf8"));
   sql.exec(readFileSync("migrations/admin/0037_shipment_delivered_date.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0038_payment_proofs.sql", "utf8"));
   const user = randomUUID();
   sql
     .prepare("INSERT INTO admin_users VALUES (?,?,?,?,?,?)")
@@ -1939,4 +1942,61 @@ test("Malabon warehouse received date and Delivered date are saved and checked i
   const id = await saveRecord(db, "shipments", values, user, "", "");
   const saved = await db.prepare("SELECT actual_arrival, delivered_date FROM shipments WHERE id = ?").bind(id).first<RecordData>();
   assert.deepEqual({ ...saved }, { actual_arrival: "2026-11-20", delivered_date: "2026-11-22" });
+});
+
+test("proof of payment: upload and replace on a customer payment and an expense, staff only on their own expenses", async () => {
+  const { sql, db, user } = database();
+  const admin = { id: user, name: "Admin", email: "admin@example.test", role: "admin" as const };
+  const customerId = await saveRecord(db, "customers", { ...customer, customer_code: "KD-PROOF" }, user, "", "");
+  const shipmentId = await saveRecord(db, "shipments", { ...shipment(customerId), tracking_number: "KDSEA900777" }, user, "", "");
+  const invoiceId = randomUUID();
+  sql.prepare(`INSERT INTO invoices (id, invoice_number, customer_id, shipment_id, subtotal, delivery_charge, total, status, issued_at, due_at, created_at, updated_at, other_charge)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(invoiceId, "INV-PROOF", customerId, shipmentId, 60000, 0, 60000, "Unpaid", "2026-11-01", null, "2026-11-01", "2026-11-01", 0);
+  const paymentId = randomUUID();
+  sql.prepare("INSERT INTO payments VALUES (?,?,?,?,?,?,?,?,?)").run(paymentId, invoiceId, customerId, 60000, "GCash", "GC-123", "2026-11-02", null, "2026-11-02");
+
+  const png = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a])], "gcash receipt.png", { type: "image/png" });
+  await saveProof(db, "payment", paymentId, png, admin);
+  await saveProof(db, "payment", paymentId, new File([new TextEncoder().encode("%PDF-1.7 bank")], "bank.pdf"), admin);
+  assert.equal((await readProofFile(db, "payment", paymentId))?.file_mime, "application/pdf");
+  assert.equal((await readProofs(db, "payment", [paymentId, randomUUID(), "not-a-uuid"])).get(paymentId)?.file_name, "bank.pdf");
+  await assert.rejects(saveProof(db, "payment", paymentId, new File(["<html>"], "x.png"), admin), /PDF, JPEG, PNG or WebP/);
+  await assert.rejects(saveProof(db, "payment", paymentId, new File([new Uint8Array(1.6 * 1024 * 1024)], "big.pdf"), admin), /over 1\.5 MB/);
+  await assert.rejects(saveProof(db, "payment", randomUUID(), png, admin), /Payment not found/);
+  const staff = { id: "staff", name: "Staff", email: "staff@example.test", role: "staff" as const };
+  sql.prepare("INSERT INTO admin_users VALUES ('staff','Staff','staff@example.test','staff','2026-01-01','2026-01-01')").run();
+  await assert.rejects(saveProof(db, "payment", paymentId, png, staff), /only Quotations and Expenses/);
+  assert.deepEqual(sql.prepare("SELECT action, entity_type FROM activity_log WHERE action LIKE 'proof_%' ORDER BY rowid").all().map((row) => [row.action, row.entity_type]),
+    [["proof_uploaded", "payments"], ["proof_replaced", "payments"]]);
+
+  // Payment rows on Edit shipment get their own detached upload forms.
+  const received = await readShipmentPayments(db, invoiceId);
+  const cell = proofCell({ kind: "payment", id: paymentId, proof: (await readProofs(db, "payment", [paymentId])).get(paymentId), csrf: "t", canWrite: true, back: `/admin/shipments?id=${shipmentId}&edit=1#customer-payment`, formId: "payment-proof-form-0" });
+  assert.match(cell.inline, /📄 View proof/);
+  assert.match(cell.inline, /<input form="payment-proof-form-0" type="file" name="file"/);
+  assert.match(cell.form, /<form id="payment-proof-form-0" method="post" action="\/admin\/finance\/proof" enctype="multipart\/form-data">/);
+  assert.match(shipmentPaymentsList(received, [cell.inline]), /View proof[\s\S]*GC-123/);
+  assert.equal(proofCell({ kind: "payment", id: paymentId, proof: null, csrf: "", canWrite: false, back: "/admin/invoices" }).inline, '<span class="muted">—</span>');
+  assert.equal(proofCell({ kind: "payment", id: paymentId, csrf: "t", canWrite: true, back: "https://evil.test/" }).form, "", "unknown return pages get no upload form");
+
+  // Expenses: the list shows a Proof box per row; staff may add proof only to expenses they made.
+  await saveExpense(db, parseExpenseForm(new URLSearchParams(expenseInput)), "staff");
+  await saveExpense(db, parseExpenseForm(new URLSearchParams({ ...expenseInput, description: "Owner expense" })), user);
+  const staffExpense = String(sql.prepare("SELECT id FROM expenses WHERE created_by_admin_user_id = 'staff'").get()!.id);
+  const ownerExpense = String(sql.prepare("SELECT id FROM expenses WHERE created_by_admin_user_id = ?").get(user)!.id);
+  await saveProof(db, "expense", staffExpense, png, staff);
+  await assert.rejects(saveProof(db, "expense", ownerExpense, png, staff), /Expense not found/);
+  const list = await (await expensesPage(db, new URL("https://admin.test/admin/finance/expenses?category=Office+%2F+Rent"), admin, "token")).text();
+  assert.match(list, /<th class="exp-tight">Proof<\/th>/);
+  assert.match(list, /href="\/admin\/finance\/proof\?type=expense&amp;id=/);
+  assert.match(list, /name="back" value="\/admin\/finance\/expenses\?category=Office\+%2F\+Rent"/);
+  const editPage = await (await expensesPage(db, new URL(`https://admin.test/admin/finance/expenses?edit=${staffExpense}`), admin, "token")).text();
+  assert.match(editPage, /<h2>Proof of payment<\/h2>/);
+
+  // Deleting an expense removes its proof file too.
+  const revision = String(sql.prepare("SELECT updated_at FROM expenses WHERE id = ?").get(staffExpense)!.updated_at);
+  await mutateExpense(db, new URLSearchParams({ csrf: "t", action: "delete", id: staffExpense, revision: "stale", confirm: "yes" }), { ...admin, role: "owner" }).catch(() => null);
+  assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM payment_proofs WHERE entity_type = 'expense'").get()!.n, 1, "a failed delete keeps the proof");
+  await mutateExpense(db, new URLSearchParams({ csrf: "t", action: "delete", id: staffExpense, revision, confirm: "yes" }), { ...admin, role: "owner" });
+  assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM payment_proofs WHERE entity_type = 'expense'").get()!.n, 0);
 });

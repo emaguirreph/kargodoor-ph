@@ -25,6 +25,7 @@ import type { RecordData } from "./validation";
 import { esc, hidden, page, pesos } from "./ui";
 import { invoiceMessages } from "./customer-messages";
 import { copyButton, copyScript } from "./shipping-instructions";
+import { proofCell, proofCss, readProofs } from "./payment-proof";
 
 const route = "/admin/invoices";
 
@@ -1368,6 +1369,7 @@ async function detail(
       .prepare(
         `
         SELECT
+          id,
           payment_date,
           amount,
           payment_method,
@@ -1389,7 +1391,7 @@ async function detail(
     Number(invoice.subtotal) !== Number(invoice.shipment_shipping_charge);
 
   const notice = (saved
-    ? '<p class="notice" role="status">Changes saved.</p>'
+    ? `<p class="notice" role="status">${saved === "proof" ? "Proof of payment uploaded." : saved === "payment" ? 'Payment recorded. You can now drop the proof of payment on it under <a href="#payment-history">Payment history</a>.' : "Changes saved."}</p>`
     : "") + (outdated
     ? `<p class="notice" role="status">The shipment's shipping charge is now ${esc(pesos(invoice.shipment_shipping_charge))}, but this invoice shows ${esc(pesos(invoice.subtotal))}. ${
         invoice.status === "Draft" || invoice.status === "Unpaid"
@@ -1469,14 +1471,18 @@ async function detail(
     </div>
   `;
 
+  const proofs = await readProofs(db, "payment", payments.map((payment) => String(payment.id)));
+  const proofCsrf = canMutateAdmin(user) ? csrfToken(env, user.id, route) : "";
   const paymentHistory = payments.length
     ? `
+      ${canMutateAdmin(user) ? '<p class="muted proof-hint">Drag the GCash or bank screenshot (or PDF) onto a payment\'s Proof box, or click Add proof.</p>' : ""}
       <div class="table">
         <table>
           <thead>
             <tr>
               <th>Date</th>
               <th>Amount</th>
+              <th>Proof</th>
               <th>Method</th>
               <th>Reference</th>
             </tr>
@@ -1495,6 +1501,15 @@ async function detail(
                       pesos(payment.amount),
                     )}</td>
 
+                    <td>${proofCell({
+                      kind: "payment",
+                      id: String(payment.id),
+                      proof: proofs.get(String(payment.id)),
+                      csrf: proofCsrf,
+                      canWrite: canMutateAdmin(user),
+                      back: `${route}?id=${id}#payment-history`,
+                    }).inline}</td>
+
                     <td>${esc(
                       payment.payment_method,
                     )}</td>
@@ -1504,6 +1519,7 @@ async function detail(
                         payment.reference_number,
                       ) || "—"
                     }</td>
+
                   </tr>
                 `,
               )
@@ -1511,6 +1527,7 @@ async function detail(
           </tbody>
         </table>
       </div>
+      ${proofCss}
     `
     : "<p>No payments recorded.</p>";
 
@@ -1598,7 +1615,7 @@ async function detail(
         invoice,
       ) : ""}
 
-      <section>
+      <section id="payment-history">
         <h2>Payment history</h2>
         ${paymentHistory}
       </section>
@@ -2453,7 +2470,7 @@ export async function handleBilling(
         env,
         user,
         id,
-        url.searchParams.get("saved") ?? "",
+        url.searchParams.get("saved") ?? (url.searchParams.get("proof") === "1" ? "proof" : ""),
         url.searchParams.get("void") === "1"
           ? "void"
           : url.searchParams.get("archive") === "1"

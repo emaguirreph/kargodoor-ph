@@ -55,7 +55,8 @@ import { lastNiHaoTransferFee, niHaoExpenseCategory, niHaoPaymentSection, readNi
 import { arrivalWindow, arrivalWindowDone, formatArrivalWindow, shortArrivalWindow } from "./arrival-window";
 import { readShipmentStatement, shipmentStatementPdf, shipmentsLedgerCsv, statementFilename } from "./shipment-statement";
 import { autoDraftInvoice } from "./billing";
-import { readShipmentBilling, recordShipmentPayment, shipmentPaymentSection } from "./shipment-payment";
+import { readShipmentBilling, readShipmentPayments, recordShipmentPayment, shipmentPaymentSection, shipmentPaymentsList } from "./shipment-payment";
+import { proofCell, proofCss, readProofs } from "./payment-proof";
 import { detachForm } from "./detached-form";
 import { niHaoDetailsBox, niHaoDetailsCss, readNiHaoDetails, saveNiHaoDetails, takeNiHaoDetails } from "./nihao-details";
 
@@ -1203,16 +1204,34 @@ export async function handleAdmin(
         // its payment box. The payment boxes submit their own forms (see
         // detachForm), placed after the Save shipment form.
         const payable = Boolean(id) && !record.archived_at && record.status !== "Cancelled";
+        // Proof of payment boxes for payments already received, each with its own detached upload form.
+        let proofForms = "";
         const customerBox = payable
-          ? detachForm(shipmentPaymentSection({
-              path,
-              csrf: csrfToken(env, user.id, path),
-              shipmentId: String(id),
-              billing: await readShipmentBilling(db, String(id), record),
-              canWrite,
-              justPaid: url.searchParams.get("customer_paid") === "1",
-              title: "Customer payment",
-            }), "customer-payment-form")
+          ? await (async () => {
+              const billing = await readShipmentBilling(db, String(id), record);
+              const received = await readShipmentPayments(db, billing.invoiceId);
+              const proofs = await readProofs(db, "payment", received.map((row) => row.id));
+              const cells = received.map((row, index) => {
+                const cell = proofCell({
+                  kind: "payment", id: row.id, proof: proofs.get(row.id), csrf: csrfToken(env, user.id, path), canWrite,
+                  back: `${path}?id=${encodeURIComponent(String(id))}&edit=1#customer-payment`, formId: `payment-proof-form-${index}`,
+                });
+                proofForms += cell.form;
+                return cell.inline;
+              });
+              return detachForm(shipmentPaymentSection({
+                path,
+                csrf: csrfToken(env, user.id, path),
+                shipmentId: String(id),
+                billing,
+                canWrite,
+                justPaid: url.searchParams.get("customer_paid") === "1",
+                title: "Customer payment",
+                paymentsList: received.length
+                  ? (url.searchParams.get("proof") === "1" ? '<p class="notice" role="status">Proof of payment uploaded.</p>' : "") + shipmentPaymentsList(received, cells) + proofCss
+                  : "",
+              }), "customer-payment-form");
+            })()
           : { inline: "", form: "" };
         const niHaoBox = payable
           ? detachForm(niHaoPaymentSection({
@@ -1243,7 +1262,7 @@ export async function handleAdmin(
             input("supplier_waybill_number", "Supplier waybill number", record, "text", false, 120) +
             input("supplier_courier", "Supplier courier", record, "text", false, 120),
         });
-        paymentForms = customerBox.form + niHaoBox.form + niHaoDetailsCard.form;
+        paymentForms = customerBox.form + proofForms + niHaoBox.form + niHaoDetailsCard.form;
 
         fields +=
           `<div class="wide shipment-money shipment-money-kd">
