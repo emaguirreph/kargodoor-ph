@@ -562,9 +562,8 @@ export function ChatAssistant() {
     {teaser && !open && <button type="button" className="kc-tease" onClick={openChat}>Hi! 👋 Have a question? Tracking, rates or booking, I can help.<span aria-hidden="true" onClick={(e) => { e.stopPropagation(); setTeaser(false); try { sessionStorage.setItem("kd-chat-seen", "1"); } catch { /* storage blocked */ } }}>×</span></button>}
     <div className="fab">
       <button type="button" className="kc-fab" aria-label="Open the KargoDoor chat assistant" aria-expanded={open} onClick={() => (open ? setOpen(false) : openChat())}>
-        <video autoPlay loop muted playsInline preload="auto" poster="/assets/kargodoor-message-us-poster.webp" aria-hidden="true">
-          <source src="/assets/kargodoor-message-us-small.webm" type="video/webm" />
-        </video>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3C6.5 3 2 6.9 2 11.7c0 2.6 1.3 4.9 3.4 6.5L4.6 21.4c-.1.4.3.7.7.5l3.7-1.9c.9.2 1.9.4 3 .4 5.5 0 10-3.9 10-8.7S17.5 3 12 3Zm-4.5 10a1.3 1.3 0 1 1 0-2.6 1.3 1.3 0 0 1 0 2.6Zm4.5 0a1.3 1.3 0 1 1 0-2.6 1.3 1.3 0 0 1 0 2.6Zm4.5 0a1.3 1.3 0 1 1 0-2.6 1.3 1.3 0 0 1 0 2.6Z"/></svg>
+        <span>Chat</span>
       </button>
     </div>
     {open && <div className="kdchat" role="dialog" aria-label="KargoDoor Assistant">
