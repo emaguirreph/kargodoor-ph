@@ -77,7 +77,11 @@ export function input(
   const numericAttributes = type === "number"
     ? `min="0" step="${esc(step ?? "0.001")}"`
     : "";
-  return `<label>${esc(label)}${required ? " *" : ""}<input name="${key}" type="${type}" value="${esc(value)}" ${required ? "required" : ""} maxlength="${max}" ${numericAttributes}></label>`;
+  // Codes are always capital letters: show them capital while typing too.
+  const codeAttributes = ["tracking_number", "customer_code", "cargo_code"].includes(key)
+    ? 'autocapitalize="characters" style="text-transform:uppercase"'
+    : "";
+  return `<label>${esc(label)}${required ? " *" : ""}<input name="${key}" type="${type}" value="${esc(value)}" ${required ? "required" : ""} maxlength="${max}" ${numericAttributes} ${codeAttributes}></label>`;
 }
 export function select(
   key: string,

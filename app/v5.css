@@ -810,7 +810,7 @@ html:has(.v5) body{background:#f4f7fc}
 .v5 .kc-sizes button small{display:block;font-weight:500;color:var(--muted)}.v5 .kc-sizes button.on{border-color:var(--brand);background:var(--surface-2)}
 .v5 .kc-two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .v5 .kdchat label{display:block;min-width:0}
-.v5 .kc-calc input,.v5 .kc-form input:not([type=checkbox]):not([type=file]),.v5 .kc-form select{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--surface);font-size:16px;font-weight:700}
+.v5 .kc-calc input:not([type=checkbox]),.v5 .kc-form input:not([type=checkbox]):not([type=file]),.v5 .kc-form select{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--surface);font-size:16px;font-weight:700}
 .v5 .kc-res{border-top:1px dashed var(--line);padding-top:8px;margin-top:4px}
 .v5 .kc-up{position:relative;display:block;border:2px dashed #9fb6dc;border-radius:12px;padding:10px;text-align:center;font-weight:800;font-size:.72rem;color:var(--blue);background:var(--surface-2);cursor:pointer;margin:2px 0}
 .v5 .kc-up input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
@@ -828,3 +828,7 @@ html.kc-open:has(.v5){overflow:hidden}
 .v5 .kc-tease{right:94px;bottom:calc(104px + env(safe-area-inset-bottom,0px))}
 }
 @media (min-width:601px){html.kc-open:has(.v5){overflow:auto}}
+.v5 .kc-label{display:flex;flex-direction:column;align-items:center;gap:2px;border:2px dashed #8a6d3b;background:#f4e3c3;border-radius:6px;padding:12px 10px;margin:6px 0;color:#3d2c10;text-align:center}
+.v5 .kc-label b{font:800 1.35rem/1.1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.02em}
+.v5 .kc-label span{font:600 .72rem var(--f-b)}
+.v5 .kc-fmt .kc-small{margin:0;flex-basis:100%}

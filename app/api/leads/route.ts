@@ -13,9 +13,11 @@ const leadInput = z.object({
   email: z.string().trim().max(254).optional().default("").refine((value) => !value || z.string().email().safeParse(value).success),
   consent: z.literal(true),
   service: z.enum(["sea", "air"]),
-  cbm: z.number().finite().positive().max(1_000_000),
+  cbm: z.number().finite().nonnegative().max(1_000_000),
   weight: z.number().finite().positive().max(100_000_000),
-}).strict();
+  item: z.string().trim().max(300).optional().default(""),
+  source: z.enum(["calculator", "chat"]).optional().default("calculator"),
+}).strict().refine((lead) => lead.cbm > 0 || lead.service === "air");
 
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 
@@ -34,16 +36,19 @@ export async function POST(request: Request) {
     const codes = (await db.prepare("SELECT lead_code FROM leads WHERE lead_code LIKE 'KD-LEAD-%'").all<{ lead_code: string }>()).results;
     const next = codes.reduce((max, row) => Math.max(max, Number(String(row.lead_code).replace("KD-LEAD-", "")) || 0), 0) + 1;
     const now = new Date().toISOString();
+    // Air without a CBM: store the volume-weight equivalent so the lead still saves (CBM must be > 0).
+    const cbm = input.cbm > 0 ? input.cbm : Math.max(0.001, Math.round((input.weight / 167) * 1000) / 1000);
+    const notes = [input.item && `Item: ${input.item}`, input.cbm > 0 ? "" : "CBM not given (estimated from weight)"].filter(Boolean).join(" · ") || null;
     const leadCode = `KD-LEAD-${String(next).padStart(6, "0")}`;
     await db.prepare("INSERT INTO leads (id,lead_code,full_name,phone,email,service_type,cbm,weight_kg,density_kg_cbm,estimated_rate,source,contacted_status,sales_status,notes,consent,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-      .bind(randomUUID(), leadCode, input.fullName, input.phone, input.email.toLowerCase() || null, input.service === "sea" ? "Sea Freight" : "Air Freight", input.cbm, input.weight, input.service === "sea" ? input.weight / input.cbm : null, Math.round(estimate.amount * 100), "Website Calculator", "No", "New", null, 1, now, now).run();
+      .bind(randomUUID(), leadCode, input.fullName, input.phone, input.email.toLowerCase() || null, input.service === "sea" ? "Sea Freight" : "Air Freight", cbm, input.weight, input.service === "sea" ? input.weight / cbm : null, Math.round(estimate.amount * 100), input.source === "chat" ? "Chat Assistant" : "Website Calculator", "No", "New", notes, 1, now, now).run();
     ctx.waitUntil(sendLeadAlert((cf as unknown as { LEAD_EMAIL?: Parameters<typeof sendLeadAlert>[0] }).LEAD_EMAIL, {
       leadCode,
       fullName: input.fullName,
       phone: input.phone,
       email: input.email,
       service: input.service === "sea" ? "Sea Freight" : "Air Freight",
-      cbm: input.cbm,
+      cbm,
       weightKg: input.weight,
       estimate: `₱${estimate.amount.toLocaleString("en-PH")}`,
       tier: estimate.packageName,
