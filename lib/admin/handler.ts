@@ -38,6 +38,7 @@ import { financeDashboard } from "./finance-summary";
 import { financeCsv } from "./finance-report";
 import { expensesPage, mutateExpense } from "./expenses";
 import { moneyLedgerPage } from "./money-ledger";
+import { deliveryPaymentSection, readDeliveryPayment, recordDeliveryPayment } from "./delivery-payment";
 import { financeCashPage, mutateFinanceCash } from "./finance-cash";
 import { financeAccountsPage } from "./finance-accounts";
 import { saveRecord, archiveOrCancelRecord } from "./data";
@@ -564,6 +565,11 @@ export async function handleAdmin(
       if (entity === "shipments" && action === "customer_paid") {
         await recordShipmentPayment(db, form, user);
         return page("Saved", "", user.name, 303, { Location: `${path}?id=${encodeURIComponent(form.get("id") ?? "")}&edit=1&customer_paid=1#customer-payment` });
+      }
+
+      if (entity === "shipments" && action === "delivery_paid") {
+        await recordDeliveryPayment(db, form, user);
+        return page("Saved", "", user.name, 303, { Location: `${path}?id=${encodeURIComponent(form.get("id") ?? "")}&edit=1&delivery_paid=1#delivery-payment` });
       }
 
       if (entity === "shipments" && action === "nihao_paid") {
@@ -1280,6 +1286,18 @@ export async function handleAdmin(
             })
           : "";
         const niHaoPaid = payable ? await readNiHaoPayment(db, record.tracking_number) : null;
+        const deliveryBox = payable
+          ? detachForm(deliveryPaymentSection({
+              path,
+              csrf: csrfToken(env, user.id, path),
+              shipmentId: String(id),
+              trackingNumber: record.tracking_number,
+              deliveryCharge: record.delivery_charge,
+              payment: await readDeliveryPayment(db, record.tracking_number),
+              canWrite,
+              justPaid: url.searchParams.get("delivery_paid") === "1",
+            }), "delivery-payment-form")
+          : { inline: "", form: "" };
         const niHaoBox = payable
           ? detachForm(niHaoPaymentSection({
               path,
@@ -1309,7 +1327,7 @@ export async function handleAdmin(
             input("supplier_waybill_number", "Supplier waybill number", record, "text", false, 120) +
             input("supplier_courier", "Supplier courier", record, "text", false, 120),
         });
-        paymentForms = customerBox.form + proofForms + niHaoBox.form + niHaoDetailsCard.form;
+        paymentForms = customerBox.form + proofForms + deliveryBox.form + niHaoBox.form + niHaoDetailsCard.form;
         // Opens on the Ni Hao tab right after a Ni Hao upload or payment.
         const niHaoFirst = url.searchParams.get("nihao_file") === "1" || url.searchParams.get("nihao_paid") === "1";
         const niHaoNote = niHaoPaid ? "Paid" : record.nihao_cost === null || record.nihao_cost === undefined || record.nihao_cost === "" ? "Cost not entered" : payable ? "Not paid yet" : "Cost entered";
@@ -1333,7 +1351,7 @@ export async function handleAdmin(
           ) +
           // Payment status follows the invoice; it is shown here, not typed.
           hidden("payment_status", record.payment_status ?? "Unpaid") +
-          `</div>${customerBox.inline}${transferFeeBox}</div>
+          `</div>${customerBox.inline}${transferFeeBox}${deliveryBox.inline}</div>
           <div class="wide shipment-money shipment-money-nh">
             <h3><span class="shipment-money-tag">Money out</span> Ni Hao · we pay Ni Hao</h3>
             <div class="grid">` +
@@ -1736,6 +1754,7 @@ export async function handleAdmin(
       })() : null;
 
       const transferFeesPaid = entity === "shipments" ? await readTransferFeesPaid(db, record.tracking_number) : [];
+      const deliveryPaid = entity === "shipments" ? await readDeliveryPayment(db, record.tracking_number) : null;
 
       const shipmentDetails = entity === "shipments" ? (() => {
         const status = String(record.status || "");
@@ -1796,8 +1815,13 @@ export async function handleAdmin(
             : []),
           shipmentDetail("Ni Hao freight cost", `${money("nihao_cost")} ${record.nihao_cost === null ? "" : niHaoSourceTag(record.nihao_cost_source)}`),
           shipmentDetail("Freight margin", marginValue),
-          ...(Number(record.delivery_charge || 0) > 0
-            ? [shipmentDetail("Delivery charge", money("delivery_charge"))]
+          ...(Number(record.delivery_charge || 0) > 0 || deliveryPaid
+            ? [
+                shipmentDetail("Delivery charge", money("delivery_charge")),
+                shipmentDetail("Delivery paid to rider", deliveryPaid
+                  ? `${pesos(deliveryPaid.amount)} <small class="muted">${esc(deliveryPaid.payee || "rider")} · ${esc(deliveryPaid.date)} · in Expenses</small>`
+                  : `<span class="muted">Not saved yet</span>${canWrite && !record.archived_at ? ` <a href="${path}?id=${esc(id)}&edit=1#delivery-payment">Record in Edit shipment</a>` : ""}`),
+              ]
             : []),
           shipmentDetail("Customer payment", paymentSummary?.customer ?? (esc(record.payment_status) || "—")),
           shipmentDetail("Ni Hao payment", paymentSummary?.nihao ?? "—"),

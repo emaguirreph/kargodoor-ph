@@ -5,17 +5,12 @@ import { AdminError, canDeleteAdmin, isRestrictedStaff, type AdminUser } from ".
 import { page, esc, pesos, input, hidden } from "./ui";
 import { philippineToday } from "./finance-dates";
 import { proofCell, proofCss, readProofs } from "./payment-proof";
+import { deliveryCategory, niHaoCategory, transferFeesCategory } from "./cost-breakdown";
 import { gcashTransferSection, lastGcashTransferFee } from "./transfer-fees";
+import { costBreakdown, costBreakdownCards } from "./cost-breakdown";
 import { bankAccountLabel, bankAccountSelect, kargodoorBankAccounts, nihaoBankAccounts } from "./bank-accounts";
 
 const path = "/admin/finance/expenses";
-const fields = [
-  ["expense_date", "Expense date"], ["category", "Category"],
-  ["payee", "Payee"], ["description", "Description"], ["amount", "Amount"],
-  ["payment_method", "Payment method"], ["paid_from_account", "Paid from"], ["paid_to_account", "Paid to"],
-  ["reference_number", "Reference number"], ["notes", "Notes"],
-] as const;
-
 export async function saveExpense(db: D1Database, values: z.infer<typeof expenseSchema>, createdBy?: string) {
   const now = new Date().toISOString();
   await db.prepare(`INSERT INTO expenses
@@ -132,12 +127,6 @@ const filterSchema = z.object({
   q: z.string().trim().max(160),
 }).refine((v) => !v.from || !v.to || v.from <= v.to, "From Date must not be after To Date");
 
-function totalPesos(rows: RecordData[]) {
-  // Accumulate and format with integers, including totals beyond Number's safe range.
-  const total = rows.reduce((sum, row) => sum + BigInt(String(row.amount)), BigInt(0));
-  return `₱${(total / BigInt(100)).toLocaleString("en-PH")}.${(total % BigInt(100)).toString().padStart(2, "0")}`;
-}
-
 export async function expensesPage(db: D1Database, url: URL, user: AdminUser | string, csrf: string, canWrite = true) {
   const actor: AdminUser = typeof user === "string" ? { id: "", name: user, email: "", role: "admin" } : user;
   const staff = isRestrictedStaff(actor);
@@ -186,7 +175,7 @@ export async function expensesPage(db: D1Database, url: URL, user: AdminUser | s
     return page(edit !== null ? "Edit Expense" : "Add Expense", `<section><p class="notice"><strong>Use this form when KargoDoor pays money out</strong> for a supplier, freight partner, package cost, or operating cost. This reduces cash. If the customer must reimburse a package cost, save the expense first, then record the amount owed in <a href="/admin/finance/cash?new=1&amp;type=Customer%20Reimbursement%20Due">Cash Flow &amp; Customer Credits</a>.</p>${historical}${oldMethod}<form method="post" action="${path}">
       ${hidden("csrf", csrf)}${edit !== null ? hidden("action", "edit") + hidden("id", record.id) + hidden("revision", record.updated_at) : ""}
       <div class="grid">${form}</div><p class="muted">* Required. For a Freight / Ni Hao Cost expense, enter the shipment's tracking number if its Ni Hao cost is already saved on the shipment, so it is not counted twice. Leave it blank for lump-sum Ni Hao payments.</p>
-      <div class="actions"><button type="submit">Save expense</button><a href="${path}">Cancel</a></div>
+      <div class="actions"><button type="submit">Save expense</button><a href="${path}">Cancel</a>${edit !== null && canDelete ? `<a href="${path}?delete=${esc(encodeURIComponent(String(record.id)))}">Delete expense</a>` : ""}</div>
       </form></section>${edit !== null ? await (async () => {
         const id = String(record.id);
         const proof = (await readProofs(db, "expense", [id])).get(id);
@@ -212,24 +201,29 @@ export async function expensesPage(db: D1Database, url: URL, user: AdminUser | s
     .bind(...(staff ? [actor.id] : []), filters.from, filters.from, filters.to, filters.to, filters.category, filters.category,
       filters.payment_method, filters.payment_method, filters.q, filters.q, filters.q, filters.q, filters.q)
     .all<RecordData>();
-  // The list leaves out Reference number (Em, 2026-11-02); the add/edit form still has it.
-  const listFields = fields.filter(([key]) => key !== "reference_number");
-  // Short columns never wrap; Description and Notes take the room that is left.
-  const cellClass = (key: string) => ["expense_date", "amount", "payment_method"].includes(key) ? ` class="exp-${key === "amount" ? "num" : "tight"}"` : key === "description" || key === "notes" ? ' class="exp-wide"' : "";
-  // A Ni Hao payment and its transfer fee show as one row (Em, 2026-11-03).
-  // They stay two records, so Ni Hao cost still matches the SOA and fees
-  // still add up on their own in Reports & BIR. The total counts both.
-  const rows = mergeNiHaoFees(results);
-  const proofs = await readProofs(db, "expense", rows.map((row) => String(row.id)));
-  // Keep the filters when an upload comes back to the list.
-  const listBack = `${path}${url.search ? `?${new URLSearchParams([...url.searchParams].filter(([key]) => ["from", "to", "category", "payment_method", "q"].includes(key)))}` : ""}`.replace(/\?$/, "");
-  const table = results.length ? `${canWrite ? '<p class="muted proof-hint">Proof of payment: drag the receipt or screenshot onto an expense\'s Proof box, or click Add proof.</p>' : ""}<div class="table"><table class="expense-list"><thead><tr>
-    ${canWrite ? '<th class="exp-tight">Actions</th>' : ""}${listFields.map(([key, label]) => `<th${cellClass(key)}>${label}</th>${key === "amount" ? '<th class="exp-tight">Proof</th>' : ""}`).join("")}</tr></thead><tbody>
-    ${rows.map((row) => `<tr>${canWrite ? `<td class="exp-tight"><a href="${path}?edit=${esc(encodeURIComponent(String(row.id)))}">Edit</a>${row.fee ? `<br><a href="${path}?edit=${esc(encodeURIComponent(String(row.fee.id)))}">Edit fee</a>` : ""}${canDelete ? `<br><a href="${path}?delete=${esc(encodeURIComponent(String(row.id)))}">Delete</a>` : ""}${canDelete && row.fee ? `<br><a href="${path}?delete=${esc(encodeURIComponent(String(row.fee.id)))}">Delete fee</a>` : ""}</td>` : ""}
-      ${listFields.map(([key]) => `<td${cellClass(key)}>${key === "amount" ? (row.fee ? `${esc(pesos(Number(row.amount) + Number(row.fee.amount)))}<small class="muted exp-split">${esc(pesos(row.amount))} + ${esc(pesos(row.fee.amount))} fee</small>` : esc(pesos(row[key]))) : key === "description" && row.fee ? `${esc(row.description)} <small class="muted">+ transfer fee</small>` : key === "paid_from_account" || key === "paid_to_account" ? esc(bankAccountLabel(row[key])) || "—" : esc(row[key]) || "—"}</td>${key === "amount" ? `<td>${proofCell({ kind: "expense", id: String(row.id), proof: proofs.get(String(row.id)), csrf, canWrite, back: listBack }).inline}</td>` : ""}`).join("")}</tr>`).join("")}
-    </tbody></table></div>${proofCss}
-    <style>.expense-list .exp-tight,.expense-list .exp-num{white-space:nowrap;overflow-wrap:normal;word-break:normal}.expense-list .exp-num{text-align:right;font-variant-numeric:tabular-nums}.expense-list th.exp-num{text-align:right}.expense-list .exp-wide{min-width:200px}.expense-list .exp-split{display:block;font-size:.8rem}.expense-list th,.expense-list td{overflow-wrap:break-word;word-break:normal}</style>` : "<p>No expenses found.</p>";
-  const notice = url.searchParams.get("deleted") === "1" ? "Expense deleted." : url.searchParams.get("updated") === "1" ? "Expense updated." : url.searchParams.get("saved") === "1" ? "Expense saved. Drop its proof of payment on the Proof box in the list." : url.searchParams.get("proof") === "1" ? "Proof of payment uploaded." : "";
+  // Columns Em asked for (2026-11-03): Amount (the cost itself: Ni Hao
+  // shipping, marketing...), transfer fee and delivery fee each in its own
+  // column, one row per shipment, then the total. The
+  // proof lives in Edit expense, not the list.
+  const lines = groupExpenses(results);
+  const editHref = (row: RecordData) => `${path}?edit=${encodeURIComponent(String(row.id))}`;
+  // Each amount opens its own record; the rest of the row opens the main one.
+  const money = (row: RecordData | undefined) => !row ? '<span class="muted">—</span>' : canWrite ? `<a href="${esc(editHref(row))}" title="Edit">${esc(pesos(row.amount))}</a>` : esc(pesos(row.amount));
+  const accounts = (line: ExpenseLine, key: "paid_from_account" | "paid_to_account") => [...new Set(line.records.map((row) => bankAccountLabel(row[key])).filter(Boolean))].map(esc).join("<br>") || "—";
+  const notes = (line: ExpenseLine) => line.records.map((row) => String(row.notes ?? "").trim()).filter(Boolean).map(esc).join("<br>") || "—";
+  const table = results.length ? `<div class="table"><table class="expense-list"><thead><tr>
+    <th class="exp-tight">Date</th><th>Category</th><th>Payee</th><th class="exp-wide">Description</th>
+    <th class="exp-num">Amount</th><th class="exp-num">Transfer fee</th><th class="exp-num">Delivery fee</th><th class="exp-num">Total</th>
+    <th>Paid from</th><th>Paid to</th><th class="exp-wide">Notes</th></tr></thead><tbody>
+    ${lines.map((line) => `<tr${canWrite ? ` class="exp-row" data-href="${esc(editHref(line.main))}" tabindex="0" title="Click to edit"` : ""}>
+      <td class="exp-tight">${esc(line.main.expense_date)}</td><td>${esc(line.main.category)}</td><td>${esc(line.main.payee) || "—"}</td>
+      <td class="exp-wide">${esc(line.main.description)}</td>
+      <td class="exp-num">${money(line.niHao ?? line.other)}</td><td class="exp-num">${money(line.fee)}</td><td class="exp-num">${money(line.delivery)}</td>
+      <td class="exp-num"><strong>${esc(pesos(line.total))}</strong></td>
+      <td>${accounts(line, "paid_from_account")}</td><td>${accounts(line, "paid_to_account")}</td><td class="exp-wide">${notes(line)}</td></tr>`).join("")}
+    </tbody></table></div>
+    <style>.expense-list .exp-tight,.expense-list .exp-num{white-space:nowrap;overflow-wrap:normal;word-break:normal}.expense-list .exp-num{text-align:right;font-variant-numeric:tabular-nums}.expense-list .exp-wide{min-width:200px}.expense-list .exp-split{display:block;font-size:.8rem}.expense-list th,.expense-list td{overflow-wrap:break-word;word-break:normal;vertical-align:top}.expense-list tr.exp-row{cursor:pointer}.expense-list tr.exp-row:hover td{background:#f1f7ff}</style><script src="/admin-row-link.js" defer></script>` : "<p>No expenses found.</p>";
+  const notice = url.searchParams.get("deleted") === "1" ? "Expense deleted." : url.searchParams.get("updated") === "1" ? "Expense updated." : url.searchParams.get("saved") === "1" ? "Expense saved. To add its proof of payment, click Edit." : url.searchParams.get("proof") === "1" ? "Proof of payment uploaded." : "";
   // Owner money, opening cash and adjustments are not sales, but they are
   // money in, so they sit next to money out (staff only see their expenses).
   const moneyIn = staff ? [] : (await db.prepare(`SELECT id, entry_date, entry_type, amount, reference_number, notes
@@ -240,33 +234,58 @@ export async function expensesPage(db: D1Database, url: URL, user: AdminUser | s
     ${moneyIn.length ? `<div class="table"><table><thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Notes</th></tr></thead><tbody>${moneyIn.map((row) => `<tr><td>${esc(row.entry_date)}</td><td>${esc(row.entry_type)}</td><td><strong>${esc(pesos(row.amount))}</strong></td><td>${esc(row.notes) || "—"}</td></tr>`).join("")}</tbody></table></div>` : '<p class="muted">No money-in records yet.</p>'}</section>`;
   return page("Expenses", `${notice ? `<p class="notice" role="status">${notice}</p>` : ""}
     <section><div class="actions">${staff ? "" : `<a href="/admin/finance">Money Today</a>`}<a href="${path}"><strong>Expenses</strong></a>${staff ? "" : `<a href="/admin/finance/accounts">Bank Accounts</a>`}${canWrite ? `<a class="button" href="${path}?new=1">Add Expense</a>` : ""}</div>
-    ${staff ? "" : `<p class="muted">Paying Ni Hao? Use Mark Ni Hao paid in Edit shipment › Ni Hao tab. Its transfer fee is saved with it and shows in the same row. Moving GCash to UnionBank? Use the box below.</p>`}</section>
+    ${staff ? "" : `<p class="muted">Paying Ni Hao? Use Mark Ni Hao paid in Edit shipment › Ni Hao tab. Its transfer fee and the rider delivery show in the same row, each in its own column. Moving GCash to UnionBank? Use the box below.</p>`}</section>
     <section><form method="get" action="${path}" class="search">
       ${input("q", "Search", filters)}${input("from", "From Date", filters, "date")}${input("to", "To Date", filters, "date")}
       ${dropdown("category", "Category", expenseCategories, filters.category, "All Categories")}
       ${dropdown("payment_method", "Payment Method", expensePaymentMethods, filters.payment_method, "All Payment Methods")}
       <button type="submit">Apply Filters</button><a href="${path}">Clear Filters</a></form></section>
     ${!staff && canWrite ? gcashTransferSection({ path, csrf, suggestedFee: await lastGcashTransferFee(db), justSaved: url.searchParams.get("transfer") === "1" }) : ""}
-    <div class="card"><h2>Total Expenses</h2><strong>${esc(totalPesos(results))}</strong></div>
+    ${costBreakdownCards(costBreakdown(results))}
     <section>${table}</section>
     ${moneyInSection}`, actor.name, 200, {}, canWrite, staff);
 }
 
-type ExpenseRow = RecordData & { fee?: RecordData };
+export type ExpenseLine = {
+  main: RecordData;
+  records: RecordData[];
+  niHao?: RecordData;
+  fee?: RecordData;
+  delivery?: RecordData;
+  /** Any other expense (marketing, rent...): its amount goes in the Amount column. */
+  other?: RecordData;
+  total: number;
+};
 
-/** Folds each "Transfer fee: … to Ni Hao for <tracking>" row into its Ni Hao payment row. */
-export function mergeNiHaoFees(results: RecordData[]): ExpenseRow[] {
+/**
+ * One list row per shipment: its Ni Hao payment, the transfer fee to Ni Hao
+ * and the rider delivery (same tracking number) share a row, each in its own
+ * column. Every other expense is its own row. The records stay separate.
+ */
+export function groupExpenses(results: RecordData[]): ExpenseLine[] {
   const key = (row: RecordData) => String(row.tracking_number ?? "").trim().toLowerCase();
-  const niHao = new Map<string, ExpenseRow>();
-  const rows: ExpenseRow[] = results.map((row) => ({ ...row }));
-  for (const row of rows) {
-    if (row.category === "Freight / Ni Hao Cost" && key(row) && !niHao.has(key(row))) niHao.set(key(row), row);
+  const isFee = (row: RecordData) => row.category === transferFeesCategory;
+  const isShipmentFee = (row: RecordData) => isFee(row) && / to Ni Hao for /.test(String(row.description ?? ""));
+  const isDelivery = (row: RecordData) => row.category === deliveryCategory;
+  const lines: ExpenseLine[] = [];
+  const byTracking = new Map<string, ExpenseLine>();
+  const slot = (row: RecordData): "niHao" | "fee" | "delivery" | null =>
+    row.category === niHaoCategory ? "niHao" : isFee(row) ? "fee" : isDelivery(row) ? "delivery" : null;
+  for (const row of results) {
+    const kind = slot(row);
+    const groupable = key(row) && (kind === "niHao" || isShipmentFee(row) || (kind === "delivery" && /^Delivery for /.test(String(row.description ?? ""))));
+    const existing = groupable ? byTracking.get(key(row)) : undefined;
+    if (existing && kind && !existing[kind]) {
+      existing[kind] = row;
+      existing.records.push(row);
+      existing.total += Number(row.amount ?? 0) || 0;
+      if (kind === "niHao") existing.main = row;
+      continue;
+    }
+    const line: ExpenseLine = { main: row, records: [row], total: Number(row.amount ?? 0) || 0 };
+    line[kind ?? "other"] = row;
+    lines.push(line);
+    if (groupable && !existing) byTracking.set(key(row), line);
   }
-  return rows.filter((row) => {
-    if (row.category !== "Bank / Payment Fees" || !key(row) || !/ to Ni Hao for /.test(String(row.description ?? ""))) return true;
-    const parent = niHao.get(key(row));
-    if (!parent || parent.fee) return true;
-    parent.fee = row;
-    return false;
-  });
+  return lines;
 }

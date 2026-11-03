@@ -1,3 +1,4 @@
+import { costBreakdown, costBreakdownCards } from "./cost-breakdown";
 import type { D1Database } from "@cloudflare/workers-types";
 import { AdminError } from "./security";
 import { esc, page, pesos } from "./ui";
@@ -257,6 +258,7 @@ export async function moneyLedgerPage(db: D1Database, url: URL, userName: string
       <div class="card"><span class="muted">In minus out</span><strong>${esc(pesos(totalIn - totalOut))}</strong></div>
       <div class="card"><span class="muted">${tabbed ? `${esc(walletLabel(filters.account!))} now` : "Cash on Hand now"}</span><strong>${esc(pesos(tabbed ? balances.byWallet[filters.account as Exclude<Wallet, "">] : cashNow))}</strong></div>
     </div>
+    ${filters.show === "in" ? "" : costBreakdownCards(costBreakdown(shown.filter((row) => counted(row) && row.direction === "out" && !row.transfer).map((row) => ({ category: row.type, amount: row.amount }))), "Total money out")}
     <section>${shown.length ? `<div class="table"><table class="ledger"><thead><tr>
       <th>Date</th><th>In / Out</th><th>Type</th><th>Customer / Payee</th><th>Details</th><th>Account</th>
       <th class="ledger-num">Money in</th><th class="ledger-num">Money out</th><th class="ledger-num">${tabbed ? `${esc(walletLabel(filters.account!))} balance` : "Balance"}</th>
