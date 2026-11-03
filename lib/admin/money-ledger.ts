@@ -92,8 +92,8 @@ export async function readLedger(db: D1Database, asOf = philippineToday()): Prom
       who: text(p.full_name), details: `Invoice ${text(p.invoice_number)}`, tracking: text(p.tracking_number),
       method: text(p.payment_method), account: "", reference: text(p.reference_number), amount: Number(p.amount),
       link: `/admin/invoices?id=${encodeURIComponent(text(p.invoice_id))}`, balance: null,
-      // Clients pay by GCash or bank transfer only, so a cash payment needs its account fixed.
-      wallet: p.payment_method === "Cash" ? "" : walletOf(null, p.payment_method), walletBalance: null,
+      // Clients pay by GCash or UnionBank; a cash payment is owner money (e.g. Archie paying Ni Hao directly).
+      wallet: walletOf(null, p.payment_method), walletBalance: null,
     });
   }
   for (const e of cash) {
@@ -286,7 +286,7 @@ export async function walletBalancesSection(db: D1Database) {
       ${card("Cash (owners)", byWallet.cash, "Owner money in, owner spending out", `${path}?account=cash`)}
       ${card("Total", total, "Same as Cash on Hand", path)}
     </div>
-    ${untagged.length ? `<p class="notice wallet-warn" role="status"><strong>${untagged.length} record${untagged.length === 1 ? "" : "s"} need${untagged.length === 1 ? "s" : ""} an account</strong> (${esc(pesos(untaggedTotal))} in the total but not in any account). Clients pay by GCash or UnionBank only. <a href="${path}?account=untagged">See them</a></p>` : ""}
+    ${untagged.length ? `<p class="notice wallet-warn" role="status"><strong>${untagged.length} record${untagged.length === 1 ? "" : "s"} need${untagged.length === 1 ? "s" : ""} an account</strong> (${esc(pesos(untaggedTotal))} in the total but not in any account). Open each one and choose UnionBank, GCash or Cash. <a href="${path}?account=untagged">See them</a></p>` : ""}
     <p class="muted">Compare each card with your UnionBank and GCash apps. If one doesn't match, something wasn't recorded.</p>
     <style>.wallet-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}.wallet-card{display:block;text-decoration:none;color:inherit}.wallet-card strong{display:block;font-size:1.5rem;margin:6px 0 2px}.wallet-warn{background:#fff8e6!important;border-color:#f3d38a!important;color:#6b4a00!important}</style>
   </section>`;
