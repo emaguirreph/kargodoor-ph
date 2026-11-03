@@ -130,7 +130,7 @@ const arrivalEstimateField = (record: RecordData) => {
     <output data-arrival-estimate-value>${window ? esc(formatArrivalWindow(window)) : "Enter the CH warehouse received date"}</output>
     <small class="muted" data-arrival-estimate-note>${window ? `Estimate only · ${esc(window.span)} after CH warehouse received date` : "Sea and FCL: 3–5 weeks after · Air: 5–7 days after"}</small>
   </div>
-  <style>.arrival-estimate{display:flex;flex-direction:column;gap:4px;padding:10px 14px;border:1px dashed #94a3b8;border-radius:12px;background:#f8fafc}.arrival-estimate[hidden]{display:none}.arrival-estimate-label{font-weight:600}.arrival-estimate output{font-weight:600;color:#1e3a8a}</style>`;
+  <style>.arrival-estimate{display:flex;flex-direction:column;gap:4px;padding:10px 14px;border:1px dashed #94a3b8;border-radius:12px;background:#f8fafc}.arrival-estimate[hidden],label[data-show-status][hidden]{display:none}.arrival-estimate-label{font-weight:600}.arrival-estimate output{font-weight:600;color:#1e3a8a}</style>`;
 };
 
 /** Green (KargoDoor, money in) and red (Ni Hao, money out) parts of the Edit shipment form. */
@@ -225,7 +225,8 @@ const labels: Record<string, string> = {
   status: "Status",
   estimated_arrival: "Estimated arrival",
   arrival_window: "Est. arrival",
-  actual_arrival: "Actual arrival",
+  actual_arrival: "Malabon warehouse received date",
+  delivered_date: "Delivered date",
   tracking_remarks: "Tracking remarks",
   cargo_quantity: "Units",
   payment_status: "Payment status",
@@ -1135,7 +1136,7 @@ export async function handleAdmin(
             true,
             160,
             "any",
-          ) +
+          ).replace("<label>", '<label style="grid-column-start:1">') +
           input(
             "weight_kg",
             "Declared weight (kg)",
@@ -1151,7 +1152,7 @@ export async function handleAdmin(
             false,
             160,
             "any",
-          ) +
+          ).replace("<label>", '<label style="grid-column-start:1">') +
           input(
             "verified_weight_kg",
             "Verified weight (kg; number only, e.g. 45)",
@@ -1164,21 +1165,24 @@ export async function handleAdmin(
             "Status",
             record,
             shipmentStatusOptions(record),
-          ).replace("<label>", '<label class="k-status-red">') + hidden("estimated_arrival", record.estimated_arrival ?? "") +
+          ).replace("<label>", '<label class="k-status-red" style="grid-column-start:1">') + hidden("estimated_arrival", record.estimated_arrival ?? "") +
           // Air Freight shows its flight date next to the status; Sea Freight keeps it hidden.
           (record.service_type === "Air Freight"
             ? input("departure_date", "Flight date", record, "date")
             : hidden("departure_date", record.departure_date ?? ""));
 
-        // Actual arrival is an end-of-journey record. Keeping it out of the
-        // earlier stages avoids implying that cargo has already reached Manila.
-        if (["Malabon Warehouse", "Delivered"].includes(String(record.status || ""))) {
-          fields += input(
-            "actual_arrival",
-            "Actual arrival",
-            record,
-            "date",
-          );
+        // End-of-journey dates: Malabon warehouse received date shows from
+        // Malabon Warehouse on, Delivered date only at Delivered. Both are
+        // always in the form (so a saved date is kept); /admin-arrival-window.js
+        // shows or hides them as the Status changes.
+        {
+          const status = String(record.status || "");
+          const atMalabon = ["Malabon Warehouse", "Delivered"].includes(status);
+          fields +=
+            input("actual_arrival", "Malabon warehouse received date", record, "date")
+              .replace("<label>", `<label style="grid-column-start:1" data-show-status="Malabon Warehouse|Delivered"${atMalabon ? "" : " hidden"}>`) +
+            input("delivered_date", "Delivered date", record, "date")
+              .replace("<label>", `<label data-show-status="Delivered"${status === "Delivered" ? "" : " hidden"}>`);
         }
 
         /*
@@ -1694,7 +1698,10 @@ export async function handleAdmin(
           })())]),
           shipmentDetail("Status", esc(status) || "—"),
           ...(actualArrivalVisible
-            ? [shipmentDetail("Actual arrival", esc(record.actual_arrival) || "Not recorded")]
+            ? [shipmentDetail("Malabon warehouse received date", esc(record.actual_arrival) || "Not recorded")]
+            : []),
+          ...(status === "Delivered"
+            ? [shipmentDetail("Delivered date", esc(record.delivered_date) || "Not recorded")]
             : []),
         ].join("");
 
@@ -1887,6 +1894,7 @@ export async function handleAdmin(
             return window ? `${formatArrivalWindow(window)} (estimate)` : null;
           })(),
           arrival: record.actual_arrival,
+          delivered: record.delivered_date,
           paymentStatus: record.payment_status,
           declaredCbm: record.cbm,
           declaredWeight: record.weight_kg,

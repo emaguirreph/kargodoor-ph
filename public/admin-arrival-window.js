@@ -37,6 +37,13 @@
     value.textContent = show(add(date, window[0]), add(date, window[1]));
     note.textContent = `Estimate only · ${window[2]} after CH warehouse received date`;
   };
+  // Malabon warehouse received date and Delivered date follow the Status.
+  const syncDates = () => {
+    for (const label of form.querySelectorAll("[data-show-status]")) {
+      label.hidden = !label.dataset.showStatus.split("|").includes(status?.value || "");
+    }
+  };
+  status?.addEventListener("change", syncDates);
   for (const el of [received, service, status]) el?.addEventListener("change", update);
   received?.addEventListener("input", update);
 })();
