@@ -240,7 +240,7 @@ export async function expensesPage(db: D1Database, url: URL, user: AdminUser | s
     ${moneyIn.length ? `<div class="table"><table><thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Notes</th></tr></thead><tbody>${moneyIn.map((row) => `<tr><td>${esc(row.entry_date)}</td><td>${esc(row.entry_type)}</td><td><strong>${esc(pesos(row.amount))}</strong></td><td>${esc(row.notes) || "—"}</td></tr>`).join("")}</tbody></table></div>` : '<p class="muted">No money-in records yet.</p>'}</section>`;
   return page("Expenses", `${notice ? `<p class="notice" role="status">${notice}</p>` : ""}
     <section><div class="actions">${staff ? "" : `<a href="/admin/finance">Money Today</a>`}<a href="${path}"><strong>Expenses</strong></a>${staff ? "" : `<a href="/admin/finance/accounts">Bank Accounts</a>`}${canWrite ? `<a class="button" href="${path}?new=1">Add Expense</a>` : ""}</div>
-    ${staff ? "" : `<p class="muted">Paying Ni Hao? Use Mark Ni Hao paid on the shipment page. Its transfer fee is saved with it and shows in the same row. Moving GCash to UnionBank? Use the box below.</p>`}</section>
+    ${staff ? "" : `<p class="muted">Paying Ni Hao? Use Mark Ni Hao paid in Edit shipment › Ni Hao tab. Its transfer fee is saved with it and shows in the same row. Moving GCash to UnionBank? Use the box below.</p>`}</section>
     <section><form method="get" action="${path}" class="search">
       ${input("q", "Search", filters)}${input("from", "From Date", filters, "date")}${input("to", "To Date", filters, "date")}
       ${dropdown("category", "Category", expenseCategories, filters.category, "All Categories")}

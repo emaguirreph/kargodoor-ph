@@ -139,6 +139,6 @@ export function shipmentPaymentsList(rows: ShipmentPaymentRow[], proofCells: str
   return `<div class="shipment-payments-received"><h5>Payments received · proof of payment</h5>
     <p class="muted">Drag the GCash or bank screenshot (or PDF) onto a payment's box, or click Add proof.</p>
     <div class="table"><table><thead><tr><th>Date</th><th>Amount</th><th>Proof</th><th>Method</th><th>Reference</th></tr></thead><tbody>
-    ${rows.map((row, index) => `<tr><td>${esc(row.payment_date)}</td><td>${esc(pesos(row.amount))}</td><td>${proofCells[index] ?? ""}</td><td>${esc(row.payment_method)}</td><td>${esc(row.reference_number) || "—"}</td></tr>`).join("")}
+    ${rows.map((row, index) => `<tr><td data-label="Date">${esc(row.payment_date)}</td><td data-label="Amount">${esc(pesos(row.amount))}</td><td data-label="Proof">${proofCells[index] ?? ""}</td><td data-label="Method">${esc(row.payment_method)}</td><td data-label="Reference">${esc(row.reference_number) || "—"}</td></tr>`).join("")}
     </tbody></table></div></div>`;
 }

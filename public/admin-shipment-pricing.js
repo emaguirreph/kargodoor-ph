@@ -28,7 +28,12 @@
     if (item.selectedOptions[0]?.parentElement?.disabled) item.value = "";
     category.value =
       type === "Sea Freight" ? seaCategories[item.value] || "" : type === "Air Freight" ? item.value : "";
+    // Units stays hidden unless the item is priced per piece (or it is already filled).
+    const unitsLabel = form.querySelector("[data-optional-units]");
+    const units = field("cargo_quantity");
+    if (unitsLabel) unitsLabel.hidden = !unitItems.has(item.value) && !(units && units.value.trim());
   };
+  const unitItems = new Set(["Mobile phones", "Computers", "Tablets", "Mobile Phones", "Laptop Computers"]);
 
   const inputs = ["service_type", "cbm", "weight_kg", "verified_cbm", "verified_weight_kg", "cargo_item", "cargo_quantity", "tracking_remarks"];
   let timer = 0;

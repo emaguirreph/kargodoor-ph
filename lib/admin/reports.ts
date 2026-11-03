@@ -260,7 +260,7 @@ export async function dashboard(
     {
       show: simple.goingOut > BigInt(0),
       label: `Ni Hao to pay · ${financePesos(simple.goingOut)}`,
-      detail: "Use Mark Ni Hao paid inside Edit shipment.",
+      detail: "Use Mark Ni Hao paid in Edit shipment › Ni Hao tab.",
       warn: true,
       href: "/admin/finance#finance-nihao",
       action: "Open list",

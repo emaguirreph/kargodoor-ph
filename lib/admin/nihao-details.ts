@@ -109,7 +109,8 @@ export function niHaoDetailsBox(options: { shipmentId: string; record: RecordDat
     ${options.uploaded ? `<p class="notice" role="status">Ni Hao file uploaded.</p>` : ""}
     <p class="muted">From Ni Hao's paper. Amount = Ni Hao freight cost above. CBM and weight = Verified CBM and weight. Saved with <strong>Save shipment</strong>.</p>
     <div class="grid">${field("nihao_no", "Ni Hao No.", 'maxlength="40" placeholder="9945"')}${field("nihao_doc_no", "Ni Hao Doc No. (optional)", 'maxlength="40" placeholder="0040385"')}
-    ${field("nihao_date", "Ni Hao date", 'type="date"')}${field("nihao_tracking", "Ni Hao Tracking No.", 'maxlength="80" placeholder="2610040014-1"')}${options.supplierFields ?? ""}</div>
+    ${field("nihao_date", "Ni Hao date", 'type="date"')}${field("nihao_tracking", "Ni Hao Tracking No.", 'maxlength="80" placeholder="2610040014-1"')}</div>
+    ${options.supplierFields ? `<details class="nihao-supplier-more"${record.supplier_waybill_number || record.supplier_courier ? " open" : ""}><summary>Supplier waybill &amp; courier (optional)</summary><div class="grid">${options.supplierFields}</div></details>` : ""}
     ${shipmentId ? `<div class="nihao-file-row">${fileLine}${upload.inline}</div>` : `<p class="muted">Save the shipment first, then upload Ni Hao's file.</p>`}
     ${shipmentId ? `<pre hidden id="${copyId}">${esc(niHaoCopyText(details, record, options.customerName))}</pre>
     <div class="actions"><button type="button" class="nihao-copy" data-copy-source="${copyId}">📋 Copy Ni Hao details</button></div>` : ""}
@@ -126,6 +127,7 @@ export const niHaoDetailsCss = `<style>
 .nihao-file-row.is-uploading{opacity:.7}
 .nihao-drop-status{font-weight:700;color:#a3261f}
 .nihao-drop-status:empty{display:none}
+.nihao-supplier-more{margin-top:12px}.nihao-supplier-more>summary{cursor:pointer;font-weight:700;color:#a3261f;font-size:.92rem}.nihao-supplier-more>.grid{margin-top:10px}
 html body .shipment-money-nh .nihao-details .nihao-copy{background:#fff;color:#a3261f;border:1.5px solid #a3261f;box-shadow:none}
 </style><script src="/admin-nihao-file.js" defer></script>`;
 

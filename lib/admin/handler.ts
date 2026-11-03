@@ -75,6 +75,9 @@ const niHaoCostField = (record: RecordData, estimate: NiHaoEstimate | null) => {
     .replace("</label>", ` ${tag}<small class="muted" style="display:block" data-live-hint="nihao">${hint}</small></label>`);
 };
 
+/** Items priced per piece: only these show the Units box (public/admin-shipment-pricing.js keeps the same list). */
+const unitItems = new Set(["Mobile phones", "Computers", "Tablets", "Mobile Phones", "Laptop Computers"]);
+
 /** Cargo details for a shipment added by hand (no source quotation), laid out like the quotation's. */
 const manualCargoFields = (record: RecordData) => {
   const item = String(record.cargo_item ?? "");
@@ -82,7 +85,7 @@ const manualCargoFields = (record: RecordData) => {
   return `<label class="wide">Customer cargo description<input name="cargo_description" type="text" value="${esc(record.cargo_description)}" maxlength="200" placeholder="e.g. Kitchen organizers, 3 cartons"><small class="muted" style="display:block">Shown to the customer as the cargo, like on a quotation.</small></label>
     <label>Item / Commodity<select name="cargo_item" data-shipment-cargo-item data-sea-categories="${esc(JSON.stringify(itemCategories))}"><option value="">Choose an item</option><optgroup label="Sea Freight" data-service="Sea Freight">${seaCargoItems.map(option).join("")}</optgroup><optgroup label="Air Freight" data-service="Air Freight">${airItems.map(option).join("")}</optgroup></select><small class="muted" style="display:block">Sets the category used for the KargoDoor charge and the Ni Hao estimate.</small></label>
     <label>Category<input data-shipment-cargo-category value="${esc(record.cargo_category)}" readonly></label>
-    <label>Units<input name="cargo_quantity" type="number" min="1" step="1" maxlength="10" value="${esc(record.cargo_quantity)}"><small class="muted" style="display:block">Applicable to Mobile Phones / Computers / Tablets.</small></label>`;
+    <label data-optional-units${record.cargo_quantity || unitItems.has(item) ? "" : " hidden"}>Units<input name="cargo_quantity" type="number" min="1" step="1" maxlength="10" value="${esc(record.cargo_quantity)}"><small class="muted" style="display:block">Applicable to Mobile Phones / Computers / Tablets.</small></label>`;
 };
 
 const chargeSourceTag = (source: unknown) =>
@@ -156,6 +159,23 @@ html body .shipment-money-kd .shipment-pay-box button{background:linear-gradient
 .shipment-money-nh .shipment-pay-box{border-color:#f0aaa4}
 html body .shipment-money-nh .shipment-pay-box button{background:linear-gradient(135deg,#a3261f,#d33a2c);box-shadow:0 10px 20px -12px rgba(163,38,31,.8)}
 @media(max-width:520px){.shipment-money{padding:14px}.shipment-pay-box{padding:12px}}
+.compact-record-form label[hidden]{display:none!important}
+/* Phone: one column that never grows wider than the screen (a wide table used to stretch it). */
+@media(max-width:760px){.compact-record-form .grid{grid-template-columns:minmax(0,1fr)!important}.compact-record-form .grid>*{min-width:0}
+.shipment-payments-received .table table{min-width:0!important}.shipment-payments-received thead{display:none}
+.shipment-payments-received tr{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;padding:10px 0;border-bottom:1px solid #d5e4ed}
+.shipment-payments-received td{display:contents}.shipment-payments-received td::before{content:attr(data-label);font-size:.78rem;color:#466177;align-self:center}
+.nihao-file-pick input{max-width:100%}}
+/* Two tabs: the shipment and KargoDoor money, and Ni Hao (details, file, payment). public/admin-shipment-tabs.js turns them on. */
+.shipment-tabs{display:none;gap:8px;margin:0 0 16px;padding:5px;border-radius:999px;background:#eef3fb;border:1px solid #d5e4ed}
+form.shipment-tabs-on .shipment-tabs{display:flex}
+.shipment-tabs button{flex:1;background:transparent!important;color:#154876!important;box-shadow:none!important;border-radius:999px;padding:10px 14px;font-weight:700;transform:none!important}
+.shipment-tabs button[aria-selected="true"]{background:#fff!important;box-shadow:0 4px 12px -6px rgba(0,40,120,.35)!important}
+.shipment-tabs button[data-tab="main"][aria-selected="true"]{color:#17643a!important}
+.shipment-tabs button[data-tab="nihao"][aria-selected="true"]{color:#a3261f!important}
+.shipment-tabs small{display:block;font-weight:600;font-size:.75rem;opacity:.8}
+form.shipment-tabs-on[data-tab="main"] .shipment-money-nh{display:none}
+form.shipment-tabs-on[data-tab="nihao"]>.grid>:not(.shipment-money-nh),form.shipment-tabs-on[data-tab="nihao"] .shipment-cargo-note{display:none}
 </style>`;
 
 /** JSON with the KargoDoor charge (hand-added shipments) and Ni Hao estimate for the values on the shipment form. */
@@ -870,6 +890,7 @@ export async function handleAdmin(
       let fields =
         "";
       let paymentForms = "";
+      let shipmentTabs = "";
 
       /*
        * CUSTOMER FORM
@@ -1253,6 +1274,7 @@ export async function handleAdmin(
               fees: await readTransferFeesPaid(db, record.tracking_number),
             })
           : "";
+        const niHaoPaid = payable ? await readNiHaoPayment(db, record.tracking_number) : null;
         const niHaoBox = payable
           ? detachForm(niHaoPaymentSection({
               path,
@@ -1260,7 +1282,7 @@ export async function handleAdmin(
               shipmentId: String(id),
               trackingNumber: record.tracking_number,
               nihaoCost: record.nihao_cost,
-              payment: await readNiHaoPayment(db, record.tracking_number),
+              payment: niHaoPaid,
               canWrite,
               justPaid: url.searchParams.get("nihao_paid") === "1",
               suggestedFee: canWrite ? await lastNiHaoTransferFee(db) : null,
@@ -1283,6 +1305,13 @@ export async function handleAdmin(
             input("supplier_courier", "Supplier courier", record, "text", false, 120),
         });
         paymentForms = customerBox.form + proofForms + niHaoBox.form + niHaoDetailsCard.form;
+        // Opens on the Ni Hao tab right after a Ni Hao upload or payment.
+        const niHaoFirst = url.searchParams.get("nihao_file") === "1" || url.searchParams.get("nihao_paid") === "1";
+        const niHaoNote = niHaoPaid ? "Paid" : record.nihao_cost === null || record.nihao_cost === undefined || record.nihao_cost === "" ? "Cost not entered" : payable ? "Not paid yet" : "Cost entered";
+        shipmentTabs = `<div class="shipment-tabs" role="tablist" aria-label="Edit shipment sections" data-shipment-tabs data-initial="${niHaoFirst ? "nihao" : "main"}">
+          <button type="button" role="tab" data-tab="main" aria-selected="${niHaoFirst ? "false" : "true"}">Shipment &amp; KargoDoor<small>Cargo, status, customer pays us</small></button>
+          <button type="button" role="tab" data-tab="nihao" aria-selected="${niHaoFirst ? "true" : "false"}">Ni Hao<small>Details, file, payment · ${esc(niHaoNote)}</small></button>
+        </div><script src="/admin-shipment-tabs.js" defer></script>`;
 
         fields +=
           `<div class="wide shipment-money shipment-money-kd">
@@ -1433,7 +1462,7 @@ export async function handleAdmin(
 
               ${entity === "shipments" && cargoInfo?.quotationId ? `<p class="notice shipment-cargo-note"><strong>Cargo / Item:</strong> ${esc(cargoInfo.item) || "—"} · <strong>Category:</strong> ${esc(cargoInfo.category) || "—"}${cargoInfo.quotationId ? ` · From quotation <a href="/admin/quotations?id=${esc(cargoInfo.quotationId)}">${esc(cargoInfo.quotationNumber) || "View quotation"}</a>. To change the item or category, edit the quotation.` : ""}</p>` : ""}
 
-              ${entity === "shipments" ? shipmentMoneyCss : ""}
+              ${entity === "shipments" ? shipmentMoneyCss + shipmentTabs : ""}
               <div class="grid">
                 ${fields}
               </div>
@@ -1988,8 +2017,15 @@ export async function handleAdmin(
       })() : "";
 
 
+      // The record's own name as the page title: tracking number or customer name.
+      const recordTitle =
+        entity === "shipments"
+          ? String(record.tracking_number || "Shipment (no tracking number yet)")
+          : entity === "customers"
+            ? String(record.full_name || title)
+            : title;
       return page(
-        title,
+        recordTitle,
         `
           ${notice}
 
