@@ -256,7 +256,7 @@ async function detailPage(db: D1Database, env: AdminEnv, user: AdminUser, id: st
     </dl>
     <h3>Product photos</h3><div class="booking-photos">${photos.map((file) => `<a href="${bookingsPath}?file=${esc(file.id)}" target="_blank" rel="noopener"><img src="${bookingsPath}?file=${esc(file.id)}" alt="${esc(file.file_name)}"></a>`).join("") || '<span class="muted">No photos.</span>'}</div>
     ${packing.length ? `<p>📎 ${packing.map((file) => `<a href="${bookingsPath}?file=${esc(file.id)}" target="_blank" rel="noopener">${esc(file.file_name)}</a>`).join(", ")}</p>` : ""}
-    ${canWrite && booking.status === "New" ? `<form method="post" class="actions">${csrfField(env, user)}<input type="hidden" name="id" value="${esc(id)}"><input type="hidden" name="action" value="messenger"><button>${booking.messenger_confirmed_at ? "Undo Messenger confirmed" : "✅ Mark confirmed on Messenger"}</button></form>` : ""}
+    ${canWrite && booking.status !== "Declined" ? `<form method="post" class="actions">${csrfField(env, user)}<input type="hidden" name="id" value="${esc(id)}"><input type="hidden" name="action" value="messenger"><button>${booking.messenger_confirmed_at ? "Undo Messenger confirmed" : "✅ Mark confirmed on Messenger"}</button></form>` : ""}
   </section>`;
 
   if (booking.status === "New" && canWrite) {
