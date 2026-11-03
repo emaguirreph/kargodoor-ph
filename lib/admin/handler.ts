@@ -1154,7 +1154,7 @@ export async function handleAdmin(
         // Order (two columns): CH warehouse received date | Estimated arrival,
         // Malabon warehouse received date | Delivered date,
         // Declared CBM | Declared weight, Verified CBM | Verified weight,
-        // Status (| Flight date for Air). Supplier waybill and courier sit in
+        // Status. Air Freight: CH received | Flight date, then Estimated arrival. Supplier waybill and courier sit in
         // the Ni Hao details box below.
         fields +=
           input(
@@ -1163,7 +1163,14 @@ export async function handleAdmin(
             record,
             "date",
           ).replace("<label>", '<label style="grid-column-start:1">') +
-          arrivalEstimateField(record) +
+          // Air Freight: Flight date comes right after the CH warehouse received
+          // date (it cannot be earlier; the browser picker starts from it too).
+          (record.service_type === "Air Freight"
+            ? input("departure_date", "Flight date", record, "date").replace(
+                'name="departure_date"',
+                `name="departure_date" data-after="warehouse_received_date"${record.warehouse_received_date ? ` min="${esc(record.warehouse_received_date)}"` : ""}`,
+              ) + arrivalEstimateField(record).replace('class="arrival-estimate"', 'class="arrival-estimate wide"')
+            : arrivalEstimateField(record)) +
           // Below them: Malabon warehouse received date (from Malabon Warehouse
           // on) and Delivered date (at Delivered). Both always stay in the form
           // so a saved date is kept; /admin-arrival-window.js shows or hides
@@ -1210,10 +1217,8 @@ export async function handleAdmin(
             record,
             shipmentStatusOptions(record),
           ).replace("<label>", '<label class="k-status-red" style="grid-column-start:1">') + hidden("estimated_arrival", record.estimated_arrival ?? "") +
-          // Air Freight shows its flight date next to the status; Sea Freight keeps it hidden.
-          (record.service_type === "Air Freight"
-            ? input("departure_date", "Flight date", record, "date")
-            : hidden("departure_date", record.departure_date ?? ""));
+          // Sea Freight keeps the flight date hidden (Air shows it after the CH date above).
+          (record.service_type === "Air Freight" ? "" : hidden("departure_date", record.departure_date ?? ""));
 
         /*
          * PUBLIC TRACKING REMARKS

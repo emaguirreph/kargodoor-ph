@@ -43,6 +43,16 @@
       label.hidden = !label.dataset.showStatus.split("|").includes(status?.value || "");
     }
   };
+  // Air Freight: the Flight date picker cannot go before the CH warehouse received date.
+  const flight = form.querySelector('[data-after="warehouse_received_date"]');
+  const syncFlightMin = () => {
+    if (!flight) return;
+    if (received?.value) flight.min = received.value;
+    else flight.removeAttribute("min");
+  };
+  received?.addEventListener("change", syncFlightMin);
+  received?.addEventListener("input", syncFlightMin);
+  syncFlightMin();
   status?.addEventListener("change", syncDates);
   for (const el of [received, service, status]) el?.addEventListener("change", update);
   received?.addEventListener("input", update);

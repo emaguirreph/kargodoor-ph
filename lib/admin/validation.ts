@@ -365,7 +365,7 @@ export const shipmentSchema =
           code: "custom",
           path: ["departure_date"],
           message:
-            "Departure date cannot be before the warehouse received date",
+            "Flight date cannot be before the CH warehouse received date",
         });
       }
 
@@ -478,9 +478,9 @@ const shipmentFormSchema = shipmentObjectSchema
     checkCargoItem(values, context);
     checkTransitStatus(values, context);
     if (values.departure_date && values.warehouse_received_date && values.departure_date < values.warehouse_received_date)
-      context.addIssue({ code: "custom", path: ["departure_date"], message: "Departure date cannot be before the warehouse received date" });
+      context.addIssue({ code: "custom", path: ["departure_date"], message: "Flight date cannot be before the CH warehouse received date" });
     if (values.actual_arrival && values.departure_date && values.actual_arrival < values.departure_date)
-      context.addIssue({ code: "custom", path: ["actual_arrival"], message: "Malabon warehouse received date cannot be before the departure date" });
+      context.addIssue({ code: "custom", path: ["actual_arrival"], message: "Malabon warehouse received date cannot be before the flight date" });
     if (values.delivered_date && values.actual_arrival && values.delivered_date < values.actual_arrival)
       context.addIssue({ code: "custom", path: ["delivered_date"], message: "Delivered date cannot be before the Malabon warehouse received date" });
   })
