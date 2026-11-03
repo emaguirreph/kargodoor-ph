@@ -2070,3 +2070,47 @@ test("Transfer fee: ₱30 split on the shipment, Ni Hao fee merged into its Expe
   assert.match(html, /₱375\.00/, "total still counts every record");
   assert.match(html, /Moved GCash to UnionBank/);
 });
+
+test("Money In & Out lists every payment, money-in entry and expense with a running balance that ends at Cash on Hand", async () => {
+  const { db, sql, user } = database();
+  const { readLedger, filterLedger, moneyLedgerPage } = await import("../../lib/admin/money-ledger");
+  const { readCashOnHand } = await import("../../lib/admin/finance-cash");
+  const { recordShipmentPayment } = await import("../../lib/admin/shipment-payment");
+  const customerId = randomUUID();
+  const shipmentId = randomUUID();
+  sql.prepare("INSERT INTO customers (id, customer_code, full_name, mobile, created_at, updated_at) VALUES (?,?,?,?,?,?)")
+    .run(customerId, "KD-LG", "Ledger Tester", "+639170000010", "2026-10-01", "2026-10-01");
+  sql.prepare("INSERT INTO shipments (id, customer_id, tracking_number, service_type, china_warehouse, cbm, weight_kg, status, shipping_charge, delivery_charge, payment_status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)")
+    .run(shipmentId, customerId, "KDAIR-900010", "Air Freight", "Guangzhou", 0, 1, "Delivered", 53000, 23100, "Unpaid", "2026-10-01", "2026-10-01");
+  const actor = { id: user, name: "Admin", email: "admin@example.test", role: "admin" as const };
+  const cash = sql.prepare("INSERT INTO finance_cash_entries (id, entry_date, entry_type, amount, notes, created_at, updated_at) VALUES (?,?,?,?,?,?,?)");
+  cash.run(randomUUID(), "2026-10-16", "Opening Cash Balance", 2500000, "Opening", "2026-10-16", "2026-10-16");
+  cash.run(randomUUID(), "2026-10-20", "Customer Reimbursement Due", 10000, "Owed, not cash", "2026-10-20", "2026-10-20");
+  const expense = sql.prepare("INSERT INTO expenses (id, expense_date, category, payee, description, amount, payment_method, tracking_number, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)");
+  expense.run(randomUUID(), "2026-09-01", "Marketing", "Printer", "Tarp (paid personally, before opening cash)", 50000, "Cash", null, "2026-09-01", "2026-09-01");
+  expense.run(randomUUID(), "2026-11-03", "Freight / Ni Hao Cost", "Ni Hao", "Ni Hao freight cost for KDAIR-900010", 35000, "Bank Transfer", "KDAIR-900010", "2026-11-03T01", "2026-11-03T01");
+  await recordShipmentPayment(db, new URLSearchParams({ csrf: "t", action: "customer_paid", id: shipmentId, amount: "761.00", payment_method: "GCash", payment_date: "2026-11-03", reference_number: "GC-7", notes: "" }), actor);
+
+  const { rows, openingDate } = await readLedger(db, "2026-11-30");
+  assert.equal(openingDate, "2026-10-16");
+  assert.equal(rows.length, 4, "the reimbursement due is not cash");
+  assert.deepEqual(rows.map((row) => [row.date, row.direction, row.balance]), [
+    ["2026-09-01", "out", null],
+    ["2026-10-16", "in", 2500000],
+    ["2026-11-03", "in", 2576100],
+    ["2026-11-03", "out", 2541100],
+  ]);
+  assert.equal(rows[2]!.who, "Ledger Tester");
+  assert.equal(rows[2]!.tracking, "KDAIR-900010");
+  assert.equal((await readCashOnHand(db, "2026-11-30")).total, BigInt(2541100), "last balance = Cash on Hand");
+  assert.equal(filterLedger(rows, { from: "", to: "", show: "out", q: "" }).length, 2);
+  assert.equal(filterLedger(rows, { from: "2026-11-01", to: "", show: "", q: "kdair-900010" }).length, 2);
+
+  const html = await (await moneyLedgerPage(db, new URL("http://x/admin/finance/ledger"), "Admin", true)).text();
+  assert.match(html, /Money In &amp; Out/);
+  assert.match(html, /₱25,411\.00/);
+  const csv = await (await moneyLedgerPage(db, new URL("http://x/admin/finance/ledger?show=in&download=csv"), "Admin", true)).text();
+  assert.match(csv, /2026-11-03,In,Customer payment,Ledger Tester,Invoice INV-[^,]+,KDAIR-900010,GCash,,GC-7,761\.00,,25761\.00/);
+  assert.doesNotMatch(csv, /Printer/);
+  await assert.rejects(moneyLedgerPage(db, new URL("http://x/admin/finance/ledger?from=2026-13-01"), "Admin", true), /valid dates/);
+});
