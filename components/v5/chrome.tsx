@@ -40,8 +40,8 @@ export function Header() {
       <div className="wrap nav">
         <Link className="logo" href="/" aria-label="KargoDoor PH home">
           <picture>
-            <source srcSet="/assets/kargodoor-logo-tagline-dark.png" media="(prefers-color-scheme: dark)" width="685" height="222" />
-            <img src="/assets/kargodoor-logo-tagline-transparent.png" alt="KargoDoor PH — China to PH, made SIMPLE" width="812" height="268" />
+            <source srcSet="/assets/kargodoor-logo-tagline-dark.webp" media="(prefers-color-scheme: dark)" width="480" height="156" />
+            <img src="/assets/kargodoor-logo-tagline-transparent.webp" alt="KargoDoor PH — China to PH, made SIMPLE" width="480" height="158" fetchPriority="high" />
           </picture>
         </Link>
 
@@ -87,7 +87,7 @@ export function Footer() {
         <div className="wrap fgrid">
           <div className="stack">
             <Link href="/" aria-label="KargoDoor PH home">
-              <img className="flogo" src="/assets/kargodoor-footer-logo.png" alt="KargoDoor PH — China to PH, made SIMPLE" />
+              <img className="flogo" src="/assets/kargodoor-footer-logo.webp" alt="KargoDoor PH — China to PH, made SIMPLE" width="720" height="267" loading="lazy" decoding="async" />
             </Link>
           </div>
           <div className="ci">

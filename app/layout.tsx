@@ -98,6 +98,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased">
+        {/* Remembers a tap on the chat button made before the page finishes loading; the assistant opens as soon as it is ready. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: "document.addEventListener('click',function(e){if(window.__kcReady)return;var b=e.target&&e.target.closest&&e.target.closest('.kc-fab,.kc-tease');if(b){window.__kcOpen=1;b.classList.add('kc-wait');}},true);",
+          }}
+        />
         {children}
 
         <AnalyticsPageViews />

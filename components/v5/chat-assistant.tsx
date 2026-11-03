@@ -617,8 +617,17 @@ export function ChatAssistant() {
   }
 
   // kargodoorph.com/chat (→ /?chat=1) opens the assistant right away, for links shared on Facebook or Messenger.
+  // A tap made before the page finished loading (caught by the small script in app/layout.tsx) opens it too.
   useEffect(() => {
+    const w = window as typeof window & { __kcReady?: boolean; __kcOpen?: number };
+    w.__kcReady = true;
     const url = new URL(window.location.href);
+    if (w.__kcOpen) {
+      w.__kcOpen = 0;
+      document.querySelectorAll(".kc-wait").forEach((el) => el.classList.remove("kc-wait"));
+      const timer = window.setTimeout(() => openChat(), 0);
+      return () => window.clearTimeout(timer);
+    }
     if (url.searchParams.get("chat") !== "1") return;
     url.searchParams.delete("chat");
     window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);

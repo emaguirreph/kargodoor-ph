@@ -493,7 +493,7 @@ html:has(.v5){font-size:18px;scroll-behavior:smooth;-webkit-text-size-adjust:100
 .v5 .site-ftr a{display:block;text-decoration:none;padding:4px 0;transition:color .2s,transform .2s}
 .v5 .site-ftr a:hover{color:var(--green-2);transform:translateX(4px)}
 .v5 .site-ftr .ci span{display:block;padding:3px 0;overflow-wrap:anywhere}
-.v5 .flogo{width:240px;max-width:100%}
+.v5 .flogo{width:240px;max-width:100%;height:auto}
 .v5 .copy{border-top:1px solid rgba(255,255,255,.1);margin-top:40px;padding-top:24px;text-align:center;font-size:.82rem;letter-spacing:.08em}
 .v5 .soc{display:flex;gap:10px;flex-wrap:wrap}
 .v5 .soc a{width:46px;height:46px;border-radius:14px;background:rgba(255,255,255,.08);display:grid;place-items:center;padding:0}
@@ -832,3 +832,5 @@ html.kc-open:has(.v5){overflow:hidden}
 .v5 .kc-label b{font:800 1.35rem/1.1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.02em}
 .v5 .kc-label span{font:600 .72rem var(--f-b)}
 .v5 .kc-fmt .kc-small{margin:0;flex-basis:100%}
+.v5 .kc-fab.kc-wait{animation:kc-wait .8s ease-in-out infinite}
+@keyframes kc-wait{0%,100%{transform:scale(1)}50%{transform:scale(.9)}}
