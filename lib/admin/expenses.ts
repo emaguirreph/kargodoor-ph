@@ -175,7 +175,7 @@ export async function expensesPage(db: D1Database, url: URL, user: AdminUser | s
     return page(edit !== null ? "Edit Expense" : "Add Expense", `<section><p class="notice"><strong>Use this form when KargoDoor pays money out</strong> for a supplier, freight partner, package cost, or operating cost. This reduces cash. If the customer must reimburse a package cost, save the expense first, then record the amount owed in <a href="/admin/finance/cash?new=1&amp;type=Customer%20Reimbursement%20Due">Cash Flow &amp; Customer Credits</a>.</p>${historical}${oldMethod}<form method="post" action="${path}">
       ${hidden("csrf", csrf)}${edit !== null ? hidden("action", "edit") + hidden("id", record.id) + hidden("revision", record.updated_at) : ""}
       <div class="grid">${form}</div><p class="muted">* Required. For a Freight / Ni Hao Cost expense, enter the shipment's tracking number if its Ni Hao cost is already saved on the shipment, so it is not counted twice. Leave it blank for lump-sum Ni Hao payments.</p>
-      <div class="actions"><button type="submit">Save expense</button><a href="${path}">Cancel</a></div>
+      <div class="actions"><button type="submit">Save expense</button><a href="${path}">Cancel</a>${edit !== null && canDelete ? `<a href="${path}?delete=${esc(encodeURIComponent(String(record.id)))}">Delete expense</a>` : ""}</div>
       </form></section>${edit !== null ? await (async () => {
         const id = String(record.id);
         const proof = (await readProofs(db, "expense", [id])).get(id);
@@ -206,24 +206,16 @@ export async function expensesPage(db: D1Database, url: URL, user: AdminUser | s
   // column, one row per shipment, then the total. The
   // proof lives in Edit expense, not the list.
   const lines = groupExpenses(results);
-  const editLink = (label: string, row: RecordData | undefined) => row ? `<a href="${path}?edit=${esc(encodeURIComponent(String(row.id)))}">${label}</a>` : "";
-  const deleteLink = (label: string, row: RecordData | undefined) => row && canDelete ? `<a href="${path}?delete=${esc(encodeURIComponent(String(row.id)))}">${label}</a>` : "";
-  const many = (line: ExpenseLine) => line.records.length > 1;
-  const actions = (line: ExpenseLine) => {
-    if (!many(line)) return [editLink("Edit", line.records[0]), deleteLink("Delete", line.records[0])].filter(Boolean).join("<br>");
-    return [editLink("Edit Ni Hao", line.niHao), editLink("Edit fee", line.fee), editLink("Edit delivery", line.delivery),
-      deleteLink("Delete Ni Hao", line.niHao), deleteLink("Delete fee", line.fee), deleteLink("Delete delivery", line.delivery)].filter(Boolean).join("<br>");
-  };
   const editHref = (row: RecordData) => `${path}?edit=${encodeURIComponent(String(row.id))}`;
   // Each amount opens its own record; the rest of the row opens the main one.
   const money = (row: RecordData | undefined) => !row ? '<span class="muted">—</span>' : canWrite ? `<a href="${esc(editHref(row))}" title="Edit">${esc(pesos(row.amount))}</a>` : esc(pesos(row.amount));
   const accounts = (line: ExpenseLine, key: "paid_from_account" | "paid_to_account") => [...new Set(line.records.map((row) => bankAccountLabel(row[key])).filter(Boolean))].map(esc).join("<br>") || "—";
   const notes = (line: ExpenseLine) => line.records.map((row) => String(row.notes ?? "").trim()).filter(Boolean).map(esc).join("<br>") || "—";
   const table = results.length ? `<div class="table"><table class="expense-list"><thead><tr>
-    ${canWrite ? '<th class="exp-tight">Actions</th>' : ""}<th class="exp-tight">Date</th><th>Category</th><th>Payee</th><th class="exp-wide">Description</th>
+    <th class="exp-tight">Date</th><th>Category</th><th>Payee</th><th class="exp-wide">Description</th>
     <th class="exp-num">Amount</th><th class="exp-num">Transfer fee</th><th class="exp-num">Delivery fee</th><th class="exp-num">Total</th>
     <th>Paid from</th><th>Paid to</th><th class="exp-wide">Notes</th></tr></thead><tbody>
-    ${lines.map((line) => `<tr${canWrite ? ` class="exp-row" data-href="${esc(editHref(line.main))}" tabindex="0" title="Click to edit"` : ""}>${canWrite ? `<td class="exp-tight">${actions(line)}</td>` : ""}
+    ${lines.map((line) => `<tr${canWrite ? ` class="exp-row" data-href="${esc(editHref(line.main))}" tabindex="0" title="Click to edit"` : ""}>
       <td class="exp-tight">${esc(line.main.expense_date)}</td><td>${esc(line.main.category)}</td><td>${esc(line.main.payee) || "—"}</td>
       <td class="exp-wide">${esc(line.main.description)}</td>
       <td class="exp-num">${money(line.niHao ?? line.other)}</td><td class="exp-num">${money(line.fee)}</td><td class="exp-num">${money(line.delivery)}</td>

@@ -2071,7 +2071,7 @@ test("Transfer fee: ₱30 split on the shipment, Ni Hao fee merged into its Expe
   assert.equal(shipmentLine.fee!.amount, 1000);
   assert.equal(shipmentLine.total, 36000);
   assert.equal(groupExpenses([{ id: "m", category: "Marketing / Advertising", amount: 50000 }])[0]!.other!.amount, 50000, "other expenses fill the Amount column");
-  assert.match(html, /Edit Ni Hao[\s\S]*Edit fee/);
+  assert.doesNotMatch(html, /<th class="exp-tight">Actions<\/th>/, "rows open Edit; no Actions column (Em, 2026-11-03)");
   assert.match(html, /<th class="exp-num">Amount<\/th><th class="exp-num">Transfer fee<\/th><th class="exp-num">Delivery fee<\/th><th class="exp-num">Total<\/th>/);
   assert.match(html, /<tr class="exp-row" data-href="\/admin\/finance\/expenses\?edit=[^"]+" tabindex="0"/, "click the row to edit");
   assert.match(html, /₱350\.00<\/a><\/td><td class="exp-num"><a[^>]*>₱10\.00<\/a><\/td><td class="exp-num"><span class="muted">—<\/span><\/td>\s*<td class="exp-num"><strong>₱360\.00/);
