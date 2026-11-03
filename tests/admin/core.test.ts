@@ -2166,13 +2166,13 @@ test("Account balances: UnionBank, GCash and Cash each keep their own running ba
   // UnionBank 25,000 + 28,405 − 25,415 + 200 + 10 = 28,200; GCash 1,000 − 700 − 200 − 15 − 10 = 75.
   assert.equal(byWallet["kd-unionbank"], 2820000);
   assert.equal(byWallet["kd-gcash"], 7500);
-  assert.equal(byWallet.cash, 0);
-  assert.deepEqual(untagged.map((row) => row.amount).sort(), [60000, 60000], "the client cash payment and the 'Other' Ni Hao payment");
+  assert.equal(byWallet.cash, 60000);
+  assert.deepEqual(untagged.map((row) => row.amount), [60000], "only the 'Other' Ni Hao payment; a cash payment is owner cash");
   assert.equal(total, 2820000 + 7500 + 60000 - 60000);
   assert.equal(BigInt(total), (await readCashOnHand(db, "2026-11-30")).total, "transfers don't change Cash on Hand");
 
   const section = await walletBalancesSection(db);
-  assert.match(section, /2 records need an account/);
+  assert.match(section, /1 record needs an account/);
   assert.match(section, /href="\/admin\/finance\/ledger\?account=untagged"/);
   const gcash = await (await moneyLedgerPage(db, new URL("http://x/admin/finance/ledger?account=kd-gcash"), "Admin", true)).text();
   assert.match(gcash, /GCash balance/);
@@ -2182,7 +2182,7 @@ test("Account balances: UnionBank, GCash and Cash each keep their own running ba
   assert.match(csv, /UnionBank Balance PHP/);
   assert.match(csv, /2026-11-03,In,Transfer,,Moved from GCash,,,UnionBank,,10\.00,,28200\.00/);
   const all = await (await moneyLedgerPage(db, new URL("http://x/admin/finance/ledger"), "Admin", true)).text();
-  assert.match(all, /Not tagged \(2\)/);
+  assert.match(all, /Not tagged \(1\)/);
 
   const box = shipmentPaymentSection({ path: "/admin/shipments", csrf: "t", shipmentId: randomUUID(), canWrite: true, billing: { invoiceId: null, invoiceNumber: null, status: null, total: 1000, paid: 0, lastPaymentDate: null } });
   assert.match(box, /Bank Transfer \(UnionBank\)/);
