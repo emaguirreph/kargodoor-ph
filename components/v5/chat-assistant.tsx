@@ -18,6 +18,10 @@ const unionBank = kargodoorBankAccounts.find((account) => account.id === "kd-uni
 const peso = (n: number) => `₱${n.toLocaleString("en-PH", Number.isInteger(n) ? { maximumFractionDigits: 0 } : { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const trackingPattern = /^(KD-?(SEA|AIR|FCL)-?\d{6,}|(AIR-?)?KDOOR-?\d{4,})$/i;
 
+// Tracking numbers and cargo codes are always capital letters.
+const codeCase = (value: string, waitingFor?: string) =>
+  waitingFor === "track" || waitingFor === "ref" || /^\s*kd[\w-]*$/i.test(value) ? value.toUpperCase() : value;
+
 function copy(text: string) {
   try { void navigator.clipboard?.writeText(text); } catch { /* clipboard blocked: the text is still on screen */ }
 }
@@ -591,7 +595,7 @@ export function ChatAssistant() {
         <button type="button" onClick={chip("restricted", "🚫 Restricted items")}>🚫 Restricted items</button>
       </div>
       <form className="kc-in" onSubmit={send}>
-        <input ref={input} value={text} onChange={(e) => setText(e.target.value)} placeholder={waiting?.kind === "last4" ? "Last 4 digits of your mobile" : waiting?.kind === "track" ? "Tracking number" : "Type your question or tracking no."} inputMode={waiting?.kind === "last4" ? "numeric" : "text"} maxLength={120} aria-label="Type your question" />
+        <input ref={input} value={text} onChange={(e) => setText(codeCase(e.target.value, waiting?.kind))} autoCapitalize={waiting?.kind === "track" || waiting?.kind === "ref" ? "characters" : "sentences"} placeholder={waiting?.kind === "last4" ? "Last 4 digits of your mobile" : waiting?.kind === "track" ? "Tracking number" : "Type your question or tracking no."} inputMode={waiting?.kind === "last4" ? "numeric" : "text"} maxLength={120} aria-label="Type your question" />
         <button aria-label="Send">➤</button>
       </form>
       <div className="kc-foot">Team replies 8 AM – 10 PM, 7 days a week</div>

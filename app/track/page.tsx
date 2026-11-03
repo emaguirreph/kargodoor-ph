@@ -141,7 +141,8 @@ function TrackContent() {
             id="tracking-number"
             type="text"
             value={code}
-            onChange={(event) => setCode(event.target.value)}
+            onChange={(event) => setCode(event.target.value.toUpperCase())}
+            autoCapitalize="characters"
             placeholder="Example: KDSEA-482731"
             autoComplete="off"
           />

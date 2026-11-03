@@ -19,7 +19,7 @@ export async function saveExpense(db: D1Database, values: z.infer<typeof expense
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(crypto.randomUUID(), values.expense_date, values.category, values.payee,
       values.description, values.amount, values.payment_method, values.reference_number,
-      values.tracking_number, values.notes, values.paid_from_account ?? null, values.paid_to_account ?? null,
+      (typeof values.tracking_number === "string" ? values.tracking_number.toUpperCase() : values.tracking_number), values.notes, values.paid_from_account ?? null, values.paid_to_account ?? null,
       createdBy ?? null, now, now).run();
 }
 
@@ -86,7 +86,7 @@ export async function mutateExpense(db: D1Database, form: URLSearchParams, user:
       paid_from_account = ?, paid_to_account = ?, updated_at = ?
       WHERE id = ? AND updated_at = ?${owned}`)
       .bind(values.expense_date, values.category, values.payee, values.description, values.amount,
-        values.payment_method, values.reference_number, values.tracking_number, values.notes,
+        values.payment_method, values.reference_number, (typeof values.tracking_number === "string" ? values.tracking_number.toUpperCase() : values.tracking_number), values.notes,
         values.paid_from_account ?? null, values.paid_to_account ?? null, now, ...scope),
   ]);
   if (result.meta.changes !== 1) throw new AdminError("Expense changed or no longer exists. Reload Expenses before trying again.", 409);
