@@ -40,6 +40,7 @@ import {
   type AdminEnv,
   canMutateAdmin,
   requireAdminMutation,
+  secureHeaders,
 } from "../../lib/admin/security";
 import { expensesPage, saveExpense, mutateExpense } from "../../lib/admin/expenses";
 import { proofCell, readProofFile, readProofs, saveProof } from "../../lib/admin/payment-proof";
@@ -2113,4 +2114,9 @@ test("Money In & Out lists every payment, money-in entry and expense with a runn
   assert.match(csv, /2026-11-03,In,Customer payment,Ledger Tester,Invoice INV-[^,]+,KDAIR-900010,GCash,,GC-7,761\.00,,25761\.00/);
   assert.doesNotMatch(csv, /Printer/);
   await assert.rejects(moneyLedgerPage(db, new URL("http://x/admin/finance/ledger?from=2026-13-01"), "Admin", true), /valid dates/);
+});
+test("admin pages allow same-origin fetch so the Leads count in the menu can load", () => {
+  // admin-skin.js fetches /admin/leads?count=1; without connect-src the browser blocks it.
+  assert.match(secureHeaders["Content-Security-Policy"], /connect-src 'self'/);
+  assert.doesNotMatch(secureHeaders["Content-Security-Policy"], /connect-src [^;]*\*/);
 });
