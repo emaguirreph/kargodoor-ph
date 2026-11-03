@@ -36,6 +36,10 @@ const invoiceStatuses = [
   "Paid",
 ] as const;
 
+/** Clients pay KargoDoor by GCash or bank transfer to UnionBank only (Em, 2026-11-03). */
+export const clientPaymentMethods = ["GCash", "Bank Transfer"] as const;
+export const paymentMethodLabel = (method: string) => (method === "Bank Transfer" ? "Bank Transfer (UnionBank)" : method);
+
 export const paymentMethods = [
   "Cash",
   "Bank Transfer",
@@ -1148,10 +1152,10 @@ function paymentForm(
           <label>
             Method *
             <select name="payment_method">
-              ${paymentMethods
+              ${clientPaymentMethods
                 .map(
                   (value) =>
-                    `<option>${esc(value)}</option>`,
+                    `<option value="${esc(value)}">${esc(paymentMethodLabel(value))}</option>`,
                 )
                 .join("")}
             </select>

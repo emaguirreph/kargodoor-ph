@@ -1,6 +1,6 @@
 import type { D1Database } from "@cloudflare/workers-types";
 import { AdminError, type AdminUser } from "./security";
-import { createInvoice, paymentMethods, recordPayment } from "./billing";
+import { clientPaymentMethods, createInvoice, paymentMethodLabel, recordPayment } from "./billing";
 import { esc, hidden, pesos } from "./ui";
 import { philippineToday } from "./finance-dates";
 
@@ -107,7 +107,7 @@ export function shipmentPaymentSection(options: {
   if (!options.canWrite || billing.total <= 0) {
     return `${open}${heading}${saved}<p class="muted">${summary}${billing.total <= 0 ? " Add the KargoDoor charge first." : ""}</p>${options.paymentsList ?? ""}${close}`;
   }
-  const methods = paymentMethods.map((method) => `<option value="${esc(method)}"${method === "GCash" ? " selected" : ""}>${esc(method)}</option>`).join("");
+  const methods = clientPaymentMethods.map((method) => `<option value="${esc(method)}"${method === "GCash" ? " selected" : ""}>${esc(paymentMethodLabel(method))}</option>`).join("");
   return `${open}
     ${heading}${saved}
     <p class="muted">${summary} When the customer pays, save it here: the invoice is issued, the money is added to Money we have now and the shipment's Payment status updates.</p>

@@ -10,6 +10,7 @@ import {
 import { readFinanceReport } from "./finance-report";
 import { esc, input, page } from "./ui";
 import { readCashOnHand, readManualCashSummary } from "./finance-cash";
+import { walletBalancesSection } from "./money-ledger";
 
 type Invoice = {
   id: string;
@@ -1455,6 +1456,7 @@ async function moneyTodayPage(
     "Money Today",
     `
       ${simpleSummarySection(simple, "Money Today", "Where the business stands right now. For a month or quarter, open Reports & BIR.")}
+      ${await walletBalancesSection(db)}
       <div class="actions finance-today-links">
         <a href="/admin/invoices">Invoices &amp; Payments</a>
         <a href="/admin/finance/expenses">Expenses</a>

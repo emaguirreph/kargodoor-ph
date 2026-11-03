@@ -91,6 +91,7 @@ function database(includePhase1 = true) {
   sql.exec(readFileSync("migrations/admin/0036_shipment_nihao_details.sql", "utf8"));
   sql.exec(readFileSync("migrations/admin/0037_shipment_delivered_date.sql", "utf8"));
   sql.exec(readFileSync("migrations/admin/0038_payment_proofs.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0039_account_transfers.sql", "utf8"));
   const user = randomUUID();
   sql
     .prepare("INSERT INTO admin_users VALUES (?,?,?,?,?,?)")
@@ -2057,7 +2058,7 @@ test("Transfer fee: ₱30 split on the shipment, Ni Hao fee merged into its Expe
   assert.match(gcashTransferSection({ path: "/x", csrf: "t", suggestedFee: 1500 }), /value="15\.00"/);
   await assert.rejects(recordGcashTransfer(db, new URLSearchParams({ ...Object.fromEntries(move), id: "x" }), actor), /Unexpected/);
   await assert.rejects(recordGcashTransfer(db, new URLSearchParams({ ...Object.fromEntries(move), moved_amount: "-5" }), actor), /amount moved/);
-  await assert.rejects(recordGcashTransfer(db, new URLSearchParams({ ...Object.fromEntries(move), amount: "0" }), actor));
+  await assert.rejects(recordGcashTransfer(db, new URLSearchParams({ ...Object.fromEntries(move), moved_amount: "" }), actor), /amount moved/);
 
   // Expenses list: Ni Hao ₱350 + ₱10 fee is one row; the GCash transfer is its own row.
   const all = sql.prepare("SELECT * FROM expenses ORDER BY expense_date DESC, created_at DESC").all() as Record<string, unknown>[];
@@ -2111,7 +2112,7 @@ test("Money In & Out lists every payment, money-in entry and expense with a runn
   assert.match(html, /Money In &amp; Out/);
   assert.match(html, /₱25,411\.00/);
   const csv = await (await moneyLedgerPage(db, new URL("http://x/admin/finance/ledger?show=in&download=csv"), "Admin", true)).text();
-  assert.match(csv, /2026-11-03,In,Customer payment,Ledger Tester,Invoice INV-[^,]+,KDAIR-900010,GCash,,GC-7,761\.00,,25761\.00/);
+  assert.match(csv, /2026-11-03,In,Customer payment,Ledger Tester,Invoice INV-[^,]+,KDAIR-900010,GCash,GCash,GC-7,761\.00,,25761\.00/);
   assert.doesNotMatch(csv, /Printer/);
   await assert.rejects(moneyLedgerPage(db, new URL("http://x/admin/finance/ledger?from=2026-13-01"), "Admin", true), /valid dates/);
 });
@@ -2119,4 +2120,71 @@ test("admin pages allow same-origin fetch so the Leads count in the menu can loa
   // admin-skin.js fetches /admin/leads?count=1; without connect-src the browser blocks it.
   assert.match(secureHeaders["Content-Security-Policy"], /connect-src 'self'/);
   assert.doesNotMatch(secureHeaders["Content-Security-Policy"], /connect-src [^;]*\*/);
+});
+
+test("Account balances: UnionBank, GCash and Cash each keep their own running balance; transfers move money between them", async () => {
+  const { db, sql, user } = database();
+  const { readLedger, walletBalances, walletBalancesSection, moneyLedgerPage, walletOf } = await import("../../lib/admin/money-ledger");
+  const { recordGcashTransfer } = await import("../../lib/admin/transfer-fees");
+  const { readCashOnHand } = await import("../../lib/admin/finance-cash");
+  const { shipmentPaymentSection } = await import("../../lib/admin/shipment-payment");
+  const actor = { id: user, name: "Admin", email: "admin@example.test", role: "admin" as const };
+  assert.equal(walletOf(null, "GCash"), "kd-gcash");
+  assert.equal(walletOf(null, "Bank Transfer"), "kd-unionbank");
+  assert.equal(walletOf("kd-gcash", "Bank Transfer"), "kd-gcash");
+  assert.equal(walletOf(null, "Other"), "");
+  const customerId = randomUUID();
+  sql.prepare("INSERT INTO customers (id, customer_code, full_name, mobile, created_at, updated_at) VALUES (?,?,?,?,?,?)")
+    .run(customerId, "KD-AC", "Acct Tester", "+639170000011", "2026-10-01", "2026-10-01");
+  const invoice = (n: string, total: number) => {
+    const shipmentId = randomUUID();
+    const invoiceId = randomUUID();
+    sql.prepare("INSERT INTO shipments (id, customer_id, tracking_number, service_type, china_warehouse, cbm, weight_kg, status, shipping_charge, delivery_charge, payment_status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)")
+      .run(shipmentId, customerId, n, "Air Freight", "Guangzhou", 0, 1, "Delivered", total, 0, "Paid", "2026-10-01", "2026-10-01");
+    sql.prepare("INSERT INTO invoices (id, invoice_number, customer_id, shipment_id, status, subtotal, delivery_charge, other_charge, total, issued_at, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")
+      .run(invoiceId, `INV-${n}`, customerId, shipmentId, "Paid", total, 0, 0, total, "2026-10-20", "2026-10-20", "2026-10-20");
+    return invoiceId;
+  };
+  const pay = sql.prepare("INSERT INTO payments (id, invoice_id, customer_id, amount, payment_method, payment_date, created_at) VALUES (?,?,?,?,?,?,?)");
+  pay.run(randomUUID(), invoice("T-1", 2840500), customerId, 2840500, "Bank Transfer", "2026-10-27", "2026-10-27");
+  pay.run(randomUUID(), invoice("T-2", 100000), customerId, 100000, "GCash", "2026-11-02", "2026-11-02");
+  pay.run(randomUUID(), invoice("T-3", 60000), customerId, 60000, "Cash", "2026-11-02", "2026-11-02");
+  sql.prepare("INSERT INTO finance_cash_entries (id, entry_date, entry_type, amount, notes, bank_account, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)")
+    .run(randomUUID(), "2026-10-16", "Opening Cash Balance", 2500000, "Archie & Em", "kd-unionbank", "2026-10-16", "2026-10-16");
+  const expense = sql.prepare("INSERT INTO expenses (id, expense_date, category, payee, description, amount, payment_method, paid_from_account, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)");
+  expense.run(randomUUID(), "2026-11-02", "Freight / Ni Hao Cost", "Ni Hao", "KDSEA000005", 2541500, "Bank Transfer", null, "2026-11-02", "2026-11-02");
+  expense.run(randomUUID(), "2026-11-02", "Freight / Ni Hao Cost", "Ni Hao", "KDAIR-362870", 70000, "GCash", null, "2026-11-02", "2026-11-02");
+  expense.run(randomUUID(), "2026-11-02", "Freight / Ni Hao Cost", "Ni Hao", "KDSEA000006", 60000, "Other", null, "2026-11-02", "2026-11-02");
+
+  await recordGcashTransfer(db, new URLSearchParams({ csrf: "t", action: "gcash_to_unionbank", expense_date: "2026-11-03", moved_amount: "200.00", amount: "15.00", reference_number: "", notes: "" }), actor);
+  await recordGcashTransfer(db, new URLSearchParams({ csrf: "t", action: "gcash_to_unionbank", expense_date: "2026-11-03", moved_amount: "10.00", amount: "", reference_number: "", notes: "" }), actor);
+  assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM account_transfers").get()!.n, 2);
+  assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM expenses WHERE category = 'Bank / Payment Fees'").get()!.n, 1, "no fee, no expense");
+
+  const { rows } = await readLedger(db, "2026-11-30");
+  const { byWallet, untagged, total } = walletBalances(rows);
+  // UnionBank 25,000 + 28,405 − 25,415 + 200 + 10 = 28,200; GCash 1,000 − 700 − 200 − 15 − 10 = 75.
+  assert.equal(byWallet["kd-unionbank"], 2820000);
+  assert.equal(byWallet["kd-gcash"], 7500);
+  assert.equal(byWallet.cash, 0);
+  assert.deepEqual(untagged.map((row) => row.amount).sort(), [60000, 60000], "the client cash payment and the 'Other' Ni Hao payment");
+  assert.equal(total, 2820000 + 7500 + 60000 - 60000);
+  assert.equal(BigInt(total), (await readCashOnHand(db, "2026-11-30")).total, "transfers don't change Cash on Hand");
+
+  const section = await walletBalancesSection(db);
+  assert.match(section, /2 records need an account/);
+  assert.match(section, /href="\/admin\/finance\/ledger\?account=untagged"/);
+  const gcash = await (await moneyLedgerPage(db, new URL("http://x/admin/finance/ledger?account=kd-gcash"), "Admin", true)).text();
+  assert.match(gcash, /GCash balance/);
+  assert.match(gcash, /Moved to UnionBank/);
+  assert.doesNotMatch(gcash, /KDSEA000005/);
+  const csv = await (await moneyLedgerPage(db, new URL("http://x/admin/finance/ledger?account=kd-unionbank&download=csv"), "Admin", true)).text();
+  assert.match(csv, /UnionBank Balance PHP/);
+  assert.match(csv, /2026-11-03,In,Transfer,,Moved from GCash,,,UnionBank,,10\.00,,28200\.00/);
+  const all = await (await moneyLedgerPage(db, new URL("http://x/admin/finance/ledger"), "Admin", true)).text();
+  assert.match(all, /Not tagged \(2\)/);
+
+  const box = shipmentPaymentSection({ path: "/admin/shipments", csrf: "t", shipmentId: randomUUID(), canWrite: true, billing: { invoiceId: null, invoiceNumber: null, status: null, total: 1000, paid: 0, lastPaymentDate: null } });
+  assert.match(box, /Bank Transfer \(UnionBank\)/);
+  assert.doesNotMatch(box, /<option value="Cash"/);
 });

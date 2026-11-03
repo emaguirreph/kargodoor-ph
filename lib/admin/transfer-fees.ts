@@ -63,50 +63,60 @@ export async function recordGcashTransfer(db: D1Database, form: URLSearchParams,
       throw new AdminError("Unexpected or repeated form field.");
   }
   const movedRaw = (form.get("moved_amount") ?? "").trim();
-  if (movedRaw && !(/^\d{1,9}(\.\d{1,2})?$/.test(movedRaw) && Number(movedRaw) > 0))
+  if (!(/^\d{1,9}(\.\d{1,2})?$/.test(movedRaw) && Number(movedRaw) > 0))
     throw new AdminError("Enter the amount moved in pesos, like 2500.00.");
-  const moved = movedRaw ? ` (moved ${pesos(Math.round(Number(movedRaw) * 100))})` : "";
-  const values = expenseSchema.parse({
-    expense_date: form.get("expense_date") ?? "",
+  const moved = Math.round(Number(movedRaw) * 100);
+  const feeRaw = (form.get("amount") ?? "").trim();
+  const reference = (form.get("reference_number") ?? "").trim().slice(0, 160) || null;
+  const notes = (form.get("notes") ?? "").trim().slice(0, 4000) || null;
+  const date = form.get("expense_date") ?? "";
+  // The fee is a business expense paid from GCash; the money moved is not.
+  const fee = feeRaw && Number(feeRaw) !== 0 ? expenseSchema.parse({
+    expense_date: date,
     category: transferFeeCategory,
     payee: "GCash",
-    description: `Transfer fee: ${gcashToUnionBankLabel}${moved}`,
-    amount: form.get("amount") ?? "",
+    description: `Transfer fee: ${gcashToUnionBankLabel} (moved ${pesos(moved)})`,
+    amount: feeRaw,
     payment_method: "GCash",
-    reference_number: form.get("reference_number") ?? "",
+    reference_number: reference ?? "",
     tracking_number: "",
-    notes: form.get("notes") ?? "",
+    notes: notes ?? "",
     paid_from_account: "kd-gcash",
     paid_to_account: "",
-  });
+  }) : null;
+  const transferDate = fee?.expense_date ?? expenseSchema.shape.expense_date.parse(date);
   const now = new Date().toISOString();
-  const expenseId = crypto.randomUUID();
+  const transferId = crypto.randomUUID();
+  const expenseId = fee ? crypto.randomUUID() : null;
   await db.batch([
-    db.prepare(`INSERT INTO expenses
+    ...(fee ? [db.prepare(`INSERT INTO expenses
       (id, expense_date, category, payee, description, amount, payment_method,
        reference_number, tracking_number, notes, paid_from_account, created_by_admin_user_id, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)`)
-      .bind(expenseId, values.expense_date, values.category, values.payee, values.description, values.amount,
-        values.payment_method, values.reference_number, values.notes, values.paid_from_account, user.id || null, now, now),
+      .bind(expenseId, fee.expense_date, fee.category, fee.payee, fee.description, fee.amount,
+        fee.payment_method, fee.reference_number, fee.notes, fee.paid_from_account, user.id || null, now, now)] : []),
+    db.prepare(`INSERT INTO account_transfers (id, transfer_date, from_account, to_account, amount, fee_expense_id, reference_number, notes, created_by_admin_user_id, created_at)
+      VALUES (?, ?, 'kd-gcash', 'kd-unionbank', ?, ?, ?, ?, ?, ?)`)
+      .bind(transferId, transferDate, moved, expenseId, reference, notes, user.id || null, now),
     db.prepare(`INSERT INTO activity_log (id,admin_user_id,action,entity_type,entity_id,old_value,new_value,notes,created_at)
-      VALUES (?, ?, 'gcash_to_unionbank', 'expenses', ?, NULL, ?, 'GCash moved to UnionBank; fee saved as an expense.', ?)`)
-      .bind(crypto.randomUUID(), user.id || null, expenseId,
-        JSON.stringify({ amount: values.amount, moved: movedRaw ? Math.round(Number(movedRaw) * 100) : null, expense_date: values.expense_date }), now),
+      VALUES (?, ?, 'gcash_to_unionbank', 'account_transfers', ?, NULL, ?, 'GCash moved to UnionBank.', ?)`)
+      .bind(crypto.randomUUID(), user.id || null, transferId,
+        JSON.stringify({ moved, fee: fee?.amount ?? 0, fee_expense_id: expenseId, transfer_date: transferDate }), now),
   ]);
-  return expenseId;
+  return transferId;
 }
 
 /** "Moved GCash to UnionBank" box on the Expenses page. */
 export function gcashTransferSection(options: { path: string; csrf: string; suggestedFee: number | null; justSaved?: boolean }) {
   return `<section id="gcash-transfer"><h2>Moved GCash to UnionBank</h2>
-    ${options.justSaved ? '<p class="notice" role="status">Transfer saved. Its fee is in the list as Bank / Payment Fees.</p>' : ""}
-    <p class="muted">Record each transfer once, even if it covers several customers. Only the fee is an expense.</p>
+    ${options.justSaved ? '<p class="notice" role="status">Transfer saved. GCash went down and UnionBank went up; the fee is in the list as Bank / Payment Fees.</p>' : ""}
+    <p class="muted">Record each transfer once, even if it covers several customers. GCash goes down by the amount plus the fee, UnionBank goes up by the amount. Only the fee is an expense.</p>
     <form method="post" action="${esc(options.path)}">
       ${hidden("csrf", options.csrf)}${hidden("action", "gcash_to_unionbank")}
       <div class="grid">
         <label>Date moved *<input name="expense_date" type="date" required value="${esc(philippineToday())}"></label>
-        <label>Amount moved (PHP)<input name="moved_amount" type="number" min="0.01" max="999999999" step="0.01" placeholder="e.g. 2500.00"></label>
-        <label>Transfer fee (PHP) *<input name="amount" type="number" min="0.01" max="1000000" step="0.01" required placeholder="e.g. 15.00" value="${options.suggestedFee ? esc((options.suggestedFee / 100).toFixed(2)) : ""}"></label>
+        <label>Amount moved (PHP) *<input name="moved_amount" type="number" min="0.01" max="9999999" step="0.01" required placeholder="e.g. 2500.00"></label>
+        <label>Transfer fee (PHP)<input name="amount" type="number" min="0" max="1000000" step="0.01" placeholder="e.g. 15.00" value="${options.suggestedFee ? esc((options.suggestedFee / 100).toFixed(2)) : ""}"></label>
         <label>Reference no.<input name="reference_number" maxlength="160"></label>
       </div>
       <div class="actions"><button type="submit">Save transfer</button></div>
