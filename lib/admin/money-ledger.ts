@@ -314,7 +314,7 @@ function profitCard(p: ShipmentProfit, filtered: boolean) {
       ${line("Delivery paid to riders", p.delivery, "−")}
       <tr class="profit-total"><td>= Profit from shipments</td><td class="ledger-num">${esc(pesos(p.profit))}</td></tr>
     </tbody></table>
-    <p class="muted">"In minus out" above is cash movement, not profit. Money the owners put in, and the costs they paid from their own pockets that KargoDoor owes back to them, are not counted as profit. Other costs (marketing, permits, website: ${esc(pesos(p.otherCosts))}) are not subtracted here.</p>
+    <p class="muted">"In minus out" above is cash movement, not profit. Money the owners put in, and the costs they paid from their own pockets that KargoDoor owes back to them, are not counted as profit. Other costs (marketing, permits, website: ${esc(pesos(p.otherCosts))}) are not subtracted here. So far the owners paid these from their own pockets, and KargoDoor pays them back separately (see Cash (owners)).</p>
   </section>
   <style>.profit-card{margin:0 0 16px}.profit-card h2{margin:0 0 8px;font-size:1.1rem}.profit-calc{width:auto;min-width:280px;border-collapse:collapse}.profit-calc td{padding:3px 12px 3px 0;border:0}.profit-calc .profit-total td{border-top:1.5px solid #c6dce9;font-weight:700;color:#1d6b3a;padding-top:6px}.profit-card p{margin:8px 0 0;font-size:.9rem}</style>`;
 }
