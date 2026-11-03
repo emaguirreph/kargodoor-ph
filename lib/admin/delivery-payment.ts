@@ -3,6 +3,7 @@ import { expenseSchema } from "./validation";
 import { AdminError, type AdminUser } from "./security";
 import { esc, hidden, pesos } from "./ui";
 import { philippineToday } from "./finance-dates";
+import { deliveryCategory } from "./cost-breakdown";
 
 /**
  * Paying the rider (Lalamove etc.) for a shipment's delivery, from the
@@ -11,7 +12,7 @@ import { philippineToday } from "./finance-dates";
  * shipment's tracking number so Expenses, Money In & Out and the account
  * balances count it. One delivery payment per shipment.
  */
-export const deliveryExpenseCategory = "Transportation / Fuel / Parking";
+export const deliveryExpenseCategory = deliveryCategory;
 const descriptionPrefix = "Delivery for ";
 const paidFrom = {
   UnionBank: { method: "Bank Transfer", account: "kd-unionbank" },

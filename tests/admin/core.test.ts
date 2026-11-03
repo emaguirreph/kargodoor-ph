@@ -2021,7 +2021,7 @@ test("Transfer fee: ₱30 split on the shipment, Ni Hao fee merged into its Expe
   const { recordGcashTransfer, readTransferFeesPaid, splitFreightCharge, transferFeeSection, transferFeesPaidSummary, lastGcashTransferFee, gcashTransferSection } = await import("../../lib/admin/transfer-fees");
   const { recordNiHaoPayment } = await import("../../lib/admin/nihao-payment");
   const { readShipmentStatement } = await import("../../lib/admin/shipment-statement");
-  const { mergeNiHaoFees, expensesPage } = await import("../../lib/admin/expenses");
+  const { expensesPage } = await import("../../lib/admin/expenses");
   const customerId = randomUUID();
   const shipmentId = randomUUID();
   sql.prepare("INSERT INTO customers (id, customer_code, full_name, mobile, created_at, updated_at) VALUES (?,?,?,?,?,?)")
@@ -2060,16 +2060,15 @@ test("Transfer fee: ₱30 split on the shipment, Ni Hao fee merged into its Expe
   await assert.rejects(recordGcashTransfer(db, new URLSearchParams({ ...Object.fromEntries(move), moved_amount: "-5" }), actor), /amount moved/);
   await assert.rejects(recordGcashTransfer(db, new URLSearchParams({ ...Object.fromEntries(move), moved_amount: "" }), actor), /amount moved/);
 
-  // Expenses list: Ni Hao ₱350 + ₱10 fee is one row; the GCash transfer is its own row.
+  // Expenses list: Ni Hao ₱350, its ₱10 fee and the GCash transfer fee are separate rows, counted apart.
   const all = sql.prepare("SELECT * FROM expenses ORDER BY expense_date DESC, created_at DESC").all() as Record<string, unknown>[];
-  const merged = mergeNiHaoFees(all);
   assert.equal(all.length, 3);
-  assert.equal(merged.length, 2);
-  assert.equal(merged.find((row) => row.category === "Freight / Ni Hao Cost")!.fee!.amount, 1000);
   const html = (await (await expensesPage(db, new URL("http://x/admin/finance/expenses"), actor, "t")).text());
-  assert.match(html, /₱360\.00<small class="muted exp-split">₱350\.00 \+ ₱10\.00 fee<\/small>/);
-  assert.match(html, /Edit fee/);
-  assert.match(html, /₱375\.00/, "total still counts every record");
+  assert.doesNotMatch(html, /Edit fee/);
+  assert.match(html, /Ni Hao cost<\/span><strong>₱350\.00/);
+  assert.match(html, /Transfer fees<\/span><strong>₱25\.00/);
+  assert.match(html, /Delivery fees<\/span><strong>₱0\.00/);
+  assert.match(html, /Total expenses<\/span><strong>₱375\.00/);
   assert.match(html, /Moved GCash to UnionBank/);
 });
 
@@ -2206,7 +2205,7 @@ test("Delivery paid to rider: saved once as an expense with the tracking number 
   const form = new URLSearchParams({ csrf: "t", action: "delivery_paid", id: shipmentId, expense_date: "2026-11-03", amount: "220.00", payee: "", paid_from: "GCash", reference_number: "LM-1" });
   await recordDeliveryPayment(db, form, actor);
   const expense = sql.prepare("SELECT * FROM expenses").get()!;
-  assert.equal(expense.category, "Transportation / Fuel / Parking");
+  assert.equal(expense.category, "Local Delivery / Trucking");
   assert.equal(expense.payee, "Lalamove");
   assert.equal(expense.description, "Delivery for KDAIR-900012");
   assert.equal(expense.tracking_number, "KDAIR-900012");
@@ -2220,4 +2219,21 @@ test("Delivery paid to rider: saved once as an expense with the tracking number 
   await assert.rejects(recordDeliveryPayment(db, new URLSearchParams({ ...Object.fromEntries(form), paid_from: "Bitcoin" }), actor), /paid from/);
   const { byWallet } = walletBalances((await readLedger(db, "2026-11-30")).rows);
   assert.equal(byWallet["kd-gcash"], -22000, "the delivery comes out of GCash");
+});
+
+test("Money In & Out counts Ni Hao cost, transfer fees and delivery fees separately", async () => {
+  const { db, sql } = database();
+  const { moneyLedgerPage } = await import("../../lib/admin/money-ledger");
+  const expense = sql.prepare("INSERT INTO expenses (id, expense_date, category, payee, description, amount, payment_method, tracking_number, paid_from_account, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)");
+  expense.run(randomUUID(), "2026-11-02", "Freight / Ni Hao Cost", "Ni Hao", "Ni Hao freight cost for KDAIR-1", 70000, "GCash", "KDAIR-1", "kd-gcash", "2026-11-02T01", "2026-11-02T01");
+  expense.run(randomUUID(), "2026-11-02", "Bank / Payment Fees", "GCash", "Transfer fee: GCash to Ni Hao for KDAIR-1", 1000, "GCash", "KDAIR-1", "kd-gcash", "2026-11-02T02", "2026-11-02T02");
+  expense.run(randomUUID(), "2026-11-02", "Local Delivery / Trucking", "Lalamove", "Delivery for KDAIR-1", 23100, "GCash", "KDAIR-1", "kd-gcash", "2026-11-02T03", "2026-11-02T03");
+  expense.run(randomUUID(), "2026-11-02", "Website / Technology", "Host", "Hosting", 5000, "GCash", null, "kd-gcash", "2026-11-02T04", "2026-11-02T04");
+  const html = await (await moneyLedgerPage(db, new URL("http://x/admin/finance/ledger"), "Admin", true)).text();
+  assert.match(html, /Ni Hao cost<\/span><strong>₱700\.00/);
+  assert.match(html, /Transfer fees<\/span><strong>₱10\.00/);
+  assert.match(html, /Delivery fees<\/span><strong>₱231\.00/);
+  assert.match(html, /Other expenses<\/span><strong>₱50\.00/);
+  assert.match(html, /Total money out<\/span><strong>₱991\.00/);
+  assert.equal((html.match(/ledger-out-amt">₱/g) ?? []).length, 4, "each record is its own row");
 });
