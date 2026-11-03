@@ -26,6 +26,7 @@ import { esc, hidden, page, pesos } from "./ui";
 import { invoiceMessages } from "./customer-messages";
 import { copyButton, copyScript } from "./shipping-instructions";
 import { proofCell, proofCss, readProofs } from "./payment-proof";
+import { splitFreightCharge } from "./transfer-fees";
 
 const route = "/admin/invoices";
 
@@ -1961,7 +1962,7 @@ export async function createView(
   );
 }
 
-async function list(
+export async function list(
   db: D1Database,
   user: {
     name: string;
@@ -2004,10 +2005,14 @@ async function list(
           i.invoice_number,
           i.status,
           i.issued_at,
+          i.created_at,
+          i.subtotal,
+          i.delivery_charge,
+          i.other_charge,
+          s.transfer_fee_collected,
           i.total + i.other_charge AS invoice_total,
           COALESCE(SUM(p.amount),0) AS amount_paid,
-          (SELECT payment_date || ' · ' || payment_method FROM payments
-            WHERE invoice_id = i.id ORDER BY payment_date DESC, created_at DESC LIMIT 1) AS last_payment,
+          (SELECT group_concat(DISTINCT payment_method) FROM payments WHERE invoice_id = i.id) AS payment_methods,
           c.full_name,
           s.tracking_number
         FROM invoices i
@@ -2071,87 +2076,46 @@ async function list(
     )}`;
   };
 
+  // Columns Em asked for (2026-11-03): the KargoDoor charge, the ₱30
+  // transfer fee inside it and the delivery fee apart, then the total and how
+  // the customer paid. Click a row to open (and edit) the invoice.
+  const invoiceLines = rows.slice(0, 25).map((row) => {
+    const { base, fee } = splitFreightCharge(row.subtotal, row.transfer_fee_collected);
+    return { row, kargodoor: base + Number(row.other_charge ?? 0), fee };
+  });
   const table = rows.length
     ? `
       <div class="table">
-        <table>
+        <table class="invoice-list">
           <thead>
             <tr>
-              <th>Invoice</th>
-              <th>Customer / shipment</th>
-              <th>Status</th>
-              <th>Total</th>
-              <th>Paid</th>
-              <th>Balance</th>
+              <th>Date</th><th>Invoice no.</th><th>Name</th><th>Tracking no.</th>
+              <th class="inv-num">KargoDoor charge</th><th class="inv-num">Transfer fee</th><th class="inv-num">Delivery fee</th>
+              <th class="inv-num">Total</th><th>Payment method</th>
             </tr>
           </thead>
-
           <tbody>
-            ${rows
-              .slice(0, 25)
-              .map(
-                (row) => `
-                  <tr>
-                    <td>
-                      <a
-                        href="${route}?id=${esc(
-                          row.id,
-                        )}"
-                      >
-                        ${esc(
-                          row.invoice_number,
-                        )}
-                      </a>
-                      <br>
-                      <span class="muted">
-                        ${
-                          esc(row.issued_at) ||
-                          "Draft"
-                        }
-                      </span>
-                    </td>
-
-                    <td>
-                      ${esc(row.full_name)}
-                      <br>
-                      <span class="muted">
-                        ${esc(
-                          row.tracking_number,
-                        )}
-                      </span>
-                    </td>
-
-                    <td>${esc(row.status)}</td>
-
-                    <td>${esc(
-                      pesos(
-                        row.invoice_total,
-                      ),
-                    )}</td>
-
-                    <td>${esc(
-                      pesos(
-                        row.amount_paid,
-                      ),
-                    )}${row.last_payment ? `<br><span class="muted">${esc(row.last_payment)}</span>` : ""}</td>
-
-                    <td>${esc(
-                      pesos(
-                        Number(
-                          row.invoice_total,
-                        ) -
-                          Number(
-                            row.amount_paid,
-                          ),
-                      ),
-                    )}</td>
-                  </tr>
-                `,
-              )
-              .join("")}
+            ${invoiceLines.map(({ row, kargodoor, fee }) => {
+              const href = `${route}?id=${encodeURIComponent(String(row.id))}`;
+              const balance = Number(row.invoice_total) - Number(row.amount_paid);
+              const methods = String(row.payment_methods ?? "").split(",").filter(Boolean).map((method) => paymentMethodLabel(method));
+              return `<tr class="inv-row" data-href="${esc(href)}" tabindex="0" title="Click to open">
+                <td class="inv-tight">${esc(String(row.issued_at || row.created_at || "").slice(0, 10))}</td>
+                <td class="inv-tight"><a href="${esc(href)}">${esc(row.invoice_number)}</a></td>
+                <td>${esc(row.full_name)}</td>
+                <td class="inv-tight">${esc(row.tracking_number)}</td>
+                <td class="inv-num">${esc(pesos(kargodoor))}</td>
+                <td class="inv-num">${esc(pesos(fee))}</td>
+                <td class="inv-num">${esc(pesos(row.delivery_charge))}</td>
+                <td class="inv-num"><strong>${esc(pesos(row.invoice_total))}</strong><small class="muted">${row.status === "Paid" ? "Paid" : `${esc(String(row.status))}${balance > 0 && row.status !== "Draft" ? ` · ${esc(pesos(balance))} due` : ""}`}</small></td>
+                <td>${methods.length ? methods.map(esc).join("<br>") : '<span class="muted">Not paid yet</span>'}</td>
+              </tr>`;
+            }).join("")}
           </tbody>
         </table>
       </div>
+      <style>.invoice-list .inv-tight,.invoice-list .inv-num{white-space:nowrap}.invoice-list .inv-num{text-align:right;font-variant-numeric:tabular-nums}.invoice-list .inv-num small{display:block}.invoice-list td{vertical-align:top}.invoice-list tr.inv-row{cursor:pointer}.invoice-list tr.inv-row:hover td{background:#f1f7ff}</style>
+      <script src="/admin-row-link.js" defer></script>
     `
     : "<p>No matching invoices.</p>";
 

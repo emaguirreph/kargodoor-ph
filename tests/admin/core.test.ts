@@ -2247,3 +2247,24 @@ test("Money In & Out counts Ni Hao cost, transfer fees and delivery fees separat
   assert.match(html, /Total money out<\/span><strong>₱991\.00/);
   assert.equal((html.match(/ledger-out-amt">₱/g) ?? []).length, 4, "each record is its own row");
 });
+
+test("Invoices list: KargoDoor charge, ₱30 transfer fee and delivery fee in their own columns, payment method, click a row to open", async () => {
+  const { db, sql } = database();
+  const { list } = await import("../../lib/admin/billing");
+  const customerId = randomUUID();
+  const shipmentId = randomUUID();
+  const invoiceId = randomUUID();
+  sql.prepare("INSERT INTO customers (id, customer_code, full_name, mobile, created_at, updated_at) VALUES (?,?,?,?,?,?)")
+    .run(customerId, "KD-IL", "Michaela Juan", "+639170000010", "2026-11-01", "2026-11-01");
+  sql.prepare("INSERT INTO shipments (id, customer_id, tracking_number, service_type, china_warehouse, cbm, weight_kg, status, shipping_charge, delivery_charge, transfer_fee_collected, payment_status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+    .run(shipmentId, customerId, "KDAIR-466471", "Air Freight", "Guangzhou", 0, 1, "Delivered", 53000, 23100, 3000, "Paid", "2026-11-01", "2026-11-01");
+  sql.prepare("INSERT INTO invoices (id, invoice_number, customer_id, shipment_id, subtotal, delivery_charge, total, status, issued_at, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)")
+    .run(invoiceId, "INV-TEST-1", customerId, shipmentId, 53000, 23100, 76100, "Paid", "2026-11-02", "2026-11-02", "2026-11-02");
+  sql.prepare("INSERT INTO payments (id, invoice_id, customer_id, amount, payment_method, payment_date, created_at) VALUES (?,?,?,?,?,?,?)")
+    .run(randomUUID(), invoiceId, customerId, 76100, "GCash", "2026-11-02", "2026-11-02");
+  const html = await (await list(db, { name: "Admin", role: "admin" }, new URL("http://x/admin/invoices"))).text();
+  assert.match(html, /<th>Date<\/th><th>Invoice no\.<\/th><th>Name<\/th><th>Tracking no\.<\/th>/);
+  assert.match(html, new RegExp(`data-href="/admin/invoices\\?id=${invoiceId}"`));
+  assert.match(html, /₱500\.00<\/td>\s*<td class="inv-num">₱30\.00<\/td>\s*<td class="inv-num">₱231\.00<\/td>\s*<td class="inv-num"><strong>₱761\.00<\/strong><small class="muted">Paid<\/small>/);
+  assert.match(html, /<td>GCash<\/td>/);
+});
