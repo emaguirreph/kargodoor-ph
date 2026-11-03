@@ -2013,3 +2013,45 @@ test("proof of payment: upload and replace on a customer payment and an expense,
   await mutateExpense(db, new URLSearchParams({ csrf: "t", action: "delete", id: staffExpense, revision, confirm: "yes" }), { ...admin, role: "owner" });
   assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM payment_proofs WHERE entity_type = 'expense'").get()!.n, 0);
 });
+
+test("Transfer fee box splits the ₱30 from the base fee and saves the GCash to UnionBank fee as a linked Bank / Payment Fees expense", async () => {
+  const { db, sql, user } = database();
+  const { recordGcashTransferFee, readTransferFeesPaid, splitFreightCharge, transferFeeSection, transferFeesPaidSummary, lastGcashTransferFee } = await import("../../lib/admin/transfer-fees");
+  const { recordNiHaoPayment } = await import("../../lib/admin/nihao-payment");
+  const { readShipmentStatement } = await import("../../lib/admin/shipment-statement");
+  const customerId = randomUUID();
+  const shipmentId = randomUUID();
+  sql.prepare("INSERT INTO customers (id, customer_code, full_name, mobile, created_at, updated_at) VALUES (?,?,?,?,?,?)")
+    .run(customerId, "KD-TF", "Fee Tester", "+639170000009", "2026-10-01", "2026-10-01");
+  sql.prepare("INSERT INTO shipments (id, customer_id, tracking_number, service_type, china_warehouse, cbm, weight_kg, status, shipping_charge, delivery_charge, nihao_cost, transfer_fee_collected, payment_status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+    .run(shipmentId, customerId, "KDAIR-900009", "Air Freight", "Guangzhou", 0, 1, "Delivered", 53000, 23100, 35000, 3000, "Paid", "2026-10-01", "2026-10-01");
+  const actor = { id: user, name: "Admin", email: "admin@example.test", role: "admin" as const };
+  assert.deepEqual(splitFreightCharge(53000, 3000), { base: 50000, fee: 3000, charge: 53000 });
+  assert.deepEqual(splitFreightCharge(2000, 3000), { base: 0, fee: 2000, charge: 2000 });
+
+  let box = transferFeeSection({ path: "/admin/shipments", csrf: "t", shipmentId, shippingCharge: 53000, transferFeeCollected: 3000, fees: [], canWrite: true });
+  assert.match(box, /₱500\.00<\/strong> KargoDoor base fee \+ <strong>₱30\.00<\/strong> transfer fee/);
+  assert.match(box, /gcash_transfer_fee/);
+  assert.equal(await lastGcashTransferFee(db), null);
+
+  await recordNiHaoPayment(db, new URLSearchParams({ csrf: "t", action: "nihao_paid", id: shipmentId, expense_date: "2026-11-03", amount: "350.00", paid_from: "UnionBank", transfer_fee: "15.00", reference_number: "", notes: "" }), actor);
+  const form = new URLSearchParams({ csrf: "t", action: "gcash_transfer_fee", id: shipmentId, expense_date: "2026-11-03", amount: "15.00", reference_number: "GC-1" });
+  await recordGcashTransferFee(db, form, actor);
+  const fees = await readTransferFeesPaid(db, "kdair-900009");
+  assert.equal(fees.length, 2);
+  assert.deepEqual(transferFeesPaidSummary(fees).split(" · ").sort(), ["₱15.00 GCash to UnionBank", "₱15.00 UnionBank to Ni Hao"]);
+  assert.equal(await lastGcashTransferFee(db), 1500);
+  const expense = sql.prepare("SELECT * FROM expenses WHERE description LIKE 'Transfer fee: GCash to UnionBank%'").get()!;
+  assert.equal(expense.category, "Bank / Payment Fees");
+  assert.equal(expense.paid_from_account, "kd-gcash");
+  assert.equal(expense.tracking_number, "KDAIR-900009");
+  assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM activity_log WHERE action = 'transfer_fee_paid'").get()!.n, 1);
+  box = transferFeeSection({ path: "/admin/shipments", csrf: "t", shipmentId, shippingCharge: 53000, transferFeeCollected: 3000, fees, canWrite: true });
+  assert.match(box, /Paid ₱30\.00 of ₱30\.00 collected\./);
+  // The statement already counts it: ₱530 − ₱350 − ₱30 fees = ₱150.
+  const statement = await readShipmentStatement(db, shipmentId);
+  assert.equal(statement.transferFees, 3000);
+  assert.equal(statement.profitAfterFees, 15000);
+  await assert.rejects(recordGcashTransferFee(db, new URLSearchParams({ ...Object.fromEntries(form), extra: "x" }), actor), /Unexpected/);
+  await assert.rejects(recordGcashTransferFee(db, new URLSearchParams({ ...Object.fromEntries(form), amount: "0" }), actor));
+});
