@@ -56,7 +56,7 @@
     }
     if (hint) {
       hint.textContent = result
-        ? `${key === "nihao" ? "Auto from Ni Hao rates" : "From KargoDoor rates"}: ${result.label}.${following ? "" : " You typed your own amount, so it is kept. Clear the box to use the rate."}`
+        ? `${key === "nihao" ? "Ni Hao rates" : "KargoDoor rates"}: ${result.label}.${following ? "" : " Your typed amount is kept; clear the box to use the rate."}`
         : "No automatic amount yet: fill in the item, CBM and weight. Or type the amount.";
     }
   };

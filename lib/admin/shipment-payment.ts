@@ -99,7 +99,7 @@ export function shipmentPaymentSection(options: {
   const saved = options.justPaid ? '<p class="notice" role="status">Payment recorded. The invoice is issued and the shipment is updated.</p>' : "";
   if (billing.status === "Paid" || (billing.invoiceId && balance === 0 && billing.paid > 0)) {
     return `${open}${heading}${saved}
-      <p><strong>Paid</strong> · ${esc(pesos(billing.paid))}${billing.lastPaymentDate ? ` on ${esc(billing.lastPaymentDate)}` : ""}. Invoice ${invoiceLink}. Counted in Money we have now.</p>${options.paymentsList ?? ""}${close}`;
+      <p><strong>Paid</strong> · ${esc(pesos(billing.paid))}${billing.lastPaymentDate ? ` on ${esc(billing.lastPaymentDate)}` : ""} · Invoice ${invoiceLink}${billing.invoiceId ? ` · <a href="/admin/invoices?id=${encodeURIComponent(billing.invoiceId)}#payment-history">Payment details &amp; proof</a>` : ""}</p>${options.paymentsList ?? ""}${close}`;
   }
   const summary = billing.invoiceId
     ? `Invoice ${invoiceLink} (${esc(billing.status)}) · ${esc(pesos(billing.paid))} paid of ${esc(pesos(billing.total))}.`
@@ -110,7 +110,9 @@ export function shipmentPaymentSection(options: {
   const methods = clientPaymentMethods.map((method) => `<option value="${esc(method)}"${method === "GCash" ? " selected" : ""}>${esc(paymentMethodLabel(method))}</option>`).join("");
   return `${open}
     ${heading}${saved}
-    <p class="muted">${summary} When the customer pays, save it here: the invoice is issued, the money is added to Money we have now and the shipment's Payment status updates.</p>
+    <p class="muted">${summary}${billing.paid > 0 && billing.invoiceId ? ` <a href="/admin/invoices?id=${encodeURIComponent(billing.invoiceId)}#payment-history">Payment details &amp; proof</a>` : ""}</p>
+    <details class="shipment-record-payment"${options.justPaid ? " open" : ""}><summary>Record payment · ${esc(pesos(balance))} to collect</summary>
+    <p class="muted">Saving issues the invoice and updates the Payment status. Upload the proof on the invoice.</p>
     <form method="post" action="${esc(options.path)}">
       ${hidden("csrf", options.csrf)}${hidden("action", "customer_paid")}${hidden("id", options.shipmentId)}
       <div class="grid">
@@ -121,6 +123,7 @@ export function shipmentPaymentSection(options: {
       </div>
       <div class="actions"><button type="submit">Record payment</button></div>
     </form>
+    </details>
     ${options.paymentsList ?? ""}
   ${close}`;
 }

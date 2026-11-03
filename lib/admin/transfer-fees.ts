@@ -129,24 +129,27 @@ export function transferFeesPaidSummary(fees: TransferFeePaid[]) {
   return fees.map((fee) => `${pesos(fee.amount)} ${transferFeeLeg(fee.description)}`).join(" · ");
 }
 
-/** "Transfer fee" box in the green KargoDoor part of Edit shipment. */
+/**
+ * The customer's charge in one summary at the top of the green KargoDoor part
+ * of Edit shipment: base fee (automatic), the standard transfer fee, the
+ * delivery fee and the total. The actual fee KargoDoor pays is saved with
+ * Mark Ni Hao paid (Ni Hao tab).
+ */
 export function transferFeeSection(options: {
   shippingCharge: unknown;
   transferFeeCollected: unknown;
-  fees: TransferFeePaid[];
+  deliveryCharge?: unknown;
+  /** Small "Auto from rates" / "Typed in" tag, already HTML. */
+  sourceTag?: string;
 }) {
+  const entered = options.shippingCharge !== null && options.shippingCharge !== undefined && String(options.shippingCharge).trim() !== "";
   const { base, fee, charge } = splitFreightCharge(options.shippingCharge, options.transferFeeCollected);
-  const paid = options.fees.reduce((sum, row) => sum + row.amount, 0);
-  const split = fee > 0
-    ? `<p><strong>${esc(pesos(base))}</strong> KargoDoor base fee + <strong>${esc(pesos(fee))}</strong> transfer fee = ${esc(pesos(charge))} shipping fee. The customer sees one shipping fee of ${esc(pesos(charge))}.</p>`
-    : `<p class="muted">No transfer fee is included in this shipment's charge.</p>`;
-  const list = options.fees.length
-    ? `<ul class="transfer-fee-list">${options.fees.map((row) => `<li>${esc(row.date)} · ${esc(transferFeeLeg(row.description))} · ${esc(pesos(row.amount))}</li>`).join("")}</ul>
-      <p class="muted">Paid ${esc(pesos(paid))}${fee > 0 ? ` of ${esc(pesos(fee))} collected${paid > fee ? ` (${esc(pesos(paid - fee))} more than collected)` : paid < fee ? ` (${esc(pesos(fee - paid))} left over)` : ""}` : ""}.</p>`
-    : `<p class="muted">No transfer fee to Ni Hao saved yet. It is saved with Mark Ni Hao paid.</p>`;
-  return `<div class="shipment-pay-box" id="transfer-fee">
-    <h4>Transfer fee</h4>
-    ${split}${list}
-    <p class="muted">GCash to UnionBank transfers are saved once per transfer on the <a href="/admin/finance/expenses#gcash-transfer">Expenses</a> page.</p>
-  </div>`;
+  const delivery = Number(options.deliveryCharge ?? 0) || 0;
+  const row = (label: string, value: string, cls = "") => `<dt${cls}>${label}</dt><dd${cls}>${value}</dd>`;
+  return `<div class="shipment-fee-summary" id="transfer-fee"><dl>
+    ${row(`Base fee ${options.sourceTag ?? ""}`, entered ? esc(pesos(base)) : "Not entered")}
+    ${row("Transfer fee (standard)", entered && fee > 0 ? esc(pesos(fee)) : `${esc(pesos(0))}${entered ? ' <small class="muted">older shipment</small>' : ""}`)}
+    ${row("Delivery fee", esc(pesos(delivery)))}
+    ${row("Total customer pays", entered ? esc(pesos(charge + delivery)) : "—", ' class="total"')}
+  </dl>${entered ? `<p class="muted">Customer sees one shipping fee${fee > 0 ? ` (${esc(pesos(charge))})` : ""} plus delivery.</p>` : ""}</div>`;
 }

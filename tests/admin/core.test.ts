@@ -1915,17 +1915,16 @@ test("Ni Hao details on Edit shipment: No. 9945 for KDSEA000006, copy text uses 
     ["nihao_details", "nihao_file_uploaded", "nihao_file_replaced"]);
 
   const box = niHaoDetailsBox({ shipmentId, record: record as never, details: await readNiHaoDetails(db, shipmentId), customerName: "Archie Aguirre", csrf: "token", canWrite: true });
-  assert.match(box.inline, /<h4>Ni Hao details<\/h4>/);
-  assert.match(box.inline, /name="nihao_no" value="9945"/);
+  assert.match(box.inline, /<h4>Ni Hao file<\/h4>/);
+  assert.doesNotMatch(box.inline, /name="nihao_no"/, "only the uploaded file is shown");
   assert.match(box.inline, /photo\.jpg/);
   assert.match(box.inline, /href="\/admin\/shipments\/nihao-file\?id=/);
   assert.match(box.inline, /<input form="nihao-file-form" type="file" name="file"/);
-  assert.match(box.inline, /data-copy-source="nihao-copy-/);
   assert.doesNotMatch(box.inline, /SOA/);
   assert.match(box.form, /<form id="nihao-file-form" method="post" action="\/admin\/shipments\/nihao-file" enctype="multipart\/form-data">/);
   const viewer = niHaoDetailsBox({ shipmentId, record: record as never, details: null, customerName: "", csrf: "", canWrite: false });
   assert.equal(viewer.form, "");
-  assert.match(viewer.inline, /name="nihao_no" value="" maxlength="40" placeholder="9945" readonly/);
+  assert.match(viewer.inline, /No Ni Hao file yet/);
 });
 
 test("estimated arrival window counts from the China warehouse received date", async () => {
@@ -2032,15 +2031,15 @@ test("Transfer fee: ₱30 split on the shipment, Ni Hao fee merged into its Expe
   assert.deepEqual(splitFreightCharge(53000, 3000), { base: 50000, fee: 3000, charge: 53000 });
   assert.deepEqual(splitFreightCharge(2000, 3000), { base: 0, fee: 2000, charge: 2000 });
 
-  let box = transferFeeSection({ shippingCharge: 53000, transferFeeCollected: 3000, fees: [] });
-  assert.match(box, /₱500\.00<\/strong> KargoDoor base fee \+ <strong>₱30\.00<\/strong> transfer fee/);
+  const box = transferFeeSection({ shippingCharge: 53000, transferFeeCollected: 3000 });
+  assert.match(box, /Base fee <\/dt><dd>₱500\.00<\/dd>/);
+  assert.match(box, /Transfer fee \(standard\)<\/dt><dd>₱30\.00<\/dd>/);
+  assert.match(transferFeeSection({ shippingCharge: 53000, transferFeeCollected: 3000, deliveryCharge: 23100 }), /Total customer pays<\/dt><dd class="total">₱761\.00<\/dd>/);
   assert.doesNotMatch(box, /<form/);
 
   await recordNiHaoPayment(db, new URLSearchParams({ csrf: "t", action: "nihao_paid", id: shipmentId, expense_date: "2026-11-03", amount: "350.00", paid_from: "UnionBank", transfer_fee: "10.00", reference_number: "", notes: "" }), actor);
   const fees = await readTransferFeesPaid(db, "kdair-900009");
   assert.equal(transferFeesPaidSummary(fees), "₱10.00 UnionBank to Ni Hao");
-  box = transferFeeSection({ shippingCharge: 53000, transferFeeCollected: 3000, fees });
-  assert.match(box, /Paid ₱10\.00 of ₱30\.00 collected \(₱20\.00 left over\)/);
   assert.equal((await readShipmentStatement(db, shipmentId)).profitAfterFees, 17000);
 
   // GCash to UnionBank: one expense per transfer, no tracking number.
