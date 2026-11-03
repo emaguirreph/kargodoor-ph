@@ -4,6 +4,7 @@
 // Buttons and simple keyword answers only (no AI), so it is free to run.
 // Live data comes from /api/track (shipment status) and /api/bookings/*.
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { preload } from "react-dom";
 import { MessengerLink } from "@/components/messenger-link";
 import { trackEvent } from "@/lib/analytics";
 import { getAirEstimate, getSeaEstimate } from "@/lib/shipping-estimate.mjs";
@@ -492,7 +493,11 @@ const intents: Array<[RegExp, string]> = [
   [/\b(hi|hello|hey|good (morning|afternoon|evening)|kumusta)\b/i, "hello"],
 ];
 
+const fabPoster = "/assets/kargodoor-message-us-poster.webp";
+
 export function ChatAssistant() {
+  // Fetch the button picture first so the button shows right away, before the video loads.
+  preload(fabPoster, { as: "image", fetchPriority: "high" });
   const [open, setOpen] = useState(false);
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [text, setText] = useState("");
@@ -633,7 +638,8 @@ export function ChatAssistant() {
     {teaser && !open && <button type="button" className="kc-tease" onClick={openChat}>Hi! 👋 Have a question? Tracking, rates or booking, I can help.<span aria-hidden="true" onClick={(e) => { e.stopPropagation(); setTeaser(false); try { sessionStorage.setItem("kd-chat-tease-closed", "1"); } catch { /* storage blocked */ } }}>×</span></button>}
     <div className="fab">
       <button type="button" className="kc-fab" aria-label="Open the KargoDoor chat assistant" aria-expanded={open} onClick={() => (open ? setOpen(false) : openChat())}>
-        <video autoPlay loop muted playsInline preload="auto" poster="/assets/kargodoor-message-us-poster.webp" aria-hidden="true">
+        <video autoPlay loop muted playsInline preload="auto" poster={fabPoster} aria-hidden="true">
+          <source src="/assets/kargodoor-message-us-small.mp4" type="video/mp4" />
           <source src="/assets/kargodoor-message-us-small.webm" type="video/webm" />
         </video>
       </button>
