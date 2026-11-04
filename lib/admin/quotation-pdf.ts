@@ -132,12 +132,15 @@ function customerQuotationPdf(q: QuotationPdfData, _logoJpeg?: Uint8Array) {
     const n = Number.isInteger(packages) && packages > 0 ? packages : 1;
     details.push(`Quantity / Packages: ${n} package${n === 1 ? "" : "s"}`);
   }
-  const dims = [cargo.length, cargo.width, cargo.height].map((v) => Number(v ?? 0));
-  if (cargo.showPackageDimensions !== false && dims.some((v) => v > 0))
-    details.push(`Dimensions (L × W × H): ${str(cargo.length)} × ${str(cargo.width)} × ${str(cargo.height)} ${str(cargo.measurementUnit) || "cm"}`);
-  const detailLines = details.flatMap((d) => wrap(d, 8, colSize - colDesc - 14));
+  // Em 2026-11-04: show declared weight, declared CBM and L × W × H whenever they were entered.
   const cbm = num(cargo.cbm);
   const kg = num(cargo.weight);
+  if (cbm) details.push(`Declared CBM: ${trimNumber(cbm)} CBM`);
+  if (kg) details.push(`Declared weight: ${trimNumber(kg)} kg`);
+  const dims = [cargo.length, cargo.width, cargo.height].map((v) => Number(v ?? 0));
+  if (dims.some((v) => v > 0))
+    details.push(`Dimensions (L × W × H): ${dims.map((v) => (v > 0 ? trimNumber(v) : "—")).join(" × ")} ${str(cargo.measurementUnit) || "cm"}`);
+  const detailLines = details.flatMap((d) => wrap(d, 8, colSize - colDesc - 14));
   const rowH = 30 + detailLines.length * 10.5;
   c.text("1", colNo + 2, y - 17, 9.5);
   c.text(serviceLine[freightType] ?? "Freight, China to Manila", colDesc, y - 17, 9.5, { bold: true });
