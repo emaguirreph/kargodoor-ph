@@ -141,6 +141,28 @@ async function number(db: D1Database) {
   );
   return `KD-Q-${y}-${String(max + 1).padStart(3, "0")}`;
 }
+/** Ni Hao quote request lines, filled from the quotation (Em, 2026-11-04). Blank when unknown. */
+export function nihaoQuoteLines(freightType: string, cargo: Record<string, unknown>): string[] {
+  const n = (v: unknown) => { const x = Number(v ?? 0); return Number.isFinite(x) && x > 0 ? x : 0; };
+  const fmt = (x: number) => String(Number(x.toFixed(3)));
+  const mode = /air/i.test(freightType) ? "Air" : freightType === "Full Container" ? `Sea (FCL${cargo.containerSize ? `, ${String(cargo.containerSize)}` : ""})` : freightType ? "Sea" : "";
+  const item = String(cargo.description || cargo.item || "").trim();
+  const dims = [cargo.length, cargo.width, cargo.height].map(n);
+  const packages = n(cargo.packageQuantity);
+  const dimText = dims.some(Boolean)
+    ? `${dims.map((d) => (d ? fmt(d) : "?")).join(" x ")} ${String(cargo.measurementUnit || "cm")}${packages ? ` (${fmt(packages)} package${packages === 1 ? "" : "s"})` : ""}`
+    : packages ? `${fmt(packages)} package${packages === 1 ? "" : "s"}` : "";
+  const cbm = n(cargo.cbm);
+  const kg = n(cargo.weight);
+  return [
+    `Sea or Air: ${mode}`.trimEnd(),
+    `Item: ${item}`.trimEnd(),
+    "Item Picture:",
+    `Dimensions: ${dimText}`.trimEnd(),
+    ...(cbm ? [`CBM: ${fmt(cbm)}`] : []),
+    `Weight: ${kg ? `${fmt(kg)} kg` : ""}`.trimEnd(),
+  ];
+}
 function quotationCustomerMessage(q: Row, accountNumber = "") {
   const customer = snapshot(q.customer_snapshot).data;
   const cargo = snapshot(q.cargo_snapshot).data;
@@ -158,11 +180,7 @@ function quotationCustomerMessage(q: Row, accountNumber = "") {
       [
         "Hello po! Pa-Quote po.",
         "",
-        "Sea or Air:",
-        "Item:",
-        "Item Picture:",
-        "Dimensions:",
-        "Weight.",
+        ...nihaoQuoteLines(String(q.freight_type || ""), cargo),
         "",
         "Thank you po. :)",
       ],
