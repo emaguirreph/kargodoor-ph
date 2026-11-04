@@ -108,79 +108,102 @@ function customerQuotationPdf(q: QuotationPdfData, _logoJpeg?: Uint8Array) {
   const supplierRows: [string, string][] = [];
   if (str(cargo.supplierName)) supplierRows.push(["Supplier", str(cargo.supplierName)]);
   if (str(cargo.origin)) supplierRows.push(["Location", str(cargo.origin)]);
-  if (str(cargo.originWarehouse)) supplierRows.push(["Origin Warehouse", str(cargo.originWarehouse)]);
   if (!supplierRows.length) supplierRows.push(["Supplier", "To follow"]);
   kv("Supplier", boxes[2], w2, supplierRows);
 
-  // Cargo / charges table.
+  // Cargo table (Em, 2026-11-04): Item, Dimensions, Declared CBM, Declared Weight,
+  // Warehouse, Sea or Air, Total Qty of Packages. Only what was entered is shown.
   y = boxTop - boxH - 18;
-  const th = 22;
-  c.round(L, y - th, R - L, th, 5, C.blue);
-  c.rect(L, y - th, R - L, 6, C.blue);
-  const colNo = L + 9;
-  const colDesc = L + 30;
-  const colSize = L + 352;
-  const head = (s: string, x: number, align: "left" | "right" = "left") => c.text(s, x, y - 14.5, 7, { bold: true, color: C.white, spacing: 0.7, align });
-  head("#", colNo); head("CARGO DETAILS", colDesc); head("SIZE", colSize); head("ESTIMATE", R - 9, "right");
-  y -= th;
-
-  const item = str(cargo.description) || str(cargo.item) || "Cargo";
-  const details: string[] = [`Item: ${item}`];
-  if (freightType === "Full Container") details.push(`Container: ${num(cargo.containerQuantity) || 1} × ${str(cargo.containerSize)}`);
-  else {
-    const packages = Number(cargo.packageQuantity ?? 1);
-    const n = Number.isInteger(packages) && packages > 0 ? packages : 1;
-    details.push(`Quantity / Packages: ${n} package${n === 1 ? "" : "s"}`);
-  }
-  // Em 2026-11-04: show declared weight, declared CBM and L × W × H whenever they were entered.
+  const isAir = /air/i.test(freightType);
+  const isFcl = freightType === "Full Container";
   const cbm = num(cargo.cbm);
   const kg = num(cargo.weight);
-  if (cbm) details.push(`Declared CBM: ${trimNumber(cbm)} CBM`);
-  if (kg) details.push(`Declared weight: ${trimNumber(kg)} kg`);
   const dims = [cargo.length, cargo.width, cargo.height].map((v) => Number(v ?? 0));
-  if (dims.some((v) => v > 0))
-    details.push(`Dimensions (L × W × H): ${dims.map((v) => (v > 0 ? trimNumber(v) : "—")).join(" × ")} ${str(cargo.measurementUnit) || "cm"}`);
-  const detailLines = details.flatMap((d) => wrap(d, 8, colSize - colDesc - 14));
-  const rowH = 30 + detailLines.length * 10.5;
-  c.text("1", colNo + 2, y - 17, 9.5);
-  c.text(serviceLine[freightType] ?? "Freight, China to Manila", colDesc, y - 17, 9.5, { bold: true });
-  detailLines.forEach((d, j) => c.text(d, colDesc, y - 29 - j * 10.5, 8, { color: C.muted }));
-  c.text(cbm ? `${trimNumber(cbm)} CBM` : freightType === "Full Container" ? str(cargo.containerSize) : "—", colSize, y - 17, 9.5);
-  if (kg) c.text(`${trimNumber(kg)} kg declared`, colSize, y - 29, 8, { color: C.muted });
-  else if (cbm) c.text("declared", colSize, y - 29, 8, { color: C.muted });
-  c.text(peso(total), R - 9, y - 17, 9.5, { align: "right" });
+  const item = str(cargo.description) || str(cargo.item) || "Cargo";
+  const packages = Number(cargo.packageQuantity ?? 1);
+  const qty = isFcl
+    ? `${num(cargo.containerQuantity) || 1} × ${str(cargo.containerSize) || "container"}`
+    : `${Number.isInteger(packages) && packages > 0 ? packages : 1}`;
+  const cols: { head: [string, string]; w: number; value: string; align?: "center" }[] = [
+    { head: ["ITEM", ""], w: 120, value: item },
+    { head: ["DIMENSIONS", "(L × W × H)"], w: 84, value: dims.some((v) => v > 0) ? `${dims.map((v) => (v > 0 ? trimNumber(v) : "—")).join(" × ")} ${str(cargo.measurementUnit) || "cm"}` : "—" },
+    { head: ["DECLARED", "CBM"], w: 64, value: cbm ? `${trimNumber(cbm)} CBM` : "—", align: "center" },
+    { head: ["DECLARED", "WEIGHT"], w: 60, value: kg ? `${trimNumber(kg)} kg` : "—", align: "center" },
+    { head: ["WAREHOUSE", ""], w: 66, value: str(cargo.originWarehouse) || "—", align: "center" },
+    { head: ["SEA OR AIR", ""], w: 50, value: isAir ? "AIR" : isFcl ? "SEA (FCL)" : "SEA", align: "center" },
+    { head: ["TOTAL QTY", "OF PACKAGES"], w: 0, value: qty, align: "center" },
+  ];
+  cols[cols.length - 1].w = R - L - cols.slice(0, -1).reduce((a, col) => a + col.w, 0);
+  const th = 28;
+  c.round(L, y - th, R - L, th, 5, C.blue);
+  c.rect(L, y - th, R - L, 6, C.blue);
+  let cx = L;
+  const cells = cols.map((col) => {
+    const pad = 7;
+    const mid = cx + col.w / 2;
+    const at = col.align === "center" ? mid : cx + pad;
+    const opts = { bold: true, color: C.white, spacing: 0.5, align: col.align ?? "left" } as const;
+    if (col.head[1]) { c.text(col.head[0], at, y - 12, 6.6, opts); c.text(col.head[1], at, y - 21, 6.6, opts); }
+    else c.text(col.head[0], at, y - 16.5, 6.6, opts);
+    const lines = wrap(col.value, 8.8, col.w - pad * 2).slice(0, 4);
+    const cell = { x: at, lines, align: col.align };
+    cx += col.w;
+    return cell;
+  });
+  y -= th;
+  const rowH = 16 + Math.max(...cells.map((cell) => cell.lines.length)) * 11.5;
+  cells.forEach((cell, i) => cell.lines.forEach((line, j) => c.text(line, cell.x, y - 16 - j * 11.5, 8.8, { bold: i === 0 && j === 0, align: cell.align ?? "left" })));
   y -= rowH;
   c.hline(L, R, y);
 
-  // Note left, big estimate box right.
-  y -= 14;
-  const note = "All-in estimate from our China warehouse to our Malabon warehouse. The final bill follows the size and weight we verify at the warehouse.";
-  wrap(note, 8.3, 270).forEach((l, i) => c.text(l, L, y - 9 - i * 11.5, 8.3, { color: C.muted }));
-  const tx = R - 210;
-  const grandH = 54;
-  c.round(tx, y - grandH, R - tx, grandH, 5, C.blue);
-  c.text("ESTIMATED ALL-IN RATE", tx + 10, y - 15, 7.5, { bold: true, color: C.white, spacing: 0.8 });
-  c.text(freightType, R - 10, y - 15, 7.5, { color: C.white, align: "right" });
-  c.text(peso(total), R - 10, y - 42, 18, { bold: true, color: C.white, align: "right" });
-  y -= grandH + 18;
+  // Estimated all-in rate, full width under the table.
+  y -= 12;
+  const grandH = 50;
+  c.round(L, y - grandH, R - L, grandH, 5, C.blue);
+  c.text("ESTIMATED ALL-IN RATE", L + 14, y - 19, 8, { bold: true, color: C.white, spacing: 0.8 });
+  c.text("China warehouse to our Malabon warehouse. Final bill follows the size and weight we verify.", L + 14, y - 34, 7.6, { color: C.white });
+  c.text(peso(total), R - 14, y - 32, 19, { bold: true, color: C.white, align: "right" });
+  y -= grandH + 16;
 
-  // Next steps, in the green box style of the invoice's "How to pay".
-  const stepsH = 70;
-  c.round(L, y - stepsH, R - L, stepsH, 7, undefined, C.green, 1.2);
-  c.ops.push(`q ${L + 0.6} ${y - 26} ${R - L - 1.2} 25.4 re W n`);
-  c.round(L + 0.6, y - 40, R - L - 1.2, 39.4, 6.5, C.greenSoft);
-  c.ops.push("Q");
-  c.text("Ready to ship?", L + 12, y - 17.5, 10.5, { bold: true, color: C.blueDark });
-  c.text(`Quotation ${number}`, R - 12, y - 17, 8.3, { color: C.muted, align: "right" });
-  const steps = ["Reply YES on Messenger or WhatsApp to confirm.", "We send your KargoDoor code and warehouse address.", "Your supplier ships to our China warehouse."];
-  const third = (R - L - 24) / 3;
-  steps.forEach((s, i) => {
-    const x = L + 12 + i * third;
-    c.round(x, y - 48, 13, 13, 6.5, C.blue);
-    c.text(String(i + 1), x + 6.5, y - 44, 7.5, { bold: true, color: C.white, align: "center" });
-    wrap(s, 8.4, third - 26).slice(0, 2).forEach((l, j) => c.text(l, x + 19, y - 44.5 - j * 11, 8.4));
+  // Cargo label example (left) and shipping instructions (right).
+  const boxH2 = 160;
+  const lw = 196;
+  const rx = L + lw + 12;
+  c.round(L, y - boxH2, lw, boxH2, 6, undefined, C.line);
+  c.round(rx, y - boxH2, R - rx, boxH2, 6, undefined, C.green, 1.2);
+  label("Cargo label example", L + 12, y - 15);
+  label("Shipping instructions", rx + 12, y - 15);
+  // The label itself: a white sticker with a dark border, like the one on the box.
+  const sx = L + 12, sw = lw - 24, sTop = y - 24, sH = 86;
+  c.round(sx, sTop - sH, sw, sH, 3, C.white, C.ink, 1.4);
+  const mark = `${isAir ? "AIR " : ""}KDOOR-XXXX`;
+  c.text(mark, sx + sw / 2, sTop - 22, 15, { bold: true, align: "center", spacing: 0.6 });
+  c.hline(sx + 10, sx + sw - 10, sTop - 30, C.greyLine);
+  const labelRows: [string, string][] = [["Item", item], ["Supplier no.", "[China phone]"], ["PH phone", str(customer.mobile) || "[PH phone]"]];
+  labelRows.forEach(([k, v], i) => {
+    const ly = sTop - 44 - i * 12.5;
+    const kw = c.text(`${k}: `, sx + 10, ly, 8.4, { bold: true });
+    c.text(wrap(v, 8.4, sw - 20 - kw)[0] ?? "", sx + 10 + kw, ly, 8.4);
   });
-  y -= stepsH + 18;
+  const labelNote = `Your own KDOOR code replaces XXXX once you confirm.${isAir ? " Air cargo: write AIR before the code." : ""}`;
+  wrap(labelNote, 7.4, lw - 24).slice(0, 3).forEach((l, i) => c.text(l, L + 12, sTop - sH - 12 - i * 9.5, 7.4, { color: C.muted }));
+  const instructions = [
+    "Confirm this quotation on Messenger or WhatsApp. We send your KDOOR code and China warehouse address.",
+    "Put the cargo label on EVERY package: code, item, supplier's phone and your PH phone.",
+    "Add a packing list: item name in Chinese, material, quantity, weight and supplier's phone.",
+    "Pack securely. Fragile items need extra protection.",
+    "Once shipped, send us the courier, tracking/waybill no., total packages and a photo of the receipt.",
+  ];
+  let iy = y - 30;
+  const iw = R - rx - 24 - 18;
+  instructions.forEach((s, i) => {
+    c.round(rx + 12, iy - 4, 12, 12, 6, C.blue);
+    c.text(String(i + 1), rx + 18, iy - 0.5, 7, { bold: true, color: C.white, align: "center" });
+    wrap(s, 8, iw).slice(0, 2).forEach((l, j) => c.text(l, rx + 30, iy - j * 10, 8));
+    iy -= wrap(s, 8, iw).slice(0, 2).length * 10 + 5;
+  });
+  wrap("Packages with missing labels or damaged packing are not accepted at the warehouse.", 7.4, R - rx - 24).forEach((l, i, all) => c.text(l, rx + 12, y - boxH2 + 10 + (all.length - 1 - i) * 9, 7.4, { bold: true, color: C.red }));
+  y -= boxH2 + 16;
 
   // Terms and conditions (saved on the quotation; empty removes them).
   c.text("TERMS AND CONDITIONS", L, y, 7.5, { bold: true, color: C.blue, spacing: 0.8 });
