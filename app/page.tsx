@@ -192,7 +192,7 @@ export default function HomePage() {
       <section className="band story" aria-labelledby="story-title">
         <div className="wrap story-grid">
           <div className="stage photo rv">
-            <img src="/assets/kargodoor-team-at-work.webp" alt="A KargoDoor PH kargador carrying cargo at the warehouse" width="1000" height="1191" loading="lazy" />
+            <img src="/assets/kargodoor-team-at-work-2.webp" srcSet="/assets/kargodoor-team-at-work-600.webp 600w, /assets/kargodoor-team-at-work-2.webp 1000w" sizes="(max-width: 760px) 92vw, 500px" alt="A KargoDoor PH kargador carrying cargo at the warehouse" width="1000" height="1191" loading="lazy" decoding="async" />
           </div>
           <div className="story-txt rv">
             <span className="pill" style={{ alignSelf: "flex-start" }}><i />OUR STORY</span>

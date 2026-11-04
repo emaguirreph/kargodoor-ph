@@ -9,7 +9,7 @@ export default async function CustomerLoginPage({ searchParams }: { searchParams
     <SiteShell>
       <AuthCard>
         <Link className="back" href="/">← Back to KargoDoorPH</Link>
-        <span className="alogo"><img src="/assets/kargodoor-logo-tagline-approved.png" alt="KargoDoor PH" /></span>
+        <span className="alogo"><img src="/assets/kargodoor-logo-tagline-approved.webp" alt="KargoDoor PH" width="520" height="192" /></span>
         <h1>MY KargoDoorPH</h1>
         <p>Sign in to access your KargoDoor account.</p>
         {error === "1" && <p className="err" role="alert">Invalid email, mobile number, or password.</p>}

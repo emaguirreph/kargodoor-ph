@@ -4,7 +4,8 @@
 
 /* Hero: the original port photo, brightened, with the China to Philippines route under the truck */
 .v5 .hero2{position:relative;overflow:hidden;isolation:isolate;background:var(--bg);text-align:center;padding-top:clamp(54px,8vw,96px);--rh:clamp(70px,8vw,118px)}
-.v5 .h2-photo{position:absolute;left:0;right:0;top:0;bottom:var(--rh);z-index:-2;background:url(/assets/kargodoor-home-hero-light.webp) 62% 100%/cover no-repeat;filter:brightness(1.14) saturate(.88) contrast(.96)}
+.v5 .h2-photo{position:absolute;left:0;right:0;top:0;bottom:var(--rh);z-index:-2;background:url(/assets/kargodoor-home-hero-light-2.webp) 62% 100%/cover no-repeat}
+@media (max-width:760px){.v5 .h2-photo{background-image:url(/assets/kargodoor-home-hero-light-960.webp)}}
 .v5 .h2-wash{position:absolute;inset:0;z-index:-1;background:
   linear-gradient(0deg,rgb(var(--hw)) 0,rgb(var(--hw)) var(--rh),rgb(var(--hw) / .8) calc(var(--rh) + 40px),rgb(var(--hw) / 0) calc(var(--rh) + 90px)),
   linear-gradient(180deg,rgb(var(--hw) / .98) 0%,rgb(var(--hw) / .93) 32%,rgb(var(--hw) / .6) 52%,rgb(var(--hw) / .18) 70%),
