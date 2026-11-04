@@ -442,3 +442,7 @@ function buildPdf(content: string) {
   for (const p of parts) { out.set(p, at); at += p.length; }
   return out;
 }
+
+/** Shared with the quotation PDF so both documents look the same. */
+export { Canvas, C, wrap as wrapPdfText, textWidth as pdfTextWidth, buildPdf, niceDate, peso, trimNumber, PAGE_W, PAGE_H, L as PDF_LEFT, R as PDF_RIGHT };
+export type { RGB };
