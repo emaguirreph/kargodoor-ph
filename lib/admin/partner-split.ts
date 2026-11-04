@@ -263,7 +263,7 @@ export async function clientSourceSection(db: D1Database, record: Record<string,
         <p class="muted">${esc(friend)} earns 10% of the profit on this client's first ${referralShipments} shipments. Paid saves a "Referral Commission" expense. From the 4th shipment: no commission.</p>`
       : `<p class="muted">No shipments yet. ${esc(friend)} earns 10% of the profit on the first ${referralShipments} shipments.</p>`;
   }
-  return `<section class="client-source" id="referral">
+  return `<style>.referral-pay{display:inline-flex;gap:6px;align-items:center;margin:0}.referral-pay select{width:auto;margin:0;padding:5px 8px}.referral-pay button{padding:6px 14px;white-space:nowrap}</style><section class="client-source" id="referral">
     <div class="actions" style="justify-content:space-between;margin-top:0"><h2 style="margin:0">Client source &amp; referral</h2>${options.canWrite ? `<a href="/admin/customers?id=${encodeURIComponent(customerId)}&amp;edit=1#client-source">Change</a>` : ""}</div>
     ${options.justPaid ? '<p class="notice" role="status">Referral paid and saved to Expenses.</p>' : ""}
     <dl class="customer-detail-grid">
