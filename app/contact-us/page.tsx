@@ -68,7 +68,8 @@ export default function ContactUsPage() {
                 ))}
               </div>
               <MessengerLink className="msgvid" target="_blank" rel="noopener noreferrer" aria-label="Message KargoDoor PH" analyticsEvent="contact">
-                <video autoPlay loop muted playsInline preload="metadata" aria-hidden="true">
+                <video autoPlay loop muted playsInline preload="metadata" poster="/assets/kargodoor-message-us-poster.webp" aria-hidden="true">
+                  <source src="/assets/kargodoor-message-us-400.mp4" type="video/mp4" />
                   <source src="/assets/kargodoor-message-us-approved.webm" type="video/webm" />
                 </video>
               </MessengerLink>
