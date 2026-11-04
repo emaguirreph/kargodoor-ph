@@ -59,6 +59,9 @@ export function shipmentCargoCategory(serviceType: string, item: string | null |
   return null;
 }
 
+/** Who brought a client. Labels live in partner-split.ts. */
+export const clientSourceIds = ["ae", "pk", "company", "ref_ae", "ref_pk", "ref_company"] as const;
+
 const required = (max: number) =>
   z
     .string()
@@ -224,6 +227,25 @@ export const customerSchema = z
     address: optional(1000),
 
     notes: optional(4000),
+
+    // Who brought this client (partner split) and the friend who referred them (Em, 2026-11-04).
+    client_source: z.preprocess(
+      (value) => String(value ?? "").trim() || "company",
+      z.enum(clientSourceIds),
+    ),
+
+    referral_code: z.preprocess(
+      (value) => value ?? "",
+      optional(40)
+        .refine((value) => !value || /^[A-Za-z0-9-]+$/.test(value), "Use letters, numbers and hyphens")
+        .transform((value) => (value ? value.toUpperCase() : value)),
+    ),
+
+    referrer_name: z.preprocess((value) => value ?? "", optional(160)),
+
+    referrer_pay_to: z.preprocess((value) => value ?? "", optional(160)),
+
+    client_since: z.preprocess((value) => value ?? "", date),
   })
   .strict();
 
@@ -431,6 +453,11 @@ export const schemaKeys: Record<
     "email",
     "address",
     "notes",
+    "client_source",
+    "referral_code",
+    "referrer_name",
+    "referrer_pay_to",
+    "client_since",
   ],
 
   shipments: [
@@ -544,6 +571,7 @@ export const expenseCategories = [
   "Professional Fees",
   "Utilities",
   "Bank / Payment Fees",
+  "Referral Commission",
   "Repairs / Maintenance",
   "Meals / Representation",
   "Taxes",

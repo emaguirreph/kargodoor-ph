@@ -1,4 +1,5 @@
-import { costBreakdown, costBreakdownCards } from "./cost-breakdown";
+import { costBreakdown } from "./cost-breakdown";
+import { clientSourceLabels, nth, readSplitShipments, referralCategory, splitTotals } from "./partner-split";
 import type { D1Database } from "@cloudflare/workers-types";
 import { AdminError } from "./security";
 import { esc, page, pesos } from "./ui";
@@ -235,7 +236,75 @@ export async function moneyLedgerPage(db: D1Database, url: URL, userName: string
 
   const params = new URLSearchParams(Object.entries(filters).filter(([, value]) => value));
   const csvLink = `${path}?${new URLSearchParams([...params, ["download", "csv"]])}`;
-  const showOption = (value: string, label: string) => `<option value="${value}"${filters.show === value ? " selected" : ""}>${label}</option>`;
+  const splitView = url.searchParams.get("view") === "split";
+  const datesShown = Boolean(filters.from || filters.to);
+  const costs = costBreakdown(shown.filter((row) => counted(row) && row.direction === "out" && !row.transfer).map((row) => ({ category: row.type, amount: row.amount })));
+  const referralsOut = shown.filter((row) => counted(row) && row.direction === "out" && row.type === referralCategory).reduce((sum, row) => sum + row.amount, 0);
+  const outNote = [["Ni Hao", costs.niHao], ["Fees", costs.transferFees], ["Delivery", costs.delivery], ["Referrals", referralsOut], ["Other", costs.other - referralsOut]]
+    .filter(([, amount]) => Number(amount) > 0).map(([label, amount]) => `${label} ${pesos(amount)}`).join(" · ");
+  const tabLink = (extra: [string, string][]) => `${path}?${new URLSearchParams([...[...params].filter(([key]) => key === "from" || key === "to"), ...extra])}`;
+  const tabs = [["", "All"], ...wallets.map((w) => [w.id, w.label]), ...(balances.untagged.length ? [["untagged", `Not tagged (${balances.untagged.length})`]] : [])]
+    .map(([id, label]) => `<a href="${esc(tabLink(id ? [["account", id!]] : []))}"${!splitView && (filters.account ?? "") === id ? ' aria-current="page"' : ""}>${esc(label!)}</a>`).join("")
+    + `<a href="${esc(tabLink([["view", "split"]]))}"${splitView ? ' aria-current="page"' : ""}>Profit &amp; Split</a>`;
+  const toolbar = `<section class="ledger-bar"><nav class="ledger-tabs">${tabs}</nav>
+    <form method="get" action="${path}" class="ledger-dates">${filters.account ? `<input type="hidden" name="account" value="${esc(filters.account)}">` : ""}${splitView ? '<input type="hidden" name="view" value="split">' : ""}
+      <label>From<input name="from" type="date" value="${esc(filters.from)}"></label>
+      <label>To<input name="to" type="date" value="${esc(filters.to)}"></label>
+      <button type="submit">Show</button>${datesShown ? `<a href="${esc(splitView ? `${path}?view=split` : path)}">All dates</a>` : ""}
+      <a href="${esc(splitView ? `${path}?${new URLSearchParams([...[...params].filter(([key]) => key === "from" || key === "to"), ["view", "split"], ["download", "csv"]])}` : csvLink)}">Download CSV</a></form></section>`;
+  const cards = `<div class="ledger-cards">
+      <div class="card in"><span class="muted">Money in${datesShown ? " (dates shown)" : ""}</span><strong>${esc(pesos(totalIn))}</strong><small class="muted">Not counting opening cash</small></div>
+      <div class="card out"><span class="muted">Money out${datesShown ? " (dates shown)" : ""}</span><strong>${esc(pesos(totalOut))}</strong>${outNote ? `<small class="muted">${esc(outNote)}</small>` : ""}</div>
+      <div class="card profit"><span class="muted">Profit${datesShown ? " (dates shown)" : ""}</span><strong>${esc(pesos(profit.profit))}</strong><small class="muted">From shipments, after referrals</small></div>
+      <div class="card"><span class="muted">${tabbed ? `${esc(walletLabel(filters.account!))} now` : "Cash on Hand now"}</span><strong>${esc(pesos(tabbed ? balances.byWallet[filters.account as Exclude<Wallet, "">] : cashNow))}</strong><small class="muted">${tabbed ? "This account" : "UnionBank + GCash + Cash"}</small></div>
+    </div>`;
+  const style = `<style>
+      .ledger-bar{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;padding:14px 18px}
+      .ledger-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:0}.ledger-tabs a{padding:9px 18px;border:1.5px solid #c6dce9;border-radius:999px;font-weight:700;text-decoration:none;background:#fff}
+      .ledger-tabs a:hover{border-color:#ff9a4d}.ledger-tabs a[aria-current="page"]{background:#003b9d;color:#fff;border-color:#003b9d}
+      .ledger-dates{display:flex;flex-wrap:wrap;align-items:end;gap:10px}.ledger-dates label{font-size:.85rem}.ledger-dates input{margin-top:2px;padding:7px 10px;width:auto}.ledger-dates button{padding:8px 16px}
+      .ledger-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:16px}
+      .ledger-cards .card strong{display:block;font-size:1.4rem;margin-top:4px}.ledger-cards .card small{display:block}
+      .ledger-cards .in strong,.ledger-cards .profit strong{color:#1d6b3a}.ledger-cards .out strong{color:#a3261f}
+      table.ledger td,table.ledger th{vertical-align:top}table.ledger tr.ledger-row{cursor:pointer}table.ledger tr.ledger-row:hover td{background:#f1f7ff}
+      table.ledger .ledger-tight,table.ledger .ledger-num{white-space:nowrap}
+      table.ledger .ledger-num{text-align:right;font-variant-numeric:tabular-nums}
+      table.ledger .ledger-wide{min-width:220px}table.ledger .ledger-wide small{display:block}
+      table.ledger .ledger-in-amt{color:#1d6b3a;font-weight:600}table.ledger .ledger-out-amt{color:#a3261f;font-weight:600}
+      .split-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}.split-cards .card strong{font-size:1.4rem;margin-top:4px}
+    </style>`;
+
+  if (splitView) {
+    const splitRows = (await readSplitShipments(db)).filter((row) => (!filters.from || row.shippedOn >= filters.from) && (!filters.to || row.shippedOn <= filters.to));
+    if (url.searchParams.get("download") === "csv") {
+      const header = ["Shipment date", "Tracking No.", "Customer", "Who brought this client", "Shipment no.", "Split", "Profit PHP", "Referrer PHP", "Referral status", "Archie & Em PHP", "Patrick & Keah PHP"];
+      const lines = splitRows.map((row) => [row.shippedOn, row.tracking, row.customerName, clientSourceLabels[row.source], row.number, row.shares.label, php(row.profit),
+        row.commission ? php(row.commission) : "", row.commissionStatus === "none" ? "" : row.commissionStatus, php(row.ae), php(row.pk)].map(csvCell).join(","));
+      return new Response(`﻿${[header.join(","), ...lines].join("\r\n")}\r\n`, {
+        headers: {
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": `attachment; filename="KargoDoor-Partner-Split-${philippineToday()}.csv"`,
+          "Cache-Control": "no-store, private",
+        },
+      });
+    }
+    const totals = splitTotals(splitRows);
+    const splitCard = (label: string, amount: number) => `<div class="card"><span class="muted">${esc(label)}</span><strong>${esc(pesos(amount))}</strong></div>`;
+    const rowsHtml = splitRows.map((row) => `<tr>
+        <td><a href="/admin/shipments?id=${encodeURIComponent(row.id)}">${esc(row.tracking || "No tracking yet")}</a><small class="muted" style="display:block">${esc(row.customerName)} · ${esc(row.shippedOn)}</small></td>
+        <td>${esc(clientSourceLabels[row.source])}<small class="muted" style="display:block">${esc(row.shares.label)}${row.shares.referrer ? ` · ${nth(row.number)} shipment` : ""}</small></td>
+        <td class="ledger-num">${esc(pesos(row.profit))}</td>
+        <td class="ledger-num">${row.commission ? esc(pesos(row.commission)) : "—"}${row.commissionStatus === "owed" ? ' <span class="k-pill" data-k="amber">Owed</span>' : row.commissionStatus.startsWith("waiting") ? ' <span class="k-pill" data-k="gray">Not yet</span>' : ""}</td>
+        <td class="ledger-num">${esc(pesos(row.ae))}</td>
+        <td class="ledger-num">${esc(pesos(row.pk))}</td>
+      </tr>`).join("");
+    return page("Money In & Out", `${style}${toolbar}${cards}
+      <section><h2>Partner split</h2>
+        <div class="split-cards">${splitCard("Archie & Em", totals.ae)}${splitCard("Patrick & Keah", totals.pk)}${splitCard("Referrers", totals.referrers)}</div>
+        <p class="muted">Each shipment's profit (customer payments − Ni Hao − transfer fees − delivery) split by who brought the client. Set that on the customer page. A friend's 10% comes off the top on the client's first 3 shipments. Startup costs the owners paid are not taken from profit.</p></section>
+      <section><h2>Split per shipment</h2>${splitRows.length ? `<div class="table"><table class="ledger"><thead><tr><th>Shipment</th><th>Source</th><th class="ledger-num">Profit</th><th class="ledger-num">Referrer</th><th class="ledger-num">Archie &amp; Em</th><th class="ledger-num">Patrick &amp; Keah</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>` : "<p>No shipments for these dates.</p>"}</section>`, userName, 200, {}, canWrite);
+  }
+
   // Newest first on screen; the balance is still the running one.
   const body = [...shown].reverse().map((row) => `<tr class="ledger-${row.direction} ledger-row" data-href="${esc(row.link)}" tabindex="0" title="Click to open">
       <td class="ledger-tight">${esc(row.date)}</td>
@@ -248,75 +317,31 @@ export async function moneyLedgerPage(db: D1Database, url: URL, userName: string
       <td class="ledger-num">${shownBalance(row) === null ? '<span class="muted" title="Before the opening cash date, not in Cash on Hand">—</span>' : esc(pesos(shownBalance(row)))}</td>
     </tr>`).join("");
 
-  return page("Money In & Out", `
-    <style>
-      .ledger-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px}
-      .ledger-cards .card strong{display:block;font-size:1.4rem;margin-top:4px}
-      .ledger-cards .in strong{color:#1d6b3a}.ledger-cards .out strong{color:#a3261f}
-      table.ledger td,table.ledger th{vertical-align:top}table.ledger tr.ledger-row{cursor:pointer}table.ledger tr.ledger-row:hover td{background:#f1f7ff}
-      .ledger-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}.ledger-tabs a{padding:9px 18px;border:1.5px solid #c6dce9;border-radius:999px;font-weight:700;text-decoration:none;background:#fff}
-      .ledger-tabs a[aria-current="page"]{background:#003b9d;color:#fff;border-color:#003b9d}
-      table.ledger .ledger-tight,table.ledger .ledger-num{white-space:nowrap}
-      table.ledger .ledger-num{text-align:right;font-variant-numeric:tabular-nums}
-      table.ledger .ledger-wide{min-width:220px}table.ledger .ledger-wide small{display:block}
-      table.ledger .ledger-in-amt{color:#1d6b3a;font-weight:600}table.ledger .ledger-out-amt{color:#a3261f;font-weight:600}
-    </style>
-    <section><div class="actions"><a href="/admin/finance">Money Today</a><a href="${path}"><strong>Money In &amp; Out</strong></a><a href="/admin/finance/expenses">Expenses</a><a href="/admin/finance/reports">Reports &amp; BIR</a></div>
-      <p class="muted">Every peso in and out, newest first: customer payments, owner money and opening cash, Ni Hao payments, fees and all other expenses. The Balance column is Cash on Hand after each row (on an account tab, that account&#39;s balance). Costs the owners paid before the opening cash are under Cash (owners)${openingDate ? `, counted from the opening cash on ${esc(openingDate)}` : ""}. Click a row's details to open the record.</p></section>
-    <nav class="ledger-tabs">${[["", "All"], ...wallets.map((w) => [w.id, w.label]), ...(balances.untagged.length ? [["untagged", `Not tagged (${balances.untagged.length})`]] : [])]
-      .map(([id, label]) => `<a href="${path}?${new URLSearchParams([...[...params].filter(([key]) => key !== "account"), ...(id ? [["account", id]] : [])])}"${(filters.account ?? "") === id ? ' aria-current="page"' : ""}>${esc(label!)}</a>`).join("")}</nav>
-    <section><form method="get" action="${path}" class="search">${filters.account ? `<input type="hidden" name="account" value="${esc(filters.account)}">` : ""}
-      <label>Search<input name="q" value="${esc(filters.q)}" maxlength="160" placeholder="Name, tracking no., description"></label>
-      <label>From Date<input name="from" type="date" value="${esc(filters.from)}"></label>
-      <label>To Date<input name="to" type="date" value="${esc(filters.to)}"></label>
-      <label>Show<select name="show">${showOption("", "Money in and out")}${showOption("in", "Money in only")}${showOption("out", "Money out only")}</select></label>
-      <button type="submit">Apply Filters</button><a href="${path}">Clear Filters</a><a href="${esc(csvLink)}">Download CSV</a></form></section>
-    <div class="ledger-cards">
-      <div class="card in"><span class="muted">Money in${filters.from || filters.to ? " (dates shown)" : ""}</span><strong>${esc(pesos(totalIn))}</strong><small class="muted">Not counting opening cash</small></div>
-      <div class="card out"><span class="muted">Money out${filters.from || filters.to ? " (dates shown)" : ""}</span><strong>${esc(pesos(totalOut))}</strong></div>
-      <div class="card"><span class="muted">In minus out</span><strong>${esc(pesos(totalIn - totalOut))}</strong></div>
-      <div class="card"><span class="muted">${tabbed ? `${esc(walletLabel(filters.account!))} now` : "Cash on Hand now"}</span><strong>${esc(pesos(tabbed ? balances.byWallet[filters.account as Exclude<Wallet, "">] : cashNow))}</strong></div>
-    </div>
-    ${profitCard(profit, Boolean(filters.from || filters.to || filters.q))}
-    ${filters.show === "in" ? "" : costBreakdownCards(costBreakdown(shown.filter((row) => counted(row) && row.direction === "out" && !row.transfer).map((row) => ({ category: row.type, amount: row.amount }))), "Total money out")}
-    <section>${shown.length ? `<div class="table"><table class="ledger"><thead><tr>
+  return page("Money In & Out", `${style}${toolbar}${cards}
+    <section><h2>Every peso in and out</h2>${openingDate ? `<p class="muted">Balance counts from the opening cash on ${esc(openingDate)}. Click a row to open it.</p>` : ""}${shown.length ? `<div class="table"><table class="ledger"><thead><tr>
       <th>Date</th><th>Category</th><th>Customer / Payee</th><th>Description</th><th>Account</th>
       <th class="ledger-num">Money in</th><th class="ledger-num">Money out</th><th class="ledger-num">${tabbed ? `${esc(walletLabel(filters.account!))} balance` : "Balance"}</th>
-    </tr></thead><tbody>${body}</tbody></table></div><script src="/admin-row-link.js" defer></script>` : "<p>No money in or out for these filters.</p>"}</section>`, userName, 200, {}, canWrite);
+    </tr></thead><tbody>${body}</tbody></table></div><script src="/admin-row-link.js" defer></script>` : "<p>No money in or out for these dates.</p>"}</section>`, userName, 200, {}, canWrite);
 }
 
-export type ShipmentProfit = { customerPayments: number; niHao: number; transferFees: number; delivery: number; profit: number; otherCosts: number };
+export type ShipmentProfit = { customerPayments: number; niHao: number; transferFees: number; delivery: number; referrals: number; profit: number; otherCosts: number };
 
 /**
  * Profit from shipments (Em, 2026-11-03): customer payments minus Ni Hao
  * cost, transfer fees and delivery paid to riders. Owner money (opening cash,
  * owner contributions) and paying the owners back are not income or cost, so
  * they are left out. Other costs (marketing, permits, website) are shown
- * apart, not subtracted.
+ * apart, not subtracted. Referral commissions paid to friends are subtracted
+ * (Em, 2026-11-04).
  */
 export function shipmentProfit(rows: LedgerRow[]): ShipmentProfit {
   const customerPayments = rows.filter((row) => row.direction === "in" && row.type === "Customer payment").reduce((sum, row) => sum + row.amount, 0);
   const costs = costBreakdown(rows.filter((row) => row.direction === "out" && !row.transfer && row.link.startsWith("/admin/finance/expenses")).map((row) => ({ category: row.type, amount: row.amount })));
+  const referrals = rows.filter((row) => row.direction === "out" && !row.transfer && row.type === referralCategory).reduce((sum, row) => sum + row.amount, 0);
   return {
-    customerPayments, niHao: costs.niHao, transferFees: costs.transferFees, delivery: costs.delivery,
-    profit: customerPayments - costs.niHao - costs.transferFees - costs.delivery, otherCosts: costs.other,
+    customerPayments, niHao: costs.niHao, transferFees: costs.transferFees, delivery: costs.delivery, referrals,
+    profit: customerPayments - costs.niHao - costs.transferFees - costs.delivery - referrals, otherCosts: costs.other - referrals,
   };
-}
-
-function profitCard(p: ShipmentProfit, filtered: boolean) {
-  const line = (label: string, amount: number, sign: string) => `<tr><td>${sign} ${esc(label)}</td><td class="ledger-num">${esc(pesos(amount))}</td></tr>`;
-  return `<section class="card profit-card">
-    <h2>Where is our profit?${filtered ? ' <small class="muted">(filters shown)</small>' : ""}</h2>
-    <table class="profit-calc"><tbody>
-      ${line("Customer payments", p.customerPayments, "")}
-      ${line("Ni Hao cost", p.niHao, "−")}
-      ${line("Transfer fees", p.transferFees, "−")}
-      ${line("Delivery paid to riders", p.delivery, "−")}
-      <tr class="profit-total"><td>= Profit from shipments</td><td class="ledger-num">${esc(pesos(p.profit))}</td></tr>
-    </tbody></table>
-    <p class="muted">"In minus out" above is cash movement, not profit. Money the owners put in, and the costs they paid from their own pockets that KargoDoor owes back to them, are not counted as profit. Other costs (marketing, permits, website: ${esc(pesos(p.otherCosts))}) are not subtracted here. So far the owners paid these from their own pockets, and KargoDoor pays them back separately (see Cash (owners)).</p>
-  </section>
-  <style>.profit-card{margin:0 0 16px}.profit-card h2{margin:0 0 8px;font-size:1.1rem}.profit-calc{width:auto;min-width:280px;border-collapse:collapse}.profit-calc td{padding:3px 12px 3px 0;border:0}.profit-calc .profit-total td{border-top:1.5px solid #c6dce9;font-weight:700;color:#1d6b3a;padding-top:6px}.profit-card p{margin:8px 0 0;font-size:.9rem}</style>`;
 }
 
 /** Balance of each account now, plus the records whose account is unknown. */

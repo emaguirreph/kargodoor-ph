@@ -62,6 +62,7 @@ import { readTransferFeesPaid, recordGcashTransfer, splitFreightCharge, transfer
 import { proofCell, proofCss, readProofs } from "./payment-proof";
 import { detachForm } from "./detached-form";
 import { niHaoDetailsBox, niHaoDetailsCss, readNiHaoDetails, saveNiHaoDetails, takeNiHaoDetails } from "./nihao-details";
+import { clientSourceFields, clientSourceSection, readCustomerSource, recordReferralPayment, shipmentSourceLines } from "./partner-split";
 
 /** Ni Hao cost input with the system estimate shown under it. Clearing the box saves the estimate. */
 const niHaoCostField = (record: RecordData, estimate: NiHaoEstimate | null) => {
@@ -572,6 +573,14 @@ export async function handleAdmin(
         return page("Saved", "", user.name, 303, { Location: `${path}?id=${encodeURIComponent(form.get("id") ?? "")}&edit=1&delivery_paid=1#delivery-payment` });
       }
 
+      if (entity === "customers" && action === "referral_paid") {
+        await recordReferralPayment(db, form, user);
+        const back = form.get("back") === "dashboard"
+          ? "/admin/dashboard?referral=paid#attention"
+          : `${path}?id=${encodeURIComponent(form.get("customer_id") ?? "")}&referral=paid#referral`;
+        return page("Saved", "", user.name, 303, { Location: back });
+      }
+
       if (entity === "shipments" && action === "nihao_paid") {
         await recordNiHaoPayment(db, form, user);
         return page("Saved", "", user.name, 303, { Location: `${path}?id=${encodeURIComponent(form.get("id") ?? "")}&edit=1&nihao_paid=1#nihao-payment` });
@@ -798,7 +807,12 @@ export async function handleAdmin(
     }
 
     if (!entity) {
-      return await dashboard(db, user, csrfToken(env, user.id, path), canWrite);
+      if (url.searchParams.get("count") === "1") {
+        const { readAttention } = await import("./reports");
+        const total = staff ? 0 : (await readAttention(db)).total;
+        return new Response(JSON.stringify({ total }), { headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
+      }
+      return await dashboard(db, user, csrfToken(env, user.id, path), canWrite, csrfToken(env, user.id, "/admin/customers"), url.searchParams.get("referral") === "paid");
     }
 
     /*
@@ -953,7 +967,7 @@ export async function handleAdmin(
             >${esc(
               record.notes,
             )}</textarea>
-          </label>`;
+          </label>` + clientSourceFields(record);
       } else {
         /*
          * SHIPMENT FORM
@@ -1732,6 +1746,7 @@ export async function handleAdmin(
           <dd>${value}</dd>
         </div>`;
 
+      const customerSource = entity === "shipments" ? await readCustomerSource(db, record.customer_id) : null;
       // Where the money stands, shown in the summary. Payments are recorded in Edit shipment.
       const paymentSummary = entity === "shipments" ? await (async () => {
         const billing = await readShipmentBilling(db, id, record);
@@ -1825,6 +1840,7 @@ export async function handleAdmin(
             : []),
           shipmentDetail("Customer payment", paymentSummary?.customer ?? (esc(record.payment_status) || "—")),
           shipmentDetail("Ni Hao payment", paymentSummary?.nihao ?? "—"),
+          shipmentSourceLines(customerSource, shipmentDetail),
         ].join("");
 
         return `
@@ -1941,6 +1957,9 @@ export async function handleAdmin(
           : !portal.enabled
             ? `<form method="post" action="${path}">${hidden("csrf",csrfToken(env,user.id,path))}${hidden("action","portal_reenable")}${hidden("customer_id",id)}<button>Re-enable Access</button></form>`
             : `<form method="post" action="${path}">${hidden("csrf",csrfToken(env,user.id,path))}${hidden("action","portal_reset")}${hidden("customer_id",id)}<button>Generate New Temporary Password</button></form><form method="post" action="${path}">${hidden("csrf",csrfToken(env,user.id,path))}${hidden("action","portal_disable")}${hidden("customer_id",id)}<button>Disable Access</button></form>`
+        : "";
+      const referralSection = entity === "customers"
+        ? await clientSourceSection(db, record, { path, csrf: csrfToken(env, user.id, path), canWrite, justPaid: url.searchParams.get("referral") === "paid" })
         : "";
       const portalSection = entity === "customers" ? `
         <section class="customer-portal-access">
@@ -2098,6 +2117,7 @@ export async function handleAdmin(
               </a>` : ""}
             </div>
           </section>
+          ${referralSection}
           ${portalSection}
           ${shippingInstructions}
           ${customerNotifications}

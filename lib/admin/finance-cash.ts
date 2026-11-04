@@ -142,7 +142,7 @@ export async function financeCashPage(db: D1Database, url: URL, user: string, cs
 
       <div class="actions">
         ${canWrite ? `<a class="button" href="${path}?new=1">+ Add Manual Record</a>` : ""}
-        <a href="/admin/finance">Finance Dashboard</a>
+        <a href="/admin/finance/ledger">Money In &amp; Out</a>
         <a href="/admin/finance/expenses">Expenses</a>
         <a href="/admin/finance/accounts">Bank Accounts</a>
       </div>

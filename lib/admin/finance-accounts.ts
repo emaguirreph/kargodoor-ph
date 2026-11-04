@@ -122,6 +122,6 @@ export async function financeAccountsPage(db: D1Database, url: URL, user: string
     `<a href="${path}?tab=${key}"${key === tab ? ' aria-current="page"' : ""}>${esc(label)}</a>`).join("")}</nav>`;
   const body = tab === "kargodoor" ? await kargodoorTab(db, canWrite) : await nihaoTab(db, canWrite);
   return page("Bank Accounts", `${style}<script src="/admin-copy.js" defer></script>
-    <section><div class="actions" style="margin-top:0"><a href="/admin/finance">Finance Dashboard</a><a href="/admin/finance/expenses">Expenses</a><a href="/admin/finance/cash">Cash Flow &amp; Customer Credits</a></div></section>
+    <section><div class="actions" style="margin-top:0"><a href="/admin/finance/ledger">Money In &amp; Out</a><a href="/admin/finance/expenses">Expenses</a><a href="/admin/finance/cash">Cash Flow &amp; Customer Credits</a></div></section>
     ${tabBar}${body}`, user, 200, {}, canWrite);
 }

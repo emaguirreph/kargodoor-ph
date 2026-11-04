@@ -7,12 +7,31 @@
     document.querySelectorAll(".admin-sidebar a").forEach((a) => {
       const href = a.getAttribute("href") || "";
       if (href.includes("?")) return;
-      if ((path === href || path.startsWith(href + "/")) && href.length > bestLength) {
-        best = a;
-        bestLength = href.length;
-      }
+      // data-also: pages that live under this menu item as tabs (e.g. Ni Hao Rates under Pricing).
+      [href, ...(a.dataset.also || "").split(" ").filter(Boolean)].forEach((match) => {
+        if ((path === match || path.startsWith(match + "/")) && match.length > bestLength) {
+          best = a;
+          bestLength = match.length;
+        }
+      });
     });
     if (best) best.classList.add("is-current");
+
+    // Page tabs: exact match on path + query first, else the tab with no query on this path.
+    const tabs = [...document.querySelectorAll(".admin-subtabs a")];
+    const here = new URLSearchParams(location.search);
+    const score = (a) => {
+      const url = new URL(a.getAttribute("href") || "", location.origin);
+      if ((url.pathname.replace(/\/$/, "") || "/admin") !== path) return -1;
+      const wanted = [...url.searchParams];
+      if (!wanted.every(([k, v]) => here.get(k) === v)) return -1;
+      if (!wanted.length && (here.get("new") === "1")) return -1;
+      return wanted.length;
+    };
+    let current = null;
+    let currentScore = -1;
+    tabs.forEach((a) => { const s = score(a); if (s > currentScore) { current = a; currentScore = s; } });
+    if (current) current.setAttribute("aria-current", "page");
 
     const tone = (text) => {
       const t = text.trim().toLowerCase();
@@ -58,9 +77,14 @@
     .then((r) => (r.ok ? r.json() : null)).catch(() => null);
   const menuCounts = () => {
     if (!window.fetch || !document.querySelector("[data-leads-count]")) return;
-    Promise.all([getJson("/admin/leads?count=1"), getJson("/admin/bookings?count=1")]).then(([leads, bookings]) => {
+    const attention = document.querySelector("[data-attention-count]") ? getJson("/admin/dashboard?count=1") : Promise.resolve(null);
+    Promise.all([getJson("/admin/leads?count=1"), getJson("/admin/bookings?count=1"), attention]).then(([leads, bookings, dash]) => {
       const n = Number(leads && leads.toContact) || 0, b = Number(bookings && bookings.bookings) || 0, p = Number(bookings && bookings.proofs) || 0;
-      const total = showCount("[data-leads-count]", n, n + " lead" + (n === 1 ? "" : "s") + " to contact")
+      const a = Number(dash && dash.total) || 0;
+      const leadsShown = showCount("[data-leads-count]", n, n + " lead" + (n === 1 ? "" : "s") + " to contact");
+      const attentionShown = showCount("[data-attention-count]", a, a + " item" + (a === 1 ? "" : "s") + " need attention");
+      // The Dashboard number already counts new leads, so the phone total does not add them twice.
+      const total = (attentionShown || leadsShown)
         + showCount("[data-bookings-count]", b, b + " booking" + (b === 1 ? "" : "s") + " to review")
         + showCount("[data-proofs-count]", p, p + " proof" + (p === 1 ? "" : "s") + " of payment to check");
       // On a phone the menu starts closed, so show the total on the Menu button.

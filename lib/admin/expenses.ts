@@ -233,7 +233,7 @@ export async function expensesPage(db: D1Database, url: URL, user: AdminUser | s
     <p class="muted">Opening cash, owner money, adjustments and customer credits. Customer invoice payments are under Invoices &amp; Payments.</p>
     ${moneyIn.length ? `<div class="table"><table><thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Notes</th></tr></thead><tbody>${moneyIn.map((row) => `<tr><td>${esc(row.entry_date)}</td><td>${esc(row.entry_type)}</td><td><strong>${esc(pesos(row.amount))}</strong></td><td>${esc(row.notes) || "—"}</td></tr>`).join("")}</tbody></table></div>` : '<p class="muted">No money-in records yet.</p>'}</section>`;
   return page("Expenses", `${notice ? `<p class="notice" role="status">${notice}</p>` : ""}
-    <section><div class="actions">${staff ? "" : `<a href="/admin/finance">Money Today</a>`}<a href="${path}"><strong>Expenses</strong></a>${staff ? "" : `<a href="/admin/finance/accounts">Bank Accounts</a>`}${canWrite ? `<a class="button" href="${path}?new=1">Add Expense</a>` : ""}</div>
+    <section><div class="actions">${staff ? "" : `<a href="/admin/finance/ledger">Money In &amp; Out</a>`}<a href="${path}"><strong>Expenses</strong></a>${staff ? "" : `<a href="/admin/finance/accounts">Bank Accounts</a>`}${canWrite ? `<a class="button" href="${path}?new=1">Add Expense</a>` : ""}</div>
     ${staff ? "" : `<p class="muted">Paying Ni Hao? Use Mark Ni Hao paid in Edit shipment › Ni Hao tab. Its transfer fee and the rider delivery show in the same row, each in its own column. Moving GCash to UnionBank? Use the box below.</p>`}</section>
     <section><form method="get" action="${path}" class="search">
       ${input("q", "Search", filters)}${input("from", "From Date", filters, "date")}${input("to", "To Date", filters, "date")}

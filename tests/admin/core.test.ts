@@ -92,6 +92,7 @@ function database(includePhase1 = true) {
   sql.exec(readFileSync("migrations/admin/0037_shipment_delivered_date.sql", "utf8"));
   sql.exec(readFileSync("migrations/admin/0038_payment_proofs.sql", "utf8"));
   sql.exec(readFileSync("migrations/admin/0039_account_transfers.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0041_client_source_referrals.sql", "utf8"));
   const user = randomUUID();
   sql
     .prepare("INSERT INTO admin_users VALUES (?,?,?,?,?,?)")
@@ -674,7 +675,7 @@ test("dashboard attention and shared follow-up note preserve role boundaries", a
   assert.match(html, /<h2>Money<\/h2>/);
   assert.match(html, /Money we have now/);
   assert.match(html, /Going out to Ni Hao/);
-  assert.match(html, /Open Money Today/);
+  assert.match(html, /Open Money In &amp; Out/);
   assert.doesNotMatch(html, /Overall profit after expenses/);
   assert.match(html, /Shipments · 1 active/);
   assert.match(html, /<th>Customer paid<\/th>/);
@@ -1410,7 +1411,7 @@ test("expense form has exact controlled dropdowns and an optional tracking field
   const categories = ["Freight / Ni Hao Cost", "Local Delivery / Trucking", "Marketing / Advertising",
     "Salaries / Wages", "Management / Administrative", "Office / Rent", "Website / Technology",
     "Permits / Government Fees", "Transportation / Fuel / Parking", "Supplies / Packaging",
-    "Professional Fees", "Utilities", "Bank / Payment Fees", "Repairs / Maintenance",
+    "Professional Fees", "Utilities", "Bank / Payment Fees", "Referral Commission", "Repairs / Maintenance",
     "Meals / Representation", "Taxes", "Miscellaneous"];
   const categorySelect = html.match(/<select name="category" required>([\s\S]*?)<\/select>/)![1];
   assert.deepEqual([...categorySelect.matchAll(/<option value="([^"]+)">([^<]+)<\/option>/g)].map((m) => [m[1], m[2]]), categories.map((c) => [c, c]));
@@ -2240,11 +2241,9 @@ test("Money In & Out counts Ni Hao cost, transfer fees and delivery fees separat
   expense.run(randomUUID(), "2026-11-02", "Local Delivery / Trucking", "Lalamove", "Delivery for KDAIR-1", 23100, "GCash", "KDAIR-1", "kd-gcash", "2026-11-02T03", "2026-11-02T03");
   expense.run(randomUUID(), "2026-11-02", "Website / Technology", "Host", "Hosting", 5000, "GCash", null, "kd-gcash", "2026-11-02T04", "2026-11-02T04");
   const html = await (await moneyLedgerPage(db, new URL("http://x/admin/finance/ledger"), "Admin", true)).text();
-  assert.match(html, /Ni Hao cost<\/span><strong>₱700\.00/);
-  assert.match(html, /Transfer fees<\/span><strong>₱10\.00/);
-  assert.match(html, /Delivery fees<\/span><strong>₱231\.00/);
-  assert.match(html, /Other expenses<\/span><strong>₱50\.00/);
-  assert.match(html, /Total money out<\/span><strong>₱991\.00/);
+  // Em 2026-11-04: the 5 cost cards became one line under the Money out card.
+  assert.match(html, /Money out<\/span><strong>₱991\.00<\/strong><small class="muted">Ni Hao ₱700\.00 · Fees ₱10\.00 · Delivery ₱231\.00 · Other ₱50\.00<\/small>/);
+  assert.doesNotMatch(html, /In minus out/);
   assert.equal((html.match(/ledger-out-amt">₱/g) ?? []).length, 4, "each record is its own row");
 });
 
@@ -2311,4 +2310,75 @@ test("Money In & Out profit card: customer payments minus Ni Hao, transfer fees 
   assert.equal(result.customerPayments, 3076600);
   assert.equal(result.profit, 3076600 - 2706500 - 2000 - 23100);
   assert.equal(result.otherCosts, 1211380);
+});
+
+test("Partner split: 60/40, 50/50, friend 10% on the first 3 shipments, 12-month bonus ends", async () => {
+  const { sharesFor, bonusEndDate } = await import("../../lib/admin/partner-split");
+  const pct = (s: { ae: number; pk: number; referrer: number }) => [Math.round(s.ae * 100), Math.round(s.pk * 100), Math.round(s.referrer * 100)];
+  assert.deepEqual(pct(sharesFor("ae", 1, "2026-11-04", "2026-11-01")), [60, 40, 0]);
+  assert.deepEqual(pct(sharesFor("pk", 5, "2026-11-04", "2026-11-01")), [40, 60, 0]);
+  assert.deepEqual(pct(sharesFor("company", 1, "2026-11-04", "2026-11-01")), [50, 50, 0]);
+  assert.deepEqual(pct(sharesFor("ref_ae", 1, "2026-11-04", "2026-11-01")), [54, 36, 10]);
+  assert.deepEqual(pct(sharesFor("ref_pk", 3, "2026-11-04", "2026-11-01")), [36, 54, 10]);
+  assert.deepEqual(pct(sharesFor("ref_company", 2, "2026-11-04", "2026-11-01")), [45, 45, 10]);
+  assert.deepEqual(pct(sharesFor("ref_ae", 4, "2026-11-04", "2026-11-01")), [60, 40, 0], "no friend share from the 4th shipment");
+  assert.deepEqual(pct(sharesFor("ae", 9, "2027-11-01", "2026-11-01")), [50, 50, 0], "back to 50/50 after 12 months");
+  assert.deepEqual(pct(sharesFor("ae", 9, "2027-10-31", "2026-11-01")), [60, 40, 0]);
+  assert.equal(bonusEndDate("2028-02-29"), "2029-02-28");
+});
+
+test("Referral commission: owed only after the customer and Ni Hao are paid, Paid saves one Referral Commission expense", async () => {
+  const { db, sql, user } = database();
+  const { readSplitShipments, readReferralsToPay, recordReferralPayment, clientSourceSection } = await import("../../lib/admin/partner-split");
+  const { moneyLedgerPage } = await import("../../lib/admin/money-ledger");
+  const actor = { id: user, name: "Admin", email: "admin@example.test", role: "admin" as const };
+  const customerId = randomUUID();
+  sql.prepare("INSERT INTO customers (id, customer_code, full_name, mobile, client_source, referral_code, referrer_name, referrer_pay_to, client_since, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)")
+    .run(customerId, "KDOOR-7001", "Referred Client", "+639170000071", "ref_ae", "REF-MARIA", "Maria Santos", "GCash 0918 123 4567", "2026-11-01", "2026-11-01", "2026-11-01");
+  const shipments = ["KDSEA-700001", "KDSEA-700002", "KDSEA-700003", "KDSEA-700004"].map((tracking, i) => {
+    const id = randomUUID();
+    sql.prepare("INSERT INTO shipments (id, customer_id, tracking_number, service_type, china_warehouse, cbm, weight_kg, status, shipping_charge, delivery_charge, payment_status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)")
+      .run(id, customerId, tracking, "Sea Freight", "Guangzhou", 1, 1, "Delivered", 500000, 0, i === 1 ? "Unpaid" : "Paid", `2026-11-0${i + 1}`, `2026-11-0${i + 1}`);
+    const invoiceId = randomUUID();
+    sql.prepare("INSERT INTO invoices (id, invoice_number, customer_id, shipment_id, subtotal, delivery_charge, total, status, created_at, updated_at, other_charge) VALUES (?,?,?,?,?,?,?,?,?,?,?)")
+      .run(invoiceId, `INV-70${i}`, customerId, id, 500000, 0, 500000, i === 1 ? "Unpaid" : "Paid", "2026-11-02", "2026-11-02", 0);
+    if (i !== 1) sql.prepare("INSERT INTO payments VALUES (?,?,?,?,?,?,?,?,?)").run(randomUUID(), invoiceId, customerId, 500000, "GCash", null, "2026-11-02", null, "2026-11-02");
+    // Ni Hao paid for all but the 3rd shipment.
+    if (i !== 2) sql.prepare(`INSERT INTO expenses (id, category, description, amount, expense_date, created_at, updated_at, tracking_number) VALUES (?,?,?,?,?,?,?,?)`)
+      .run(randomUUID(), "Freight / Ni Hao Cost", `Ni Hao for ${tracking}`, 200000, "2026-11-02", "2026-11-02", "2026-11-02", tracking);
+    return id;
+  });
+  const rows = (await readSplitShipments(db, customerId)).sort((a, b) => a.number - b.number);
+  assert.deepEqual(rows.map((r) => r.commissionStatus), ["owed", "waiting-customer", "waiting-nihao", "none"]);
+  assert.equal(rows[0].profit, 300000);
+  assert.equal(rows[0].commission, 30000);
+  assert.equal(rows[0].ae, 162000, "54% of ₱3,000");
+  assert.equal(rows[0].pk, 108000, "36% of ₱3,000");
+  assert.equal(rows[3].ae, 180000, "4th shipment: 60%");
+  assert.equal((await readReferralsToPay(db)).length, 1);
+
+  await assert.rejects(recordReferralPayment(db, new URLSearchParams({ csrf: "t", action: "referral_paid", customer_id: customerId, shipment_id: shipments[1], paid_from: "GCash" }), actor), /not ready to pay/);
+  const form = new URLSearchParams({ csrf: "t", action: "referral_paid", customer_id: customerId, shipment_id: shipments[0], paid_from: "GCash" });
+  await recordReferralPayment(db, form, actor);
+  const expense = sql.prepare("SELECT * FROM expenses WHERE category = 'Referral Commission'").get()!;
+  assert.equal(expense.amount, 30000);
+  assert.equal(expense.payee, "Maria Santos");
+  assert.equal(expense.tracking_number, "KDSEA-700001");
+  assert.equal(expense.paid_from_account, "kd-gcash");
+  await assert.rejects(recordReferralPayment(db, form, actor), /already paid/);
+  assert.equal((await readReferralsToPay(db)).length, 0);
+
+  const customer = sql.prepare("SELECT * FROM customers WHERE id = ?").get(customerId) as Record<string, unknown>;
+  const section = await clientSourceSection(db, customer, { path: "/admin/customers", csrf: "t", canWrite: true });
+  assert.match(section, /Referral to Archie &amp; Em/);
+  assert.match(section, /REF-MARIA/);
+  assert.match(section, /Waiting for customer payment/);
+  assert.doesNotMatch(section, /KDSEA-700004/, "no commission row from the 4th shipment");
+
+  const split = await (await moneyLedgerPage(db, new URL("http://x/admin/finance/ledger?view=split"), "Admin", true)).text();
+  assert.match(split, /Partner split/);
+  // ₱300 paid + ₱500 still waiting on the 3rd shipment (Ni Hao not paid yet, so its profit is ₱5,000 for now).
+  assert.match(split, /Referrers<\/span><strong>₱800\.00/);
+  const ledger = await (await moneyLedgerPage(db, new URL("http://x/admin/finance/ledger"), "Admin", true)).text();
+  assert.match(ledger, /Referrals ₱300\.00/);
 });

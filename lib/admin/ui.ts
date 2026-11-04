@@ -20,6 +20,23 @@ export const niHaoSourceTag = (source: unknown) =>
     : source === "actual"
       ? `<span class="nihao-tag nihao-tag-actual" style="display:inline-block;font-size:.75rem;padding:1px 8px;border-radius:999px;background:#e3f5ea;color:#1d6b3a">Ni Hao actual</span>`
       : "";
+/** Tabs shared by pages that sit under one menu item. The current tab is marked by admin-skin.js. */
+function pageTabs(title: string, canWrite: boolean) {
+  const groups: [string[], [string, string][]][] = [
+    [["Quotations", "Quotation", "Bulk Quotation", "Edit quotation"], [
+      ["/admin/quotations", "Quotations"],
+      ["/admin/quotations?new=1", "Add quotation"],
+      ...(canWrite ? [["/admin/bulk-intake", "Bulk Quotation"] as [string, string]] : []),
+      ["/admin/quotations?new=1&fcl=1", "FCL Quotation"],
+    ]],
+    [["Rates & Pricing Guide", "Ni Hao Rates"], [["/admin/rates-guide", "Rates & Pricing"], ["/admin/nihao-rates", "Ni Hao Rates"]]],
+    [["Activity log", "Export"], canWrite ? [["/admin/activity", "Activity Log"], ["/admin/import-export", "Import / Export"]] : []],
+  ];
+  const group = groups.find(([titles]) => titles.includes(title));
+  if (!group || group[1].length < 2) return "";
+  return `<nav class="admin-subtabs" aria-label="${esc(title)} pages">${group[1].map(([href, label]) => `<a href="${esc(href)}">${esc(label)}</a>`).join("")}</nav>`;
+}
+
 export function page(
   title: string,
   body: string,
@@ -32,11 +49,10 @@ export function page(
   const cleanBackground = ["Customers", "Shipments", "Quotations", "Invoices"].includes(title);
   let navigation = staff
     ? `<a class="admin-nav-link" href="/admin/quotations">Quotations</a><div class="admin-nav-heading">Expenses</div><a class="admin-nav-link" href="/admin/finance/expenses">My Expenses</a><div class="admin-nav-heading">Account</div><a class="admin-nav-link" href="/cdn-cgi/access/logout">Sign Out</a>`
-    : `<a class="admin-nav-link" href="/admin/dashboard">Dashboard</a><div class="admin-nav-heading">Customers &amp; Cargo</div><a class="admin-nav-link admin-nav-leads" href="/admin/bookings">Bookings<span class="nav-count" data-bookings-count hidden></span></a><a class="admin-nav-link admin-nav-leads" href="/admin/leads">Leads<span class="nav-count" data-leads-count hidden></span></a><a class="admin-nav-link" href="/admin/quotations">Quotations</a><a class="admin-nav-sub" href="/admin/quotations?new=1&amp;fcl=1">FCL Quotation</a><a class="admin-nav-link" href="/admin/customers">Customers</a><a class="admin-nav-link" href="/admin/shipments">Shipments</a><a class="admin-nav-link" href="/admin/insights">Insights</a><div class="admin-nav-heading">Billing &amp; Finance</div><div class="admin-nav-group"><a class="admin-nav-link" href="/admin/finance">Money Today</a><a class="admin-nav-sub" href="/admin/finance/ledger">Money In &amp; Out</a><a class="admin-nav-sub admin-nav-leads" href="/admin/invoices">Invoices &amp; Payments<span class="nav-count" data-proofs-count hidden></span></a><a class="admin-nav-sub" href="/admin/finance/expenses">Expenses</a><a class="admin-nav-sub" href="/admin/finance/accounts">Bank Accounts</a><a class="admin-nav-sub" href="/admin/finance/reports">Reports &amp; BIR</a></div><div class="admin-nav-heading">Pricing</div><div class="admin-nav-group"><a class="admin-nav-link" href="/admin/rates-guide">Rates &amp; Pricing</a><a class="admin-nav-sub" href="/admin/nihao-rates">Ni Hao Rates</a></div>${canWrite ? '<div class="admin-nav-heading">Admin &amp; Tools</div><a class="admin-nav-link" href="/admin/activity">Activity Log</a><a class="admin-nav-link" href="/admin/import-export">Import / Export</a>' : ""}<div class="admin-nav-heading">Account</div><a class="admin-nav-link" href="/cdn-cgi/access/logout">Sign Out</a>`;
-  if (!staff) navigation = navigation.replace(
-    '<a class="admin-nav-link" href="/admin/quotations">Quotations</a>',
-    '<a class="admin-nav-link" href="/admin/quotations">Quotations</a><a class="admin-nav-sub" href="/admin/bulk-intake">Bulk Quotation</a>',
-  );
+    : `<a class="admin-nav-link admin-nav-leads" href="/admin/dashboard">Dashboard<span class="nav-count" data-attention-count hidden></span></a><div class="admin-nav-heading">Customers &amp; Cargo</div><a class="admin-nav-link admin-nav-leads" href="/admin/bookings">Bookings<span class="nav-count" data-bookings-count hidden></span></a><a class="admin-nav-link admin-nav-leads" href="/admin/leads">Leads<span class="nav-count" data-leads-count hidden></span></a><a class="admin-nav-link" href="/admin/quotations" data-also="/admin/bulk-intake">Quotations</a><a class="admin-nav-link" href="/admin/customers">Customers</a><a class="admin-nav-link" href="/admin/shipments">Shipments</a><div class="admin-nav-heading">Billing &amp; Finance</div><a class="admin-nav-link" href="/admin/finance/ledger">Money In &amp; Out</a><a class="admin-nav-link admin-nav-leads" href="/admin/invoices">Invoices &amp; Payments<span class="nav-count" data-proofs-count hidden></span></a><a class="admin-nav-link" href="/admin/finance/expenses">Expenses</a><a class="admin-nav-link" href="/admin/finance/accounts">Bank Accounts</a><a class="admin-nav-link" href="/admin/finance/reports">Reports &amp; BIR</a><div class="admin-nav-heading">Admin &amp; Tools</div><a class="admin-nav-link" href="/admin/rates-guide" data-also="/admin/nihao-rates">Pricing</a>${canWrite ? '<a class="admin-nav-link" href="/admin/activity" data-also="/admin/import-export">Activity Log</a>' : ""}<a class="admin-nav-link" href="/admin/insights">Insights</a><div class="admin-nav-heading">Account</div><a class="admin-nav-link" href="/cdn-cgi/access/logout">Sign Out</a>`;
+  // Pages that used to be their own menu items are tabs at the top of the page (Em, 2026-11-04).
+  const tabs = pageTabs(title, canWrite && !staff);
+  if (tabs) body = tabs + body;
   const hasPageBackLink = /(?:←\s*Back|>Back<)/.test(body);
   const backControl = user && !hasPageBackLink
     ? `<p class="admin-page-back"><button type="button" data-admin-page-back>← Back</button></p>`

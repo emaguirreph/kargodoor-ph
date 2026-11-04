@@ -125,12 +125,12 @@ export async function saveStaffFollowUp(
   ]);
 }
 
-export async function dashboard(
-  db: D1Database,
-  user: DashboardUser,
-  csrf: string,
-  canWrite = true,
-) {
+/**
+ * Everything the Dashboard's Needs Attention lists (Em, 2026-11-04: all
+ * to-do lists live on the Dashboard; Money Today left the menu). Also used
+ * for the red number next to Dashboard in the menu.
+ */
+export async function readAttention(db: D1Database) {
   const today = philippineToday();
   const summary = await db
     .prepare(
@@ -143,24 +143,71 @@ export async function dashboard(
     .first<RecordData>();
 
   // Issued invoices the customer has not fully paid yet.
-  const unpaid = await db
+  const { results: collections } = await db
     .prepare(
-      `SELECT
-        COUNT(*) AS n,
-        COALESCE(SUM(CASE WHEN due_at IS NOT NULL AND due_at < ? THEN 1 ELSE 0 END), 0) AS overdue,
-        CAST(COALESCE(SUM(balance), 0) AS TEXT) AS amount
-      FROM (
+      `SELECT * FROM (
         SELECT
-          i.due_at,
+          i.id, i.invoice_number, i.due_at, c.full_name,
           i.total + i.other_charge - COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.invoice_id = i.id), 0) AS balance
         FROM invoices i
+        LEFT JOIN customers c ON c.id = i.customer_id
         WHERE i.status NOT IN ('Draft','Void')
           AND i.archived_at IS NULL
       )
-      WHERE balance > 0`,
+      WHERE balance > 0
+      ORDER BY due_at IS NULL, due_at, invoice_number`,
     )
-    .bind(today)
-    .first<{ n: number; overdue: number; amount: string }>();
+    .all<{ id: string; invoice_number: string; due_at: string | null; full_name: string | null; balance: number }>();
+  const unpaid = {
+    n: collections.length,
+    overdue: collections.filter((row) => row.due_at && row.due_at < today).length,
+    amount: String(collections.reduce((sum, row) => sum + BigInt(Math.round(Number(row.balance))), BigInt(0))),
+  };
+
+  const { readSimpleSummary } = await import("./finance-summary");
+  const { niHaoExpenseCategory } = await import("./nihao-payment");
+  const { readReferralsToPay } = await import("./partner-split");
+  const simple = await readSimpleSummary(db);
+
+  // Same list Money Today had: active shipments with no Ni Hao payment saved yet.
+  const { results: niHaoDue } = await db
+    .prepare(
+      `SELECT s.id, s.tracking_number, c.full_name, s.status,
+        CAST(s.nihao_cost AS TEXT) AS nihao_cost, s.nihao_cost_source
+      FROM shipments s
+      JOIN customers c ON c.id = s.customer_id
+      WHERE s.status != 'Cancelled'
+        AND s.archived_at IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM expenses e
+          WHERE e.category = ?
+            AND e.tracking_number = s.tracking_number
+        )
+      ORDER BY s.nihao_cost IS NULL, s.nihao_cost DESC, s.created_at ASC`,
+    )
+    .bind(niHaoExpenseCategory)
+    .all<{ id: string; tracking_number: string | null; full_name: string; status: string; nihao_cost: string | null; nihao_cost_source: string | null }>();
+
+  const referrals = await readReferralsToPay(db);
+  const count = (value: unknown) => Number(value ?? 0);
+  const needCost = simple.goingOutUnknown + count(summary?.estimated_costs);
+  const total = count(summary?.new_leads) + simple.unbilled.results.length + collections.length + niHaoDue.length
+    + needCost + count(summary?.at_malabon) + referrals.length;
+  return { today, summary, unpaid, collections, simple, niHaoDue, referrals, needCost, total, niHaoExpenseCategory };
+}
+
+export async function dashboard(
+  db: D1Database,
+  user: DashboardUser,
+  csrf: string,
+  canWrite = true,
+  referralCsrf = "",
+  referralPaid = false,
+) {
+  const { today, summary, unpaid, collections, simple, niHaoDue, referrals, needCost, niHaoExpenseCategory } = await readAttention(db);
+  void today;
+  const { financePesos } = await import("./finance-summary");
+  const { referralPayForm, nth } = await import("./partner-split");
 
   const statusCounts = new Map(
     (
@@ -174,9 +221,6 @@ export async function dashboard(
     ).results.map((row) => [row.status, Number(row.n)]),
   );
 
-  const { readSimpleSummary, financePesos } = await import("./finance-summary");
-  const { niHaoExpenseCategory } = await import("./nihao-payment");
-  const simple = await readSimpleSummary(db);
 
   // Recently updated shipments with where the money stands on each, like the shipment page.
   const recent = (
@@ -229,60 +273,114 @@ export async function dashboard(
   const statusLink = (status: string) =>
     `/admin/shipments?status=${encodeURIComponent(status)}`;
 
-  // Shipments still missing Ni Hao's actual cost: no cost at all, or only the estimate.
-  const needCost = simple.goingOutUnknown + count(summary?.estimated_costs);
 
-  const attention = [
+  const row = (cells: string[]) => `<tr>${cells.map((cell) => `<td>${cell}</td>`).join("")}</tr>`;
+  const table = (rows: string[]) => `<div class="table"><table class="attention-table"><tbody>${rows.join("")}</tbody></table></div>`;
+  const shipmentLink = (id: string, tracking: string | null) => `<a href="/admin/shipments?id=${encodeURIComponent(id)}">${esc(tracking || "No tracking yet")}</a>`;
+  const go = (href: string, label: string) => `<a class="attention-act" href="${esc(href)}">${esc(label)}</a>`;
+  const niHaoTotal = niHaoDue.reduce((sum, item) => sum + BigInt(item.nihao_cost ?? "0"), BigInt(0));
+  const referralTotal = referrals.reduce((sum, item) => sum + item.commission, 0);
+
+  type Attention = { show: boolean; n: number; label: string; detail: string; href: string; action: string; warn?: boolean; rows?: string; id?: string };
+  const attention: Attention[] = [
     {
       show: count(summary?.new_leads) > 0,
+      n: count(summary?.new_leads),
       label: `${plural(count(summary?.new_leads), "new lead", "new leads")} to contact`,
       detail: "Reply and send a quotation.",
       href: "/admin/leads",
-      action: "Open Leads",
+      action: "Open",
     },
     {
       show: simple.unbilled.results.length > 0,
+      n: simple.unbilled.results.length,
+      id: "attention-bill",
       label: `${plural(simple.unbilled.results.length, "shipment", "shipments")} to bill · ${financePesos(simple.unbilledTotal)}`,
       detail: "Not sent to the customer yet. Check the draft invoice and send it.",
-      href: "/admin/finance#finance-unbilled",
-      action: "Open list",
-    },
-    {
-      show: count(unpaid?.n) > 0,
-      label: `${plural(count(unpaid?.n), "invoice", "invoices")} not fully paid · ${financePesos(BigInt(unpaid?.amount ?? "0"))}`,
-      detail: count(unpaid?.overdue) > 0
-        ? `${plural(count(unpaid?.overdue), "is", "are")} past the due date. Follow up with the customer.`
-        : "Waiting for the customer to pay.",
-      warn: count(unpaid?.overdue) > 0,
       href: "/admin/invoices",
-      action: "Open Invoices",
+      action: "Open",
+      rows: table(simple.unbilled.results.map((item) => row([
+        shipmentLink(String(item.id), item.tracking_number ? String(item.tracking_number) : null),
+        esc(item.full_name),
+        `<span class="finance-number">${esc(financePesos(BigInt(String(item.amount ?? "0"))))}</span>`,
+        item.draft_invoice_id
+          ? go(`/admin/invoices?id=${encodeURIComponent(String(item.draft_invoice_id))}`, "Issue invoice")
+          : canWrite ? go(`/admin/invoices?new=1&shipment_id=${encodeURIComponent(String(item.id))}`, "Create invoice") : "",
+      ]))),
     },
     {
-      show: simple.goingOut > BigInt(0),
-      label: `Ni Hao to pay · ${financePesos(simple.goingOut)}`,
-      detail: "Use Mark Ni Hao paid in Edit shipment › Ni Hao tab.",
+      show: collections.length > 0,
+      n: collections.length,
+      id: "attention-collections",
+      label: `${plural(collections.length, "invoice", "invoices")} not fully paid · ${financePesos(BigInt(unpaid.amount))}`,
+      detail: unpaid.overdue > 0
+        ? `${plural(unpaid.overdue, "is", "are")} past the due date. Follow up with the customer.`
+        : "Waiting for the customer to pay.",
+      warn: unpaid.overdue > 0,
+      href: "/admin/invoices",
+      action: "Open",
+      rows: table(collections.map((item) => row([
+        `<a href="/admin/invoices?id=${encodeURIComponent(item.id)}">${esc(item.invoice_number)}</a>`,
+        esc(item.full_name || "—"),
+        esc(item.due_at ? `Due ${item.due_at}` : "No due date"),
+        `<span class="finance-number">${esc(financePesos(BigInt(Math.round(Number(item.balance)))))}</span>`,
+        go(`/admin/invoices?id=${encodeURIComponent(item.id)}`, "Record payment"),
+      ]))),
+    },
+    {
+      show: niHaoDue.length > 0,
+      n: niHaoDue.length,
+      id: "attention-nihao",
+      label: `Ni Hao to pay · ${financePesos(niHaoTotal)}`,
+      detail: "Pay Ni Hao, then Mark Ni Hao paid. Add the transfer fee there too.",
       warn: true,
-      href: "/admin/finance#finance-nihao",
-      action: "Open list",
+      href: "/admin/shipments",
+      action: "Open",
+      rows: table(niHaoDue.map((item) => row([
+        shipmentLink(item.id, item.tracking_number),
+        esc(item.full_name),
+        item.nihao_cost === null ? '<span class="muted">Not entered</span>' : `<span class="finance-number">${esc(financePesos(BigInt(item.nihao_cost)))}</span>${item.nihao_cost_source === "estimate" ? ' <span class="muted">(estimate)</span>' : ""}`,
+        go(`/admin/shipments?id=${encodeURIComponent(item.id)}${canWrite ? "&edit=1#nihao-payment" : ""}`, canWrite ? "Mark Ni Hao paid" : "View"),
+      ]))),
     },
     {
       show: needCost > 0,
+      n: needCost,
       label: `${plural(needCost, "shipment needs", "shipments need")} Ni Hao's actual cost`,
       detail: simple.goingOutUnknown > 0
         ? `${simple.goingOutUnknown} with no cost yet, so profit is not correct. Add it in Edit shipment.`
         : "Estimate only. Add Ni Hao's actual cost in Edit shipment once they send it.",
-      warn: simple.goingOutUnknown > 0,
+      warn: true,
       href: "/admin/shipments",
-      action: "Open Shipments",
+      action: "Open",
     },
     {
       show: count(summary?.at_malabon) > 0,
+      n: count(summary?.at_malabon),
       label: `${plural(count(summary?.at_malabon), "shipment", "shipments")} at Malabon waiting for delivery`,
       detail: "Arrange release or delivery to the customer.",
       href: statusLink("Malabon Warehouse"),
-      action: "View",
+      action: "Open",
+    },
+    {
+      show: referrals.length > 0,
+      n: referrals.length,
+      id: "attention-referrals",
+      label: `Referrals to pay · ${pesos(referralTotal)}`,
+      detail: "Customer paid in full and Ni Hao is paid. Send the friend their 10%, then tap Paid.",
+      href: "/admin/finance/ledger?view=split",
+      action: "Open",
+      rows: table(referrals.map((item) => row([
+        `${esc(item.referrerName || item.referralCode || "Friend")}${item.referralCode && item.referrerName ? ` <span class="muted">${esc(item.referralCode)}</span>` : ""}`,
+        `${shipmentLink(item.id, item.tracking)} · ${esc(nth(item.number))} of 3`,
+        esc(item.referrerPayTo || "—"),
+        canWrite && referralCsrf
+          ? referralPayForm(item, { path: "/admin/customers", csrf: referralCsrf, back: "dashboard" })
+          : `<span class="finance-number">${esc(pesos(item.commission))}</span>`,
+      ]))),
     },
   ].filter((item) => item.show);
+  const attentionTotal = attention.reduce((sum, item) => sum + item.n, 0);
 
   const pipeline = [
     { label: "Waiting in China", statuses: ["Awaiting Supplier Dispatch", "Pending Warehouse Receipt", "China Warehouse", "Received at Warehouse", "China Port"] },
@@ -346,10 +444,23 @@ export async function dashboard(
         .dashboard-attention .dashboard-panel-header{margin-bottom:10px}
         .attention-count{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;padding:0 7px;margin-left:6px;border-radius:999px;background:#e5383b;color:#fff;font-size:.8rem;vertical-align:middle}
         .attention-list{list-style:none;margin:0;padding:0;display:grid;gap:4px}
-        .attention-list a{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;border-left:3px solid #1356c9;background:#f8fbfd;color:#0b1f45;text-decoration:none;min-width:0}
-        .attention-list a:hover{background:#eef4ff}
-        .attention-list li.attention-warn a{border-left-color:#c62828;background:#fff6f6}
-        .attention-list li.attention-warn a:hover{background:#ffecec}
+        .attention-list>li{border-radius:8px;border-left:3px solid #1356c9;background:#f8fbfd;min-width:0}
+        .attention-list>li.attention-warn{border-left-color:#c62828;background:#fff6f6}
+        .attention-list>li>a,.attention-list summary{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;color:#0b1f45;text-decoration:none;min-width:0;cursor:pointer;list-style:none}
+        .attention-list summary::-webkit-details-marker{display:none}
+        .attention-list>li>a:hover,.attention-list summary:hover{background:#eef4ff}
+        .attention-list>li.attention-warn>a:hover,.attention-list li.attention-warn summary:hover{background:#ffecec}
+        .attention-n{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;padding:0 7px;border-radius:999px;background:#1356c9;color:#fff;font-size:.8rem;font-weight:800}
+        .attention-warn .attention-n{background:#e5383b}
+        .attention-list details .when-open,.attention-list details[open] .when-closed{display:none}
+        .attention-list details[open] .when-open{display:inline}
+        .attention-list .table{margin:0 12px 8px}
+        .attention-table td{padding:8px;vertical-align:middle;background:transparent!important}
+        .attention-table td:last-child{text-align:right;white-space:nowrap}
+        .attention-act{font-weight:700}
+        .referral-pay{display:inline-flex;gap:6px;align-items:center;margin:0}
+        .referral-pay select{width:auto;margin:0;padding:5px 8px}
+        .referral-pay button{padding:6px 14px}
         .attention-list strong{flex:0 0 auto;font-size:.95rem}
         .attention-detail{flex:1 1 auto;min-width:0;color:#64748b;font-size:.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
         .attention-go{flex:0 0 auto;margin-left:auto;color:#1356c9;font-weight:700;font-size:.85rem;white-space:nowrap}
@@ -403,21 +514,20 @@ export async function dashboard(
 
       <section class="dashboard-panel dashboard-attention">
         <div class="dashboard-panel-header">
-          <h2>Needs Attention${attention.length ? `<span class="attention-count">${attention.length}</span>` : ""}</h2>
+          <h2>Needs Attention${attentionTotal ? `<span class="attention-count">${attentionTotal}</span>` : ""}</h2>
         </div>
+        ${referralPaid ? '<p class="notice" role="status">Referral paid and saved to Expenses.</p>' : ""}
         ${
           attention.length
             ? `<ul class="attention-list">${attention
-                .map(
-                  (item) => `
-                    <li class="${"warn" in item && item.warn ? "attention-warn" : ""}">
-                      <a href="${esc(item.href)}" title="${esc(item.detail)}">
-                        <strong>${esc(item.label)}</strong>
-                        <span class="attention-detail">${esc(item.detail)}</span>
-                        <span class="attention-go">${esc(item.action)} ›</span>
-                      </a>
-                    </li>`,
-                )
+                .map((item) => {
+                  const head = `<span class="attention-n">${item.n}</span><strong>${esc(item.label)}</strong><span class="attention-detail">${esc(item.detail)}</span>`;
+                  return `<li class="${item.warn ? "attention-warn" : ""}"${item.id ? ` id="${item.id}"` : ""}>${
+                    item.rows
+                      ? `<details${item.id === "attention-referrals" && referralPaid ? " open" : ""}><summary title="${esc(item.detail)}">${head}<span class="attention-go"><span class="when-closed">Show ▾</span><span class="when-open">Hide ▴</span></span></summary>${item.rows}</details>`
+                      : `<a href="${esc(item.href)}" title="${esc(item.detail)}">${head}<span class="attention-go">${esc(item.action)} ›</span></a>`
+                  }</li>`;
+                })
                 .join("")}</ul>`
             : `<p class="muted">All caught up. Nothing needs action right now.</p>`
         }
@@ -426,7 +536,7 @@ export async function dashboard(
       <section class="dashboard-panel dashboard-money">
         <div class="dashboard-panel-header">
           <h2>Money</h2>
-          <a class="panel-link" href="/admin/finance">Open Money Today →</a>
+          <a class="panel-link" href="/admin/finance/ledger">Open Money In &amp; Out →</a>
         </div>
         <div class="money-cards">
           <div class="money-card money-have">
@@ -562,8 +672,8 @@ export async function finance(
     "Freight margin",
     `
       <p>
-        <a href="/admin/finance">
-          Finance Dashboard
+        <a href="/admin/finance/ledger">
+          Money In &amp; Out
         </a>
         ·
         <a href="/admin/finance/expenses">
