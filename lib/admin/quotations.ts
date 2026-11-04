@@ -159,8 +159,8 @@ export function nihaoQuoteLines(freightType: string, cargo: Record<string, unkno
     `Item: ${item}`.trimEnd(),
     "Item Picture:",
     `Dimensions: ${dimText}`.trimEnd(),
-    ...(cbm ? [`CBM: ${fmt(cbm)}`] : []),
-    `Weight: ${kg ? `${fmt(kg)} kg` : ""}`.trimEnd(),
+    `Declared Total CBM: ${cbm ? fmt(cbm) : ""}`.trimEnd(),
+    `Declared Weight: ${kg ? `${fmt(kg)} kg` : ""}`.trimEnd(),
   ];
 }
 function quotationCustomerMessage(q: Row, accountNumber = "") {

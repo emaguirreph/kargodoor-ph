@@ -2385,8 +2385,8 @@ test("Referral commission: owed only after the customer and Ni Hao are paid, Pai
 
 test("Ni Hao quote request fills from the quotation and leaves unknowns blank", () => {
   assert.deepEqual(nihaoQuoteLines("Sea Freight", { description: "Office chairs", length: 60, width: 60, height: 110, measurementUnit: "cm", packageQuantity: 4, cbm: 1.584, weight: 180 }), [
-    "Sea or Air: Sea", "Item: Office chairs", "Item Picture:", "Dimensions: 60 x 60 x 110 cm (4 packages)", "CBM: 1.584", "Weight: 180 kg",
+    "Sea or Air: Sea", "Item: Office chairs", "Item Picture:", "Dimensions: 60 x 60 x 110 cm (4 packages)", "Declared Total CBM: 1.584", "Declared Weight: 180 kg",
   ]);
-  assert.deepEqual(nihaoQuoteLines("Air Freight", { description: "Phone cases" }), ["Sea or Air: Air", "Item: Phone cases", "Item Picture:", "Dimensions:", "Weight:"]);
+  assert.deepEqual(nihaoQuoteLines("Air Freight", { description: "Phone cases" }), ["Sea or Air: Air", "Item: Phone cases", "Item Picture:", "Dimensions:", "Declared Total CBM:", "Declared Weight:"]);
   assert.equal(nihaoQuoteLines("Full Container", { containerSize: "40 ft HQ" })[0], "Sea or Air: Sea (FCL, 40 ft HQ)");
 });
