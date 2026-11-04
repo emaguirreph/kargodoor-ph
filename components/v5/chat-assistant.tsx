@@ -515,7 +515,7 @@ export function ChatAssistant() {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [text, setText] = useState("");
   const [waiting, setWaiting] = useState<null | { kind: "track" } | { kind: "ref" } | { kind: "last4"; ref: string }>(null);
-  const [teaser, setTeaser] = useState(false);
+  const [teaser, setTeaser] = useState(true);
   const counter = useRef(0);
   const list = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -639,9 +639,7 @@ export function ChatAssistant() {
   useEffect(() => {
     let seen = false;
     try { seen = sessionStorage.getItem("kd-chat-tease-closed") === "1"; } catch { /* storage blocked */ }
-    if (seen) return;
-    const timer = window.setTimeout(() => setTeaser(true), 2000);
-    return () => window.clearTimeout(timer);
+    if (seen) setTeaser(false);
   }, []);
 
   useEffect(() => {
