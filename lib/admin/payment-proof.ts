@@ -151,6 +151,6 @@ export async function proofRequest(request: Request) {
   } catch (error) {
     const err = error instanceof AdminError ? error : new AdminError("The proof of payment could not be saved. Please try again.", 500);
     if (!(error instanceof AdminError)) console.error("KargoDoor proof upload failed", error instanceof Error ? error.message : "Unknown error");
-    return page("Proof of payment", `<p class="notice">${esc(err.message)}</p><p><a href="/admin/finance">Back to Money Today</a></p>`, "", err.status);
+    return page("Proof of payment", `<p class="notice">${esc(err.message)}</p><p><a href="/admin/dashboard">Back to Dashboard</a></p>`, "", err.status);
   }
 }
