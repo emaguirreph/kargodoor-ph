@@ -18,7 +18,7 @@
 .v5 .kd-hello p b{color:#003b9d;font-weight:700}
 .v5 .kd-hello p strong{color:#55a430;font-weight:800;white-space:nowrap}
 /* Desktop: full bubble on hover */
-.v5 .kd-bub{position:relative;width:400px;aspect-ratio:880/531;container-type:inline-size;cursor:pointer;filter:drop-shadow(0 14px 26px rgba(0,59,157,.18))}
+.v5 .kd-bub{position:relative;width:400px;aspect-ratio:800/483;container-type:inline-size;cursor:pointer;filter:drop-shadow(0 14px 26px rgba(0,59,157,.18))}
 .v5 .kd-art{position:absolute;inset:0;width:100%;height:100%}
 .v5 .kd-txt{position:absolute;left:46%;right:3.5%;top:8.5%;bottom:14%;display:flex;flex-direction:column;align-items:flex-start}
 .v5 .kd-bub .kd-top{gap:1.4cqw;margin-bottom:3.2cqw}
