@@ -512,6 +512,7 @@ export function ChatAssistant() {
   // Fetch KARDO's face first so the chat button shows right away.
   preload(fabPoster, { as: "image", fetchPriority: "high" });
   const [open, setOpen] = useState(false);
+  const [peek, setPeek] = useState(false);
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [text, setText] = useState("");
   const [waiting, setWaiting] = useState<null | { kind: "track" } | { kind: "ref" } | { kind: "last4"; ref: string }>(null);
@@ -611,6 +612,7 @@ export function ChatAssistant() {
 
   function openChat() {
     setOpen(true);
+    setPeek(false);
     if (!msgs.length) welcome();
   }
 
@@ -658,8 +660,24 @@ export function ChatAssistant() {
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
+  // Phones can't hover: show the mini KARDO card once per visit, after the customer scrolls a little, for 6 seconds.
+  useEffect(() => {
+    if (!window.matchMedia("(hover: none)").matches) return;
+    try { if (sessionStorage.getItem("kd-kardo-peek") === "1") return; } catch { /* storage blocked */ }
+    let hide = 0;
+    const onScroll = () => {
+      if (window.scrollY < 250) return;
+      window.removeEventListener("scroll", onScroll);
+      try { sessionStorage.setItem("kd-kardo-peek", "1"); } catch { /* storage blocked */ }
+      setPeek(true);
+      hide = window.setTimeout(() => setPeek(false), 6000);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => { window.removeEventListener("scroll", onScroll); window.clearTimeout(hide); };
+  }, []);
+
   return <>
-    <div className="fab kd-dock">
+    <div className={`fab kd-dock${peek && !open ? " kd-peek" : ""}`}>
       {!open && <div className="kd-hello">
         <div className="kd-bub" role="button" tabIndex={-1} onClick={openChat}>
           <img className="kd-art" src="/assets/kardo-bubble.webp" alt="KARDO from KargoDoor PH" width={800} height={483} fetchPriority="low" decoding="async" />
@@ -677,6 +695,7 @@ export function ChatAssistant() {
             <b className="kd-hi">Hi! I&apos;m <em>KARDO!</em> 👋</b>
             <p>Need to know <b>how to import</b>, <b>rates</b>, <b>shipment</b>, <b>tracking</b> etc.? <strong>Ask me!</strong></p>
           </div>
+          <span className="kd-x" role="button" aria-label="Close" onClick={(e) => { e.stopPropagation(); setPeek(false); }}>×</span>
         </div>
       </div>}
       <button type="button" className="kc-fab kd-fab" aria-label="Chat with KARDO AI, the KargoDoor 24/7 AI assistant" aria-expanded={open} onClick={() => (open ? setOpen(false) : openChat())}>

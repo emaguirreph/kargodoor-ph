@@ -55,3 +55,9 @@
 .v5 .kd-lbl small{display:inline;font-size:13px;font-weight:800;opacity:1;margin-right:4px}
 .v5 .kd-lbl svg{display:none}
 }
+/* Phones: mini card pops up once per visit after scrolling (see chat-assistant.tsx) */
+.v5 .kd-x{display:none}
+@media (hover:none){
+.v5 .kd-dock.kd-peek .kd-hello{display:block;animation:v5-viewIn .3s both}
+.v5 .kd-x{position:absolute;top:-10px;right:-10px;width:28px;height:28px;display:grid;place-items:center;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.2);font-size:17px;line-height:1;color:#16233a}
+}
