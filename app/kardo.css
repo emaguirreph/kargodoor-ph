@@ -1,0 +1,57 @@
+/* KARDO AI chat button + greeting (replaces the Message Us video button and orange teaser). */
+.v5 .fab.kd-dock{display:flex;flex-direction:column;align-items:flex-end}
+.v5 .fab .kc-fab.kd-fab{width:auto;height:auto;padding:0;border:0;border-radius:0;background:none;box-shadow:none;overflow:visible;animation:none;display:flex;align-items:center;cursor:pointer;font-family:var(--f-b,Poppins,system-ui,sans-serif)}
+.v5 .fab .kc-fab.kd-fab:hover{transform:translateY(-2px)}
+.v5 .kd-av{position:relative;z-index:2;flex:none;width:58px;height:58px;border-radius:50%;border:3px solid #69be28;background:#fff;box-shadow:0 8px 20px rgba(0,0,0,.18)}
+.v5 .kd-av img{display:block;width:100%;height:100%;border-radius:50%;object-fit:cover}
+.v5 .kd-av i{position:absolute;top:0;right:0;width:13px;height:13px;border-radius:50%;background:#3ad15a;border:2px solid #fff}
+.v5 .kd-lbl{margin-left:-18px;padding:7px 18px 7px 26px;border-radius:0 99px 99px 0;background:linear-gradient(180deg,#ff8a2b,#ff6b00);color:#fff;display:flex;align-items:center;gap:9px;box-shadow:0 8px 20px rgba(255,107,0,.35);font-weight:800;font-size:14px;line-height:1.15;text-align:left;white-space:nowrap}
+.v5 .kd-lbl small{display:block;font-size:11px;font-weight:500;opacity:.92}
+.v5 .kd-lbl svg{flex:none}
+.v5 .kd-hello{position:absolute;right:0;bottom:100%;padding-bottom:10px;display:none}
+.v5 .kd-top{display:flex;align-items:center;white-space:nowrap}
+.v5 .kd-pill{display:inline-flex;align-items:center;background:#003b9d;color:#fff;font-weight:700;border-radius:99px;white-space:nowrap}
+.v5 .kd-pill i{border-radius:50%;background:#3ad15a}
+.v5 .kd-hi{display:block;font-weight:800;color:#16233a;letter-spacing:-.02em;line-height:1.1;white-space:nowrap}
+.v5 .kd-hi em{display:inline-block;background:#69be28;color:#fff;font-style:italic;font-weight:900;transform:skew(-6deg)}
+.v5 .kd-hello p{margin:0;color:#2d3b55;font-weight:500}
+.v5 .kd-hello p b{color:#003b9d;font-weight:700}
+.v5 .kd-hello p strong{color:#55a430;font-weight:800;white-space:nowrap}
+/* Desktop: full bubble on hover */
+.v5 .kd-bub{position:relative;width:400px;aspect-ratio:880/531;container-type:inline-size;cursor:pointer;filter:drop-shadow(0 14px 26px rgba(0,59,157,.18))}
+.v5 .kd-art{position:absolute;inset:0;width:100%;height:100%}
+.v5 .kd-txt{position:absolute;left:46%;right:3.5%;top:8.5%;bottom:14%;display:flex;flex-direction:column;align-items:flex-start}
+.v5 .kd-bub .kd-top{gap:1.4cqw;margin-bottom:3.2cqw}
+.v5 .kd-bub .kd-top img{height:5cqw;width:auto}
+.v5 .kd-bub .kd-pill{gap:1cqw;font-size:2.3cqw;padding:.6cqw 1.8cqw}
+.v5 .kd-bub .kd-pill i{width:1.6cqw;height:1.6cqw}
+.v5 .kd-bub .kd-hi{font-size:5cqw}
+.v5 .kd-bub .kd-hi em{padding:0 1.6cqw;border-radius:1.8cqw}
+.v5 .kd-bub p{margin-top:1.4cqw;font-size:3.25cqw;line-height:1.38}
+.v5 .kd-bub p strong{font-size:3.9cqw;margin-left:.6cqw}
+.v5 .kd-cta{margin-top:2.4cqw;display:flex;justify-content:center;width:92%;padding:1.4cqw 3cqw;border-radius:99px;background:linear-gradient(180deg,#6fc52e,#4a9a26);color:#fff;font-weight:700;font-size:3.3cqw;box-shadow:0 1cqw 2.4cqw rgba(85,164,48,.35)}
+.v5 .kd-mini{display:none}
+/* The greeting only shows while the button (or the greeting) is hovered. Touch screens get just the button. */
+@media (hover:hover){
+.v5 .kd-dock:hover .kd-hello{display:block;animation:v5-viewIn .25s both}
+}
+/* Narrow windows: mini card instead of the full bubble */
+@media (max-width:700px){
+.v5 .kd-bub{display:none}
+.v5 .kd-mini{position:relative;display:flex;gap:10px;width:min(272px,calc(100vw - 32px));background:linear-gradient(135deg,#fff 55%,#eef8e6);border:2.5px solid #69be28;border-radius:20px;padding:12px;box-shadow:0 10px 24px rgba(0,59,157,.18);cursor:pointer;text-align:left}
+.v5 .kd-mini:after{content:"";position:absolute;right:58px;bottom:-9px;width:15px;height:15px;background:#eef8e6;border-right:2.5px solid #69be28;border-bottom:2.5px solid #69be28;transform:rotate(45deg)}
+.v5 .kd-face{flex:none;width:52px;height:52px;border-radius:50%;border:2.5px solid #69be28;object-fit:cover;background:#fff}
+.v5 .kd-mini .kd-top{gap:6px}
+.v5 .kd-mini .kd-top img{height:16px;width:auto}
+.v5 .kd-mini .kd-pill{gap:4px;font-size:9.5px;padding:2px 7px}
+.v5 .kd-mini .kd-pill i{width:6px;height:6px}
+.v5 .kd-mini .kd-hi{font-size:15px;margin-top:4px}
+.v5 .kd-mini .kd-hi em{padding:0 6px;border-radius:6px}
+.v5 .kd-mini p{font-size:11.5px;line-height:1.35;margin-top:3px}
+}
+@media (hover:none),(max-width:700px){
+.v5 .kd-av{width:50px;height:50px}
+.v5 .kd-lbl{padding:6px 16px 6px 22px;font-size:13px}
+.v5 .kd-lbl small{display:inline;font-size:13px;font-weight:800;opacity:1;margin-right:4px}
+.v5 .kd-lbl svg{display:none}
+}

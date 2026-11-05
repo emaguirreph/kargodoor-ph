@@ -506,16 +506,15 @@ const intents: Array<[RegExp, string]> = [
   [/\b(hi|hello|hey|good (morning|afternoon|evening)|kumusta)\b/i, "hello"],
 ];
 
-const fabPoster = "/assets/kargodoor-message-us-poster.webp";
+const fabPoster = "/assets/kardo-face.webp";
 
 export function ChatAssistant() {
-  // Fetch the button picture first so the button shows right away, before the video loads.
+  // Fetch KARDO's face first so the chat button shows right away.
   preload(fabPoster, { as: "image", fetchPriority: "high" });
   const [open, setOpen] = useState(false);
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [text, setText] = useState("");
   const [waiting, setWaiting] = useState<null | { kind: "track" } | { kind: "ref" } | { kind: "last4"; ref: string }>(null);
-  const [teaser, setTeaser] = useState(true);
   const counter = useRef(0);
   const list = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -532,7 +531,7 @@ export function ChatAssistant() {
   function welcome() {
     say(<>
       <p>Hi! 👋 Welcome to <b>KargoDoor PH</b>.</p>
-      <p>I&apos;m the KargoDoor Assistant. Ask me about <b>shipping rates</b>, <b>tracking</b>, <b>warehouse addresses</b>, and how to import from China.</p>
+      <p>I&apos;m KARDO, the KargoDoor 24/7 AI Assistant. Ask me about <b>shipping rates</b>, <b>tracking</b>, <b>warehouse addresses</b>, and how to import from China.</p>
       <p>If I can&apos;t answer, tap <b>Talk to our team</b> and we&apos;ll reply on Messenger.</p>
       <p><b>How can I help you today?</b></p>
     </>);
@@ -612,7 +611,6 @@ export function ChatAssistant() {
 
   function openChat() {
     setOpen(true);
-    setTeaser(false);
     if (!msgs.length) welcome();
   }
 
@@ -636,11 +634,6 @@ export function ChatAssistant() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    let seen = false;
-    try { seen = sessionStorage.getItem("kd-chat-tease-closed") === "1"; } catch { /* storage blocked */ }
-    if (seen) setTeaser(false);
-  }, []);
 
   useEffect(() => {
     const el = list.current;
@@ -666,19 +659,35 @@ export function ChatAssistant() {
   }, [open]);
 
   return <>
-    {teaser && !open && <button type="button" className="kc-tease" onClick={openChat}>Hi! 👋 Have a question?<br />Tracking, rates or booking,<br />I can help. 😊<span aria-hidden="true" onClick={(e) => { e.stopPropagation(); setTeaser(false); try { sessionStorage.setItem("kd-chat-tease-closed", "1"); } catch { /* storage blocked */ } }}>×</span></button>}
-    <div className="fab">
-      <button type="button" className="kc-fab" aria-label="Open the KargoDoor chat assistant" aria-expanded={open} onClick={() => (open ? setOpen(false) : openChat())}>
-        <video autoPlay loop muted playsInline preload="auto" poster={fabPoster} aria-hidden="true">
-          <source src="/assets/kargodoor-message-us-small.mp4" type="video/mp4" />
-          <source src="/assets/kargodoor-message-us-small.webm" type="video/webm" />
-        </video>
+    <div className="fab kd-dock">
+      {!open && <div className="kd-hello">
+        <div className="kd-bub" role="button" tabIndex={-1} onClick={openChat}>
+          <img className="kd-art" src="/assets/kardo-bubble.webp" alt="KARDO from KargoDoor PH" width={880} height={531} loading="lazy" decoding="async" />
+          <div className="kd-txt">
+            <div className="kd-top"><img src="/assets/kargodoor-logo-tagline-transparent.webp" alt="KargoDoor PH" width={480} height={158} /><span className="kd-pill"><i />24/7 AI Assistant ✨</span></div>
+            <b className="kd-hi">Hi! I&apos;m <em>KARDO!</em> 👋</b>
+            <p>Need to know <b>how to import</b>, <b>rates</b>, <b>shipment</b>, <b>tracking</b>, etc.? <strong>Ask me!</strong></p>
+            <span className="kd-cta">Ask KARDO AI →</span>
+          </div>
+        </div>
+        <div className="kd-mini" role="button" tabIndex={-1} onClick={openChat}>
+          <img className="kd-face" src="/assets/kardo-face.webp" alt="" width={160} height={160} />
+          <div>
+            <div className="kd-top"><img src="/assets/kargodoor-logo-tagline-transparent.webp" alt="KargoDoor PH" width={480} height={158} /><span className="kd-pill"><i />24/7 AI Assistant ✨</span></div>
+            <b className="kd-hi">Hi! I&apos;m <em>KARDO!</em> 👋</b>
+            <p>Need to know <b>how to import</b>, <b>rates</b>, <b>shipment</b>, <b>tracking</b> etc.? <strong>Ask me!</strong></p>
+          </div>
+        </div>
+      </div>}
+      <button type="button" className="kc-fab kd-fab" aria-label="Chat with KARDO AI, the KargoDoor 24/7 AI assistant" aria-expanded={open} onClick={() => (open ? setOpen(false) : openChat())}>
+        <span className="kd-av"><img src="/assets/kardo-face.webp" alt="" width={160} height={160} /><i /></span>
+        <span className="kd-lbl"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" /></svg><span><small>Chat with</small>KARDO AI</span></span>
       </button>
     </div>
     {open && <div className="kdchat" role="dialog" aria-label="KargoDoor Assistant">
       <div className="kc-hd">
-        <img src="/assets/kargodoor-message-us-poster.webp" alt="" />
-        <div className="kc-t"><b>KargoDoor Assistant</b><small><span className="kc-dot" />Instant answers 24/7</small></div>
+        <img src="/assets/kardo-face.webp" alt="" />
+        <div className="kc-t"><b>KARDO AI Assistant</b><small><span className="kc-dot" />Instant answers 24/7</small></div>
         <TeamButton label="💬 Talk to our team" className="kc-live" />
         <button type="button" className="kc-x" aria-label="Close chat" onClick={() => setOpen(false)}>×</button>
       </div>
