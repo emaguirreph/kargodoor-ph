@@ -662,25 +662,25 @@ export function ChatAssistant() {
     <div className="fab kd-dock">
       {!open && <div className="kd-hello">
         <div className="kd-bub" role="button" tabIndex={-1} onClick={openChat}>
-          <img className="kd-art" src="/assets/kardo-bubble.webp" alt="KARDO from KargoDoor PH" width={880} height={531} loading="lazy" decoding="async" />
+          <img className="kd-art" src="/assets/kardo-bubble.webp" alt="KARDO from KargoDoor PH" width={800} height={483} fetchPriority="low" decoding="async" />
           <div className="kd-txt">
-            <div className="kd-top"><img src="/assets/kargodoor-logo-tagline-transparent.webp" alt="KargoDoor PH" width={480} height={158} /><span className="kd-pill"><i />24/7 AI Assistant ✨</span></div>
+            <div className="kd-top"><img src="/assets/kardo-logo-small.webp" alt="KargoDoor PH" width={182} height={60} /><span className="kd-pill"><i />24/7 AI Assistant ✨</span></div>
             <b className="kd-hi">Hi! I&apos;m <em>KARDO!</em> 👋</b>
             <p>Need to know <b>how to import</b>, <b>rates</b>, <b>shipment</b>, <b>tracking</b>, etc.? <strong>Ask me!</strong></p>
             <span className="kd-cta">Ask KARDO AI →</span>
           </div>
         </div>
         <div className="kd-mini" role="button" tabIndex={-1} onClick={openChat}>
-          <img className="kd-face" src="/assets/kardo-face.webp" alt="" width={160} height={160} />
+          <img className="kd-face" src="/assets/kardo-face.webp" alt="" width={120} height={120} />
           <div>
-            <div className="kd-top"><img src="/assets/kargodoor-logo-tagline-transparent.webp" alt="KargoDoor PH" width={480} height={158} /><span className="kd-pill"><i />24/7 AI Assistant ✨</span></div>
+            <div className="kd-top"><img src="/assets/kardo-logo-small.webp" alt="KargoDoor PH" width={182} height={60} /><span className="kd-pill"><i />24/7 AI Assistant ✨</span></div>
             <b className="kd-hi">Hi! I&apos;m <em>KARDO!</em> 👋</b>
             <p>Need to know <b>how to import</b>, <b>rates</b>, <b>shipment</b>, <b>tracking</b> etc.? <strong>Ask me!</strong></p>
           </div>
         </div>
       </div>}
       <button type="button" className="kc-fab kd-fab" aria-label="Chat with KARDO AI, the KargoDoor 24/7 AI assistant" aria-expanded={open} onClick={() => (open ? setOpen(false) : openChat())}>
-        <span className="kd-av"><img src="/assets/kardo-face.webp" alt="" width={160} height={160} /><i /></span>
+        <span className="kd-av"><img src="/assets/kardo-face.webp" alt="" width={120} height={120} /><i /></span>
         <span className="kd-lbl"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" /></svg><span><small>Chat with</small>KARDO AI</span></span>
       </button>
     </div>
