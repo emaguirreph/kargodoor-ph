@@ -14,6 +14,7 @@ import "@fontsource/plus-jakarta-sans/latin-700.css";
 import "@fontsource/plus-jakarta-sans/latin-800.css";
 import "./v5.css";
 import "./v5-home.css";
+import "./kardo.css";
 import { AnalyticsPageViews } from "@/components/analytics-pageviews";
 import { pageMetadata, siteUrl } from "@/lib/seo";
 
@@ -101,7 +102,7 @@ export default function RootLayout({
         {/* Remembers a tap on the chat button made before the page finishes loading; the assistant opens as soon as it is ready. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: "try{if(sessionStorage.getItem('kd-chat-tease-closed')==='1')document.documentElement.classList.add('kc-tease-off')}catch(e){}document.addEventListener('click',function(e){if(window.__kcReady)return;if(e.target&&e.target.closest&&e.target.closest('.kc-tease span')){document.documentElement.classList.add('kc-tease-off');try{sessionStorage.setItem('kd-chat-tease-closed','1')}catch(x){}return;}var b=e.target&&e.target.closest&&e.target.closest('.kc-fab,.kc-tease');if(b){window.__kcOpen=1;b.classList.add('kc-wait');}},true);",
+            __html: "try{if(sessionStorage.getItem('kd-chat-tease-closed')==='1')document.documentElement.classList.add('kc-tease-off')}catch(e){}document.addEventListener('click',function(e){if(window.__kcReady)return;if(e.target&&e.target.closest&&e.target.closest('.kc-tease span,.kd-x')){document.documentElement.classList.add('kc-tease-off');try{sessionStorage.setItem('kd-chat-tease-closed','1')}catch(x){}return;}var b=e.target&&e.target.closest&&e.target.closest('.kc-fab,.kc-tease,.kd-bub,.kd-mini');if(b){window.__kcOpen=1;b.classList.add('kc-wait');}},true);",
           }}
         />
         {children}
