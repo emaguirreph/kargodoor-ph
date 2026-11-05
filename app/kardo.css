@@ -31,14 +31,13 @@
 .v5 .kd-bub p strong{font-size:3.9cqw;margin-left:.6cqw}
 .v5 .kd-cta{margin-top:2.4cqw;display:flex;justify-content:center;width:92%;padding:1.4cqw 3cqw;border-radius:99px;background:linear-gradient(180deg,#6fc52e,#4a9a26);color:#fff;font-weight:700;font-size:3.3cqw;box-shadow:0 1cqw 2.4cqw rgba(85,164,48,.35)}
 .v5 .kd-mini{display:none}
-@media (hover:hover) and (min-width:701px){
-.v5 .kd-dock:hover .kd-hello,.v5 .kd-dock:focus-within .kd-hello{display:block;animation:v5-viewIn .25s both}
+/* The greeting only shows while the button (or the greeting) is hovered. Touch screens get just the button. */
+@media (hover:hover){
+.v5 .kd-dock:hover .kd-hello{display:block;animation:v5-viewIn .25s both}
 }
-/* Phone: mini card, shown once per visit for a few seconds */
-@media (hover:none),(max-width:700px){
+/* Narrow windows: mini card instead of the full bubble */
+@media (max-width:700px){
 .v5 .kd-bub{display:none}
-.v5 .kd-dock.kd-peek .kd-hello{display:block;animation:v5-viewIn .3s both}
-html.kc-tease-off .v5 .kd-dock .kd-hello{display:none}
 .v5 .kd-mini{position:relative;display:flex;gap:10px;width:min(272px,calc(100vw - 32px));background:linear-gradient(135deg,#fff 55%,#eef8e6);border:2.5px solid #69be28;border-radius:20px;padding:12px;box-shadow:0 10px 24px rgba(0,59,157,.18);cursor:pointer;text-align:left}
 .v5 .kd-mini:after{content:"";position:absolute;right:58px;bottom:-9px;width:15px;height:15px;background:#eef8e6;border-right:2.5px solid #69be28;border-bottom:2.5px solid #69be28;transform:rotate(45deg)}
 .v5 .kd-face{flex:none;width:52px;height:52px;border-radius:50%;border:2.5px solid #69be28;object-fit:cover;background:#fff}
@@ -49,7 +48,8 @@ html.kc-tease-off .v5 .kd-dock .kd-hello{display:none}
 .v5 .kd-mini .kd-hi{font-size:15px;margin-top:4px}
 .v5 .kd-mini .kd-hi em{padding:0 6px;border-radius:6px}
 .v5 .kd-mini p{font-size:11.5px;line-height:1.35;margin-top:3px}
-.v5 .kd-x{position:absolute;top:-10px;right:-10px;width:26px;height:26px;display:grid;place-items:center;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.2);font-size:16px;line-height:1;color:#16233a}
+}
+@media (hover:none),(max-width:700px){
 .v5 .kd-av{width:50px;height:50px}
 .v5 .kd-lbl{padding:6px 16px 6px 22px;font-size:13px}
 .v5 .kd-lbl small{display:inline;font-size:13px;font-weight:800;opacity:1;margin-right:4px}

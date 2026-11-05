@@ -515,7 +515,6 @@ export function ChatAssistant() {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [text, setText] = useState("");
   const [waiting, setWaiting] = useState<null | { kind: "track" } | { kind: "ref" } | { kind: "last4"; ref: string }>(null);
-  const [teaser, setTeaser] = useState(true);
   const counter = useRef(0);
   const list = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -612,7 +611,6 @@ export function ChatAssistant() {
 
   function openChat() {
     setOpen(true);
-    setTeaser(false);
     if (!msgs.length) welcome();
   }
 
@@ -636,17 +634,6 @@ export function ChatAssistant() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    let seen = false;
-    try { seen = sessionStorage.getItem("kd-chat-tease-closed") === "1"; } catch { /* storage blocked */ }
-    if (seen) { setTeaser(false); return; }
-    // Phones can't hover, so the mini greeting shows once per visit for a few seconds.
-    const t = window.setTimeout(() => {
-      setTeaser(false);
-      try { sessionStorage.setItem("kd-chat-tease-closed", "1"); } catch { /* storage blocked */ }
-    }, 7000);
-    return () => window.clearTimeout(t);
-  }, []);
 
   useEffect(() => {
     const el = list.current;
@@ -672,7 +659,7 @@ export function ChatAssistant() {
   }, [open]);
 
   return <>
-    <div className={`fab kd-dock${teaser && !open ? " kd-peek" : ""}`}>
+    <div className="fab kd-dock">
       {!open && <div className="kd-hello">
         <div className="kd-bub" role="button" tabIndex={-1} onClick={openChat}>
           <img className="kd-art" src="/assets/kardo-bubble.webp" alt="KARDO from KargoDoor PH" width={880} height={531} loading="lazy" decoding="async" />
@@ -690,7 +677,6 @@ export function ChatAssistant() {
             <b className="kd-hi">Hi! I&apos;m <em>KARDO!</em> 👋</b>
             <p>Need to know <b>how to import</b>, <b>rates</b>, <b>shipment</b>, <b>tracking</b> etc.? <strong>Ask me!</strong></p>
           </div>
-          <span className="kd-x" aria-label="Close" role="button" onClick={(e) => { e.stopPropagation(); setTeaser(false); try { sessionStorage.setItem("kd-chat-tease-closed", "1"); } catch { /* storage blocked */ } }}>×</span>
         </div>
       </div>}
       <button type="button" className="kc-fab kd-fab" aria-label="Chat with KARDO AI, the KargoDoor 24/7 AI assistant" aria-expanded={open} onClick={() => (open ? setOpen(false) : openChat())}>
