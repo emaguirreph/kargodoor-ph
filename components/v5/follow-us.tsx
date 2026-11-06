@@ -94,3 +94,13 @@ export function FollowUs() {
     </section>
   );
 }
+
+/** Body of /follow: sends the visitor on to our Facebook Page, with the graphic and buttons as a fallback. */
+export function FollowRedirect() {
+  useEffect(() => {
+    trackEvent("click_facebook");
+    const timer = window.setTimeout(() => window.location.replace(FACEBOOK_URL), 600);
+    return () => window.clearTimeout(timer);
+  }, []);
+  return <FollowUs />;
+}
