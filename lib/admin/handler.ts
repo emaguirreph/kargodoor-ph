@@ -677,6 +677,14 @@ export async function handleAdmin(
         );
       }
 
+      // Referral rule (also shown to customers in the portal): nobody earns from their own code.
+      const typedReferral = entity === "customers" ? String(form.get("referral_code") ?? "").trim() : "";
+      if (typedReferral && id) {
+        const own = await db.prepare("SELECT customer_code FROM customers WHERE id = ?").bind(id).first<{ customer_code: string }>();
+        if (own && String(own.customer_code).toUpperCase() === typedReferral.toUpperCase())
+          throw new AdminError("A customer can't use their own code as the referral code.");
+      }
+
       let measuredCharge = false;
       if (entity === "shipments") {
         const current = values as RecordData;

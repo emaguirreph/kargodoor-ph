@@ -21,7 +21,7 @@ export class BookingError extends Error {
 const pesos = (centavos: number) => Math.round(centavos) / 100;
 const fileName = (name: string, fallback: string) => name.replace(/[^\w.\- ]+/g, "_").trim().slice(0, 120) || fallback;
 
-async function readUpload(file: File, label: string) {
+export async function readUpload(file: File, label: string) {
   if (!file.size) throw new BookingError(`The ${label} is empty. Please choose it again.`);
   if (file.size > bookingFileMaxBytes) throw new BookingError(`The ${label} is over 1.5 MB. Please use a smaller photo or file.`);
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -49,7 +49,13 @@ export function parseBookingForm(form: FormData): { input: BookingInput; photos:
 
 export async function createBooking(db: D1Database, form: FormData, ip: string | null) {
   const { input, photos, packing } = parseBookingForm(form);
-  const key = clientKey(ip);
+  return saveBooking(db, { input, photos, packing, key: clientKey(ip) });
+}
+
+/** Saves a booking from the chat, or from a logged-in customer in the portal (customerId + source 'portal'). */
+export async function saveBooking(db: D1Database, { input, photos, packing, key, customerId = null, source = "chat" }: {
+  input: BookingInput; photos: File[]; packing: File | null; key: string | null; customerId?: string | null; source?: "chat" | "portal";
+}) {
   const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
   const [blocked, recentByPhone, recentByClient] = await Promise.all([
     db.prepare("SELECT 1 FROM bookings WHERE phone = ? AND blocked = 1 LIMIT 1").bind(input.phone).first(),
@@ -81,12 +87,12 @@ export async function createBooking(db: D1Database, form: FormData, ip: string |
     taken.add(ref);
     const statements: D1PreparedStatement[] = [
       db.prepare(`INSERT INTO bookings (id, booking_ref, full_name, phone, email, service_type, delivery_mode, delivery_address, item_description,
-          quantity_text, est_cbm, est_weight_kg, item_value, china_warehouse, supplier_contact, notes, estimate_amount, status, client_key, created_at, updated_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'New',?,?,?)`)
+          quantity_text, est_cbm, est_weight_kg, item_value, china_warehouse, supplier_contact, notes, estimate_amount, status, client_key, customer_id, source, created_at, updated_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'New',?,?,?,?,?)`)
         .bind(id, ref, input.fullName, input.phone, input.email.toLowerCase() || null, input.service === "sea" ? "Sea Freight" : "Air Freight",
           input.deliveryMode === "delivery" ? "Delivery" : "Pickup", input.deliveryMode === "delivery" ? input.deliveryAddress : null,
           input.item, input.quantity, input.cbm, input.weight, input.itemValue ? Math.round(input.itemValue * 100) : null,
-          input.warehouse, input.supplier, input.notes || null, estimate.amount, key, now, now),
+          input.warehouse, input.supplier, input.notes || null, estimate.amount, key, customerId, source, now, now),
       ...files.map((file) => db.prepare("INSERT INTO booking_files (id, booking_id, kind, file_name, file_mime, file_size, file_data, uploaded_at) VALUES (?,?,?,?,?,?,?,?)")
         .bind(randomUUID(), id, file.kind, file.name, file.mime, file.bytes.byteLength, file.bytes, now)),
     ];
@@ -162,9 +168,9 @@ export async function saveCustomerProof(db: D1Database, lookup: { ref: string; l
   if (Number(pending?.n ?? 0) >= 3) throw new BookingError("We already have your proof of payment and are checking it. Please message us on Messenger if you need help.", 429);
   const upload = await readUpload(file, "proof of payment");
   const now = new Date().toISOString();
-  await db.prepare(`INSERT INTO customer_payment_proofs (id, booking_id, shipment_id, invoice_id, status, file_name, file_mime, file_size, file_data, uploaded_at)
-      VALUES (?,?,?,?,'Pending',?,?,?,?,?)`)
-    .bind(randomUUID(), booking.id, shipment.id, billing.invoiceId, upload.name, upload.mime, upload.bytes.byteLength, upload.bytes, now).run();
+  await db.prepare(`INSERT INTO customer_payment_proofs (id, booking_id, customer_id, source, shipment_id, invoice_id, status, file_name, file_mime, file_size, file_data, uploaded_at)
+      VALUES (?,?,?,'chat',?,?,'Pending',?,?,?,?,?)`)
+    .bind(randomUUID(), booking.id, booking.customer_id ?? null, shipment.id, billing.invoiceId, upload.name, upload.mime, upload.bytes.byteLength, upload.bytes, now).run();
 }
 
 /** The customer's invoice PDF, only once it is fully paid. */

@@ -52,14 +52,14 @@ export function Header() {
             </Link>
           ))}
           <div className="mx">
-            <Link className="btn btn-outline" href="/customer/login" onClick={close}>LOGIN</Link>
+            <Link className="btn btn-outline" href="/customer/login" onClick={close}>SIGN IN</Link>
             <MessengerLink className="btn btn-green" target="_blank" rel="noopener noreferrer" analyticsEvent="generate_lead" onClick={close}>
               GET A QUOTE
             </MessengerLink>
           </div>
         </nav>
 
-        <Link className="btn btn-outline" href="/customer/login">LOGIN</Link>
+        <Link className="btn btn-outline" href="/customer/login">SIGN IN</Link>
         <MessengerLink className="btn btn-green" target="_blank" rel="noopener noreferrer" analyticsEvent="generate_lead">
           GET A QUOTE
         </MessengerLink>

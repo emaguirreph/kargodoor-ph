@@ -1,4 +1,4 @@
-// End-to-end chat booking flow on an isolated local D1 emulator; never reads or writes remote databases.
+// End-to-end chat booking + customer portal flow on an isolated local D1 emulator; never reads or writes remote databases.
 // Book in the chat → admin Bookings (count, approve) → customer + shipment → arrival bill →
 // customer uploads proof → admin records payment → customer downloads the paid invoice.
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
@@ -50,6 +50,7 @@ const token = (html) => { const m = html.match(/name="csrf" value="([^"]+)"/); a
 const sqlRows = (command) => JSON.parse(cli(["d1", "execute", "ADMIN_DB", "--local", "--json", "--command", command]))[0].results;
 const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
 const steps = [];
+let customerCookie = "";
 const step = (name) => { steps.push(name); console.log("✓ " + name); };
 
 const booking = {
@@ -106,7 +107,7 @@ try {
   step("Chat lookup: wrong last 4 digits refused; New booking shows no cargo code");
 
   // 4. Admin menu count + Bookings page.
-  assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 1, proofs: 0 });
+  assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 1, proofs: 0, concerns: 0 });
   let html = await (await get("/admin/bookings")).text();
   assert.ok(html.includes(made.ref) && html.includes("Juan Dela Cruz"));
   html = await (await get("/admin/dashboard")).text();
@@ -142,7 +143,7 @@ try {
   assert.equal(approved.shipping_charge, approved.approved_amount);
   html = await (await get(`/admin/bookings?id=${saved.id}`)).text();
   assert.ok(html.includes(`Cargo code: ${approved.customer_code}`), "copy-ready Messenger message");
-  assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 0, proofs: 0 });
+  assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 0, proofs: 0, concerns: 0 });
   step(`Approved: customer ${approved.customer_code} + shipment ${approved.tracking_number} (₱${approved.shipping_charge / 100}); Messenger message ready; count back to 0`);
 
   // 6. Chat shows the code; no bill yet so proof is refused.
@@ -175,7 +176,7 @@ try {
   proof = new FormData(); proof.set("ref", made.ref); proof.set("last4", "4567"); proof.append("file", new Blob([png], { type: "image/png" }), "proof.png");
   res = await api("/api/bookings/proof", proof);
   assert.equal(res.status, 200, await res.clone().text());
-  assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 0, proofs: 1 });
+  assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 0, proofs: 1, concerns: 0 });
   html = await (await get("/admin/invoices")).text();
   assert.ok(html.includes(made.ref), "proof waiting on Invoices & Payments");
   html = await (await get(`/admin/bookings?id=${saved.id}`)).text();
@@ -184,7 +185,7 @@ try {
   assert.equal(res.status, 303, await res.text());
   const paid = sqlRows(`SELECT i.status, s.payment_status, (SELECT COUNT(*) FROM payment_proofs) AS proofs FROM invoices i JOIN shipments s ON s.id=i.shipment_id WHERE i.id='${invoice.id}'`)[0];
   assert.deepEqual(paid, { status: "Paid", payment_status: "Paid", proofs: 1 });
-  assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 0, proofs: 0 });
+  assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 0, proofs: 0, concerns: 0 });
   step("Proof uploaded → red count on Invoices & Payments → Record payment: invoice Paid, shipment Paid, proof kept");
 
   // 9. Customer downloads the paid invoice.
@@ -213,9 +214,114 @@ try {
   assert.equal(res.status, 429, "4th booking in a day refused");
   step("Decline + block stops that phone; 4th booking from one phone in a day is refused");
 
+  // 11. Customer portal: admin gives Juan a login; Juan sees the same records the admin sees.
+  html = await (await get(`/admin/customers?id=${saved2.customer_id}`)).text();
+  res = await post("/admin/customers", { csrf: token(html), action: "portal_create", customer_id: saved2.customer_id });
+  assert.equal(res.status, 200, "portal login created");
+  const temp = (await res.text()).match(/Temporary Password:<\/strong> <code>([^<]+)<\/code>/)[1].replace(/&amp;/g, "&");
+  const browser = (path, init = {}) => retry(() => fetch(origin + path, { redirect: "manual", ...init, headers: { Origin: origin, ...(init.headers ?? {}), ...(cookie ? { cookie } : {}) } }));
+  let cookie = "";
+  const keepCookie = () => { customerCookie = cookie; };
+  res = await browser("/customer");
+  assert.equal(res.status, 307, "portal needs login");
+  res = await browser("/api/customer/login", { method: "POST", body: new URLSearchParams({ identifier: "juan@example.test", password: temp }) });
+  assert.equal(res.headers.get("location"), origin + "/customer/change-password");
+  cookie = res.headers.get("set-cookie").split(";")[0];
+  const newPassword = "Juan-portal-" + randomBytes(6).toString("hex");
+  res = await browser("/api/customer/change-password", { method: "POST", body: new URLSearchParams({ current_password: temp, password: newPassword, confirm_password: newPassword }) });
+  assert.equal(res.status, 303, await res.text());
+  if (res.headers.get("set-cookie")) cookie = res.headers.get("set-cookie").split(";")[0];
+  res = await browser("/customer");
+  html = await res.text();
+  assert.ok(html.includes(approved.customer_code) && html.includes(made.ref), `dashboard shows cargo code + shipment (${res.status} ${res.headers.get("location")} ${html.slice(0, 300)})`);
+  html = await (await browser("/customer/shipments")).text();
+  assert.ok(html.includes(made.ref) && html.includes("PAID"), "My Shipments shows the paid shipment");
+  html = await (await browser(`/customer/track?q=${made.ref}`)).text();
+  assert.ok(html.includes("Malabon Warehouse"));
+  html = await (await browser("/customer/warehouses?mode=air&wh=Guangzhou")).text();
+  assert.ok(html.includes(`AIR ${approved.customer_code}`) || html.includes(`AIR</b> ${approved.customer_code}`) || html.includes(approved.customer_code), "warehouse label has the code");
+  assert.ok(!/0917\s?518\s?8335|09175188335/.test(html), "no Malabon contact numbers in the portal");
+  html = await (await browser("/customer/refer")).text();
+  assert.ok(html.includes(approved.customer_code) && /own code/i.test(html), "Refer & Earn: code + own-code rule");
+  res = await browser(`/customer/invoice?id=${invoice.id}`);
+  assert.equal(res.status, 200); assert.match(res.headers.get("content-type"), /pdf/);
+  const other = sqlRows("SELECT id FROM invoices LIMIT 1")[0].id;
+  assert.equal(other, invoice.id);
+  step("Portal: admin creates login → temp password must be changed → dashboard, shipments, track, warehouses (no contact numbers), refer, invoice PDF");
+
+  // 12. Portal Book a Shipment lands in admin Bookings, tagged Portal, linked to Juan.
+  // (Step 10 used up today's 3 bookings for this phone; the same daily limit applies in the portal.)
+  sqlRows("UPDATE bookings SET created_at = '2026-01-01T00:00:00.000Z'");
+  const book = new FormData();
+  for (const [k, v] of Object.entries({ service: "air", warehouse: "Yiwu", item: "Phone cases", quantity: "3 boxes", cbm: "", weight: "15", supplier: "Supplier Wang", itemValue: "8000", deliveryMode: "pickup", deliveryAddress: "", notes: "" })) book.set(k, v);
+  book.append("photos", new Blob([png], { type: "image/png" }), "case.png");
+  res = await browser("/customer/actions/book", { method: "POST", body: book });
+  assert.equal(res.status, 303, await res.text());
+  assert.match(res.headers.get("location"), /\/customer\/book\?done=1&ref=KDAIR-\d{6}/);
+  const portalBooking = sqlRows("SELECT id, booking_ref, source, customer_id, phone FROM bookings WHERE source='portal'")[0];
+  assert.equal(portalBooking.customer_id, saved2.customer_id);
+  assert.equal(portalBooking.phone, "09171234567");
+  html = await (await get("/admin/bookings")).text();
+  assert.ok(html.includes(portalBooking.booking_ref) && html.includes("🔐 Portal"));
+  html = await (await get(`/admin/bookings?id=${portalBooking.id}`)).text();
+  assert.ok(html.includes("Booked in the customer portal"));
+  html = await (await browser("/customer/shipments")).text();
+  assert.ok(html.includes(portalBooking.booking_ref), "pending booking shows in the portal");
+  sqlRows(`UPDATE bookings SET status='Declined' WHERE id='${portalBooking.id}'`);
+  step(`Portal booking ${portalBooking.booking_ref} → admin Bookings with 🔐 Portal tag, already linked to ${approved.customer_code}`);
+
+  // 13. Portal proof of payment for an admin-made shipment (no chat booking) → admin records it.
+  const sid3 = randomUUID(), inv3 = randomUUID();
+  sqlRows(`INSERT INTO shipments (id, tracking_number, customer_id, service_type, china_warehouse, status, cbm, weight_kg, shipping_charge, delivery_charge, payment_status, created_at, updated_at)
+    VALUES ('${sid3}', 'KDSEA-111222', '${saved2.customer_id}', 'Sea Freight', 'Guangzhou', 'Malabon Warehouse', 0.3, 40, 150000, 0, 'Unpaid', '2026-11-05', '2026-11-05')`);
+  sqlRows(`INSERT INTO invoices (id, invoice_number, customer_id, shipment_id, status, subtotal, delivery_charge, total, issued_at, created_at, updated_at)
+    VALUES ('${inv3}', 'INV-PORTAL-1', '${saved2.customer_id}', '${sid3}', 'Unpaid', 150000, 0, 150000, '2026-11-05', '2026-11-05', '2026-11-05')`);
+  html = await (await browser("/customer/payments")).text();
+  assert.ok(html.includes("INV-PORTAL-1") && html.includes("UnionBank"));
+  const sendProof = new FormData(); sendProof.set("invoice_id", inv3); sendProof.append("file", new Blob([png], { type: "image/png" }), "gcash.png");
+  res = await browser("/customer/actions/proof", { method: "POST", body: sendProof });
+  assert.equal(res.status, 303, await res.text());
+  assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 2, proofs: 1, concerns: 0 }); // 2 = step 10 bookings still New
+  html = await (await get("/admin/invoices")).text();
+  const reviewId = html.match(/review_proof=([0-9a-f-]{36})/)[1];
+  html = await (await get(`/admin/bookings?review_proof=${reviewId}`)).text();
+  assert.ok(html.includes("Sent in the customer portal") && html.includes("KDSEA-111222"));
+  res = await post("/admin/bookings", { csrf: token(html), action: "portal_accept_proof", proof_id: reviewId, amount: "1500", payment_date: "2026-11-05", reference_number: "GC-1" });
+  assert.equal(res.status, 303, await res.text());
+  assert.equal(sqlRows(`SELECT status FROM invoices WHERE id='${inv3}'`)[0].status, "Paid");
+  assert.equal(sqlRows(`SELECT status FROM customer_payment_proofs WHERE id='${reviewId}'`)[0].status, "Accepted");
+  html = await (await browser("/customer/payments")).text();
+  assert.ok(!html.includes('<span class="pbadge"'), "no unpaid badge after payment");
+  step("Portal proof for an admin-made shipment → Invoices & Payments → admin records ₱1,500: invoice Paid");
+
+  // 14. Support concern → admin Customer concerns tab → done note shows in the portal.
+  res = await browser("/customer/actions/support", { method: "POST", body: new URLSearchParams({ topic: "Shipment / tracking", shipment_id: sid3, message: "When can I pick up my cargo?" }) });
+  assert.equal(res.status, 303, await res.text());
+  assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 2, proofs: 0, concerns: 1 });
+  html = await (await get("/admin/bookings?status=Concerns")).text();
+  assert.ok(html.includes("When can I pick up my cargo?"));
+  const concernId = html.match(/name="concern_id" value="([^"]+)"/)[1];
+  res = await post("/admin/bookings", { csrf: token(html), action: "concern_done", concern_id: concernId, admin_note: "Ready for pickup tomorrow." });
+  assert.equal(res.status, 303);
+  html = await (await browser("/customer/support")).text();
+  assert.ok(html.includes("Ready for pickup tomorrow."));
+  step("Support concern → admin Customer concerns (count 1) → marked done, note shows in the portal");
+
+  // 15. Own code can't be the referral code; cross-site posts are refused.
+  html = await (await get(`/admin/customers?id=${saved2.customer_id}&edit=1`)).text();
+  const cust = sqlRows(`SELECT * FROM customers WHERE id='${saved2.customer_id}'`)[0];
+  const fields = Object.fromEntries([...html.matchAll(/<input[^>]*name="([a-z_]+)"[^>]*value="([^"]*)"/g)].map((m) => [m[1], m[2].replace(/&amp;/g, "&")]));
+  res = await post("/admin/customers", { csrf: token(html), id: cust.id, revision: fields.revision, full_name: cust.full_name, mobile: cust.mobile, email: cust.email ?? "", client_source: "ref_ae", referral_code: cust.customer_code });
+  assert.ok(/own code as the referral code/.test(await res.text()), "own referral code refused");
+  res = await retry(() => fetch(origin + "/customer/actions/support", { method: "POST", redirect: "manual", headers: { Origin: "https://evil.example", cookie }, body: new URLSearchParams({ topic: "Other", message: "spam spam" }) }));
+  assert.notEqual(res.status, 303, "other-site post refused");
+  assert.equal(sqlRows("SELECT COUNT(*) AS n FROM customer_concerns")[0].n, 1);
+  keepCookie();
+  step("Admin refuses a customer's own code as referral code; other-site portal posts refused");
+
   console.log(`\nBooking flow end-to-end passed: ${steps.length} steps. All operations were local.`);
   // KEEP_SERVER=1 leaves the local server running (for screenshots).
-  if (process.env.KEEP_SERVER) { writeFileSync(resolve(dir, "admin-password"), password, { mode: 0o600 }); console.log(`READY ${origin} ${dir}`); await new Promise(() => {}); }
+  if (process.env.KEEP_SERVER) { writeFileSync(resolve(dir, "admin-password"), password, { mode: 0o600 }); writeFileSync(resolve(dir, "customer-cookie"), customerCookie, { mode: 0o600 }); console.log(`READY ${origin} ${dir}`); await new Promise(() => {}); }
 } catch (error) {
   console.error(error);
   console.error(logs.slice(-3000));

@@ -15,6 +15,7 @@ import "@fontsource/plus-jakarta-sans/latin-800.css";
 import "./v5.css";
 import "./v5-home.css";
 import "./kardo.css";
+import "./portal.css";
 import { AnalyticsPageViews } from "@/components/analytics-pageviews";
 import { pageMetadata, siteUrl } from "@/lib/seo";
 

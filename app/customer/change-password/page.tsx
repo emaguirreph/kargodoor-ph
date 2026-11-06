@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
@@ -17,7 +18,7 @@ export default async function ChangePassword({ searchParams }: { searchParams: P
   return (
     <SiteShell>
       <AuthCard icon="key">
-        {!temporary && <a className="back" href="/customer">← Back to my shipments</a>}
+        {!temporary && <Link className="back" href="/customer">← Back to my portal</Link>}
         <h1>MY KargoDoorPH</h1>
         <h2>{temporary ? "Create Your New Password" : "Change Password"}</h2>
         <p>{temporary ? "Set a password that only you know." : "Enter your current password, then choose a new one."}</p>

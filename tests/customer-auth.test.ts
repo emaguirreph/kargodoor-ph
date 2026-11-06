@@ -290,8 +290,12 @@ test(
       "utf8",
     );
 
+    // The portal pages share one session check (portal-page.tsx) and one data loader (portal.ts).
     const dashboard = readFileSync(
-      "app/customer/page.tsx",
+      "lib/customer/portal-page.tsx",
+      "utf8",
+    ) + readFileSync(
+      "lib/customer/portal.ts",
       "utf8",
     );
 
@@ -326,7 +330,7 @@ test(
     );
     assert.match(
       dashboard,
-      /AND i\.customer_id = s\.customer_id/,
+      /AND i2\.customer_id = s\.customer_id/,
     );
 
     assert.match(
@@ -341,7 +345,7 @@ test(
 
     assert.ok(
       header.indexOf(
-        'className="btn btn-outline" href="/customer/login">LOGIN</Link>',
+        'className="btn btn-outline" href="/customer/login">SIGN IN</Link>',
       ) <
         header.lastIndexOf(
           'GET A QUOTE',
@@ -350,7 +354,7 @@ test(
 
     assert.match(
       header,
-      /<Link className="btn btn-outline" href="\/customer\/login" onClick=\{close\}>LOGIN<\/Link>/,
+      /<Link className="btn btn-outline" href="\/customer\/login" onClick=\{close\}>SIGN IN<\/Link>/,
     );
   },
 );
