@@ -1,4 +1,7 @@
 User-agent: *
 Allow: /
+Allow: /api/insights/images/
+Disallow: /admin
+Disallow: /api/
 
 Sitemap: https://kargodoorph.com/sitemap.xml
