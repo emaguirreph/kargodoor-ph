@@ -839,3 +839,17 @@ html.kc-open:has(.v5){overflow:hidden}
 .v5 .kc-fmt .kc-small{margin:0;flex-basis:100%}
 .v5 .kc-fab.kc-wait{animation:kc-wait .8s ease-in-out infinite}
 @keyframes kc-wait{0%,100%{transform:scale(1)}50%{transform:scale(.9)}}
+
+/* ---- compact blog list (small icons, 2 columns) ---- */
+.v5 .igrid.ilist{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.v5 .ilist .icard{flex-direction:row;align-items:center;border-radius:20px}
+.v5 .ilist .icard:hover{transform:translateY(-3px)}
+.v5 .ilist .iart{flex:0 0 76px;width:76px;height:76px;min-height:0;margin:16px 0 16px 16px;border-radius:16px;align-self:center}
+.v5 .ilist .iart .ring,.v5 .ilist .iart .fb{display:none}
+.v5 .ilist .iart svg{width:36px;height:36px}
+.v5 .ilist .icopy{padding:14px 18px;gap:4px}
+.v5 .ilist .ilabel{display:none}
+.v5 .ilist .icopy h2{font-size:1.05rem;line-height:1.3}
+.v5 .ilist .icopy p{font-size:.9rem;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.v5 .ilist .link-arr{font-size:.78rem;margin-top:4px}
+@media(max-width:760px){.v5 .igrid.ilist{grid-template-columns:1fr;gap:12px}.v5 .ilist .iart{flex-basis:60px;width:60px;height:60px;margin:12px 0 12px 12px}.v5 .ilist .iart svg{width:28px;height:28px}.v5 .ilist .icopy{padding:12px 14px}}

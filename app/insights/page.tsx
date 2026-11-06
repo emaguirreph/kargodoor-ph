@@ -36,9 +36,9 @@ export default async function InsightsPage() {
 
       <section className="band" style={{ paddingTop: 30 }} aria-label="KargoDoor PH guides">
         <div className="wrap">
-          <div className="igrid rv-g">
-            {cards.map((card, i) => (
-              <Link className={`icard${i === 0 ? " feat" : ""}`} href={`/insights/${card.slug}`} key={card.slug}>
+          <div className="igrid ilist rv-g">
+            {cards.map((card) => (
+              <Link className="icard" href={`/insights/${card.slug}`} key={card.slug}>
                 <InsightArt icon={card.icon} cover={card.cover} />
                 <div className="icopy">
                   <span className="ilabel">SHIPPING GUIDE</span>
