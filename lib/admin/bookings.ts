@@ -39,16 +39,23 @@ const csrfField = (env: AdminEnv, user: AdminUser) => `<input type="hidden" name
 
 /** Counts for the red numbers in the menu: bookings to review and customer proofs of payment to check. */
 export async function bookingCounts(db: D1Database) {
-  const [bookings, proofs] = await Promise.all([
+  const [bookings, proofs, concerns] = await Promise.all([
     db.prepare("SELECT COUNT(*) AS n FROM bookings WHERE status = 'New' AND blocked = 0").first<{ n: number }>(),
     db.prepare("SELECT COUNT(*) AS n FROM customer_payment_proofs WHERE status = 'Pending'").first<{ n: number }>(),
+    // Portal concerns (Support page); 0 if that table is not there yet.
+    db.prepare("SELECT COUNT(*) AS n FROM customer_concerns WHERE status = 'Open'").first<{ n: number }>().catch(() => null),
   ]);
-  return { bookings: Number(bookings?.n ?? 0), proofs: Number(proofs?.n ?? 0) };
+  return { bookings: Number(bookings?.n ?? 0), proofs: Number(proofs?.n ?? 0), concerns: Number(concerns?.n ?? 0) };
 }
 
 /** Customers whose mobile (any format) or email matches the booking. */
 async function matchingCustomers(db: D1Database, booking: Row) {
   const rows = (await db.prepare("SELECT id, customer_code, full_name, mobile, email FROM customers WHERE archived_at IS NULL").all<Row>()).results;
+  // A booking from the logged-in portal already knows its customer: that one comes first.
+  if (booking.customer_id) {
+    const own = rows.find((row) => row.id === booking.customer_id);
+    if (own) return [own];
+  }
   const email = String(booking.email ?? "").trim().toLowerCase();
   return rows.filter((row) => normalizePhMobile(row.mobile) === booking.phone || (email && String(row.email ?? "").trim().toLowerCase() === email));
 }
@@ -173,10 +180,12 @@ async function approveBooking(db: D1Database, user: AdminUser, booking: Row, for
   if (!result[statements.length - 2]?.meta.changes) throw new AdminError("This booking was already reviewed.", 409);
 }
 
-async function acceptProof(db: D1Database, user: AdminUser, booking: Row, form: FormData) {
+async function acceptProof(db: D1Database, user: AdminUser, booking: Row | null, form: FormData) {
   const proofId = String(form.get("proof_id") ?? "");
   if (!uuid.test(proofId)) throw new AdminError("Invalid proof.");
-  const proof = await db.prepare("SELECT * FROM customer_payment_proofs WHERE id = ? AND booking_id = ? AND status = 'Pending'").bind(proofId, booking.id).first<Row>();
+  const proof = booking
+    ? await db.prepare("SELECT * FROM customer_payment_proofs WHERE id = ? AND booking_id = ? AND status = 'Pending'").bind(proofId, booking.id).first<Row>()
+    : await db.prepare("SELECT * FROM customer_payment_proofs WHERE id = ? AND status = 'Pending'").bind(proofId).first<Row>();
   if (!proof) throw new AdminError("This proof was already checked.", 409);
   const invoiceId = await recordShipmentPayment(db, new URLSearchParams({
     id: String(proof.shipment_id),
@@ -184,7 +193,7 @@ async function acceptProof(db: D1Database, user: AdminUser, booking: Row, form: 
     payment_method: "Bank Transfer",
     payment_date: String(form.get("payment_date") ?? ""),
     reference_number: String(form.get("reference_number") ?? ""),
-    notes: `Proof sent in chat (${String(booking.booking_ref)})`,
+    notes: proof.source === "portal" ? "Proof sent in the customer portal" : `Proof sent in chat (${String(booking?.booking_ref ?? "")})`,
   }), user);
   const payment = await db.prepare("SELECT id FROM payments WHERE invoice_id = ? ORDER BY created_at DESC LIMIT 1").bind(invoiceId).first<{ id: string }>();
   const now = new Date().toISOString();
@@ -199,6 +208,7 @@ async function acceptProof(db: D1Database, user: AdminUser, booking: Row, form: 
 
 function bookingFlags(booking: Row, matches: Row[], recent: number) {
   const flags: string[] = [];
+  if (booking.source === "portal") flags.push(`<span class="booking-flag ok">🔐 Booked in the customer portal (logged in)</span>`);
   flags.push(booking.messenger_confirmed_at
     ? `<span class="booking-flag ok">✅ Confirmed on Messenger</span>`
     : `<span class="booking-flag warn">⏳ Not confirmed on Messenger yet</span>`);
@@ -321,8 +331,9 @@ async function detailPage(db: D1Database, env: AdminEnv, user: AdminUser, id: st
   return page(String(booking.booking_ref), html, user.name, 200, {}, canWrite);
 }
 
-async function listPage(db: D1Database, user: AdminUser, url: URL) {
+async function listPage(db: D1Database, env: AdminEnv, user: AdminUser, url: URL) {
   const tab = url.searchParams.get("status") ?? "New";
+  if (tab === "Concerns") return concernsPage(db, env, user, url);
   if (![...statuses, "All"].includes(tab)) throw new AdminError("Invalid filter.");
   const q = (url.searchParams.get("q") ?? "").trim().slice(0, 80);
   const rows = (await db.prepare(`SELECT b.*, (SELECT COUNT(*) FROM customer_payment_proofs p WHERE p.booking_id = b.id AND p.status = 'Pending') AS pending_proofs
@@ -331,17 +342,86 @@ async function listPage(db: D1Database, user: AdminUser, url: URL) {
   const counts = await bookingCounts(db);
   const tabLink = (name: string, label: string) => `<a class="${tab === name ? "on" : ""}" href="${bookingsPath}?status=${encodeURIComponent(name)}">${label}</a>`;
   const body = `${css}<section>
-    <p class="muted">Shipments booked in the chat assistant on the website. Check the photos and details, confirm the customer on Messenger, then approve to create the customer and shipment.</p>
-    <div class="booking-tabs">${tabLink("New", `New${counts.bookings ? ` <span class="nav-count">${counts.bookings}</span>` : ""}`)}${tabLink("Approved", "Approved")}${tabLink("Declined", "Declined")}${tabLink("All", "All")}</div>
+    <p class="muted">Shipments booked in the website chat or by logged-in customers in the portal (🔐). Check the photos and details, confirm the customer on Messenger, then approve to create the shipment.</p>
+    <div class="booking-tabs">${tabLink("New", `New${counts.bookings ? ` <span class="nav-count">${counts.bookings}</span>` : ""}`)}${tabLink("Approved", "Approved")}${tabLink("Declined", "Declined")}${tabLink("All", "All")}${concernsTabLink(tab, counts.concerns)}</div>
     <form method="get" class="search"><input type="hidden" name="status" value="${esc(tab)}"><label>Search name, phone or booking no.<input name="q" value="${esc(q)}"></label><button>Search</button></form>
     ${rows.length ? `<div class="table"><table><thead><tr><th>Booking</th><th>Date</th><th>Customer</th><th>Cargo</th><th>Mode</th><th>Estimate</th><th>Status</th></tr></thead><tbody>
-      ${rows.map((row) => `<tr class="inv-row" data-href="${bookingsPath}?id=${esc(row.id)}" tabindex="0"><td><a href="${bookingsPath}?id=${esc(row.id)}"><strong>${esc(row.booking_ref)}</strong></a></td><td>${esc(date(row.created_at))}</td>
+      ${rows.map((row) => `<tr class="inv-row" data-href="${bookingsPath}?id=${esc(row.id)}" tabindex="0"><td><a href="${bookingsPath}?id=${esc(row.id)}"><strong>${esc(row.booking_ref)}</strong></a>${row.source === "portal" ? '<br><small class="muted">🔐 Portal</small>' : ""}</td><td>${esc(date(row.created_at))}</td>
         <td>${esc(row.full_name)}<br><small class="muted">${esc(row.phone)}</small></td><td>${esc(row.item_description)}<br><small class="muted">${esc(row.quantity_text)} · ${esc(kgCbm(row))}</small></td>
         <td>${esc(String(row.service_type).replace(" Freight", ""))}<br><small class="muted">${esc(row.china_warehouse)}</small></td><td>${pesos(row.approved_amount ?? row.estimate_amount)}</td>
         <td>${statusTag(row.status)}${row.messenger_confirmed_at ? ' <span title="Confirmed on Messenger">✅</span>' : ""}${Number(row.pending_proofs) ? ' <span class="nav-count" title="Proof of payment to check">₱</span>' : ""}</td></tr>`).join("")}
     </tbody></table></div><script src="/admin-row-link.js" defer></script>` : '<p class="muted">No bookings here yet.</p>'}
   </section>`;
   return page("Bookings", body, user.name, 200, {}, canMutateAdmin(user));
+}
+
+const concernsTabLink = (tab: string, open: number) =>
+  `<a class="${tab === "Concerns" ? "on" : ""}" href="${bookingsPath}?status=Concerns">Customer concerns${open ? ` <span class="nav-count">${open}</span>` : ""}</a>`;
+
+/** Concerns sent from the portal's Support page. */
+async function concernsPage(db: D1Database, env: AdminEnv, user: AdminUser, url: URL) {
+  const counts = await bookingCounts(db);
+  const show = url.searchParams.get("show") === "done" ? "Done" : "Open";
+  const rows = (await db.prepare(`SELECT k.*, c.customer_code, c.full_name, c.mobile, s.tracking_number FROM customer_concerns k
+      JOIN customers c ON c.id = k.customer_id LEFT JOIN shipments s ON s.id = k.shipment_id
+      WHERE k.status = ? ORDER BY k.created_at ${show === "Open" ? "ASC" : "DESC"} LIMIT 200`).bind(show).all<Row>()).results;
+  const canWrite = canMutateAdmin(user);
+  const tabLink = (name: string, label: string) => `<a href="${bookingsPath}?status=${encodeURIComponent(name)}">${label}</a>`;
+  const body = `${css}<section>
+    <p class="muted">Concerns customers sent from the Support page of their portal. Reply on Messenger or call them, then mark it done (your note shows to the customer).</p>
+    <div class="booking-tabs">${tabLink("New", `New${counts.bookings ? ` <span class="nav-count">${counts.bookings}</span>` : ""}`)}${tabLink("Approved", "Approved")}${tabLink("Declined", "Declined")}${tabLink("All", "All")}${concernsTabLink("Concerns", counts.concerns)}</div>
+    ${url.searchParams.get("done") ? '<p class="notice">Saved.</p>' : ""}
+    <p class="actions"><a class="button${show === "Open" ? "" : " secondary"}" href="${bookingsPath}?status=Concerns">Open</a> <a class="button${show === "Done" ? "" : " secondary"}" href="${bookingsPath}?status=Concerns&show=done">Done</a></p>
+    ${rows.length ? rows.map((row) => `<div class="booking-proof">
+      <div><p><strong>${esc(row.topic)}</strong>${row.tracking_number ? ` · <a href="/admin/shipments?id=${esc(row.shipment_id)}">${esc(row.tracking_number)}</a>` : ""}</p>
+        <p><a href="/admin/customers?id=${esc(row.customer_id)}">${esc(row.customer_code)} · ${esc(row.full_name)}</a><br><small class="muted">${esc(row.mobile)} · ${esc(String(row.created_at).replace("T", " ").slice(0, 16))}</small></p></div>
+      <div><p style="white-space:pre-wrap">${esc(row.message)}</p>
+        ${row.status === "Open" && canWrite ? `<form method="post" class="grid">${csrfField(env, user)}<input type="hidden" name="action" value="concern_done"><input type="hidden" name="concern_id" value="${esc(row.id)}">
+          <label>Note for the customer (optional)<input name="admin_note" maxlength="500" placeholder="e.g. Called you, your cargo is at Manila Port."></label>
+          <p class="actions" style="grid-column:1/-1"><button>✅ Mark done</button></p></form>`
+        : `${row.admin_note ? `<p class="muted">Note: ${esc(row.admin_note)}</p>` : ""}${canWrite ? `<form method="post">${csrfField(env, user)}<input type="hidden" name="action" value="concern_reopen"><input type="hidden" name="concern_id" value="${esc(row.id)}"><button class="secondary">Reopen</button></form>` : ""}`}</div></div>`).join("")
+      : `<p class="muted">${show === "Open" ? "No open concerns. 🎉" : "No finished concerns yet."}</p>`}
+  </section>`;
+  return page("Customer concerns", body, user.name, 200, {}, canWrite);
+}
+
+/** A proof of payment sent from the customer portal (not tied to a chat booking). */
+async function proofReviewPage(db: D1Database, env: AdminEnv, user: AdminUser, proofId: string, url: URL) {
+  const proof = await db.prepare(`SELECT p.id, p.status, p.file_name, p.uploaded_at, p.payment_id, p.booking_id, p.shipment_id, p.invoice_id,
+      c.id AS customer_id, c.customer_code, c.full_name, s.tracking_number, i.invoice_number, i.total + i.other_charge AS total,
+      COALESCE((SELECT SUM(amount) FROM payments WHERE invoice_id = i.id), 0) AS paid
+    FROM customer_payment_proofs p LEFT JOIN customers c ON c.id = p.customer_id LEFT JOIN shipments s ON s.id = p.shipment_id
+    LEFT JOIN invoices i ON i.id = p.invoice_id WHERE p.id = ?`).bind(proofId).first<Row>();
+  if (!proof) throw new AdminError("Proof not found.", 404);
+  const canWrite = canMutateAdmin(user);
+  const done = url.searchParams.get("done");
+  const balance = Math.max(0, Number(proof.total ?? 0) - Number(proof.paid ?? 0));
+  const today = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+  const isImage = !/\.pdf$/i.test(String(proof.file_name));
+  const body = `${css}<section><div class="actions"><a class="button" href="/admin/invoices">← Back</a></div>
+    ${done === "paid" ? '<p class="notice">Payment recorded. The bill is updated and the customer sees it as paid in their portal.</p>' : done === "rejected" ? '<p class="notice">Proof marked as not accepted. The customer sees that they need to send it again.</p>' : ""}
+    <h2>Proof of payment · ${esc(proof.full_name)} ${proofTag(proof.status)}</h2>
+    <p class="booking-flags"><span class="booking-flag ok">🔐 Sent in the customer portal</span></p>
+    <dl class="booking-details">
+      <div><dt>Customer</dt><dd><a href="/admin/customers?id=${esc(proof.customer_id)}">${esc(proof.customer_code)} · ${esc(proof.full_name)}</a></dd></div>
+      <div><dt>Shipment</dt><dd><a href="/admin/shipments?id=${esc(proof.shipment_id)}">${esc(proof.tracking_number)}</a></dd></div>
+      <div><dt>Bill</dt><dd>${esc(proof.invoice_number ?? "—")}</dd></div>
+      <div><dt>Balance</dt><dd>${pesos(balance)}</dd></div>
+      <div><dt>Sent</dt><dd>${esc(String(proof.uploaded_at).replace("T", " ").slice(0, 16))}</dd></div>
+      ${proof.booking_id ? `<div><dt>Chat booking</dt><dd><a href="${bookingsPath}?id=${esc(proof.booking_id)}">Open booking</a></dd></div>` : ""}
+    </dl>
+    <div class="booking-proof">
+      <div>${isImage ? `<a href="${bookingsPath}?proof=${esc(proof.id)}" target="_blank" rel="noopener"><img src="${bookingsPath}?proof=${esc(proof.id)}" alt="Proof of payment" style="max-width:100%;border-radius:10px;border:1px solid #c6dce9"></a>` : ""}
+        <p><a href="${bookingsPath}?proof=${esc(proof.id)}" target="_blank" rel="noopener">📄 ${esc(proof.file_name)}</a></p></div>
+      <div>${proof.status === "Pending" && canWrite ? `<p>Check UnionBank or GCash first. Then record the payment; the proof is attached to it.</p>
+        <form method="post" class="grid">${csrfField(env, user)}<input type="hidden" name="action" value="portal_accept_proof"><input type="hidden" name="proof_id" value="${esc(proof.id)}">
+          <label>Amount received (₱)<input name="amount" required inputmode="decimal" placeholder="${esc((balance / 100).toFixed(2))}"></label>
+          <label>Payment date<input name="payment_date" type="date" required value="${today}"></label>
+          <label>Bank reference<input name="reference_number" maxlength="80"></label>
+          <p class="actions" style="grid-column:1/-1"><button>✅ Record payment</button></p></form>
+        <form method="post">${csrfField(env, user)}<input type="hidden" name="action" value="portal_reject_proof"><input type="hidden" name="proof_id" value="${esc(proof.id)}"><button class="secondary">Not received — reject</button></form>` : proof.payment_id ? '<p class="muted">Recorded as a payment.</p>' : ""}</div>
+    </div></section>`;
+  return page("Proof of payment", body, user.name, 200, {}, canWrite);
 }
 
 export async function bookingsPage(request: Request, envOverride?: AdminEnv): Promise<Response> {
@@ -367,6 +447,25 @@ export async function bookingsPage(request: Request, envOverride?: AdminEnv): Pr
       if (!adminOriginAllowed(env, url.origin)) throw new AdminError("Admin request origin is invalid.", 403);
       const form = await request.formData();
       checkCsrf(env, user.id, bookingsPath, String(form.get("csrf") ?? ""));
+      const directAction = String(form.get("action") ?? "");
+      // Portal proofs and concerns are not tied to a chat booking.
+      if (directAction === "portal_accept_proof" || directAction === "portal_reject_proof") {
+        const proofId = String(form.get("proof_id") ?? "");
+        if (!uuid.test(proofId)) throw new AdminError("Invalid proof.");
+        if (directAction === "portal_accept_proof") await acceptProof(db, user, null, form);
+        else await db.prepare("UPDATE customer_payment_proofs SET status = 'Rejected', reviewed_by_admin_user_id = ?, reviewed_at = ? WHERE id = ? AND status = 'Pending'").bind(user.id, new Date().toISOString(), proofId).run();
+        return page("Saved", "", user.name, 303, { Location: `${bookingsPath}?review_proof=${encodeURIComponent(proofId)}&done=${directAction === "portal_accept_proof" ? "paid" : "rejected"}` }, true);
+      }
+      if (directAction === "concern_done" || directAction === "concern_reopen") {
+        const concernId = String(form.get("concern_id") ?? "");
+        if (!uuid.test(concernId)) throw new AdminError("Invalid concern.");
+        const now = new Date().toISOString();
+        if (directAction === "concern_done")
+          await db.prepare("UPDATE customer_concerns SET status = 'Done', admin_note = ?, resolved_by_admin_user_id = ?, resolved_at = ? WHERE id = ?")
+            .bind(String(form.get("admin_note") ?? "").trim().slice(0, 500) || null, user.id, now, concernId).run();
+        else await db.prepare("UPDATE customer_concerns SET status = 'Open', resolved_by_admin_user_id = NULL, resolved_at = NULL WHERE id = ?").bind(concernId).run();
+        return page("Saved", "", user.name, 303, { Location: `${bookingsPath}?status=Concerns&done=1` }, true);
+      }
       const id = String(form.get("id") ?? "");
       if (!uuid.test(id)) throw new AdminError("Invalid booking ID.");
       const booking = await db.prepare("SELECT * FROM bookings WHERE id = ?").bind(id).first<Row>();
@@ -403,7 +502,12 @@ export async function bookingsPage(request: Request, envOverride?: AdminEnv): Pr
       if (!uuid.test(id)) throw new AdminError("Invalid booking ID.");
       return await detailPage(db, env, user, id, url);
     }
-    return await listPage(db, user, url);
+    const reviewProof = url.searchParams.get("review_proof") ?? "";
+    if (reviewProof) {
+      if (!uuid.test(reviewProof)) throw new AdminError("Invalid proof.");
+      return await proofReviewPage(db, env, user, reviewProof, url);
+    }
+    return await listPage(db, env, user, url);
   } catch (error) {
     const err = error instanceof AdminError ? error : new AdminError("Bookings are unavailable.", 500);
     if (!(error instanceof AdminError)) console.error("KargoDoor bookings failed", error instanceof Error ? error.message : "Unknown error");

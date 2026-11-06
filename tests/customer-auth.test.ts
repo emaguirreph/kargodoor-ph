@@ -290,8 +290,12 @@ test(
       "utf8",
     );
 
+    // The portal pages share one session check (portal-page.tsx) and one data loader (portal.ts).
     const dashboard = readFileSync(
-      "app/customer/page.tsx",
+      "lib/customer/portal-page.tsx",
+      "utf8",
+    ) + readFileSync(
+      "lib/customer/portal.ts",
       "utf8",
     );
 
@@ -326,7 +330,7 @@ test(
     );
     assert.match(
       dashboard,
-      /AND i\.customer_id = s\.customer_id/,
+      /AND i2\.customer_id = s\.customer_id/,
     );
 
     assert.match(
