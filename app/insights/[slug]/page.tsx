@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const insight = getInsight(slug);
-  if (!insight) return pageMetadata("Insights | KargoDoor PH", "Shipping and importing guides from KargoDoor PH.", `/insights/${slug}`);
+  if (!insight) return pageMetadata("Blog | KargoDoor PH", "Shipping and importing guides from KargoDoor PH.", `/insights/${slug}`);
   return pageMetadata(insight.seoTitle, insight.description, `/insights/${insight.slug}`);
 }
 
@@ -106,8 +106,8 @@ export default async function InsightArticlePage({ params }: Props) {
 function ArticleHeader({ title, date, dek }: { title: string; date: string; dek: string }) {
   return (
     <PageHero className="ahead">
-      <Link className="back" href="/insights">← ALL INSIGHTS</Link>
-      <span className="pill"><i />KARGODOOR PH INSIGHTS</span>
+      <Link className="back" href="/insights">← ALL BLOG POSTS</Link>
+      <span className="pill"><i />KARGODOOR PH BLOG</span>
       <h1>{title}</h1>
       <p className="meta"><i aria-hidden="true">KD</i>By KargoDoor PH · {date}</p>
       <p className="lead">{dek}</p>
