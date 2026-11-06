@@ -20,8 +20,23 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const insight = getInsight(slug);
-  if (!insight) return pageMetadata("Insights | KargoDoor PH", "Shipping and importing guides from KargoDoor PH.", `/insights/${slug}`);
-  return pageMetadata(insight.seoTitle, insight.description, `/insights/${insight.slug}`);
+  if (insight) return pageMetadata(insight.seoTitle, insight.description, `/insights/${insight.slug}`);
+  try {
+    const { env: cf } = await getCloudflareContext();
+    const managed = await publishedInsight((cf as unknown as AdminEnv).ADMIN_DB, slug);
+    if (managed) {
+      const meta = pageMetadata(`${managed.title} | KargoDoor PH`, excerpt(managed.body, 155), `/insights/${managed.slug}`);
+      if (managed.coverImageKey) {
+        const image = `/api/insights/images/${managed.coverImageKey}`;
+        meta.openGraph = { ...meta.openGraph, type: "article", publishedTime: managed.publishedAt, images: [{ url: image, alt: managed.title }] };
+        meta.twitter = { ...meta.twitter, images: [image] };
+      }
+      return meta;
+    }
+  } catch {
+    // Fall through to the generic title below.
+  }
+  return pageMetadata("Insights | KargoDoor PH", "Shipping and importing guides from KargoDoor PH.", `/insights/${slug}`);
 }
 
 export default async function InsightArticlePage({ params }: Props) {
@@ -70,8 +85,10 @@ export default async function InsightArticlePage({ params }: Props) {
     datePublished: insight.publishedAt,
     dateModified: insight.publishedAt,
     mainEntityOfPage: `${siteUrl}/insights/${insight.slug}`,
-    author: { "@type": "Organization", name: "KargoDoor PH" },
-    publisher: { "@type": "Organization", name: "KargoDoor PH" },
+    inLanguage: "en-PH",
+    image: `${siteUrl}/assets/kargodoor-social-share.png`,
+    author: { "@type": "Organization", name: "KargoDoor PH", url: siteUrl },
+    publisher: { "@id": `${siteUrl}/#organization` },
   };
 
   return (

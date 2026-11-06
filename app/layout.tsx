@@ -17,14 +17,15 @@ import "./v5-home.css";
 import "./kardo.css";
 import "./portal.css";
 import { AnalyticsPageViews } from "@/components/analytics-pageviews";
-import { pageMetadata, siteUrl } from "@/lib/seo";
+import { siteUrl, socialTitle } from "@/lib/seo";
 
+// No canonical here on purpose: each page sets its own. A canonical of "/" in
+// the root layout made every page without its own metadata (like /track) tell
+// Google it was a copy of the home page.
 export const metadata: Metadata = {
-  ...pageMetadata(
-    "KargoDoor PH | China to Philippines Shipping",
+  title: socialTitle,
+  description:
     "Simple, reliable, and affordable shipping from China to the Philippines. Ship by sea or air with KargoDoor PH's all-in shipping service.",
-    "/",
-  ),
 
   metadataBase: new URL(siteUrl),
 
@@ -64,10 +65,6 @@ export const metadata: Metadata = {
     index: true,
     follow: true,
   },
-
-  other: {
-    "codex-preview": "development",
-  },
 };
 
 const structuredData = {
@@ -75,9 +72,26 @@ const structuredData = {
   "@graph": [
     {
       "@type": "Organization",
+      "@id": `${siteUrl}/#organization`,
       name: "KargoDoor PH",
+      alternateName: ["KargoDoorPH", "KargoDoor"],
       url: siteUrl,
       logo: `${siteUrl}/assets/kargodoor-logo-tagline-approved.png`,
+      description:
+        "Simple, reliable, and affordable shipping from China to the Philippines by sea or air, with all-in rates, customs clearance, and delivery coordination.",
+      email: "support@kargodoorph.com",
+      telephone: "+63 919 932 3077",
+      areaServed: { "@type": "Country", name: "Philippines" },
+      contactPoint: [
+        {
+          "@type": "ContactPoint",
+          contactType: "customer service",
+          telephone: "+63-919-932-3077",
+          email: "support@kargodoorph.com",
+          areaServed: "PH",
+          availableLanguage: ["English", "Filipino"],
+        },
+      ],
       sameAs: [
         "https://www.facebook.com/KargoDoorPH",
         "https://www.instagram.com/kargodoorph/",
@@ -86,8 +100,12 @@ const structuredData = {
     },
     {
       "@type": "WebSite",
+      "@id": `${siteUrl}/#website`,
       name: "KargoDoor PH",
+      alternateName: "KargoDoorPH",
       url: siteUrl,
+      inLanguage: "en-PH",
+      publisher: { "@id": `${siteUrl}/#organization` },
     },
   ],
 };

@@ -28,8 +28,9 @@ export function pageMetadata(
       type: "website",
       url: path,
       siteName: "KargoDoor PH",
-      title: socialTitle,
-      description: socialDescription,
+      locale: "en_PH",
+      title,
+      description,
       images: [
         {
           url: socialImage,
@@ -42,9 +43,14 @@ export function pageMetadata(
 
     twitter: {
       card: "summary_large_image",
-      title: socialTitle,
-      description: socialDescription,
+      title,
+      description,
       images: [socialImage],
     },
   };
 }
+
+/** For private pages (customer portal, short links): keep them out of Google. */
+export const noIndex: Metadata = {
+  robots: { index: false, follow: false },
+};
