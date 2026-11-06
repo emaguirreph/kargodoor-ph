@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const insight = getInsight(slug);
-  if (!insight) return pageMetadata("Insights | KargoDoor PH", "Shipping and importing guides from KargoDoor PH.", `/insights/${slug}`);
+  if (!insight) return pageMetadata("Blog | KargoDoor PH", "Shipping and importing guides from KargoDoor PH.", `/insights/${slug}`);
   return pageMetadata(insight.seoTitle, insight.description, `/insights/${insight.slug}`);
 }
 
@@ -32,7 +32,7 @@ export default async function InsightArticlePage({ params }: Props) {
   if (!insight && !managed) notFound();
 
   if (managed) {
-    const publishedDate = new Intl.DateTimeFormat("en-PH", { day: "numeric", month: "long", year: "numeric" }).format(new Date(`${managed.publishedAt}T00:00:00+08:00`));
+    const publishedDate = new Intl.DateTimeFormat("en-PH", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Manila" }).format(new Date(`${managed.publishedAt}T00:00:00+08:00`));
     return (
       <SiteShell>
         <ArticleProgress headings={[]} />
@@ -60,6 +60,7 @@ export default async function InsightArticlePage({ params }: Props) {
     day: "numeric",
     month: "long",
     year: "numeric",
+    timeZone: "Asia/Manila",
   }).format(new Date(`${insight.publishedAt}T00:00:00+08:00`));
 
   const articleSchema = {
@@ -91,6 +92,7 @@ export default async function InsightArticlePage({ params }: Props) {
                   )}
                 </section>
               ))}
+              <RelatedInsights slugs={insight.related} />
               <QuotationCta />
             </div>
           </div>
@@ -104,8 +106,8 @@ export default async function InsightArticlePage({ params }: Props) {
 function ArticleHeader({ title, date, dek }: { title: string; date: string; dek: string }) {
   return (
     <PageHero className="ahead">
-      <Link className="back" href="/insights">← ALL INSIGHTS</Link>
-      <span className="pill"><i />KARGODOOR PH INSIGHTS</span>
+      <Link className="back" href="/insights">← ALL BLOG POSTS</Link>
+      <span className="pill"><i />KARGODOOR PH BLOG</span>
       <h1>{title}</h1>
       <p className="meta"><i aria-hidden="true">KD</i>By KargoDoor PH · {date}</p>
       <p className="lead">{dek}</p>
@@ -118,7 +120,25 @@ function QuotationCta() {
     <aside className="cta acta">
       <h2 style={{ fontSize: "clamp(1.4rem,3vw,2rem)" }}>Kailangan ng shipping quotation?</h2>
       <p>I-send ang product details, cartons, dimensions, weight, pickup address sa China, at delivery address sa Pilipinas.</p>
-      <Link className="btn btn-green glow" href="/contact-us">CONTACT KARGODOOR PH <span className="arr">→</span></Link>
+      <div className="acta-buttons" style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+        <Link className="btn btn-green glow" href="/contact-us">CONTACT KARGODOOR PH <span className="arr">→</span></Link>
+        <Link className="btn btn-outline" href="/rates-calculator">TRY THE RATE CALCULATOR</Link>
+      </div>
     </aside>
+  );
+}
+
+function RelatedInsights({ slugs }: { slugs?: string[] }) {
+  const items = (slugs ?? []).map((slug) => getInsight(slug)).filter((item) => item !== undefined);
+  if (!items.length) return null;
+  return (
+    <section className="arelated">
+      <h2>Basahin din</h2>
+      <ul>
+        {items.map((item) => (
+          <li key={item.slug}><Link href={`/insights/${item.slug}`}>{item.title}</Link></li>
+        ))}
+      </ul>
+    </section>
   );
 }

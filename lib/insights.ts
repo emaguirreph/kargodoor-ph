@@ -1,3 +1,5 @@
+import { guideInsights } from "./insights-guides";
+
 export type Insight = {
   slug: string;
   title: string;
@@ -5,6 +7,8 @@ export type Insight = {
   description: string;
   publishedAt: string;
   icon: "package" | "ship" | "clock" | "clipboard";
+  /** Slugs of other insights to link at the end ("Basahin din"). */
+  related?: string[];
   sections: Array<{
     heading: string;
     paragraphs?: string[];
@@ -12,7 +16,7 @@ export type Insight = {
   }>;
 };
 
-export const insights: Insight[] = [
+const originalInsights: Insight[] = [
   {
     slug: "importing-from-china-to-the-philippines",
     title: "Beginner’s Guide sa Importing from China to the Philippines",
@@ -209,6 +213,8 @@ export const insights: Insight[] = [
     ],
   },
 ];
+
+export const insights: Insight[] = [...originalInsights, ...guideInsights];
 
 export function getInsight(slug: string) {
   return insights.find((insight) => insight.slug === slug);

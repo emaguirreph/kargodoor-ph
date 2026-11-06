@@ -102,7 +102,7 @@ export function Footer() {
             {navigation.map((item) => (
               <Link key={item.href} href={item.href}>{item.label}</Link>
             ))}
-            <Link href="/insights">INSIGHTS</Link>
+            <Link href="/insights">BLOG</Link>
             {/* Plain link: /admin sits behind Cloudflare Access, so it needs a full page load, not client-side navigation. */}
             <a href="https://kargodoorph.com/admin">ADMIN</a>
           </nav>

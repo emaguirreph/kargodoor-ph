@@ -1,3 +1,4 @@
+import { insights } from "@/lib/insights";
 import type { MetadataRoute } from "next";
 
 export default function sitemap(): MetadataRoute.Sitemap {
@@ -58,29 +59,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "weekly",
       priority: 0.8,
     },
-    {
-      url: baseUrl + "/insights/importing-from-china-to-the-philippines",
+    ...insights.map((insight) => ({
+      url: `${baseUrl}/insights/${insight.slug}`,
       lastModified: new Date(),
-      changeFrequency: "monthly",
+      changeFrequency: "monthly" as const,
       priority: 0.7,
-    },
-    {
-      url: baseUrl + "/insights/sea-freight-vs-air-freight-philippines",
-      lastModified: new Date(),
-      changeFrequency: "monthly",
-      priority: 0.7,
-    },
-    {
-      url: baseUrl + "/insights/china-to-philippines-shipping-time",
-      lastModified: new Date(),
-      changeFrequency: "monthly",
-      priority: 0.7,
-    },
-    {
-      url: baseUrl + "/insights/packaging-requirements-shipping-quotation",
-      lastModified: new Date(),
-      changeFrequency: "monthly",
-      priority: 0.7,
-    },
+    })),
   ];
 }

@@ -8,7 +8,7 @@ import { excerpt, publishedInsights } from "@/lib/published-insights";
 import { pageMetadata } from "@/lib/seo";
 
 export const metadata = pageMetadata(
-  "Insights | China to Philippines Shipping Guides | KargoDoor PH",
+  "Blog | China to Philippines Shipping Guides | KargoDoor PH",
   "Easy-to-understand guides about importing from China to the Philippines, sea freight, air freight, shipping timelines, packaging, and quotations.",
   "/insights",
 );
@@ -27,7 +27,7 @@ export default async function InsightsPage() {
     <SiteShell>
       <PageHero>
         <span className="pill"><i />KARGODOOR PH</span>
-        <h1 id="insights-title">Insights</h1>
+        <h1 id="insights-title">Blog</h1>
         <p className="lead">
           Easy-to-understand guides tungkol sa importing from China to the
           Philippines, cargo preparation, at shipping options.
@@ -36,12 +36,12 @@ export default async function InsightsPage() {
 
       <section className="band" style={{ paddingTop: 30 }} aria-label="KargoDoor PH guides">
         <div className="wrap">
-          <div className="igrid rv-g">
-            {cards.map((card, i) => (
-              <Link className={`icard${i === 0 ? " feat" : ""}`} href={`/insights/${card.slug}`} key={card.slug}>
+          <div className="igrid ilist rv-g">
+            {cards.map((card) => (
+              <Link className="icard" href={`/insights/${card.slug}`} key={card.slug}>
                 <InsightArt icon={card.icon} cover={card.cover} />
                 <div className="icopy">
-                  <span className="ilabel">INSIGHTS GUIDE</span>
+                  <span className="ilabel">SHIPPING GUIDE</span>
                   <h2>{card.title}</h2>
                   <p>{card.text}</p>
                   <span className="link-arr">READ THE GUIDE <span className="arr">→</span></span>
