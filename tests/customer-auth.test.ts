@@ -345,7 +345,7 @@ test(
 
     assert.ok(
       header.indexOf(
-        'className="btn btn-outline" href="/customer/login">LOGIN</Link>',
+        'className="btn btn-outline" href="/customer/login">SIGN IN</Link>',
       ) <
         header.lastIndexOf(
           'GET A QUOTE',
@@ -354,7 +354,7 @@ test(
 
     assert.match(
       header,
-      /<Link className="btn btn-outline" href="\/customer\/login" onClick=\{close\}>LOGIN<\/Link>/,
+      /<Link className="btn btn-outline" href="\/customer\/login" onClick=\{close\}>SIGN IN<\/Link>/,
     );
   },
 );

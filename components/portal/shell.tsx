@@ -23,8 +23,8 @@ export function PortalShell({ data, links, active, banner, children }: {
   const who = (
     <div className="pwho">
       <div><span className="av">{initials(data.customer.full_name)}</span><span className="em">{data.customer.login_email || data.customer.email || data.customer.mobile}</span></div>
-      {links.preview ? <span className="pbtn pbtn-line">LOG OUT</span> : (
-        <form action="/customer/logout" method="post"><button className="pbtn pbtn-line" type="submit">LOG OUT</button></form>
+      {links.preview ? <span className="pbtn pbtn-line">SIGN OUT</span> : (
+        <form action="/customer/logout" method="post"><button className="pbtn pbtn-line" type="submit">SIGN OUT</button></form>
       )}
     </div>
   );

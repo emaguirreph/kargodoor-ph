@@ -3,6 +3,7 @@ import Link from "next/link";
 import { MessengerLink } from "@/components/messenger-link";
 import { CopyButton } from "./copy-button";
 import { kargodoorBankAccounts } from "@/lib/admin/bank-accounts";
+import { riderPickupMessage } from "@/lib/admin/customer-messages";
 import { customerShippingInstructions, supplierRequirementsText } from "@/lib/admin/shipping-instructions";
 import { malabonWarehouseAddress, warehouseAddresses, type WarehouseName } from "@/lib/warehouse-addresses";
 import {
@@ -431,6 +432,11 @@ export function WarehousesView({ data, links, query }: ViewProps) {
     : name === "Hong Kong" ? `TD+${code}+MOBILE NO` : `SEA ${code} · Item · Supplier no. · PH mobile`;
   const address = warehouseAddresses[selected].replace(/（?\+客户唛头\.?）?/, `（+${code}）`);
   const q = (next: Record<string, string>) => new URLSearchParams({ mode, ...next }).toString();
+  // Malabon: contact persons/phones stay in the admin only.
+  const malabonAddress = malabonWarehouseAddress.replace(/\n*Contact person:[^\n]*\n[^\n]*/, "");
+  // Same rider message as the admin's "Lalamove Rider Pickup" (Em's wording); item = cargo waiting in Malabon, if any.
+  const ready = data.shipments.filter((s) => s.status === "Malabon Warehouse" || s.status === "Ready for Release");
+  const riderText = riderPickupMessage({ cargoCode: code, item: ready.map((s) => s.item).filter(Boolean).join(", ") || undefined });
   return (
     <>
       <PageHead title="Warehouse Addresses" sub={<>Pick sea or air, then copy the address. Your code <b>{code}</b> is already added to the label.</>} />
@@ -457,7 +463,12 @@ export function WarehousesView({ data, links, query }: ViewProps) {
       </div>
       <section className="pcard">
         <h2>Philippine warehouse (pickup)</h2>
-        <pre className="ppre">{malabonWarehouseAddress.replace(/\n*Contact person:[^\n]*\n[^\n]*/, "")}</pre>
+        <pre className="ppre">{malabonAddress}</pre>
+        <div className="pbtns"><CopyButton text={malabonAddress} label="COPY ADDRESS" className="pbtn pbtn-blue" /></div>
+        <h3 className="psub">Pickup instructions for your rider</h3>
+        <p className="pmuted">Booking a Lalamove or other rider? Copy this and send it to them. The warehouse address is included when you copy.</p>
+        <pre className="ppre">{riderText}</pre>
+        <div className="pbtns"><CopyButton text={`${riderText}\n\n📍 ${malabonAddress}`} label="COPY FOR MY RIDER" className="pbtn pbtn-blue" /></div>
         <p className="phint"><b>Payment before pickup:</b> please pay your bill in full and upload your proof first. We release your cargo once your bill shows <b>PAID</b>. <a className="plink" href={links.href("payments")}>Go to Payments →</a></p>
       </section>
     </>
@@ -504,7 +515,7 @@ export function AccountView({ data, links }: ViewProps) {
           <div><dt>Name</dt><dd>{c.full_name}</dd></div>
           <div><dt>Account / Cargo Code</dt><dd>{c.customer_code}</dd></div>
           {c.company_name ? <div><dt>Company</dt><dd>{c.company_name}</dd></div> : null}
-          <div><dt>Login email</dt><dd>{c.login_email || c.email || "—"}</dd></div>
+          <div><dt>Sign-in email</dt><dd>{c.login_email || c.email || "—"}</dd></div>
           <div><dt>Mobile</dt><dd>{c.mobile}</dd></div>
           <div><dt>Delivery address</dt><dd>{c.address || "—"}</dd></div>
           <div><dt>Customer since</dt><dd>{formatMonth(c.created_at)}</dd></div>

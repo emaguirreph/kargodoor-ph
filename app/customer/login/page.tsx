@@ -32,10 +32,10 @@ export default async function CustomerLoginPage({ searchParams }: { searchParams
               <input id="login-identifier" type="text" name="identifier" autoComplete="username" inputMode="email" required maxLength={320} />
             </div>
             <PasswordField label="Password" id="login-password" name="password" autoComplete="current-password" required maxLength={1024} />
-            <button className="pbtn pbtn-blue" type="submit">LOGIN</button>
+            <button className="pbtn pbtn-blue" type="submit">SIGN IN</button>
           </form>
           <MessengerLink className="plink" target="_blank" rel="noopener noreferrer">Forgot password? Message us on Messenger</MessengerLink>
-          <p className="newbox">Wala pang account? <Link href="/chat">Book your first shipment</Link> and we&apos;ll send your login once your booking is approved.</p>
+          <p className="newbox">Wala pang account? <Link href="/chat">Book your first shipment</Link> and we&apos;ll send your sign-in details once your booking is approved.</p>
         </div>
       </div>
     </SiteShell>

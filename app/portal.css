@@ -38,6 +38,7 @@
 .v5 .pbtns{display:flex;gap:8px;flex-wrap:wrap}
 .v5 .plink{color:var(--blue);font-weight:700}
 .v5 .pmuted{color:var(--muted);font-size:.84rem}
+.v5 .psub{font:800 1rem var(--f-h);color:var(--ink,#0b1f4d);margin:18px 0 4px}
 .v5 .pred{color:var(--red)}
 .v5 .pstrong{font-weight:700}
 .v5 .pstack{display:grid;gap:12px}
