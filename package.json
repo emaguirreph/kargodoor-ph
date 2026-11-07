@@ -19,7 +19,8 @@
     "test:customer-password-state-migration": "node scripts/test-customer-password-state-migration.mjs",
     "test:admin:http": "node scripts/test-admin-http.mjs",
     "test:money-flow": "node scripts/test-money-flow-http.mjs",
-    "test:booking-flow": "node scripts/test-booking-flow-http.mjs"
+    "test:booking-flow": "node scripts/test-booking-flow-http.mjs",
+    "test:email-verification": "node scripts/test-email-verification.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

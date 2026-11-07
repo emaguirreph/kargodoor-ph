@@ -17,6 +17,8 @@ export type AdminEnv = {
   ADMIN_LOCAL_DEV?: string;
   LOCAL_ADMIN_EMAIL?: string;
   LOCAL_ADMIN_HASH?: string;
+  RESEND_API_KEY?: string;
+  EMAIL_FROM?: string;
 };
 export type AdminRole = "owner" | "admin" | "viewer" | "staff";
 export type AdminUser = { id: string; name: string; email: string; role: AdminRole };
