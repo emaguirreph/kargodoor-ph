@@ -26,6 +26,8 @@ export default async function CustomerLoginPage({ searchParams }: { searchParams
           <h2>Sign in to your account</h2>
           <p className="pmuted">Use the email or mobile number you gave KargoDoor.</p>
           {error === "1" && <p className="err" role="alert">Invalid email, mobile number, or password.</p>}
+          {error === "pending" && <p className="pnote" role="status">⏳ Your sign-up is still waiting for approval. We&apos;ll message you your KDOOR cargo code once it&apos;s approved, then you can sign in.</p>}
+          {error === "declined" && <p className="err" role="alert">We could not approve your sign-up. Please message us on Messenger so we can help.</p>}
           <form action="/api/customer/login" method="post">
             <div className="field">
               <label htmlFor="login-identifier">Email or mobile number</label>
@@ -35,7 +37,7 @@ export default async function CustomerLoginPage({ searchParams }: { searchParams
             <button className="pbtn pbtn-blue" type="submit">SIGN IN</button>
           </form>
           <MessengerLink className="plink" target="_blank" rel="noopener noreferrer">Forgot password? Message us on Messenger</MessengerLink>
-          <p className="newbox">Wala pang account? <Link href="/chat">Book your first shipment</Link> and we&apos;ll send your sign-in details once your booking is approved.</p>
+          <p className="newbox">Wala pang account? <Link href="/customer/signup">Sign up here</Link>. We check every sign-up and message you your KDOOR cargo code once it&apos;s approved. Or <Link href="/chat">book your first shipment</Link> in the chat.</p>
         </div>
       </div>
     </SiteShell>

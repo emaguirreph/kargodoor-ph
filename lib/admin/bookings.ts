@@ -15,6 +15,7 @@ import { recordShipmentPayment } from "./shipment-payment";
 import { copyButton, copyScript, warehouseAddress } from "./shipping-instructions";
 import { warehouses } from "./validation";
 import { normalizePhMobile } from "../bookings";
+import { approveSignup, rejectSignup, signupCount, signupDetail, signupsList } from "./signups";
 import { hongKongMark, isHongKongWarehouse } from "../warehouse-addresses";
 
 type Row = Record<string, unknown>;
@@ -40,13 +41,15 @@ const csrfField = (env: AdminEnv, user: AdminUser) => `<input type="hidden" name
 
 /** Counts for the red numbers in the menu: bookings to review and customer proofs of payment to check. */
 export async function bookingCounts(db: D1Database) {
-  const [bookings, proofs, concerns] = await Promise.all([
+  const [bookings, proofs, concerns, signups] = await Promise.all([
     db.prepare("SELECT COUNT(*) AS n FROM bookings WHERE status = 'New' AND blocked = 0").first<{ n: number }>(),
     db.prepare("SELECT COUNT(*) AS n FROM customer_payment_proofs WHERE status = 'Pending'").first<{ n: number }>(),
     // Portal concerns (Support page); 0 if that table is not there yet.
     db.prepare("SELECT COUNT(*) AS n FROM customer_concerns WHERE status = 'Open'").first<{ n: number }>().catch(() => null),
+    // Online sign-ups waiting for approval.
+    signupCount(db),
   ]);
-  return { bookings: Number(bookings?.n ?? 0), proofs: Number(proofs?.n ?? 0), concerns: Number(concerns?.n ?? 0) };
+  return { bookings: Number(bookings?.n ?? 0), proofs: Number(proofs?.n ?? 0), concerns: Number(concerns?.n ?? 0), signups };
 }
 
 /** Customers whose mobile (any format) or email matches the booking. */
@@ -233,6 +236,8 @@ const css = `<style>
 .booking-price strong{font-size:1.6rem}.booking-margin.low{color:#c62828;font-weight:800}.booking-margin.good{color:#1d6b3a;font-weight:800}
 .booking-tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}.booking-tabs a{padding:7px 14px;border-radius:999px;border:1px solid #94b3c7;text-decoration:none;font-weight:700}.booking-tabs a.on{background:#0753ad;color:#fff;border-color:#0753ad}
 .booking-proof{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:14px;align-items:start;border-top:1px solid #e3edf4;padding-top:12px;margin-top:12px}
+.signup-link{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;border:1px dashed #94b3c7;border-radius:12px;padding:12px 14px;margin:0 0 14px;background:#f6fafd}
+.signup-link>div{flex:1 1 260px}.signup-link input{width:100%;margin-top:6px}
 @media(max-width:760px){.booking-details{grid-template-columns:1fr}.booking-proof{grid-template-columns:1fr}}
 </style>`;
 
@@ -335,6 +340,7 @@ async function detailPage(db: D1Database, env: AdminEnv, user: AdminUser, id: st
 async function listPage(db: D1Database, env: AdminEnv, user: AdminUser, url: URL) {
   const tab = url.searchParams.get("status") ?? "New";
   if (tab === "Concerns") return concernsPage(db, env, user, url);
+  if (tab === "Signups") return signupsPage(db, user, url);
   if (![...statuses, "All"].includes(tab)) throw new AdminError("Invalid filter.");
   const q = (url.searchParams.get("q") ?? "").trim().slice(0, 80);
   const rows = (await db.prepare(`SELECT b.*, (SELECT COUNT(*) FROM customer_payment_proofs p WHERE p.booking_id = b.id AND p.status = 'Pending') AS pending_proofs
@@ -344,7 +350,7 @@ async function listPage(db: D1Database, env: AdminEnv, user: AdminUser, url: URL
   const tabLink = (name: string, label: string) => `<a class="${tab === name ? "on" : ""}" href="${bookingsPath}?status=${encodeURIComponent(name)}">${label}</a>`;
   const body = `${css}<section>
     <p class="muted">Shipments booked in the website chat or by logged-in customers in the portal (🔐). Check the photos and details, confirm the customer on Messenger, then approve to create the shipment.</p>
-    <div class="booking-tabs">${tabLink("New", `New${counts.bookings ? ` <span class="nav-count">${counts.bookings}</span>` : ""}`)}${tabLink("Approved", "Approved")}${tabLink("Declined", "Declined")}${tabLink("All", "All")}${concernsTabLink(tab, counts.concerns)}</div>
+    <div class="booking-tabs">${tabLink("New", `New${counts.bookings ? ` <span class="nav-count">${counts.bookings}</span>` : ""}`)}${tabLink("Approved", "Approved")}${tabLink("Declined", "Declined")}${tabLink("All", "All")}${concernsTabLink(tab, counts.concerns)}${signupsTabLink(tab, counts.signups)}</div>
     <form method="get" class="search"><input type="hidden" name="status" value="${esc(tab)}"><label>Search name, phone or booking no.<input name="q" value="${esc(q)}"></label><button>Search</button></form>
     ${rows.length ? `<div class="table"><table><thead><tr><th>Booking</th><th>Date</th><th>Customer</th><th>Cargo</th><th>Mode</th><th>Estimate</th><th>Status</th></tr></thead><tbody>
       ${rows.map((row) => `<tr class="inv-row" data-href="${bookingsPath}?id=${esc(row.id)}" tabindex="0"><td><a href="${bookingsPath}?id=${esc(row.id)}"><strong>${esc(row.booking_ref)}</strong></a>${row.source === "portal" ? '<br><small class="muted">🔐 Portal</small>' : ""}</td><td>${esc(date(row.created_at))}</td>
@@ -359,6 +365,17 @@ async function listPage(db: D1Database, env: AdminEnv, user: AdminUser, url: URL
 const concernsTabLink = (tab: string, open: number) =>
   `<a class="${tab === "Concerns" ? "on" : ""}" href="${bookingsPath}?status=Concerns">Customer concerns${open ? ` <span class="nav-count">${open}</span>` : ""}</a>`;
 
+const signupsTabLink = (tab: string, waiting: number) =>
+  `<a class="${tab === "Signups" ? "on" : ""}" href="${bookingsPath}?status=Signups">Sign-ups${waiting ? ` <span class="nav-count">${waiting}</span>` : ""}</a>`;
+
+/** Online sign-ups from kargodoorph.com/customer/signup. */
+async function signupsPage(db: D1Database, user: AdminUser, url: URL) {
+  const counts = await bookingCounts(db);
+  const tabLink = (name: string, label: string) => `<a href="${bookingsPath}?status=${encodeURIComponent(name)}">${label}</a>`;
+  const tabs = `<div class="booking-tabs">${tabLink("New", `New${counts.bookings ? ` <span class="nav-count">${counts.bookings}</span>` : ""}`)}${tabLink("Approved", "Approved")}${tabLink("Declined", "Declined")}${tabLink("All", "All")}${concernsTabLink("Signups", counts.concerns)}${signupsTabLink("Signups", counts.signups)}</div>`;
+  return page("Customer sign-ups", css + await signupsList(db, url, tabs), user.name, 200, {}, canMutateAdmin(user));
+}
+
 /** Concerns sent from the portal's Support page. */
 async function concernsPage(db: D1Database, env: AdminEnv, user: AdminUser, url: URL) {
   const counts = await bookingCounts(db);
@@ -370,7 +387,7 @@ async function concernsPage(db: D1Database, env: AdminEnv, user: AdminUser, url:
   const tabLink = (name: string, label: string) => `<a href="${bookingsPath}?status=${encodeURIComponent(name)}">${label}</a>`;
   const body = `${css}<section>
     <p class="muted">Concerns customers sent from the Support page of their portal. Reply on Messenger or call them, then mark it done (your note shows to the customer).</p>
-    <div class="booking-tabs">${tabLink("New", `New${counts.bookings ? ` <span class="nav-count">${counts.bookings}</span>` : ""}`)}${tabLink("Approved", "Approved")}${tabLink("Declined", "Declined")}${tabLink("All", "All")}${concernsTabLink("Concerns", counts.concerns)}</div>
+    <div class="booking-tabs">${tabLink("New", `New${counts.bookings ? ` <span class="nav-count">${counts.bookings}</span>` : ""}`)}${tabLink("Approved", "Approved")}${tabLink("Declined", "Declined")}${tabLink("All", "All")}${concernsTabLink("Concerns", counts.concerns)}${signupsTabLink("Concerns", counts.signups)}</div>
     ${url.searchParams.get("done") ? '<p class="notice">Saved.</p>' : ""}
     <p class="actions"><a class="button${show === "Open" ? "" : " secondary"}" href="${bookingsPath}?status=Concerns">Open</a> <a class="button${show === "Done" ? "" : " secondary"}" href="${bookingsPath}?status=Concerns&show=done">Done</a></p>
     ${rows.length ? rows.map((row) => `<div class="booking-proof">
@@ -457,6 +474,13 @@ export async function bookingsPage(request: Request, envOverride?: AdminEnv): Pr
         else await db.prepare("UPDATE customer_payment_proofs SET status = 'Rejected', reviewed_by_admin_user_id = ?, reviewed_at = ? WHERE id = ? AND status = 'Pending'").bind(user.id, new Date().toISOString(), proofId).run();
         return page("Saved", "", user.name, 303, { Location: `${bookingsPath}?review_proof=${encodeURIComponent(proofId)}&done=${directAction === "portal_accept_proof" ? "paid" : "rejected"}` }, true);
       }
+      if (directAction === "signup_approve" || directAction === "signup_reject") {
+        const signupId = String(form.get("signup_id") ?? "");
+        if (!uuid.test(signupId)) throw new AdminError("Invalid sign-up.");
+        if (directAction === "signup_approve") await approveSignup(db, user, signupId, form);
+        else await rejectSignup(db, user, signupId, form);
+        return page("Saved", "", user.name, 303, { Location: `${bookingsPath}?signup=${encodeURIComponent(signupId)}&done=${directAction === "signup_approve" ? "approved" : "rejected"}` }, true);
+      }
       if (directAction === "concern_done" || directAction === "concern_reopen") {
         const concernId = String(form.get("concern_id") ?? "");
         if (!uuid.test(concernId)) throw new AdminError("Invalid concern.");
@@ -502,6 +526,12 @@ export async function bookingsPage(request: Request, envOverride?: AdminEnv): Pr
     if (id) {
       if (!uuid.test(id)) throw new AdminError("Invalid booking ID.");
       return await detailPage(db, env, user, id, url);
+    }
+    const signupId = url.searchParams.get("signup") ?? "";
+    if (signupId) {
+      if (!uuid.test(signupId)) throw new AdminError("Invalid sign-up.");
+      const canWrite = canMutateAdmin(user);
+      return page("Customer sign-up", css + await signupDetail(db, env, user, signupId, url, canWrite), user.name, 200, {}, canWrite);
     }
     const reviewProof = url.searchParams.get("review_proof") ?? "";
     if (reviewProof) {
