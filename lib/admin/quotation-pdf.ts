@@ -1,6 +1,7 @@
 // lib/admin/quotation-pdf.ts
 import { invoiceLogo } from "./invoice-logo";
 import { C, Canvas, PAGE_H, PDF_LEFT as L, PDF_RIGHT as R, buildPdf, niceDate, pdfTextWidth as textWidth, peso, trimNumber, wrapPdfText as wrap } from "./invoice-pdf";
+import { hongKongMark, isHongKongWarehouse } from "../warehouse-addresses";
 
 /**
  * Customer quotation PDF (A4), same look as the customer invoice (Em,
@@ -176,7 +177,8 @@ function customerQuotationPdf(q: QuotationPdfData, _logoJpeg?: Uint8Array) {
   // The label itself: a white sticker with a dark border, like the one on the box.
   const sx = L + 12, sw = lw - 24, sTop = y - 24, sH = 86;
   c.round(sx, sTop - sH, sw, sH, 3, C.white, C.ink, 1.4);
-  const mark = `${isAir ? "AIR " : ""}KDOOR-XXXX`;
+  const hongKong = !isAir && isHongKongWarehouse(cargo.originWarehouse);
+  const mark = isAir ? "AIR KDOOR-XXXX" : hongKong ? hongKongMark("KDOOR-XXXX") : "KDOOR-XXXX";
   c.text(mark, sx + sw / 2, sTop - 22, 15, { bold: true, align: "center", spacing: 0.6 });
   c.hline(sx + 10, sx + sw - 10, sTop - 30, C.greyLine);
   const labelRows: [string, string][] = [["Item", item], ["Supplier no.", "[China phone]"], ["PH phone", str(customer.mobile) || "[PH phone]"]];
@@ -185,7 +187,7 @@ function customerQuotationPdf(q: QuotationPdfData, _logoJpeg?: Uint8Array) {
     const kw = c.text(`${k}: `, sx + 10, ly, 8.4, { bold: true });
     c.text(wrap(v, 8.4, sw - 20 - kw)[0] ?? "", sx + 10 + kw, ly, 8.4);
   });
-  const labelNote = `Your own KDOOR code replaces XXXX once you confirm.${isAir ? " Air cargo: write AIR before the code." : ""}`;
+  const labelNote = `Your own KDOOR code replaces XXXX once you confirm.${isAir ? " Air cargo: write AIR before the code." : hongKong ? " Hong Kong cargo: write TD before the code." : ""}`;
   wrap(labelNote, 7.4, lw - 24).slice(0, 3).forEach((l, i) => c.text(l, L + 12, sTop - sH - 12 - i * 9.5, 7.4, { color: C.muted }));
   const instructions = [
     "Confirm this quotation on Messenger or WhatsApp. We send your KDOOR code and China warehouse address.",
