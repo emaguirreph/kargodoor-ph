@@ -8,7 +8,10 @@ import { preload } from "react-dom";
 import { MessengerLink } from "@/components/messenger-link";
 import { trackEvent } from "@/lib/analytics";
 import { getAirEstimate, getSeaEstimate } from "@/lib/shipping-estimate.mjs";
-import { warehouseAddresses, type WarehouseName } from "@/lib/warehouse-addresses";
+import { hongKongMark, isHongKongWarehouse, warehouseAddresses, type WarehouseName } from "@/lib/warehouse-addresses";
+
+/** What goes on the box: AIR + code for air, TD + code for Hong Kong sea, the code alone for other sea routes. */
+const boxMark = (code: string, air?: boolean, warehouse?: string) => air ? `AIR ${code}` : isHongKongWarehouse(warehouse) ? hongKongMark(code) : code;
 import { kargodoorBankAccounts } from "@/lib/admin/bank-accounts";
 import { bookingMaxPhotos, normalizeBookingRef, normalizePhMobile } from "@/lib/booking-rules";
 
@@ -94,7 +97,7 @@ function supplierMessage(label: BoxLabel, address: string) {
 
 function SupplierGuide({ act, code, air, warehouse, item, supplier, phone }: { act: (key: string, data?: Record<string, string>) => void; code?: string; air?: boolean; warehouse?: string; item?: string; supplier?: string; phone?: string }) {
   const sample = code ?? "KDOOR-1234";
-  const mark = air ? `AIR ${sample}` : sample;
+  const mark = boxMark(sample, air, warehouse);
   const address = warehouse && warehouse in warehouseAddresses ? warehouseAddresses[warehouse as WarehouseName] : "";
   const label: BoxLabel = code
     ? { mark, item: item || "(item name)", supplier: supplier || "(supplier phone)", phone: phone || "(your mobile)" }
@@ -109,6 +112,7 @@ function SupplierGuide({ act, code, air, warehouse, item, supplier, phone }: { a
     <p className="kc-lbl">USE THE RIGHT CODE FOR YOUR ROUTE</p>
     <div className="kc-fmt"><span className="kc-tag-sea">Sea → Manila</span><code>{code ?? "KDOOR-1234"}</code><small className="kc-small">3–5 weeks</small></div>
     <div className="kc-fmt"><span className="kc-tag-air">Air → Manila</span><code>AIR {code ?? "KDOOR-1234"}</code><small className="kc-small">Add &quot;AIR&quot; before the code · 5–7 days</small></div>
+    <div className="kc-fmt"><span className="kc-tag-sea">Hong Kong → Manila</span><code>{hongKongMark(code ?? "KDOOR-1234")}</code><small className="kc-small">Add &quot;TD&quot; before the code · sea</small></div>
     <p className="kc-lbl">{code ? "YOUR BOX LABEL" : "EXAMPLE BOX LABEL"}</p>
     <div className="kc-label"><b>{label.mark}</b><span>Item: {label.item}</span><span>Supplier no.: {label.supplier}</span><span>PH phone: {label.phone}</span></div>
     {code
@@ -465,10 +469,10 @@ function StatusAnswer({ bookingRef, last4, act }: { bookingRef: string; last4: s
   return <>
     <p><span className={`kc-pill${paid ? "" : " kc-blue-pill"}`}>{paid ? "PAID ✅" : s.bill ? "BILL READY" : "APPROVED ✅"}</span></p>
     {!s.bill && <p>Your booking is approved, {s.name}! 🎉</p>}
-    <div className="kc-code"><small>YOUR KARGODOOR CARGO CODE</small><div>{sh.cargoCode}</div><CopyButton text={air ? `AIR ${sh.cargoCode}` : sh.cargoCode} label="Copy code" /></div>
+    <div className="kc-code"><small>YOUR KARGODOOR CARGO CODE</small><div>{sh.cargoCode}</div><CopyButton text={boxMark(sh.cargoCode, air, sh.warehouse)} label="Copy code" /></div>
     {!s.bill && <>
       <p><b>Ask your supplier to write this on EVERY box:</b></p>
-      <div className="kc-fmt"><span className={air ? "kc-tag-air" : "kc-tag-sea"}>{air ? "Air → Manila" : "Sea → Manila"}</span><code>{air ? `AIR ${sh.cargoCode}` : sh.cargoCode}</code></div>
+      <div className="kc-fmt"><span className={air ? "kc-tag-air" : "kc-tag-sea"}>{air ? "Air → Manila" : isHongKongWarehouse(sh.warehouse) ? "Hong Kong → Manila" : "Sea → Manila"}</span><code>{boxMark(sh.cargoCode, air, sh.warehouse)}</code></div>
       <div className="kc-card"><div><span>Warehouse</span><b>{routeLabel(sh.warehouse)}</b></div><div><span>Estimated rate</span><b>{peso(sh.approvedAmount)}</b></div><div><span>Tracking no.</span><b>{sh.trackingNumber}</b></div><div><span>Status</span><b>{sh.status}</b></div></div>
       <p className="kc-small">💡 <b>Nothing to pay yet.</b> You pay once your cargo arrives in Malabon, before it is released or delivered.</p>
       {sh.warehouse in warehouseAddresses && <button type="button" className="kc-btn kc-green" onClick={() => act("address", { name: sh.warehouse })}>🏭 Get {routeLabel(sh.warehouse)} address</button>}

@@ -1,5 +1,5 @@
 import { finishMessage, messageFooter } from "./customer-messages";
-import { warehouseNames, type WarehouseName, warehouseAddresses, malabonWarehouseAddress } from "../warehouse-addresses";
+import { warehouseNames, type WarehouseName, warehouseAddresses, malabonWarehouseAddress, isHongKongWarehouse, hongKongMark } from "../warehouse-addresses";
 export { warehouseNames, type WarehouseName, malabonWarehouseAddress } from "../warehouse-addresses";
 
 export type ShippingInstructionCustomer = {
@@ -35,8 +35,37 @@ export function warehouseAddress(warehouse: unknown): string {
 
 const divider = "━━━━━━━━━━━━━━";
 
-/** Supplier rules in Chinese and English, with label examples for the customer's cargo code. */
-export function supplierRequirementsText(code = "KDOOR-XXXX"): string {
+/**
+ * Supplier rules in Chinese and English, with label examples for the customer's cargo code.
+ * For the Hong Kong warehouse only the TD label is shown; with no warehouse, the TD label is noted under sea.
+ */
+export function supplierRequirementsText(code = "KDOOR-XXXX", warehouse?: unknown): string {
+  const hongKong = isHongKongWarehouse(warehouse);
+  const labelExamples = hongKong
+    ? [
+        "🚢 SEA FREIGHT (HONG KONG) – Label Example",
+        "",
+        hongKongMark(code),
+        "Item: [Product Name]",
+        "Supplier: [Supplier Phone Number]",
+        "Recipient: [PH Phone Number]",
+      ]
+    : [
+        "🚢 SEA FREIGHT – Label Example",
+        "",
+        `SEA ${code}`,
+        "Item: [Product Name]",
+        "Supplier: [Chinese Phone Number]",
+        "Recipient: [PH Phone Number]",
+        `(Hong Kong warehouse: ${hongKongMark(code)})`,
+        "",
+        "✈️ AIR FREIGHT – Label Example",
+        "",
+        `AIR ${code}`,
+        "Item: [Product Name]",
+        "Supplier: [Chinese Phone Number]",
+        "Recipient: [PH Phone Number]",
+      ];
   return [
     "📌 IMPORTANT SUPPLIER INSTRUCTIONS",
     "",
@@ -56,19 +85,7 @@ export function supplierRequirementsText(code = "KDOOR-XXXX"): string {
     "",
     "Each package must display the cargo code, item name, supplier's contact number, and Philippine recipient's phone number.",
     "",
-    "🚢 SEA FREIGHT – Label Example",
-    "",
-    `SEA ${code}`,
-    "Item: [Product Name]",
-    "Supplier: [Chinese Phone Number]",
-    "Recipient: [PH Phone Number]",
-    "",
-    "✈️ AIR FREIGHT – Label Example",
-    "",
-    `AIR ${code}`,
-    "Item: [Product Name]",
-    "Supplier: [Chinese Phone Number]",
-    "Recipient: [PH Phone Number]",
+    ...labelExamples,
     "",
     "2️⃣ Packing List",
     "",
@@ -108,6 +125,7 @@ function shippingInstructionsMessage(details: ShippingInstructionCustomer): stri
     "📦 YOUR SHIPPING DETAILS",
     "",
     `Cargo Code: ${code}`,
+    ...(isHongKongWarehouse(warehouse) ? [`Shipping Mark: ${hongKongMark(code)}`] : []),
     `Shipping Method: ${shippingMethod(details.service)}`,
     `Assigned Warehouse: ${warehouse}`,
     "",
@@ -117,7 +135,7 @@ function shippingInstructionsMessage(details: ShippingInstructionCustomer): stri
     "",
     divider,
     "",
-    supplierRequirementsText(code),
+    supplierRequirementsText(code, warehouse),
     "",
     divider,
     "",
@@ -191,7 +209,7 @@ export function customerWarehouseAddressMessage(customer: ShippingInstructionCus
     address,
     "",
     "Next Steps:",
-    `Please share this address with your supplier and ask them to place ${code} clearly on every package so we can receive and identify your cargo.`,
+    `Please share this address with your supplier and ask them to place ${isHongKongWarehouse(warehouse) ? hongKongMark(code) : code} clearly on every package so we can receive and identify your cargo.`,
     "",
   ]);
 }

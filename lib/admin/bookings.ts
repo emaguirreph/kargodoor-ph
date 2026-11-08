@@ -15,6 +15,7 @@ import { recordShipmentPayment } from "./shipment-payment";
 import { copyButton, copyScript, warehouseAddress } from "./shipping-instructions";
 import { warehouses } from "./validation";
 import { normalizePhMobile } from "../bookings";
+import { hongKongMark, isHongKongWarehouse } from "../warehouse-addresses";
 
 type Row = Record<string, unknown>;
 export const bookingsPath = "/admin/bookings";
@@ -114,7 +115,7 @@ function approvalMessage(booking: Row, customerCode: string, shipment: Row | nul
     "",
     `Cargo code: ${customerCode}`,
     "Please ask your supplier to write this on EVERY box:",
-    air ? `AIR ${customerCode}` : customerCode,
+    air ? `AIR ${customerCode}` : isHongKongWarehouse(warehouse) ? hongKongMark(customerCode) : customerCode,
     `Item: ${String(booking.item_description ?? "")}`,
     `Supplier no.: ${String(booking.supplier_contact ?? "")}`,
     `PH phone: ${String(booking.phone ?? "")}`,

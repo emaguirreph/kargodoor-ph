@@ -5,7 +5,7 @@ import { CopyButton } from "./copy-button";
 import { kargodoorBankAccounts } from "@/lib/admin/bank-accounts";
 import { riderPickupMessage } from "@/lib/admin/customer-messages";
 import { customerShippingInstructions, supplierRequirementsText } from "@/lib/admin/shipping-instructions";
-import { malabonWarehouseAddress, warehouseAddresses, type WarehouseName } from "@/lib/warehouse-addresses";
+import { hongKongMark, malabonWarehouseAddress, warehouseAddresses, type WarehouseName } from "@/lib/warehouse-addresses";
 import {
   concernTopics, formatDate, formatMonth, formatPeso, portalStages, stageIndex,
   type PortalBill, type PortalData, type PortalShipment,
@@ -79,7 +79,7 @@ function Stages({ shipment }: { shipment: PortalShipment }) {
   );
 }
 
-function ShipmentCard({ shipment, links }: { shipment: PortalShipment; links: PortalLinks }) {
+function ShipmentCard({ shipment, links, code }: { shipment: PortalShipment; links: PortalLinks; code: string }) {
   const owes = shipment.payment === "UNPAID" || shipment.payment === "PARTIAL";
   return (
     <article className="pcard" id={shipment.trackingNumber}>
@@ -111,7 +111,7 @@ function ShipmentCard({ shipment, links }: { shipment: PortalShipment; links: Po
       </div>
       <details className="pdetails">
         <summary>Shipping instructions for this package</summary>
-        <pre>{customerShippingInstructions({ name: "", customerCode: "", service: shipment.service, warehouse: shipment.warehouse }).replace(/^Hi there! 😊\n\n/, "")}</pre>
+        <pre>{customerShippingInstructions({ name: "", customerCode: code, service: shipment.service, warehouse: shipment.warehouse }).replace(/^Hi there! 😊\n\n/, "")}</pre>
       </details>
     </article>
   );
@@ -243,7 +243,7 @@ export function HowToShipView({ data, links }: ViewProps) {
       </CodeBox>
       <div className="pstack">
         {[
-          ["Send your code and our China address to your supplier", `Copy your cargo code and the warehouse address. Ask your supplier to write SEA ${code} (or AIR ${code}) on every box.`, "warehouses", "See warehouse addresses →"],
+          ["Send your code and our China address to your supplier", `Copy your cargo code and the warehouse address. Ask your supplier to write SEA ${code} (AIR ${code} for air, ${hongKongMark(code)} for our Hong Kong warehouse) on every box.`, "warehouses", "See warehouse addresses →"],
           ["Tell us what's coming", "Book your shipment with the item, number of boxes and your supplier's details so we can watch for it.", "book", "Book a shipment →"],
           ["We receive and measure it in China", "Our China warehouse checks the real CBM and weight. Your final bill uses these verified numbers. Sea takes 3–5 weeks, air 5–7 days.", "shipments", "Track your shipments →"],
           ["Pay and receive it", "Pay by UnionBank or GCash and upload your proof. Then pick up at our Malabon warehouse or have it delivered.", "payments", "Go to Payments →"],
@@ -269,7 +269,7 @@ export function ShipmentsView({ data, links }: ViewProps) {
         <div className="ptable"><table><thead><tr><th>Booking no.</th><th>Item</th><th>Type</th><th>Sent</th></tr></thead><tbody>
           {data.bookings.map((b) => <tr key={b.ref}><td className="ptn">{b.ref}</td><td>{b.item}</td><td>{b.service}</td><td>{formatDate(b.createdAt)}</td></tr>)}
         </tbody></table></div></section> : null}
-      {active.length ? active.map((s) => <ShipmentCard key={s.id} shipment={s} links={links} />) : (
+      {active.length ? active.map((s) => <ShipmentCard key={s.id} shipment={s} links={links} code={data.customer.customer_code} />) : (
         <section className="pcard pempty">No active shipments yet.<br />Already shipping with us and expecting to see cargo here? <MessengerLink className="plink" target="_blank" rel="noopener noreferrer">Message us</MessengerLink> with your name and we&apos;ll link it.</section>
       )}
       <section className="pcard">
@@ -300,7 +300,7 @@ export function TrackView({ data, links, query }: ViewProps) {
         {!q && data.shipments.some((s) => s.active) ? <div className="ppills">{data.shipments.filter((s) => s.active).map((s) => <a key={s.id} className="ppill link" href={links.href("track", `q=${encodeURIComponent(s.trackingNumber)}`)}>{s.trackingNumber}</a>)}</div> : null}
       </section>
       {q && !found ? <Notice kind="err">We couldn&apos;t find {q} in your account. Check the number, or try the <a className="plink" href={`/track?tracking=${encodeURIComponent(q)}`}>public tracker</a>.</Notice> : null}
-      {found ? <ShipmentCard shipment={found} links={links} /> : null}
+      {found ? <ShipmentCard shipment={found} links={links} code={data.customer.customer_code} /> : null}
     </>
   );
 }
@@ -429,7 +429,7 @@ export function WarehousesView({ data, links, query }: ViewProps) {
   const list = mode === "air" ? airWarehouses : seaWarehouses;
   const selected = list.find((w) => w === query.wh) ?? list[0];
   const label = (name: WarehouseName) => mode === "air" ? `AIR ${code} · Item · Supplier no. · PH mobile`
-    : name === "Hong Kong" ? `TD+${code}+MOBILE NO` : `SEA ${code} · Item · Supplier no. · PH mobile`;
+    : name === "Hong Kong" ? `${hongKongMark(code)} · Item · Supplier no. · PH mobile` : `SEA ${code} · Item · Supplier no. · PH mobile`;
   const address = warehouseAddresses[selected].replace(/（?\+客户唛头\.?）?/, `（+${code}）`);
   const q = (next: Record<string, string>) => new URLSearchParams({ mode, ...next }).toString();
   // Malabon: contact persons/phones stay in the admin only.
@@ -446,7 +446,7 @@ export function WarehousesView({ data, links, query }: ViewProps) {
       </div>
       <div className="pwh">
         <div className="pstack">
-          <p className="phint">{mode === "air" ? <>Air freight: write <b>AIR {code}</b> on every carton, plus item, supplier phone and your PH mobile.</> : <>Sea freight: write <b>SEA {code}</b> on every carton, plus item, supplier phone and your PH mobile.</>}</p>
+          <p className="phint">{mode === "air" ? <>Air freight: write <b>AIR {code}</b> on every carton, plus item, supplier phone and your PH mobile.</> : <>Sea freight: write <b>SEA {code}</b> on every carton (Hong Kong warehouse: <b>{hongKongMark(code)}</b>), plus item, supplier phone and your PH mobile.</>}</p>
           {list.map((name) => (
             <a key={name} className="pwhitem" aria-current={name === selected ? "true" : undefined} href={links.href("warehouses", q({ wh: name }))}>
               {name}<small>Label: {label(name)}</small>

@@ -198,6 +198,17 @@ test("shipping instructions include the customer account code and supplier detai
   assert.match(customerWarehouseAddressMessage({ name: "Maria", warehouse: "Taiwan" }), /\[Add warehouse address\]/);
   assert.match(warehouseAddress("Hong Kong"), /香港新界葵涌贷柜码头路51-63号葵顺工业中心9楼E室/);
 
+  // Hong Kong sea cargo is labelled TD KDOOR-XXXX; other sea routes keep SEA KDOOR-XXXX.
+  const hongKongMessage = customerShippingInstructions({ name: "Maria", customerCode: "KDOOR-1234", service: "Sea Freight", warehouse: "Hong Kong" });
+  assert.match(hongKongMessage, /Shipping Mark: TD KDOOR-1234/);
+  assert.match(hongKongMessage, /SEA FREIGHT \(HONG KONG\) – Label Example\n\nTD KDOOR-1234\n/);
+  assert.doesNotMatch(hongKongMessage, /SEA KDOOR-1234|AIR KDOOR-1234/);
+  assert.match(customerWarehouseAddressMessage({ name: "Maria", customerCode: "KDOOR-1234", warehouse: "Hong Kong" }), /place TD KDOOR-1234 clearly/);
+  const guangzhouMessage = customerShippingInstructions({ name: "Maria", customerCode: "KDOOR-1234", service: "Sea Freight", warehouse: "Guangzhou" });
+  assert.match(guangzhouMessage, /\nSEA KDOOR-1234\n/);
+  assert.match(guangzhouMessage, /\(Hong Kong warehouse: TD KDOOR-1234\)/);
+  assert.doesNotMatch(guangzhouMessage, /Shipping Mark:/);
+
   const shipmentMessage = shipmentShippingInstructions({
     name: "Maria",
     customerCode: "KD-10025",
