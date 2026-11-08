@@ -174,6 +174,24 @@
 .v5 .plogin .err{color:var(--red,#c8372d);font-weight:700}
 .v5 .plogin .newbox{border-top:1px solid var(--line);padding-top:14px;font-size:.86rem;color:var(--muted)}
 .v5 .plogin .lform a{color:var(--blue);font-weight:700}
+/* Sign-up page (/customer/signup) */
+.v5 .psignup .lform{justify-content:flex-start}
+.v5 .psignup .perks{counter-reset:none}
+.v5 .psignup .perks i{font-weight:800}
+.v5 .plogin .lform select,.v5 .plogin .lform textarea{font:600 1rem var(--f-b);padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--fg);width:100%;resize:vertical}
+.v5 .plogin .lform .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.v5 .plogin .lform .two>*{min-width:0}
+.v5 .plogin .lform label .opt{text-transform:none;letter-spacing:0;font-weight:600}
+.v5 .plogin .lform .agree{display:flex;gap:10px;align-items:flex-start;text-transform:none;letter-spacing:0;font:600 .86rem/1.4 var(--f-b);color:var(--fg)}
+.v5 .plogin .lform .agree input{width:18px;height:18px;flex:none;margin-top:2px}
+.v5 .plogin .lform .hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
+.v5 .plogin .signup-done{display:grid;gap:10px}
+.v5 .plogin .signup-done p{margin:0}
+.v5 .plogin .signup-done .big{font:800 1.25rem var(--f-h)}
+.v5 .plogin .signup-done .pbtn{color:#fff}
+.v5 .plogin .pnote{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--surface-2,#f3f7fb);font-weight:600}
+@media (max-width:900px){.v5 .psignup .lform{order:-1}.v5 .psignup .lpanel .route{display:none}}
+@media (max-width:600px){.v5 .plogin .lform .two{grid-template-columns:1fr}}
 
 @media (max-width:900px){
   .v5 .portal{padding-top:14px}

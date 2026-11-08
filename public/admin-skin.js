@@ -79,13 +79,13 @@
     if (!window.fetch || !document.querySelector("[data-leads-count]")) return;
     const attention = document.querySelector("[data-attention-count]") ? getJson("/admin/dashboard?count=1") : Promise.resolve(null);
     Promise.all([getJson("/admin/leads?count=1"), getJson("/admin/bookings?count=1"), attention]).then(([leads, bookings, dash]) => {
-      const n = Number(leads && leads.toContact) || 0, b = (Number(bookings && bookings.bookings) || 0) + (Number(bookings && bookings.concerns) || 0), p = Number(bookings && bookings.proofs) || 0;
+      const n = Number(leads && leads.toContact) || 0, b = (Number(bookings && bookings.bookings) || 0) + (Number(bookings && bookings.concerns) || 0) + (Number(bookings && bookings.signups) || 0), p = Number(bookings && bookings.proofs) || 0;
       const a = Number(dash && dash.total) || 0;
       const leadsShown = showCount("[data-leads-count]", n, n + " lead" + (n === 1 ? "" : "s") + " to contact");
       const attentionShown = showCount("[data-attention-count]", a, a + " item" + (a === 1 ? "" : "s") + " need attention");
       // The Dashboard number already counts new leads, so the phone total does not add them twice.
       const total = (attentionShown || leadsShown)
-        + showCount("[data-bookings-count]", b, b + " booking" + (b === 1 ? "" : "s") + " or customer concern" + (b === 1 ? "" : "s") + " to review")
+        + showCount("[data-bookings-count]", b, b + " booking" + (b === 1 ? "" : "s") + ", sign-up" + (b === 1 ? "" : "s") + " or customer concern" + (b === 1 ? "" : "s") + " to review")
         + showCount("[data-proofs-count]", p, p + " proof" + (p === 1 ? "" : "s") + " of payment to check");
       // On a phone the menu starts closed, so show the total on the Menu button.
       const toggle = document.querySelector(".mobile-nav-toggle");

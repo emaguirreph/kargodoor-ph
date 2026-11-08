@@ -1,5 +1,6 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { customerSessionCookieValue, loginCustomer } from "@/lib/customer/security";
+import { signupStatusForLogin } from "@/lib/customer/signup";
 
 export const runtime = "nodejs";
 
@@ -16,7 +17,11 @@ export async function POST(request: Request) {
     if (!identifier || identifier.length > 320 || !password || password.length > 1_024) return failed(request);
     const { env } = await getCloudflareContext();
     const login = await loginCustomer(env.ADMIN_DB, identifier, password);
-    if (!login) return failed(request);
+    if (!login) {
+      // A sign-up that is not approved yet gets a clear answer instead of "invalid password".
+      const signup = await signupStatusForLogin(env.ADMIN_DB, identifier, password).catch(() => null);
+      return signup ? Response.redirect(new URL(`/customer/login?error=${signup}`, request.url), 303) : failed(request);
+    }
     return new Response(null, { status: 303, headers: {
       Location: new URL(login.account.password_state === "temporary" ? "/customer/change-password" : "/customer", request.url).href,
       "Set-Cookie": customerSessionCookieValue(login.session.token),

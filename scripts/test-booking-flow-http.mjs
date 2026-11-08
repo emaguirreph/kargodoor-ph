@@ -107,7 +107,7 @@ try {
   step("Chat lookup: wrong last 4 digits refused; New booking shows no cargo code");
 
   // 4. Admin menu count + Bookings page.
-  assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 1, proofs: 0, concerns: 0 });
+  assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 1, proofs: 0, concerns: 0, signups: 0 });
   let html = await (await get("/admin/bookings")).text();
   assert.ok(html.includes(made.ref) && html.includes("Juan Dela Cruz"));
   html = await (await get("/admin/dashboard")).text();
@@ -143,7 +143,7 @@ try {
   assert.equal(approved.shipping_charge, approved.approved_amount);
   html = await (await get(`/admin/bookings?id=${saved.id}`)).text();
   assert.ok(html.includes(`Cargo code: ${approved.customer_code}`), "copy-ready Messenger message");
-  assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 0, proofs: 0, concerns: 0 });
+  assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 0, proofs: 0, concerns: 0, signups: 0 });
   step(`Approved: customer ${approved.customer_code} + shipment ${approved.tracking_number} (₱${approved.shipping_charge / 100}); Messenger message ready; count back to 0`);
 
   // 6. Chat shows the code; no bill yet so proof is refused.
@@ -176,7 +176,7 @@ try {
   proof = new FormData(); proof.set("ref", made.ref); proof.set("last4", "4567"); proof.append("file", new Blob([png], { type: "image/png" }), "proof.png");
   res = await api("/api/bookings/proof", proof);
   assert.equal(res.status, 200, await res.clone().text());
-  assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 0, proofs: 1, concerns: 0 });
+  assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 0, proofs: 1, concerns: 0, signups: 0 });
   html = await (await get("/admin/invoices")).text();
   assert.ok(html.includes(made.ref), "proof waiting on Invoices & Payments");
   html = await (await get(`/admin/bookings?id=${saved.id}`)).text();
@@ -185,7 +185,7 @@ try {
   assert.equal(res.status, 303, await res.text());
   const paid = sqlRows(`SELECT i.status, s.payment_status, (SELECT COUNT(*) FROM payment_proofs) AS proofs FROM invoices i JOIN shipments s ON s.id=i.shipment_id WHERE i.id='${invoice.id}'`)[0];
   assert.deepEqual(paid, { status: "Paid", payment_status: "Paid", proofs: 1 });
-  assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 0, proofs: 0, concerns: 0 });
+  assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 0, proofs: 0, concerns: 0, signups: 0 });
   step("Proof uploaded → red count on Invoices & Payments → Record payment: invoice Paid, shipment Paid, proof kept");
 
   // 9. Customer downloads the paid invoice.
@@ -281,7 +281,7 @@ try {
   const sendProof = new FormData(); sendProof.set("invoice_id", inv3); sendProof.append("file", new Blob([png], { type: "image/png" }), "gcash.png");
   res = await browser("/customer/actions/proof", { method: "POST", body: sendProof });
   assert.equal(res.status, 303, await res.text());
-  assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 2, proofs: 1, concerns: 0 }); // 2 = step 10 bookings still New
+  assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 2, proofs: 1, concerns: 0, signups: 0 }); // 2 = step 10 bookings still New
   html = await (await get("/admin/invoices")).text();
   const reviewId = html.match(/review_proof=([0-9a-f-]{36})/)[1];
   html = await (await get(`/admin/bookings?review_proof=${reviewId}`)).text();
@@ -297,7 +297,7 @@ try {
   // 14. Support concern → admin Customer concerns tab → done note shows in the portal.
   res = await browser("/customer/actions/support", { method: "POST", body: new URLSearchParams({ topic: "Shipment / tracking", shipment_id: sid3, message: "When can I pick up my cargo?" }) });
   assert.equal(res.status, 303, await res.text());
-  assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 2, proofs: 0, concerns: 1 });
+  assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 2, proofs: 0, concerns: 1, signups: 0 });
   html = await (await get("/admin/bookings?status=Concerns")).text();
   assert.ok(html.includes("When can I pick up my cargo?"));
   const concernId = html.match(/name="concern_id" value="([^"]+)"/)[1];
