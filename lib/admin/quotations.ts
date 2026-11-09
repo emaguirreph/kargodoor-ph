@@ -22,6 +22,7 @@ import {
   itemCategories,
   seaQuote,
   seaRates,
+  seaRatesBeforeNov2026,
   type AirItem,
   type SeaCategory,
 } from "./quotation-pricing";
@@ -852,13 +853,15 @@ export async function quotationsPage(
         category: savedCategory,
         cbm: cargo.cbm,
         weight: cargo.weight,
+        // Show the rates the quotation was priced with. Snapshots saved before rates were recorded
+        // were priced with the pre-10 Nov 2026 table, so that table is the fallback.
         cbmRate:
           savedCategory in seaRates
-            ? seaRates[savedCategory as SeaCategory].cbmRate
+            ? (pricing.cbmRate as number | undefined) ?? seaRatesBeforeNov2026[savedCategory as SeaCategory].cbmRate
             : null,
         densityRate:
           savedCategory in seaRates
-            ? seaRates[savedCategory as SeaCategory].densityRate
+            ? (pricing.densityRate as number | null | undefined) ?? seaRatesBeforeNov2026[savedCategory as SeaCategory].densityRate
             : null,
       };
       const savedAir = {

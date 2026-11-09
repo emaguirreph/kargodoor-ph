@@ -2,14 +2,15 @@ import { airVolumetricFactor, roundAirBillableWeight, type AirItem, type SeaCate
 
 export const niHaoDensityThreshold = 500;
 
+/** Ni Hao (supplier) Sea Freight CBM rates. Seasonal change effective 10 Nov 2026; density rates are unchanged. */
 export const niHaoSeaRates: Record<SeaCategory, { cbmRate: number; densityRate: number | null }> = {
-  "LOW VALUE GOODS": { cbmRate: 7000, densityRate: 14 },
-  "VOLUME GOODS": { cbmRate: 7500, densityRate: 15 },
-  COMMODITIES: { cbmRate: 8500, densityRate: 17 },
-  "HIGH VALUE": { cbmRate: 9500, densityRate: 19 },
+  "LOW VALUE GOODS": { cbmRate: 8000, densityRate: 14 },
+  "VOLUME GOODS": { cbmRate: 8500, densityRate: 15 },
+  COMMODITIES: { cbmRate: 9500, densityRate: 17 },
+  "HIGH VALUE": { cbmRate: 10500, densityRate: 19 },
   "SENSITIVE - BATTERIES": { cbmRate: 15000, densityRate: 30 },
-  "SENSITIVE - CHEMICALS": { cbmRate: 12000, densityRate: 24 },
-  "MOBILE / COMPUTERS / TABLETS": { cbmRate: 10000, densityRate: null },
+  "SENSITIVE - CHEMICALS": { cbmRate: 13000, densityRate: 24 },
+  "MOBILE / COMPUTERS / TABLETS": { cbmRate: 11000, densityRate: null },
 };
 
 export const niHaoPackagePricing = {

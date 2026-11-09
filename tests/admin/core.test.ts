@@ -296,7 +296,7 @@ test("live admin Air calculation delegates to the authoritative pricing engine",
 test("live admin Sea calculation delegates to the authoritative pricing engine", () => {
   const solar = calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Solar panels", cbm: "8.38593", weight: "3400", units: "0" });
   assert.equal(solar.category, "COMMODITIES");
-  assert.equal(solar.cbmRate, 9500);
+  assert.equal(solar.cbmRate, 10500);
   assert.equal(solar.packageTier, "KD Standard");
   assert.equal(solar.densityApplies, false);
   assert.equal(solar.final.toFixed(2), "79696.34");
@@ -400,7 +400,7 @@ test("shipments get a Ni Hao cost estimate from the Ni Hao rates unless Ni Hao's
   const { sql, db, user } = database();
   const estimated = await createShipmentFromApprovedQuotation(db, user, insertQuotation(sql));
   const row = sql.prepare("SELECT nihao_cost, nihao_cost_source FROM shipments WHERE id = ?").get(estimated.shipmentId)!;
-  assert.equal(row.nihao_cost, 875000, "1.25 CBM of Bags × ₱7,000");
+  assert.equal(row.nihao_cost, 1000000, "1.25 CBM of Bags × ₱8,000");
   assert.equal(row.nihao_cost_source, "estimate");
 
   const quotedId = insertQuotation(sql, { cargo: { item: "Bags", category: "LOW VALUE GOODS", cbm: "1", weight: "100", originWarehouse: "Guangzhou" } });
@@ -452,20 +452,20 @@ test("shipments added by hand carry their own cargo details and compute the Karg
   const sea = form({ cargo_description: "Kitchen organizers", cargo_item: "LED lights", shipping_charge: "" });
   assert.deepEqual([sea.cargo_description, sea.cargo_item, sea.cargo_category, sea.shipping_charge], ["Kitchen organizers", "LED lights", "COMMODITIES", null]);
   const seaCharge = resolveManualShipmentCharge(sea, null);
-  assert.deepEqual(seaCharge, { cost: 1190500, source: "rate" }, "1.25 CBM of Commodities × ₱9,500");
+  assert.deepEqual(seaCharge, { cost: 1315500, source: "rate" }, "1.25 CBM of Commodities × ₱10,500 + ₱30 transfer fee");
   const seaId = await saveRecord(db, "shipments", { ...sea, shipping_charge: seaCharge.cost, shipping_charge_source: seaCharge.source }, user, "", "");
   assert.deepEqual({ ...(await shipmentCargo(db, seaId)) }, { item: "Kitchen organizers", category: "LED lights (Commodities)", quotationId: null, quotationNumber: null });
-  assert.equal((await shipmentNiHaoEstimate(db, seaId, sea))?.cost, 1062500, "1.25 CBM of Commodities × ₱8,500");
+  assert.equal((await shipmentNiHaoEstimate(db, seaId, sea))?.cost, 1187500, "1.25 CBM of Commodities × ₱9,500");
 
   // Saving the verified size with the charge untouched moves the charge to the new rate.
   const saved = sql.prepare("SELECT shipping_charge, shipping_charge_source FROM shipments WHERE id = ?").get(seaId)!;
-  const verified = form({ cargo_item: "LED lights", shipping_charge: "11905.00", verified_cbm: "1", verified_weight_kg: "300" });
-  assert.deepEqual(resolveManualShipmentCharge(verified, saved), { cost: 953000, source: "rate" });
+  const verified = form({ cargo_item: "LED lights", shipping_charge: "13155.00", verified_cbm: "1", verified_weight_kg: "300" });
+  assert.deepEqual(resolveManualShipmentCharge(verified, saved), { cost: 1053000, source: "rate" });
   // A typed charge is kept, also after the size changes.
   assert.deepEqual(resolveManualShipmentCharge(form({ cargo_item: "LED lights", shipping_charge: "5000" }), saved), { cost: 500000, source: "manual" });
   assert.deepEqual(resolveManualShipmentCharge(verified, { shipping_charge: 1190500, shipping_charge_source: "manual" }), { cost: 1190500, source: "manual" });
   // Clearing the box goes back to the rate; nothing to price and no charge is an error.
-  assert.deepEqual(resolveManualShipmentCharge({ ...verified, shipping_charge: null }, { shipping_charge: 500000, shipping_charge_source: "manual" }), { cost: 953000, source: "rate" });
+  assert.deepEqual(resolveManualShipmentCharge({ ...verified, shipping_charge: null }, { shipping_charge: 500000, shipping_charge_source: "manual" }), { cost: 1053000, source: "rate" });
   assert.throws(() => resolveManualShipmentCharge(form({ shipping_charge: "" }), null), /Item \/ Commodity/);
 
   // Air piece items use Units.

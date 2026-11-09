@@ -5,14 +5,14 @@ import { estimateNiHaoCost, resolveNiHaoCost } from "../../lib/admin/nihao-estim
 
 test("Ni Hao sea rates use the 500 kg/CBM density rule separately from customer pricing", () => {
   const lowValue = niHaoSeaQuote("LOW VALUE GOODS", 1, 501);
-  assert.equal(lowValue.base, 7000);
+  assert.equal(lowValue.base, 8000);
   assert.equal(lowValue.densityApplies, true);
   assert.equal(lowValue.densityCharge, 7014);
-  assert.equal(lowValue.final, 7014);
+  assert.equal(lowValue.final, 8000);
   assert.equal(niHaoSeaQuote("VOLUME GOODS", 1, 500).densityApplies, false);
   assert.equal(niHaoSeaQuote("SENSITIVE - BATTERIES", 1, 400).final, 15000);
   assert.equal(niHaoSeaQuote("SENSITIVE - BATTERIES", 1, 501).final, 15030);
-  assert.equal(niHaoSeaQuote("SENSITIVE - CHEMICALS", 1, 501).final, 12024);
+  assert.equal(niHaoSeaQuote("SENSITIVE - CHEMICALS", 1, 501).final, 13000);
 });
 
 test("Ni Hao small packages compare their base with density pricing", () => {
@@ -29,7 +29,7 @@ test("Ni Hao mobile, computers, and tablets are density exempt", () => {
   assert.equal(quote.densityApplies, false);
   assert.equal(quote.densityCharge, 0);
   assert.equal(quote.final, 200);
-  assert.equal(niHaoSeaQuote("MOBILE / COMPUTERS / TABLETS", 1, 1000).final, 10000);
+  assert.equal(niHaoSeaQuote("MOBILE / COMPUTERS / TABLETS", 1, 1000).final, 11000);
 });
 
 test("Ni Hao air cost uses billable weight rounded up, or a per-piece rate", () => {
@@ -41,7 +41,7 @@ test("Ni Hao air cost uses billable weight rounded up, or a per-piece rate", () 
 });
 
 test("Ni Hao estimate prices sea and air shipments in centavos and skips what it cannot price", () => {
-  assert.deepEqual(estimateNiHaoCost({ serviceType: "Sea Freight", category: "LOW VALUE GOODS", cbm: 1, weight: 100 })?.cost, 700000);
+  assert.deepEqual(estimateNiHaoCost({ serviceType: "Sea Freight", category: "LOW VALUE GOODS", cbm: 1, weight: 100 })?.cost, 800000);
   assert.equal(estimateNiHaoCost({ serviceType: "Sea Freight", category: "COMMODITIES", cbm: 0.04, weight: 5, packageCount: 2 })?.cost, 120000);
   assert.equal(estimateNiHaoCost({ serviceType: "Air Freight", item: "Ordinary Items", cbm: 0.0381, weight: 7.5 })?.cost, 280000);
   assert.match(estimateNiHaoCost({ serviceType: "Air Freight", item: "Ordinary Items", cbm: 0.0381, weight: 7.5 })!.basis, /8 kg × ₱350/);
