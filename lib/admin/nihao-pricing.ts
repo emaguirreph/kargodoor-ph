@@ -8,7 +8,7 @@ export const niHaoSeaRates: Record<SeaCategory, { cbmRate: number; densityRate: 
   "VOLUME GOODS": { cbmRate: 8500, densityRate: 15 },
   COMMODITIES: { cbmRate: 9500, densityRate: 17 },
   "HIGH VALUE": { cbmRate: 10500, densityRate: 19 },
-  "SENSITIVE - BATTERIES": { cbmRate: 15000, densityRate: 30 },
+  "SENSITIVE - BATTERIES": { cbmRate: 16000, densityRate: 30 },
   "SENSITIVE - CHEMICALS": { cbmRate: 13000, densityRate: 24 },
   "MOBILE / COMPUTERS / TABLETS": { cbmRate: 11000, densityRate: null },
 };

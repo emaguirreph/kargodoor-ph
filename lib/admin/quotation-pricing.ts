@@ -6,7 +6,7 @@ export const seaRates: Record<SeaCategory, SeaRate> = {
   "VOLUME GOODS": { cbmRate: 9500, densityRate: 20 },
   COMMODITIES: { cbmRate: 10500, densityRate: 22 },
   "HIGH VALUE": { cbmRate: 12000, densityRate: 26 },
-  "SENSITIVE - BATTERIES": { cbmRate: 16000, densityRate: 38 },
+  "SENSITIVE - BATTERIES": { cbmRate: 17000, densityRate: 38 },
   "SENSITIVE - CHEMICALS": { cbmRate: 14000, densityRate: 31 },
   "MOBILE / COMPUTERS / TABLETS": { cbmRate: 11500, densityRate: null },
 };

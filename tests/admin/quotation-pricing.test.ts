@@ -14,7 +14,7 @@ test("sea package tiers and density rule preserve boundaries", () => {
 test("batteries and chemicals have their own sensitive rates", () => {
   assert.equal(itemCategories["Batteries"], "SENSITIVE - BATTERIES");
   assert.equal(itemCategories["Chemicals"], "SENSITIVE - CHEMICALS");
-  assert.equal(seaQuote("SENSITIVE - BATTERIES", 1, 400).final, 16030);
+  assert.equal(seaQuote("SENSITIVE - BATTERIES", 1, 400).final, 17030);
   assert.equal(seaQuote("SENSITIVE - CHEMICALS", 1, 400).final, 14030);
 });
 test("mobile sea is unit priced and never density priced", () => {

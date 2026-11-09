@@ -10,8 +10,8 @@ test("Ni Hao sea rates use the 500 kg/CBM density rule separately from customer 
   assert.equal(lowValue.densityCharge, 7014);
   assert.equal(lowValue.final, 8000);
   assert.equal(niHaoSeaQuote("VOLUME GOODS", 1, 500).densityApplies, false);
-  assert.equal(niHaoSeaQuote("SENSITIVE - BATTERIES", 1, 400).final, 15000);
-  assert.equal(niHaoSeaQuote("SENSITIVE - BATTERIES", 1, 501).final, 15030);
+  assert.equal(niHaoSeaQuote("SENSITIVE - BATTERIES", 1, 400).final, 16000);
+  assert.equal(niHaoSeaQuote("SENSITIVE - BATTERIES", 1, 501).final, 16000);
   assert.equal(niHaoSeaQuote("SENSITIVE - CHEMICALS", 1, 501).final, 13000);
 });
 
