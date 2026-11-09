@@ -294,12 +294,18 @@ test("live admin Air calculation delegates to the authoritative pricing engine",
   }
 });
 test("live admin Sea calculation delegates to the authoritative pricing engine", () => {
-  const solar = calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Solar panels", cbm: "8.38593", weight: "3400", units: "0" });
+  const solar = calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Solar panels", cbm: "8.38593", weight: "3400", units: "0", pricingDate: "2026-11-09T08:00:00.000Z" });
   assert.equal(solar.category, "COMMODITIES");
   assert.equal(solar.cbmRate, 9500);
   assert.equal(solar.packageTier, "KD Standard");
   assert.equal(solar.densityApplies, false);
   assert.equal(solar.final.toFixed(2), "79696.34");
+  // The same cargo on a quotation created from 2026-11-10 uses the new rates (KargoDoor ₱10,500, Ni Hao ₱9,500).
+  const solarNew = calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Solar panels", cbm: "8.38593", weight: "3400", units: "0", pricingDate: "2026-11-10T00:30:00.000Z" });
+  assert.equal(solarNew.cbmRate, 10500);
+  assert.equal(solarNew.final.toFixed(2), (8.38593 * 10500 + 30).toFixed(2));
+  assert.equal(solarNew.niHaoEstimate, Math.round(8.38593 * 9500 * 100) / 100);
+  assert.equal(solar.niHaoEstimate, Math.round(8.38593 * 8500 * 100) / 100);
   const denseSolar = calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Solar panels", cbm: "0.126", weight: "1000", units: "0" });
   assert.equal(denseSolar.category, "COMMODITIES");
   assert.equal(denseSolar.packageTier, "KD Max");
@@ -313,8 +319,10 @@ test("live admin Sea calculation delegates to the authoritative pricing engine",
   assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Bags", cbm: "1", weight: "425", units: "0" }).densityApplies, false);
   assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Bags", cbm: "1", weight: "500", units: "0" }).packageTier, "KD Max");
   assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Bags", cbm: "0.01", weight: "100", units: "0" }).packageTier, "KD Max");
-  for (const item of ["Mobile phones", "Computers", "Tablets"])
-    assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item, cbm: "1", weight: "1", units: "1" }).final, 10780);
+  for (const item of ["Mobile phones", "Computers", "Tablets"]) {
+    assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item, cbm: "1", weight: "1", units: "1", pricingDate: "2026-11-09" }).final, 10780);
+    assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item, cbm: "1", weight: "1", units: "1", pricingDate: "2026-11-10" }).final, 11780);
+  }
   assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Mobile / computer parts & accessories", cbm: "1", weight: "1", units: "1" }).category, "MOBILE / COMPUTERS / TABLETS");
 });
 test("admin quotation density uses the strict 425 kg/CBM threshold", () => {
@@ -396,7 +404,11 @@ test("approved quotations create one pending, unpaid shipment with a safe custom
   assert.equal(JSON.parse(String(log.new_value)).source_quotation_id, quotationId);
   await assert.rejects(createShipmentFromApprovedQuotation(db, user, quotationId), /already exists/);
 });
-test("shipments get a Ni Hao cost estimate from the Ni Hao rates unless Ni Hao's actual cost is known", async () => {
+/** Freezes the clock on 2026-11-09 (Manila) so records made in the test are priced on the pre-2026-11-10 sea rates. */
+const pinBeforeNewSeaRates = (t: { mock: { timers: { enable: (options: { apis: "Date"[]; now: number }) => void } } }) =>
+  t.mock.timers.enable({ apis: ["Date"], now: Date.parse("2026-11-09T08:00:00.000Z") });
+test("shipments get a Ni Hao cost estimate from the Ni Hao rates unless Ni Hao's actual cost is known", async (t) => {
+  pinBeforeNewSeaRates(t); // expected amounts below use the sea rates before 2026-11-10
   const { sql, db, user } = database();
   const estimated = await createShipmentFromApprovedQuotation(db, user, insertQuotation(sql));
   const row = sql.prepare("SELECT nihao_cost, nihao_cost_source FROM shipments WHERE id = ?").get(estimated.shipmentId)!;
@@ -436,7 +448,8 @@ test("migration 0035 moves Air Freight shipments on Sea Transit to Air Transit",
   assert.deepEqual(sql.prepare("SELECT id, status FROM shipments ORDER BY id").all().map((row) => [row.id, row.status]), [["air", "Air Transit"], ["sea", "Sea Transit"]]);
   assert.throws(() => sql.exec("UPDATE shipments SET status = 'Flying'"), /CHECK/);
 });
-test("shipments added by hand carry their own cargo details and compute the KargoDoor charge and Ni Hao cost automatically", async () => {
+test("shipments added by hand carry their own cargo details and compute the KargoDoor charge and Ni Hao cost automatically", async (t) => {
+  pinBeforeNewSeaRates(t); // expected amounts below use the sea rates before 2026-11-10
   const { sql, db, user } = database();
   const customerId = await saveRecord(db, "customers", { ...customer, customer_code: "KD-MANUAL", email: "manual@example.test" }, user, "", "");
   const { tracking_number: _t, cargo_code: _c, ...formInput } = shipmentInput(customerId);
@@ -491,7 +504,33 @@ test("shipments added by hand carry their own cargo details and compute the Karg
   assert.equal((await shipmentNiHaoEstimate(db, legacyId, { service_type: "Air Freight", cbm: 0.0381, weight_kg: 7.5 }))?.cost, 280000);
   assert.equal(await verifiedShipmentFreight(db, legacyId, 0.0381, 7.5), null, "hand-added shipments are not repriced through the quotation path");
 });
-test("verified warehouse measurements recalculate Sea and Air freight and refresh only eligible invoices", async () => {
+test("from 2026-11-10 new sea rates price new work while earlier quotations and shipments keep their rates", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: Date.parse("2026-11-15T03:00:00.000Z") });
+  const { sql, db, user } = database();
+  const cargo = { item: "Bags", category: "LOW VALUE GOODS", cbm: "2", weight: "300", originWarehouse: "Guangzhou" };
+
+  // Quotation made on 2026-09-15 (before), with a saved final amount.
+  const oldQuotation = insertQuotation(sql, { cargo });
+  const oldSaved = sql.prepare("SELECT final_amount, calculated_amount, pricing_snapshot FROM quotations WHERE id = ?").get(oldQuotation)!;
+  const oldShipment = await createShipmentFromApprovedQuotation(db, user, oldQuotation);
+  assert.deepEqual(await verifiedShipmentFreight(db, oldShipment.shipmentId, 2, 300), { shippingCharge: (2 * 7999 + 30) * 100, pricingMethod: "CBM-Based" });
+  assert.equal((await shipmentNiHaoEstimate(db, oldShipment.shipmentId, { service_type: "Sea Freight", verified_cbm: 2, verified_weight_kg: 300 }))?.cost, 2 * 7000 * 100);
+  assert.deepEqual({ ...sql.prepare("SELECT final_amount, calculated_amount, pricing_snapshot FROM quotations WHERE id = ?").get(oldQuotation)! }, { ...oldSaved }, "saved quotation amounts are untouched");
+
+  // The same cargo on a quotation made on 2026-11-10 (Manila) uses the new rates.
+  const newQuotation = insertQuotation(sql, { cargo });
+  sql.prepare("UPDATE quotations SET created_at = '2026-11-09T16:00:00.000Z' WHERE id = ?").run(newQuotation);
+  const newShipment = await createShipmentFromApprovedQuotation(db, user, newQuotation);
+  assert.deepEqual(await verifiedShipmentFreight(db, newShipment.shipmentId, 2, 300), { shippingCharge: (2 * 8999 + 30) * 100, pricingMethod: "CBM-Based" });
+  assert.equal((await shipmentNiHaoEstimate(db, newShipment.shipmentId, { service_type: "Sea Freight", verified_cbm: 2, verified_weight_kg: 300 }))?.cost, 2 * 8000 * 100);
+
+  // Shipments added by hand follow their own date.
+  const values = { service_type: "Sea Freight", cargo_item: "Batteries", cargo_category: "SENSITIVE - BATTERIES", cbm: 1, weight_kg: 300, shipping_charge: null };
+  assert.deepEqual(resolveManualShipmentCharge({ ...values, created_at: "2026-11-01T02:00:00.000Z" }, null), { cost: 1603000, source: "rate" }, "before: ₱16,000 + ₱30");
+  assert.deepEqual(resolveManualShipmentCharge({ ...values, created_at: null }, null), { cost: 1703000, source: "rate" }, "new shipment: ₱17,000 + ₱30");
+});
+test("verified warehouse measurements recalculate Sea and Air freight and refresh only eligible invoices", async (t) => {
+  pinBeforeNewSeaRates(t); // expected amounts below use the sea rates before 2026-11-10
   const { sql, db, user } = database();
 
   const seaQuotationId = insertQuotation(sql, {
@@ -559,7 +598,8 @@ test("approved FCL quotations create an FCL shipment and invoice-ready manual ra
   const invoiceId = await createInvoice(db, { shipment_id: result.shipmentId, delivery_charge: "0", other_charge: "0", status: "Draft", issued_at: "", due_at: "" }, user);
   assert.equal(sql.prepare("SELECT shipment_id FROM invoices WHERE id=?").get(invoiceId)!.shipment_id, result.shipmentId);
 });
-test("an approved bulk furniture quotation creates one trackable shipment per package and keeps invoices separate", async () => {
+test("an approved bulk furniture quotation creates one trackable shipment per package and keeps invoices separate", async (t) => {
+  pinBeforeNewSeaRates(t); // expected amounts below use the sea rates before 2026-11-10
   const { sql, db, user } = database();
   const customerId = await saveRecord(db, "customers", { ...customer, customer_code: "KDOOR-6690", email: "juan.test@example.com" }, user, "", "");
   const packages = [

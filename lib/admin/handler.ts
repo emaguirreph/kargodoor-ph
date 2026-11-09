@@ -185,7 +185,7 @@ async function shipmentLiveEstimate(db: D1Database, params: URLSearchParams) {
   const id = params.get("id") ?? "";
   if (id && !/^[\da-f-]{36}$/i.test(id)) throw new AdminError("Invalid record ID.");
   const saved = id
-    ? await db.prepare("SELECT source_quotation_id, tracking_remarks FROM shipments WHERE id = ?").bind(id).first<RecordData>()
+    ? await db.prepare("SELECT source_quotation_id, tracking_remarks, created_at FROM shipments WHERE id = ?").bind(id).first<RecordData>()
     : null;
   if (id && !saved) throw new AdminError("Record not found.", 404);
   const number = (key: string) => {
@@ -208,6 +208,8 @@ async function shipmentLiveEstimate(db: D1Database, params: URLSearchParams) {
     values.cargo_item = cargoItem;
     values.cargo_category = shipmentCargoCategory(serviceType, cargoItem);
     values.cargo_quantity = number("cargo_quantity");
+    // Shipments made before 2026-11-10 keep the earlier sea rates.
+    values.created_at = saved?.created_at ?? null;
   }
   let kargodoor: { cost: number; basis: string } | null = null;
   if (!saved?.source_quotation_id) {
@@ -689,7 +691,7 @@ export async function handleAdmin(
       if (entity === "shipments") {
         const current = values as RecordData;
         const previous = id
-          ? await db.prepare("SELECT nihao_cost, nihao_cost_source, shipping_charge, shipping_charge_source, source_quotation_id, payment_status FROM shipments WHERE id = ?").bind(id).first<RecordData>()
+          ? await db.prepare("SELECT nihao_cost, nihao_cost_source, shipping_charge, shipping_charge_source, source_quotation_id, payment_status, created_at FROM shipments WHERE id = ?").bind(id).first<RecordData>()
           : null;
         // Only invoice payments change the payment status, so it can never say
         // Paid without the money being recorded.
@@ -707,7 +709,8 @@ export async function handleAdmin(
           current.shipping_charge_source = charge.source;
           measuredCharge = Boolean(verifiedFreight) && charge.source === "rate";
         } else {
-          const charge = resolveManualShipmentCharge(current, previous);
+          // The rates follow the shipment's own date (pre-2026-11-10 shipments keep the earlier sea rates).
+          const charge = resolveManualShipmentCharge({ ...current, created_at: previous?.created_at ?? null }, previous);
           current.shipping_charge = charge.cost;
           current.shipping_charge_source = charge.source;
         }

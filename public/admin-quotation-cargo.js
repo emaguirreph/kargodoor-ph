@@ -399,6 +399,8 @@
               weight: weight.value,
               units: units.value || "0",
               packageQuantity: packageQuantity?.value || "1",
+              // Saved quotations keep the sea rates of the day they were created.
+              pricingDate: form.querySelector("[data-pricing-date]")?.value || "",
             }
           : {
               freightType: freight.value,

@@ -1,5 +1,13 @@
 export type SeaCategory = "LOW VALUE GOODS" | "VOLUME GOODS" | "COMMODITIES" | "HIGH VALUE" | "SENSITIVE - BATTERIES" | "SENSITIVE - CHEMICALS" | "MOBILE / COMPUTERS / TABLETS";
-export const seaRates: Record<SeaCategory, { cbmRate: number; densityRate: number | null }> = {
+type SeaRateTable = Record<SeaCategory, { cbmRate: number; densityRate: number | null }>;
+/**
+ * New sea rates start on this Manila date. Quotations and shipments created
+ * before it keep the earlier rates when they are recalculated; saved amounts
+ * are never touched.
+ */
+export const seaRatesEffectiveDate = "2026-11-10";
+/** KargoDoor sea rates for records created before seaRatesEffectiveDate. */
+export const seaRatesBeforeNov2026: SeaRateTable = {
   "LOW VALUE GOODS": { cbmRate: 7999, densityRate: 19 },
   "VOLUME GOODS": { cbmRate: 8500, densityRate: 20 },
   COMMODITIES: { cbmRate: 9500, densityRate: 22 },
@@ -8,6 +16,31 @@ export const seaRates: Record<SeaCategory, { cbmRate: number; densityRate: numbe
   "SENSITIVE - CHEMICALS": { cbmRate: 13000, densityRate: 31 },
   "MOBILE / COMPUTERS / TABLETS": { cbmRate: 10500, densityRate: null },
 };
+/** Current KargoDoor sea rates (from 2026-11-10). Density rates are unchanged. */
+export const seaRates: SeaRateTable = {
+  "LOW VALUE GOODS": { cbmRate: 8999, densityRate: 19 },
+  "VOLUME GOODS": { cbmRate: 9500, densityRate: 20 },
+  COMMODITIES: { cbmRate: 10500, densityRate: 22 },
+  "HIGH VALUE": { cbmRate: 12000, densityRate: 26 },
+  "SENSITIVE - BATTERIES": { cbmRate: 17000, densityRate: 38 },
+  "SENSITIVE - CHEMICALS": { cbmRate: 14000, densityRate: 31 },
+  "MOBILE / COMPUTERS / TABLETS": { cbmRate: 11500, densityRate: null },
+};
+/**
+ * Manila calendar date (YYYY-MM-DD) of a record's created_at or a plain date.
+ * Missing or unreadable values count as today, so new work gets the new rates.
+ */
+export function manilaDate(value?: unknown): string {
+  const raw = value instanceof Date ? value.toISOString() : String(value ?? "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const normalized = /^\d{4}-\d{2}-\d{2} \d/.test(raw) && !/[zZ]|[+-]\d{2}:?\d{2}$/.test(raw) ? `${raw.replace(" ", "T")}Z` : raw;
+  const time = raw ? Date.parse(normalized) : NaN;
+  return new Date((Number.isFinite(time) ? time : Date.now()) + 8 * 3600_000).toISOString().slice(0, 10);
+}
+/** True when a record dated pricingDate is priced on the earlier sea rates. */
+export const usesEarlierSeaRates = (pricingDate?: unknown) => manilaDate(pricingDate) < seaRatesEffectiveDate;
+/** KargoDoor sea rates for a record created on pricingDate (default: today). */
+export const seaRatesOn = (pricingDate?: unknown): SeaRateTable => usesEarlierSeaRates(pricingDate) ? seaRatesBeforeNov2026 : seaRates;
 export const itemCategories: Record<string, SeaCategory> = {
   "Bags":"LOW VALUE GOODS","Plastic toys (non-copy)":"LOW VALUE GOODS","Beddings":"LOW VALUE GOODS","Clothes":"LOW VALUE GOODS","Household wares":"LOW VALUE GOODS","Face masks":"LOW VALUE GOODS","Packaging materials":"LOW VALUE GOODS","Plastic products":"LOW VALUE GOODS","Shoes / slippers":"LOW VALUE GOODS","Textile & leather":"LOW VALUE GOODS","Tissue paper":"LOW VALUE GOODS",
   "Construction materials":"VOLUME GOODS","Daily necessities":"VOLUME GOODS","Eyeglasses":"VOLUME GOODS","Office & school supplies":"VOLUME GOODS","Pet supplies / grooming":"VOLUME GOODS","Umbrellas":"VOLUME GOODS",
@@ -29,12 +62,16 @@ export const roundAirBillableWeight = (weight: number) => Math.ceil(weight);
  */
 export const transferFeePesos = 30;
 const valid = (value: number) => Number.isFinite(value) && value >= 0;
-export function seaQuote(category: SeaCategory, cbm: number, weight: number, units = 0) {
+/**
+ * KargoDoor sea price. pricingDate is the record's created_at (or a
+ * YYYY-MM-DD date); leave it out for new work to use the current rates.
+ */
+export function seaQuote(category: SeaCategory, cbm: number, weight: number, units = 0, pricingDate?: unknown) {
   if (!valid(cbm) || !valid(weight) || cbm <= 0 || (category === "MOBILE / COMPUTERS / TABLETS" && (!Number.isInteger(units) || units < 1))) throw new Error("Invalid sea quotation inputs.");
-  const rate = seaRates[category], density = weight / cbm;
+  const rate = seaRatesOn(pricingDate)[category], density = weight / cbm;
   if (category === "MOBILE / COMPUTERS / TABLETS") {
-    const base = Math.max(1700, cbm * 10500), unitCharge = units * 250;
-    return { packageTier:"KD Standard", density, base, volumeCharge:cbm*10500, densityCharge:0, unitCharge, densityApplies:false, final:base+unitCharge+transferFeePesos, transferFee:transferFeePesos, pricingMethod:"₱10,500/CBM + ₱250/unit" };
+    const volumeCharge = cbm * rate.cbmRate, base = Math.max(1700, volumeCharge), unitCharge = units * 250;
+    return { packageTier:"KD Standard", density, base, volumeCharge, densityCharge:0, unitCharge, densityApplies:false, final:base+unitCharge+transferFeePesos, transferFee:transferFeePesos, pricingMethod:`₱${rate.cbmRate.toLocaleString("en-PH")}/CBM + ₱250/unit` };
   }
   const fixed = cbm <= .01 ? 250 : cbm <= .05 ? 750 : cbm <= .125 ? 1400 : null;
   const volumeCharge = fixed ?? cbm * rate.cbmRate;

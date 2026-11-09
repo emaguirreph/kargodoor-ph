@@ -1,5 +1,5 @@
 import { estimateNiHaoCost } from "./nihao-estimate";
-import { airItems, airQuote, itemCategories, seaQuote, seaRates, type AirItem, type SeaCategory } from "./quotation-pricing";
+import { airItems, airQuote, itemCategories, seaQuote, seaRates, seaRatesOn, type AirItem, type SeaCategory } from "./quotation-pricing";
 
 const numeric = (value: unknown, label: string, required = true) => {
   const raw = String(value ?? "").trim();
@@ -24,17 +24,20 @@ export function calculateAdminSeaQuote(input: Record<string, unknown>) {
   const cbm = numeric(input.cbm, "Declared CBM");
   const weight = numeric(input.weight, "actual weight");
   const units = numeric(input.units, "units", false);
-  const calculation = seaQuote(category, cbm, weight, units);
+  // Editing a saved quotation sends its created_at so it keeps the rates of its day; new quotations use today's rates.
+  const pricingDate = input.pricingDate || undefined;
+  const calculation = seaQuote(category, cbm, weight, units, pricingDate);
   const packageCount = numeric(input.packageQuantity, "quantity of packages", false) || 1;
+  const rates = seaRatesOn(pricingDate);
   return {
-    ...niHao(estimateNiHaoCost({ serviceType: "Sea Freight", category, cbm, weight, packageCount })),
+    ...niHao(estimateNiHaoCost({ serviceType: "Sea Freight", category, cbm, weight, packageCount, pricingDate })),
     item,
     category,
     cbm,
     weight,
     units,
-    cbmRate: seaRates[category].cbmRate,
-    densityRate: seaRates[category].densityRate,
+    cbmRate: rates[category].cbmRate,
+    densityRate: rates[category].densityRate,
     ...calculation,
   };
 }
