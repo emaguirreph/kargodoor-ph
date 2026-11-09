@@ -12,6 +12,7 @@ export type LeadAlert = {
   weightKg: number;
   estimate: string;
   tier?: string;
+  item?: string;
 };
 
 const FROM = "leads@kargodoorph.com";
@@ -29,6 +30,7 @@ export function leadAlertMessage(lead: LeadAlert, now = new Date()) {
     `Name: ${oneLine(lead.fullName)}`,
     `Phone: ${oneLine(lead.phone)}`,
     `Email: ${oneLine(lead.email) || "—"}`,
+    `Item: ${oneLine(lead.item ?? "") || "—"}`,
     `Service: ${lead.service}`,
     `CBM: ${lead.cbm}`,
     `Weight: ${lead.weightKg} kg`,

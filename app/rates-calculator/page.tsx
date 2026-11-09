@@ -43,6 +43,7 @@ export default function RatesCalculatorPage() {
   const [service, setService] = useState<Service>("sea");
   const [cbm, setCbm] = useState("");
   const [weight, setWeight] = useState("");
+  const [item, setItem] = useState("");
   const [estimate, setEstimate] = useState<Estimate | null>(null);
   const [pendingEstimate, setPendingEstimate] = useState<Estimate | null>(null);
   const [leadOpen, setLeadOpen] = useState(false);
@@ -98,10 +99,12 @@ export default function RatesCalculatorPage() {
       if (params.get("service") === "air") setService("air");
       const qCbm = params.get("cbm") ?? "";
       const qWeight = params.get("weight") ?? "";
+      const qItem = params.get("item") ?? "";
+      if (qItem) setItem(qItem.slice(0, 300));
       if (qCbm || qWeight) {
         setCbm(qCbm);
         setWeight(qWeight);
-        autoSubmit.current = Boolean(qCbm && qWeight);
+        autoSubmit.current = Boolean(qCbm && qWeight && qItem.trim());
       }
     }, 0);
     return () => window.clearTimeout(timer);
@@ -137,6 +140,12 @@ export default function RatesCalculatorPage() {
 
   const calculate = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (item.trim().length < 2) {
+      setEstimate(null);
+      setError("Enter the item you are shipping.");
+      return;
+    }
 
     const numericWeight = Number(weight);
 
@@ -176,7 +185,7 @@ export default function RatesCalculatorPage() {
     setLeadError("");
     setSubmittingLead(true);
     try {
-      const response = await fetch("/api/leads", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...lead, service, cbm: Number(cbm), weight: Number(weight) }) });
+      const response = await fetch("/api/leads", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...lead, service, cbm: Number(cbm), weight: Number(weight), item: item.trim() }) });
       const body = await response.json() as { error?: string; estimate?: Estimate };
       if (!response.ok || !body.estimate) throw new Error(body.error || "We could not save your inquiry.");
       sessionStorage.setItem("kd-calculator-lead-captured", "1");
@@ -225,6 +234,20 @@ export default function RatesCalculatorPage() {
           <div className="calc">
             <form className="panel" ref={formRef} onSubmit={calculate} noValidate>
               <h3>SHIPPING CALCULATOR</h3>
+              <div className="field">
+                <label htmlFor="calc-item">ITEM</label>
+                <input
+                  id="calc-item"
+                  type="text"
+                  maxLength={300}
+                  placeholder="Example: Phone cases"
+                  value={item}
+                  onChange={(event) => {
+                    setItem(event.target.value);
+                    resetResult();
+                  }}
+                />
+              </div>
               <div className="row2">
                 <div className="field">
                   <label htmlFor="calc-cbm">CBM (CUBIC METER)</label>
@@ -279,7 +302,7 @@ export default function RatesCalculatorPage() {
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
                 <span>
                   {sea
-                    ? "Both CBM and weight are required for Sea Freight."
+                    ? "Item, CBM and weight are required for Sea Freight."
                     : "Charges are based on the higher of Actual Weight or Volumetric Weight (CBM × 167 kg)."}
                 </span>
               </p>

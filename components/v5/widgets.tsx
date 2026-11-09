@@ -10,6 +10,7 @@ export function QuickCalculator() {
   const [service, setService] = useState<"sea" | "air">("sea");
   const [cbm, setCbm] = useState("");
   const [weight, setWeight] = useState("");
+  const [item, setItem] = useState("");
   const sea = service === "sea";
 
   return (
@@ -21,6 +22,7 @@ export function QuickCalculator() {
         const params = new URLSearchParams({ service });
         if (cbm) params.set("cbm", cbm);
         if (weight) params.set("weight", weight);
+        if (item.trim()) params.set("item", item.trim());
         router.push(`/rates-calculator?${params}`);
       }}
     >
@@ -32,6 +34,10 @@ export function QuickCalculator() {
         <span className="thumb" />
         <button type="button" aria-pressed={sea} onClick={() => setService("sea")}>SEA FREIGHT</button>
         <button type="button" aria-pressed={!sea} onClick={() => setService("air")}>AIR FREIGHT</button>
+      </div>
+      <div className="field qitem">
+        <label htmlFor="quick-item">ITEM</label>
+        <input id="quick-item" type="text" maxLength={300} placeholder="Example: Phone cases" value={item} onChange={(e) => setItem(e.target.value)} />
       </div>
       <div className="field">
         <label htmlFor="quick-cbm">CBM (CUBIC METER)</label>
