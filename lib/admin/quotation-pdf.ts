@@ -2,6 +2,7 @@
 import { invoiceLogo } from "./invoice-logo";
 import { C, Canvas, PAGE_H, PDF_LEFT as L, PDF_RIGHT as R, buildPdf, niceDate, pdfTextWidth as textWidth, peso, trimNumber, wrapPdfText as wrap } from "./invoice-pdf";
 import { hongKongMark, isHongKongWarehouse } from "../warehouse-addresses";
+import { bulkDimensions, bulkPackageLines } from "./bulk-quotation";
 
 /**
  * Customer quotation PDF (A4), same look as the customer invoice (Em,
@@ -21,7 +22,7 @@ type CargoSnapshot = {
   description?: unknown; item?: unknown; category?: unknown; quantity?: unknown; packageQuantity?: unknown;
   units?: unknown; unitType?: unknown; length?: unknown; width?: unknown; height?: unknown; measurementUnit?: unknown;
   showPackageDimensions?: unknown; cbm?: unknown; weight?: unknown; supplierName?: unknown; origin?: unknown;
-  originWarehouse?: unknown; containerSize?: unknown; containerQuantity?: unknown;
+  originWarehouse?: unknown; containerSize?: unknown; containerQuantity?: unknown; bulkPackages?: unknown;
 };
 type QuotationPdfData = {
   customer_snapshot?: unknown; cargo_snapshot?: unknown; pricing_snapshot?: unknown; quotation_date?: unknown;
@@ -75,7 +76,8 @@ function customerQuotationPdf(q: QuotationPdfData, _logoJpeg?: Uint8Array) {
 
   // Three info boxes: prepared for, quotation, supplier.
   const boxTop = PAGE_H - 145;
-  const boxH = 84;
+  const supplierWraps = [cargo.supplierName, cargo.origin].filter((v) => textWidth(str(v), 8.6) > (R - L - 190 - 24) / 2 - 22 - 50).length;
+  const boxH = 84 + supplierWraps * 11;
   const gap = 12;
   const w1 = 190;
   const w2 = (R - L - w1 - gap * 2) / 2;
@@ -105,6 +107,8 @@ function customerQuotationPdf(q: QuotationPdfData, _logoJpeg?: Uint8Array) {
   const quoteRows: [string, string][] = [["Date", niceDate(q.quotation_date)]];
   if (str(q.valid_until)) quoteRows.push(["Valid until", niceDate(q.valid_until)]);
   quoteRows.push(["Service", freightType || "—"]);
+  const bulkLines = bulkPackageLines(cargo as Record<string, unknown>);
+  if (bulkLines.length && str(cargo.originWarehouse)) quoteRows.push(["Warehouse", str(cargo.originWarehouse)]);
   kv("Quotation", boxes[1], w2, quoteRows);
   const supplierRows: [string, string][] = [];
   if (str(cargo.supplierName)) supplierRows.push(["Supplier", str(cargo.supplierName)]);
@@ -120,11 +124,50 @@ function customerQuotationPdf(q: QuotationPdfData, _logoJpeg?: Uint8Array) {
   const cbm = num(cargo.cbm);
   const kg = num(cargo.weight);
   const dims = [cargo.length, cargo.width, cargo.height].map((v) => Number(v ?? 0));
-  const item = str(cargo.description) || str(cargo.item) || "Cargo";
+  const bulkLabelItem = bulkPackageLines(cargo as Record<string, unknown>)[0]?.item.replace(/\s*\([^)]*\)\s*$/, "").trim();
+  const item = bulkLabelItem || str(cargo.description) || str(cargo.item) || "Cargo";
   const packages = Number(cargo.packageQuantity ?? 1);
   const qty = isFcl
     ? `${num(cargo.containerQuantity) || 1} × ${str(cargo.containerSize) || "container"}`
     : `${Number.isInteger(packages) && packages > 0 ? packages : 1}`;
+  if (bulkLines.length) {
+    // Bulk quotation: one row per package line, each with its own amount.
+    const bcols: { head: string; w: number; align?: "center" | "right" }[] = [
+      { head: "#", w: 22, align: "center" }, { head: "ITEM", w: 170 }, { head: "DIMENSIONS (L × W × H)", w: 118 },
+      { head: "CBM", w: 52, align: "center" }, { head: "WEIGHT", w: 62, align: "center" }, { head: "AMOUNT", w: 0, align: "right" },
+    ];
+    bcols[bcols.length - 1].w = R - L - bcols.slice(0, -1).reduce((a, col) => a + col.w, 0);
+    const pad = 7;
+    const xAt = (i: number) => { const x0 = L + bcols.slice(0, i).reduce((a, col) => a + col.w, 0), col = bcols[i]; return col.align === "center" ? x0 + col.w / 2 : col.align === "right" ? x0 + col.w - pad : x0 + pad; };
+    const bth = 22;
+    c.round(L, y - bth, R - L, bth, 5, C.blue);
+    c.rect(L, y - bth, R - L, 6, C.blue);
+    bcols.forEach((col, i) => c.text(col.head, xAt(i), y - 14, 6.6, { bold: true, color: C.white, spacing: 0.5, align: col.align ?? "left" }));
+    y -= bth;
+    const maxRows = 12;
+    const shown = bulkLines.length > maxRows ? bulkLines.slice(0, maxRows - 1) : bulkLines;
+    const rowH = 15;
+    shown.forEach((line, index) => {
+      const values = [String(index + 1), wrap(line.item, 8.4, bcols[1].w - pad * 2)[0] ?? "", bulkDimensions(line), line.cbm.toFixed(3), `${trimNumber(Number(line.weight.toFixed(2)))} kg`, peso(line.charge)];
+      values.forEach((value, i) => c.text(value, xAt(i), y - 10.5, 8.4, { align: bcols[i].align ?? "left" }));
+      y -= rowH;
+      c.hline(L, R, y, C.greyLine);
+    });
+    if (shown.length < bulkLines.length) {
+      const rest = bulkLines.slice(shown.length);
+      c.text(`+ ${rest.length} more packages`, xAt(1), y - 10.5, 8.4, { color: C.muted });
+      c.text(peso(rest.reduce((a, line) => a + line.charge, 0)), xAt(5), y - 10.5, 8.4, { align: "right" });
+      y -= rowH;
+      c.hline(L, R, y, C.greyLine);
+    }
+    const totalCbm = bulkLines.reduce((a, line) => a + line.cbm, 0), totalKg = bulkLines.reduce((a, line) => a + line.weight, 0);
+    c.text(`TOTAL · ${bulkLines.length} line${bulkLines.length === 1 ? "" : "s"}`, xAt(1), y - 10.5, 8.4, { bold: true });
+    c.text(totalCbm.toFixed(3), xAt(3), y - 10.5, 8.4, { bold: true, align: "center" });
+    c.text(`${trimNumber(Number(totalKg.toFixed(2)))} kg`, xAt(4), y - 10.5, 8.4, { bold: true, align: "center" });
+    c.text(peso(bulkLines.reduce((a, line) => a + line.charge, 0)), xAt(5), y - 10.5, 8.4, { bold: true, align: "right" });
+    y -= rowH;
+    c.hline(L, R, y);
+  } else {
   const cols: { head: [string, string]; w: number; value: string; align?: "center" }[] = [
     { head: ["ITEM", ""], w: 120, value: item },
     { head: ["DIMENSIONS", "(L × W × H)"], w: 84, value: dims.some((v) => v > 0) ? `${dims.map((v) => (v > 0 ? trimNumber(v) : "—")).join(" × ")} ${str(cargo.measurementUnit) || "cm"}` : "—" },
@@ -156,6 +199,7 @@ function customerQuotationPdf(q: QuotationPdfData, _logoJpeg?: Uint8Array) {
   cells.forEach((cell, i) => cell.lines.forEach((line, j) => c.text(line, cell.x, y - 16 - j * 11.5, 8.8, { bold: i === 0 && j === 0, align: cell.align ?? "left" })));
   y -= rowH;
   c.hline(L, R, y);
+  }
 
   // Estimated all-in rate, full width under the table.
   y -= 12;
@@ -214,7 +258,7 @@ function customerQuotationPdf(q: QuotationPdfData, _logoJpeg?: Uint8Array) {
   for (const paragraph of terms.split(/\n\s*\n/)) {
     for (const raw of paragraph.split("\n")) {
       for (const line of wrap(raw, 7.6, R - L)) {
-        if (y < 136) break;
+        if (y < (bulkLines.length ? 119 : 136)) break;
         c.text(line, L, y, 7.6, { color: C.muted });
         y -= 10;
       }

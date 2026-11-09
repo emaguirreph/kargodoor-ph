@@ -29,6 +29,7 @@ import { measurementUnits } from "./quotation-cbm";
 import { densityThreshold } from "./quotation-density";
 import { quotationNiHaoEstimate, resolveNiHaoCost } from "./nihao-estimate";
 import { defaultQuotationTerms } from "./quotation-pdf";
+import { bulkPackageLines, bulkPackageTable, isBulkCargo } from "./bulk-quotation";
 type Row = Record<string, unknown>;
 type Snapshot = Record<string, unknown>;
 
@@ -273,7 +274,7 @@ function quotationCustomerMessage(q: Row, accountNumber = "") {
 
 const quotationMessageCopyScript = () => `<script src="/admin-copy.js" defer></script>`;
 
-function customerPreview(q: Row, accountNumber = "") {
+export function customerPreview(q: Row, accountNumber = "") {
   const customer = snapshot(q.customer_snapshot);
   const cargo = snapshot(q.cargo_snapshot);
   const c = customer.data;
@@ -302,6 +303,7 @@ function customerPreview(q: Row, accountNumber = "") {
       <section class="quotation-detail-card"><h2>Cargo &amp; price</h2><dl class="quotation-detail-grid">${detail("Item", item)}${detail("Freight type", q.freight_type)}${detail("Declared CBM", shipment.cbm)}${detail("Declared weight", shipment.weight === undefined || shipment.weight === null || shipment.weight === "" ? "" : `${shipment.weight} kg`)}${detail("Origin warehouse", shipment.originWarehouse)}<div class="quotation-detail-item quotation-total"><dt>KargoDoor shipping total</dt><dd>${pesos(q.final_amount)}</dd></div></dl></section>
       <section class="quotation-detail-card quotation-internal-card"><h2>Internal cost &amp; profit</h2><dl class="quotation-detail-grid"><div class="quotation-detail-item"><dt>Ni Hao cost</dt><dd>${cost}</dd></div><div class="quotation-detail-item"><dt>KargoDoor charge</dt><dd>${pesos(q.final_amount)}</dd></div><div class="quotation-detail-item"><dt>Gross profit</dt><dd>${gross}</dd></div><div class="quotation-detail-item"><dt>Gross margin</dt><dd>${margin}</dd></div></dl></section>
     </div>
+    ${bulkPackageTable(bulkPackageLines(shipment), true)}
   </article>`;
 }
 export async function quotationsPage(
@@ -459,6 +461,34 @@ export async function quotationsPage(
         const savedCargo = JSON.parse(
           String(existing.cargo_snapshot),
         ) as Record<string, unknown>;
+        if (isBulkCargo(savedCargo)) {
+          // Bulk quotation: the package lines and their prices stay as saved.
+          // Only status, dates, customer, supplier, warehouse and notes change.
+          const quotationDate = String(form.get("quotation_date") || "");
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(quotationDate))
+            throw new AdminError("Enter a valid quotation date.");
+          const validUntil = String(form.get("valid_until") || "");
+          if (validUntil && !/^\d{4}-\d{2}-\d{2}$/.test(validUntil))
+            throw new AdminError("Enter a valid valid-until date.");
+          const warehouse = String(form.get("origin_warehouse") || savedCargo.originWarehouse || "");
+          const cargo = {
+            ...savedCargo,
+            description: String(form.get("description") ?? savedCargo.description ?? "").trim() || String(savedCargo.description ?? ""),
+            supplierName: String(form.get("supplier_name") ?? "").trim(),
+            origin: String(form.get("origin") ?? "").trim(),
+            originWarehouse: warehouse,
+          };
+          const now = new Date().toISOString();
+          await db
+            .prepare("UPDATE quotations SET customer_id=?,status=?,quotation_date=?,valid_until=?,customer_snapshot=?,cargo_snapshot=?,notes=?,updated_at=? WHERE id=?")
+            .bind(customerId, status, quotationDate, validUntil || null, JSON.stringify(customer), JSON.stringify(cargo), String(form.get("notes") ?? ""), now, id)
+            .run();
+          await db
+            .prepare("INSERT INTO activity_log (id,admin_user_id,action,entity_type,entity_id,new_value,created_at) VALUES (?,?,?,?,?,?,?)")
+            .bind(randomUUID(), user.id, "update", "quotations", id, JSON.stringify({ status, bulk: true }), now)
+            .run();
+          return page("Saved", "", user.name, 303, { Location: `${path}?id=${id}` });
+        }
         const decimal = (key: string, required = false) => {
           const raw = String(form.get(key) ?? "").trim();
           if (!raw) {
@@ -845,6 +875,20 @@ export async function quotationsPage(
       const customer = snapshot(q.customer_snapshot).data,
         cargo = snapshot(q.cargo_snapshot).data,
         pricing = snapshot(q.pricing_snapshot).data;
+      if (isBulkCargo(cargo)) {
+        const v = (x: unknown) => esc(x);
+        const field = (name: string, label: string, x: unknown, type = "text") => `<label>${label}<input name="${name}" type="${type}" value="${v(x)}"></label>`;
+        const select = (name: string, label: string, x: unknown, options: string[]) => `<label>${label}<select name="${name}">${[...new Set([...options, String(x || "")].filter(Boolean))].map((o) => `<option value="${v(o)}"${String(x) === o ? " selected" : ""}>${v(o)}</option>`).join("")}</select></label>`;
+        return page(
+          "Edit quotation",
+          `<section><div class="actions"><a class="button" href="${path}?id=${v(q.id)}">Back</a></div><p class="notice"><strong>Bulk quotation.</strong> The package lines and their prices are fixed here. To change a line, make a new bulk quotation. You can still change the status, dates, customer, supplier, warehouse and terms.</p><form method="post" class="grid"><input type="hidden" name="csrf" value="${v(csrfToken(env, user.id, path))}"><input type="hidden" name="action" value="update"><input type="hidden" name="quotation_id" value="${v(q.id)}"><input type="hidden" name="customer_id" value="${v(q.customer_id ?? "")}"><p class="wide"><strong>Quotation No.</strong> ${v(q.quotation_number)}</p>${select("status", "Status", q.status, ["Draft", "Sent", "Approved", "Revised", "Cancelled"])}${field("quotation_date", "Quotation date", q.quotation_date, "date")}${field("valid_until", "Valid until", q.valid_until || "", "date")}${field("customer_name", "Customer name", customer.name)}${field("company", "Company", customer.company)}${field("mobile", "Contact number", customer.mobile)}${field("email", "Email", customer.email, "email")}<label class="wide">Address<textarea name="address">${v(customer.address)}</textarea></label>${field("description", "Customer cargo description", cargo.description)}${field("supplier_name", "Supplier Name", cargo.supplierName)}${field("origin", "Supplier / Origin Location", cargo.origin)}${select("origin_warehouse", "KargoDoor Warehouse", cargo.originWarehouse, [...originWarehouses])}<div class="wide">${bulkPackageTable(bulkPackageLines(cargo), !staff)}</div><label class="wide">Terms and Conditions<textarea name="notes">${v(q.notes)}</textarea></label><p class="wide actions"><button>Save changes</button></p></form></section>`,
+          user.name,
+          200,
+          {},
+          canMutateAdmin(user),
+          staff,
+        );
+      }
       const savedCategory = String(cargo.category || "");
       const savedSea = {
         ...pricing,
