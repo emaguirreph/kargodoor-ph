@@ -88,7 +88,7 @@ export const guideInsights: Insight[] = [
           "50 × 40 × 30 = 60,000",
           "60,000 ÷ 1,000,000 = 0.06 CBM bawat carton",
           "0.06 × 5 cartons = 0.30 CBM total",
-          "Sa KD Standard rate na ₱7,999 per CBM: 0.30 × ₱7,999 = ₱2,399.70",
+          "Sa KD Standard rate na ₱8,999 per CBM: 0.30 × ₱8,999 = ₱2,699.70",
         ],
       },
       {
@@ -100,7 +100,7 @@ export const guideInsights: Insight[] = [
           "KD Mini: hanggang 0.01 CBM, ₱250",
           "KD Lite: hanggang 0.05 CBM, ₱750",
           "KD Plus: hanggang 0.125 CBM, ₱1,400",
-          "KD Standard: higit 0.125 CBM, ₱7,999 per CBM (minimum ₱1,700)",
+          "KD Standard: higit 0.125 CBM, ₱8,999 per CBM (minimum ₱1,700)",
         ],
       },
       {
@@ -134,7 +134,7 @@ export const guideInsights: Insight[] = [
           "KD Mini: hanggang 0.01 CBM, ₱250",
           "KD Lite: hanggang 0.05 CBM, ₱750",
           "KD Plus: hanggang 0.125 CBM, ₱1,400",
-          "KD Standard: ₱7,999 per CBM, minimum ₱1,700",
+          "KD Standard: ₱8,999 per CBM, minimum ₱1,700",
           "KD Max (mabigat na cargo): nagsisimula sa ₱19 per kg",
         ],
       },
@@ -361,7 +361,7 @@ export const guideInsights: Insight[] = [
         heading: "Ang sagot ng KargoDoor PH",
         bullets: [
           "All-in ang rate: freight, customs clearance, duties, taxes, at processing",
-          "Malinaw na rates: KD Mini ₱250, KD Lite ₱750, KD Plus ₱1,400, KD Standard ₱7,999/CBM",
+          "Malinaw na rates: KD Mini ₱250, KD Lite ₱750, KD Plus ₱1,400, KD Standard ₱8,999/CBM",
           "Final charge base sa sukat at timbang sa warehouse, at ipinapakita namin kung by size o by weight",
           "Pickup sa Malabon, at FREE delivery para sa 2 CBM pataas sa loob ng 20 km",
         ],

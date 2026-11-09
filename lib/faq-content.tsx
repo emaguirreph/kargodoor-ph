@@ -282,7 +282,7 @@ export const faqs = [
           </li>
           <li>
             <b>KD Standard</b> — Above 0.125 CBM: starts at{" "}
-            <b>₱7,999/CBM</b>, minimum charge: <b>₱1,700</b>
+            <b>₱8,999/CBM</b>, minimum charge: <b>₱1,700</b>
           </li>
           <li>
             <b>KD Max</b> — High-density cargo: starts at <b>₱19/kg</b>,

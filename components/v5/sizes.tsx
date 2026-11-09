@@ -8,7 +8,7 @@ export const tiers = [
   { id: "mini", name: "KD Mini", from: "", price: "₱250", unit: "", range: "Up to 0.01 CBM · Fixed", cbm: 0.01 },
   { id: "lite", name: "KD Lite", from: "", price: "₱750", unit: "", range: "Above 0.01 to 0.05 CBM · Fixed", cbm: 0.05 },
   { id: "plus", name: "KD Plus", from: "", price: "₱1,400", unit: "", range: "Above 0.05 to 0.125 CBM · Fixed", cbm: 0.125 },
-  { id: "std", name: "KD Standard", from: "Starts at", price: "₱7,999", unit: "/CBM", range: "Above 0.125 CBM · minimum charge: ₱1,700", cbm: 1 },
+  { id: "std", name: "KD Standard", from: "Starts at", price: "₱8,999", unit: "/CBM", range: "Above 0.125 CBM · minimum charge: ₱1,700", cbm: 1 },
   { id: "max", name: "KD Max", from: "Starts at", price: "₱19", unit: "/kg", range: "High-density cargo", cbm: null },
 ] as const;
 
