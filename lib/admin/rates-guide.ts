@@ -19,7 +19,7 @@ function airBasis(item: (typeof airItems)[number]) {
 export const kargoDoorPackageTiers = [
   { tier: "KD Mini", range: "≤0.01 CBM", base: "₱250", rule: "If density >425, compare ₱250 with weight × category density rate. Higher wins." },
   { tier: "KD Lite", range: ">0.01–0.05 CBM", base: "₱750", rule: "If density >425, compare ₱750 with weight × category density rate. Higher wins." },
-  { tier: "KD Plus", range: ">0.05–0.125 CBM", base: "₱1,400", rule: "If density >425, compare ₱1,400 with weight × category density rate. Higher wins." },
+  { tier: "KD Plus", range: ">0.05–0.125 CBM", base: "₱1,499", rule: "If density >425, compare ₱1,499 with weight × category density rate. Higher wins." },
   { tier: "KD Standard", range: ">0.125 CBM", base: "Minimum ₱1,700", rule: "Base = MAX(₱1,700, CBM × category CBM rate). If density >425, compare base with density charge." },
   { tier: "KD Max", range: "Density charge wins", base: "Density-based charge", rule: "Applies only when density is >425 kg/CBM and the density charge is higher than the base charge." },
 ] as const;

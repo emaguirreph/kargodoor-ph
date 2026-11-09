@@ -18,14 +18,17 @@ export const seaRatesBeforeNov2026: SeaRateTable = {
 };
 /** Current KargoDoor sea rates (from 2026-11-10). Density rates are unchanged. */
 export const seaRates: SeaRateTable = {
-  "LOW VALUE GOODS": { cbmRate: 8999, densityRate: 19 },
-  "VOLUME GOODS": { cbmRate: 9500, densityRate: 20 },
-  COMMODITIES: { cbmRate: 10500, densityRate: 22 },
-  "HIGH VALUE": { cbmRate: 12000, densityRate: 26 },
-  "SENSITIVE - BATTERIES": { cbmRate: 17000, densityRate: 38 },
-  "SENSITIVE - CHEMICALS": { cbmRate: 14000, densityRate: 31 },
-  "MOBILE / COMPUTERS / TABLETS": { cbmRate: 11500, densityRate: null },
+  "LOW VALUE GOODS": { cbmRate: 9499, densityRate: 19 },
+  "VOLUME GOODS": { cbmRate: 9999, densityRate: 20 },
+  COMMODITIES: { cbmRate: 11199, densityRate: 22 },
+  "HIGH VALUE": { cbmRate: 12499, densityRate: 26 },
+  "SENSITIVE - BATTERIES": { cbmRate: 18999, densityRate: 38 },
+  "SENSITIVE - CHEMICALS": { cbmRate: 15499, densityRate: 31 },
+  "MOBILE / COMPUTERS / TABLETS": { cbmRate: 12999, densityRate: null },
 };
+/** KD Plus fixed price (>0.05–0.125 CBM): ₱1,400 before 2026-11-10, ₱1,499 from then. Mini and Lite are unchanged. */
+export const kdPlusPriceBeforeNov2026 = 1400;
+export const kdPlusPrice = 1499;
 /**
  * Manila calendar date (YYYY-MM-DD) of a record's created_at or a plain date.
  * Missing or unreadable values count as today, so new work gets the new rates.
@@ -41,6 +44,8 @@ export function manilaDate(value?: unknown): string {
 export const usesEarlierSeaRates = (pricingDate?: unknown) => manilaDate(pricingDate) < seaRatesEffectiveDate;
 /** KargoDoor sea rates for a record created on pricingDate (default: today). */
 export const seaRatesOn = (pricingDate?: unknown): SeaRateTable => usesEarlierSeaRates(pricingDate) ? seaRatesBeforeNov2026 : seaRates;
+/** KD Plus fixed price for a record created on pricingDate (default: today). */
+export const kdPlusPriceOn = (pricingDate?: unknown) => usesEarlierSeaRates(pricingDate) ? kdPlusPriceBeforeNov2026 : kdPlusPrice;
 export const itemCategories: Record<string, SeaCategory> = {
   "Bags":"LOW VALUE GOODS","Plastic toys (non-copy)":"LOW VALUE GOODS","Beddings":"LOW VALUE GOODS","Clothes":"LOW VALUE GOODS","Household wares":"LOW VALUE GOODS","Face masks":"LOW VALUE GOODS","Packaging materials":"LOW VALUE GOODS","Plastic products":"LOW VALUE GOODS","Shoes / slippers":"LOW VALUE GOODS","Textile & leather":"LOW VALUE GOODS","Tissue paper":"LOW VALUE GOODS",
   "Construction materials":"VOLUME GOODS","Daily necessities":"VOLUME GOODS","Eyeglasses":"VOLUME GOODS","Office & school supplies":"VOLUME GOODS","Pet supplies / grooming":"VOLUME GOODS","Umbrellas":"VOLUME GOODS",
@@ -73,13 +78,14 @@ export function seaQuote(category: SeaCategory, cbm: number, weight: number, uni
     const volumeCharge = cbm * rate.cbmRate, base = Math.max(1700, volumeCharge), unitCharge = units * 250;
     return { packageTier:"KD Standard", density, base, volumeCharge, densityCharge:0, unitCharge, densityApplies:false, final:base+unitCharge+transferFeePesos, transferFee:transferFeePesos, pricingMethod:`₱${rate.cbmRate.toLocaleString("en-PH")}/CBM + ₱250/unit` };
   }
-  const fixed = cbm <= .01 ? 250 : cbm <= .05 ? 750 : cbm <= .125 ? 1400 : null;
+  const tier = cbm <= .01 ? "KD Mini" : cbm <= .05 ? "KD Lite" : cbm <= .125 ? "KD Plus" : "KD Standard";
+  const fixed = tier === "KD Mini" ? 250 : tier === "KD Lite" ? 750 : tier === "KD Plus" ? kdPlusPriceOn(pricingDate) : null;
   const volumeCharge = fixed ?? cbm * rate.cbmRate;
   const base = fixed ?? Math.max(1700, volumeCharge);
   const densityApplies = density > 425;
   const densityCharge = weight * rate.densityRate!;
   const final = Math.max(base, densityApplies ? densityCharge : 0) + transferFeePesos;
-  return { transferFee:transferFeePesos, packageTier: densityApplies && densityCharge > base ? "KD Max" : fixed === 250 ? "KD Mini" : fixed === 750 ? "KD Lite" : fixed === 1400 ? "KD Plus" : "KD Standard", density, base, volumeCharge, densityCharge, unitCharge:0, densityApplies, final, pricingMethod:densityApplies && densityCharge > base ? "Density-Based" : fixed ? "Fixed Rate" : "CBM-Based" };
+  return { transferFee:transferFeePesos, packageTier: densityApplies && densityCharge > base ? "KD Max" : tier, density, base, volumeCharge, densityCharge, unitCharge:0, densityApplies, final, pricingMethod:densityApplies && densityCharge > base ? "Density-Based" : fixed ? "Fixed Rate" : "CBM-Based" };
 }
 export function airQuote(item: AirItem, cbm: number, weight: number, quantity: number) {
   if (!valid(quantity) || !Number.isInteger(quantity) || quantity < 1) throw new Error("Quantity is required.");

@@ -2,7 +2,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { randomUUID } from "node:crypto";
 import { AdminError, authenticate, canMutateAdmin, checkCsrf, csrfToken, type AdminEnv } from "./security";
 import { esc, page } from "./ui";
-import { itemCategories, seaQuote, seaRates, type SeaCategory } from "./quotation-pricing";
+import { itemCategories, kdPlusPriceOn, seaQuote, seaRatesOn, type SeaCategory } from "./quotation-pricing";
 
 type Row = Record<string, unknown>;
 type PackageRow = { item: string; catalogItem: string; category: SeaCategory; length: number; width: number; height: number; weight: number; status: string; nihaoCost: number; cbm: number; charge: number };
@@ -29,7 +29,7 @@ async function nextQuotationNumber(db: any) { const year = new Date().getUTCFull
 function pageBody(user: any, env: AdminEnv, customers: Row[], values: Record<string, string> = {}) {
   const customerOptions = customers.map((customer) => `<option value="${esc(customer.id)}"${values.customer_id === String(customer.id) ? " selected" : ""}>${esc(customer.customer_code)} — ${esc(customer.full_name)}</option>`).join("");
   const warehouseOptions = warehouses.map((warehouse) => `<option value="${esc(warehouse)}"${(values.warehouse ?? warehouses[0]) === warehouse ? " selected" : ""}>${esc(warehouse)}</option>`).join("");
-  return page("Bulk Quotation", `<section data-bulk-intake data-item-categories="${esc(JSON.stringify(itemCategories))}" data-sea-rates="${esc(JSON.stringify(seaRates))}">
+  return page("Bulk Quotation", `<section data-bulk-intake data-item-categories="${esc(JSON.stringify(itemCategories))}" data-sea-rates="${esc(JSON.stringify(seaRatesOn()))}" data-kd-plus="${kdPlusPriceOn()}">
 <p class="notice"><strong>One customer, many packages, one quotation.</strong> Add one physical package per row. The customer receives one quotation total; individual shipments and tracking numbers are created only after approval.</p>
 <form method="post" data-bulk-form><input type="hidden" name="csrf" value="${esc(csrfToken(env, user.id, "/admin/bulk-intake"))}"><input type="hidden" name="packages" value="" data-package-data>
 <div class="grid"><label>Existing customer *<select name="customer_id" required><option value="">Choose customer</option>${customerOptions}</select><small><a href="/admin/customers">+ Add customer</a></small></label><label>China warehouse *<select name="warehouse">${warehouseOptions}</select></label><label>Quotation date<input name="quotation_date" type="date" value="${esc(values.quotation_date ?? today())}"></label></div>
