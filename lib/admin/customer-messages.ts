@@ -156,9 +156,6 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
       `• CBM: ${hasVerified ? verifiedCbm : "Pending warehouse verification"}`,
       `• Weight: ${hasVerified ? `${verifiedWeight} kg` : "Pending warehouse verification"}`,
       "",
-      "💰 How Your Final Shipping Cost Is Computed",
-      "Your final shipping charge is based on the warehouse-verified measurements, not the declared figures.",
-      "For sea freight, we compute both the volume charge (CBM × rate) and the weight charge (kg × rate). Whichever is higher becomes your final shipping cost, subject to the minimum charge and any additional charges in your quotation.",
       hasVerified
         ? `For your shipment, we'll use the verified ${verifiedCbm} CBM and ${verifiedWeight} kg.`
         : "We'll use the verified CBM and weight once the warehouse has measured your cargo.",
