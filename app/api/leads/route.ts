@@ -52,6 +52,7 @@ export async function POST(request: Request) {
       weightKg: input.weight,
       estimate: `₱${estimate.amount.toLocaleString("en-PH")}`,
       tier: estimate.packageName,
+      item: input.item,
     }));
     return json({ estimate });
   } catch (error) {

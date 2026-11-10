@@ -2577,6 +2577,7 @@ export async function handleAdmin(
                   : "shipment"
               }
             </a>
+            ${entity === "customers" ? `<a class="button secondary" href="/admin/bookings?status=Signups">Sign-ups &amp; sign-up link</a>` : ""}
           </div>` : ""}
           </section>
 

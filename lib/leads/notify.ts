@@ -12,6 +12,7 @@ export type LeadAlert = {
   weightKg: number;
   estimate: string;
   tier?: string;
+  item?: string;
 };
 
 const FROM = "leads@kargodoorph.com";
@@ -29,6 +30,7 @@ export function leadAlertMessage(lead: LeadAlert, now = new Date()) {
     `Name: ${oneLine(lead.fullName)}`,
     `Phone: ${oneLine(lead.phone)}`,
     `Email: ${oneLine(lead.email) || "—"}`,
+    `Item: ${oneLine(lead.item ?? "") || "—"}`,
     `Service: ${lead.service}`,
     `CBM: ${lead.cbm}`,
     `Weight: ${lead.weightKg} kg`,
@@ -55,6 +57,28 @@ export function bookingAlertMessage(booking: BookingAlert, now = new Date()) {
     ``,
     `Review it in admin: https://kargodoorph.com/admin/bookings`,
   ], now);
+}
+
+export type SignupAlert = { fullName: string; mobile: string; email: string; address: string; shipsWhat: string; heardFrom: string; referralCode: string };
+
+export function signupAlertMessage(signup: SignupAlert, now = new Date()) {
+  return alertMessage(`New customer sign-up: ${signup.fullName}`, [
+    `Someone signed up for a KargoDoor account on kargodoorph.com/customer/signup.`,
+    ``,
+    `Name: ${oneLine(signup.fullName)}`,
+    `Mobile: ${oneLine(signup.mobile)}`,
+    `Email: ${oneLine(signup.email)}`,
+    `Address: ${oneLine(signup.address)}`,
+    `Plans to ship: ${oneLine(signup.shipsWhat) || "—"}`,
+    `Heard from: ${oneLine(signup.heardFrom) || "—"}`,
+    `Referral code: ${oneLine(signup.referralCode) || "—"}`,
+    ``,
+    `Approve or reject it in admin: https://kargodoorph.com/admin/bookings?status=Signups`,
+  ], now);
+}
+
+export async function sendSignupAlert(binding: SendEmailBinding | undefined, signup: SignupAlert) {
+  await sendAlert(binding, signupAlertMessage(signup));
 }
 
 function alertMessage(subjectText: string, lines: string[], now: Date) {

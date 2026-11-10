@@ -1,0 +1,70 @@
+"use client";
+
+import { useState, type FormEvent } from "react";
+import Link from "next/link";
+import { PasswordField } from "@/components/v5/password-field";
+import { MessengerLink } from "@/components/messenger-link";
+
+const heardFrom = ["Facebook", "TikTok", "Instagram", "Google", "Friend or referral", "Other"];
+
+/** Sign-up form: sends to /api/customer/signup and keeps what was typed if something needs fixing. */
+export function SignupForm() {
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    if (form.get("password") !== form.get("confirm_password")) { setError("The two passwords do not match."); return; }
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch("/api/customer/signup", { method: "POST", body: form });
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) setError(body.error ?? "We could not send your sign-up. Please try again.");
+      else { setSent(true); window.scrollTo({ top: 0, behavior: "smooth" }); }
+    } catch {
+      setError("No internet connection? Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (sent) return (
+    <div className="signup-done" role="status">
+      <p className="big">✅ Salamat! We got your sign-up.</p>
+      <p>We&apos;ll check your details and message you your <strong>KDOOR cargo code</strong> once it&apos;s approved, usually within the day.</p>
+      <p>After that, sign in with your email or mobile number and the password you just made.</p>
+      <p><Link href="/customer/login" className="pbtn pbtn-blue">GO TO SIGN IN</Link></p>
+      <p className="pmuted">Need it faster? <MessengerLink target="_blank" rel="noopener noreferrer">Message us on Messenger</MessengerLink>.</p>
+    </div>
+  );
+
+  return (
+    <form onSubmit={submit} noValidate={false}>
+      <div className="field"><label htmlFor="su-name">Full name *</label><input id="su-name" name="full_name" autoComplete="name" required minLength={2} maxLength={160} /></div>
+      <div className="field"><label htmlFor="su-company">Shop or business name <span className="opt">(optional)</span></label><input id="su-company" name="company_name" autoComplete="organization" maxLength={160} /></div>
+      <div className="two">
+        <div className="field"><label htmlFor="su-mobile">Mobile number *</label><input id="su-mobile" name="mobile" type="tel" inputMode="tel" autoComplete="tel" placeholder="09XX XXX XXXX" required maxLength={20} /></div>
+        <div className="field"><label htmlFor="su-email">Email *</label><input id="su-email" name="email" type="email" autoComplete="email" required maxLength={254} /></div>
+      </div>
+      <div className="field"><label htmlFor="su-address">Address in the Philippines *</label><textarea id="su-address" name="address" autoComplete="street-address" placeholder="House no., street, barangay, city, province" required minLength={8} maxLength={400} rows={2} /></div>
+      <div className="field"><label htmlFor="su-ships">What do you plan to ship? <span className="opt">(optional)</span></label><input id="su-ships" name="ships_what" placeholder="e.g. clothes, phone accessories, furniture" maxLength={300} /></div>
+      <div className="two">
+        <div className="field"><label htmlFor="su-heard">How did you find us? <span className="opt">(optional)</span></label>
+          <select id="su-heard" name="heard_from" defaultValue=""><option value="">Choose…</option>{heardFrom.map((h) => <option key={h}>{h}</option>)}</select></div>
+        <div className="field"><label htmlFor="su-ref">Referral code <span className="opt">(optional)</span></label><input id="su-ref" name="referral_code" placeholder="KDOOR-1234" maxLength={40} style={{ textTransform: "uppercase" }} /></div>
+      </div>
+      <div className="two">
+        <PasswordField label="Make a password *" id="su-password" name="password" autoComplete="new-password" required minLength={8} maxLength={1024} />
+        <PasswordField label="Type it again *" id="su-confirm" name="confirm_password" autoComplete="new-password" required minLength={8} maxLength={1024} />
+      </div>
+      <p className="pmuted" style={{ margin: 0 }}>At least 8 characters. You&apos;ll use this to sign in once we approve your account.</p>
+      <input className="hp" name="website" tabIndex={-1} autoComplete="off" aria-hidden="true" />
+      <label className="agree"><input type="checkbox" name="consent" value="1" required /> I agree that KargoDoor PH may contact me by Messenger, SMS, call or email about my account and shipments.</label>
+      {error && <p className="err" role="alert">{error}</p>}
+      <button className="pbtn pbtn-blue" type="submit" disabled={busy}>{busy ? "SENDING…" : "SIGN UP"}</button>
+    </form>
+  );
+}

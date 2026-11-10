@@ -43,6 +43,10 @@ CONTACT PERSON: Mr Wang Shixiong 王世雄 （00852）65127878
 Monday to Friday, 9am to 6pm, Saturday, 9am to 2pm.`,
 };
 
+/** Hong Kong sea cargo is labelled "TD KDOOR-XXXX" (Em, 2026-11-08). */
+export const isHongKongWarehouse = (warehouse: unknown) => String(warehouse ?? "").trim() === "Hong Kong";
+export const hongKongMark = (code: string) => `TD ${code}`;
+
 /** Malabon warehouse, exactly as supplied by Em (2026-11-02). */
 export const malabonWarehouseAddress = `Tongda Malabon Warehouse Address
 PIN: FSW COMMERCIAL WAREHOUSE RENTAL

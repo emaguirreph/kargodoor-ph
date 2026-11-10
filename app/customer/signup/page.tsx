@@ -1,0 +1,36 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { SiteShell } from "@/components/v5/chrome";
+import { SignupForm } from "@/components/portal/signup-form";
+
+export const metadata: Metadata = {
+  title: "Sign up | MY KargoDoorPH",
+  description: "Open your KargoDoorPH customer account for China to Philippines shipping.",
+  robots: { index: false, follow: true },
+};
+
+export default function CustomerSignupPage() {
+  return (
+    <SiteShell>
+      <div className="plogin psignup">
+        <div className="lpanel">
+          <span className="peyebrow" style={{ color: "#8fd36a" }}>MY KargoDoorPH · Sign up</span>
+          <h1>Open your <em>KargoDoor account.</em></h1>
+          <p>Fill in your details once. We check every sign-up, then send you your KDOOR cargo code and you can sign in right away.</p>
+          <ol className="perks">
+            <li><i aria-hidden="true">1</i>Fill in this form and make your password</li>
+            <li><i aria-hidden="true">2</i>We check and approve it (usually same day)</li>
+            <li><i aria-hidden="true">3</i>We message you your KDOOR cargo code</li>
+            <li><i aria-hidden="true">4</i>Sign in to see your China warehouse address and shipments</li>
+          </ol>
+          <div className="route" aria-hidden="true"><span>CHINA</span><span className="line" /><span>PHILIPPINES</span></div>
+        </div>
+        <div className="lform">
+          <Link href="/customer/login" className="plink">← Already have an account? Sign in</Link>
+          <h2>Create your account</h2>
+          <SignupForm />
+        </div>
+      </div>
+    </SiteShell>
+  );
+}
