@@ -161,7 +161,7 @@ export function shipmentStatusMessages(input: ShipmentMessageInput): Array<[stri
         : "We'll use the verified CBM and weight once the warehouse has measured your cargo.",
       "",
       "Next Steps:",
-      "No action needed from you. We'll send you your updated shipping quotation and keep you posted on the next steps.",
+      "No action needed from you.",
       "Please check your customer portal for shipping updates.",
       "",
     ]],
