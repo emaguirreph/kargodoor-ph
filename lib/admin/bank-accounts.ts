@@ -24,7 +24,7 @@ export const nihaoBankAccounts = [
 // The same accounts customers are told to pay into (customer-messages.ts paymentInstructions).
 export const kargodoorBankAccounts = [
   { id: "kd-unionbank", owner: "kargodoor", bank: "UnionBank of the Philippines", branch: "Bank transfer", accountName: "KargoDoor Cargo Forwarding", accountNumber: "002170017106" },
-  { id: "kd-gcash", owner: "kargodoor", bank: "GCash", branch: "E-wallet", accountName: "EMMARUTH GALLARDO", accountNumber: "0919 932 3077" },
+  { id: "kd-gcash", owner: "kargodoor", bank: "GCash", branch: "E-wallet", accountName: "EMMARUTH AGUIRRE", accountNumber: "0919 932 3077" },
 ] as const satisfies readonly BankAccount[];
 
 export const bankAccounts: readonly BankAccount[] = [...nihaoBankAccounts, ...kargodoorBankAccounts];

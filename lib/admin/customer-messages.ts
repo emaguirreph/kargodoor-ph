@@ -57,7 +57,7 @@ export const paymentInstructions = [
   "",
   "GCash",
   "GCash Number: 0919 932 3077",
-  "Account Name: EMMARUTH GALLARDO",
+  "Account Name: EMMARUTH AGUIRRE",
   "",
   "Once paid, please send us a screenshot of your payment receipt so we can confirm it right away.",
 ];
