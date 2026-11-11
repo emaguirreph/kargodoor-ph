@@ -916,7 +916,10 @@ export async function quotationsPage(
       const value = (v: unknown) => esc(v);
       const text = (name: string, label: string, v: unknown, type = "text") => {
         const displayLabel = label === "Total CBM" ? "Declared CBM" : label === "Actual Weight (kg)" ? "Declared Weight (kg)" : label;
-        return `<label>${displayLabel}<input name="${name}" type="${type}" value="${value(v)}"></label>`;
+        // A number input without step="any" only accepts values that are whole
+        // steps away from the saved value, so a saved 1.5 kg would reject 2.
+        const numberAttrs = type === "number" ? ' min="0" step="any"' : "";
+        return `<label>${displayLabel}<input name="${name}" type="${type}"${numberAttrs} value="${value(v)}"></label>`;
       };
       const choices = (
         name: string,
