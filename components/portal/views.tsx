@@ -229,11 +229,11 @@ const checkFirst = ["Batteries", "Liquids", "Chemicals", "Food", "Medicines", "C
 function Reminders() {
   return (
     <div className="pstack">
-      <div className="phint pask">
-        <b>Message us first before buying any of these:</b>
-        <div className="pchips">{checkFirst.map((item) => <span key={item}>{item}</span>)}</div>
-        <p>Some of these can&apos;t be shipped or need special handling. Contact us about these packages <b>before</b> your supplier sends them, and we&apos;ll tell you if we can ship it.</p>
-        <div className="pbtns"><MessengerLink className="pbtn pbtn-blue" target="_blank" rel="noopener noreferrer">💬 MESSAGE US ON MESSENGER</MessengerLink></div>
+      <div className="palert" role="note">
+        <div className="palert-head"><span className="palert-icon" aria-hidden="true">⚠️</span><div><strong>Message us FIRST before buying any of these</strong><span>Some can&apos;t be shipped or need special handling.</span></div></div>
+        <div className="palert-chips">{checkFirst.map((item) => <span key={item}>{item}</span>)}</div>
+        <p>Contact us about these packages <b>before</b> your supplier sends them, and we&apos;ll tell you if we can ship it.</p>
+        <div className="pbtns"><MessengerLink className="pbtn pbtn-red" target="_blank" rel="noopener noreferrer">💬 MESSAGE US ON MESSENGER</MessengerLink></div>
       </div>
     </div>
   );
