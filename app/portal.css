@@ -215,3 +215,33 @@
   .v5 .plogin{grid-template-columns:1fr}
   .v5 .plogin .lpanel,.v5 .plogin .lform{padding:26px}
 }
+
+/* Shipping Process: cargo code lines, supplier/warehouse/waybill tabs, "message us first" box (2026-11-11) */
+.v5 .pcodelines{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:4px;font-size:.78rem;color:var(--muted)}
+.v5 .pcodelines b{color:var(--fg)}
+.v5 .pask{display:grid;gap:10px}
+.v5 .pask p{margin:0}
+.v5 .ptabs{display:grid;gap:12px}
+.v5 .ptabbar{display:flex;gap:6px;flex-wrap:wrap;background:var(--surface-2);border-radius:14px;padding:5px}
+.v5 .ptabbar button{flex:1 1 180px;display:flex;align-items:center;justify-content:center;gap:8px;border:0;background:transparent;color:var(--muted);font:800 .8rem var(--f-b);padding:10px 12px;border-radius:10px;cursor:pointer}
+.v5 .ptabbar button .n{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:999px;background:var(--line);color:var(--fg);font-size:.7rem}
+.v5 .ptabbar button[aria-selected="true"]{background:var(--surface);color:var(--blue);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.v5 .ptabbar button[aria-selected="true"] .n{background:var(--blue);color:#fff}
+.v5 .ptabpanel{display:grid;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.v5 .ptabpanel .pmuted{margin:0}
+.v5 .ppick{border:1px solid var(--line);background:var(--surface);color:var(--fg);font:700 .78rem var(--f-b);padding:6px 11px;border-radius:999px;cursor:pointer}
+.v5 .ppick small{color:var(--muted);font-weight:600}
+.v5 .ppick.on{border-color:var(--blue);background:var(--blue);color:#fff}
+.v5 .ppick.on small{color:rgba(255,255,255,.8)}
+.v5 .pstepcard{display:grid;gap:12px}
+.v5 .pstephead{display:flex;align-items:center;gap:10px}
+.v5 .pstephead h2{margin:0}
+.v5 .pstephead .n{display:inline-grid;place-items:center;width:32px;height:32px;border-radius:999px;background:var(--brand);color:#fff;font:800 .95rem var(--f-h);flex:none}
+.v5 .pstepcard p{margin:0}
+.v5 .pcarton{margin:0;display:grid;gap:8px;justify-items:center}
+.v5 .pcarton .box{position:relative;width:min(100%,360px);aspect-ratio:3/2;background:linear-gradient(160deg,#d9a866,#c48b45);border-radius:6px;box-shadow:inset 0 -10px 0 rgba(0,0,0,.08),0 6px 14px rgba(0,0,0,.15);display:grid;place-items:center}
+.v5 .pcarton .tape{position:absolute;top:0;bottom:0;left:50%;width:34px;transform:translateX(-50%);background:rgba(255,236,190,.55)}
+.v5 .pcarton .label{position:relative;background:#fff;color:#111;border:2px solid #111;border-radius:4px;padding:10px 14px;display:grid;gap:2px;transform:rotate(-2deg);min-width:62%;font:600 .74rem/1.35 var(--f-b)}
+.v5 .pcarton .label small{font:800 .58rem var(--f-b);letter-spacing:.1em;color:#555}
+.v5 .pcarton .label strong{font:800 1.45rem/1.1 var(--f-h);color:#0b2f8a}
+.v5 .pcarton figcaption{font-size:.8rem;color:var(--muted);text-align:center}

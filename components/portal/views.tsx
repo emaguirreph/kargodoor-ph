@@ -2,9 +2,10 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { MessengerLink } from "@/components/messenger-link";
 import { CopyButton } from "./copy-button";
+import { ShippingTabs, type ShippingTabWarehouse } from "./shipping-tabs";
 import { kargodoorBankAccounts } from "@/lib/admin/bank-accounts";
 import { riderPickupMessage } from "@/lib/admin/customer-messages";
-import { customerShippingInstructions, supplierRequirementsText } from "@/lib/admin/shipping-instructions";
+import { customerShippingInstructions, onceShippedMessage, supplierShipmentMessage } from "@/lib/admin/shipping-instructions";
 import { hongKongMark, malabonWarehouseAddress, warehouseAddresses, type WarehouseName } from "@/lib/warehouse-addresses";
 import {
   concernTopics, formatDate, formatMonth, formatPeso, portalStages, stageIndex,
@@ -13,13 +14,12 @@ import {
 
 export const portalSections = [
   ["dashboard", "My Dashboard", "home"],
-  ["how-to-ship", "How to Ship", "how"],
   ["shipments", "My Shipments", "box"],
-  ["track", "Track Shipment", "track"],
+  ["how-to-ship", "Shipping Process", "how"],
+  ["warehouses", "Warehouses", "house"],
   ["book", "Book a Shipment", "plus"],
   ["payments", "Payments", "card"],
   ["refer", "Refer & Earn", "award"],
-  ["warehouses", "Warehouses", "house"],
   ["support", "Support", "chat"],
   ["account", "Account", "user"],
 ] as const;
@@ -117,19 +117,41 @@ function ShipmentCard({ shipment, links, code }: { shipment: PortalShipment; lin
   );
 }
 
-function CodeBox({ data, children }: { data: PortalData; children?: ReactNode }) {
+function CodeBox({ data }: { data: PortalData }) {
   const code = data.customer.customer_code;
+  const phone = data.customer.mobile;
+  const copyText = `SHIPPING MARK / CARGO CODE: ${code}\nITEM: [your item name]\nCUSTOMER PHONE NUMBER: ${phone}`;
   return (
     <div className="pcode">
       <h3>Put your code on every carton</h3>
       <div className="inner">
-        <div><small>YOUR ACCOUNT / CARGO CODE</small><strong>{code}</strong></div>
+        <div>
+          <small>SHIPPING MARK / CARGO CODE</small><strong>{code}</strong>
+          <div className="pcodelines"><span>Item: <b>your item name</b></span><span>Customer Phone Number: <b>{phone}</b></span></div>
+        </div>
         <div className="labels">Sea: <b>SEA {code}</b><br />Air: <b>AIR {code}</b></div>
       </div>
       <p>This code is how the warehouse knows the box is <b>yours</b>. Boxes without it can be refused or lost. Send it to your supplier and ask them to write it on <b>every</b> carton, not just the first one.</p>
-      {children}
+      <div className="pbtns"><CopyButton text={copyText} label="COPY" className="pbtn pbtn-blue" /></div>
     </div>
   );
+}
+
+const tabWarehouses: Array<[WarehouseName, "Sea" | "Air"]> = [["Guangzhou", "Sea"], ["Yiwu", "Sea"], ["Shishi", "Sea"], ["Hong Kong", "Sea"], ["Tongda Air Cargo", "Air"]];
+
+/** Supplier Instructions, Warehouse Addresses and Courier Waybill Example tabs, shown below the cargo code. */
+function ShippingGuide({ data, links, showWaybill = true }: { data: PortalData; links: PortalLinks; showWaybill?: boolean }) {
+  const code = data.customer.customer_code;
+  const warehouses: ShippingTabWarehouse[] = tabWarehouses.map(([name, mode]) => ({
+    name, mode,
+    label: mode === "Air" ? `AIR ${code}` : name === "Hong Kong" ? hongKongMark(code) : `SEA ${code}`,
+    address: warehouseAddresses[name].replace(/（?\+客户唛头\.?）?/, `（+${code}）`),
+    // Same text as the admin Supplier Message, without the "Hi …, please send this to your supplier" lines.
+    supplierMessage: supplierShipmentMessage({ customerCode: code, service: `${mode} Freight`, warehouse: name, clientPhone: data.customer.mobile })
+      .replace(/^Hi [^\n]*\n[^\n]*\n\n/, "")
+      .replace("[Add the item / product name]", "[Your item name]"),
+  }));
+  return <ShippingTabs warehouses={warehouses} waybill={onceShippedMessage()} warehousesHref={links.href("warehouses")} showWaybill={showWaybill} />;
 }
 
 const checkFirst = ["Batteries", "Liquids", "Chemicals", "Food", "Medicines", "Cosmetics", "Branded goods", "Hazardous materials", "Other regulated products"];
@@ -137,7 +159,12 @@ const checkFirst = ["Batteries", "Liquids", "Chemicals", "Food", "Medicines", "C
 function Reminders({ code }: { code: string }) {
   return (
     <div className="pstack">
-      <div><b>Check with us first before buying:</b><div className="pchips">{checkFirst.map((item) => <span key={item}>{item}</span>)}</div></div>
+      <div className="phint pask">
+        <b>Message us first before buying any of these:</b>
+        <div className="pchips">{checkFirst.map((item) => <span key={item}>{item}</span>)}</div>
+        <p>Some of these can&apos;t be shipped or need special handling. Contact us about these packages <b>before</b> your supplier sends them, and we&apos;ll tell you if we can ship it.</p>
+        <div className="pbtns"><MessengerLink className="pbtn pbtn-blue" target="_blank" rel="noopener noreferrer">💬 MESSAGE US ON MESSENGER</MessengerLink></div>
+      </div>
       <div><b>Before your supplier sends the goods</b>
         <ol className="plist">
           <li>Label every carton: SEA or AIR + {code}, item name, supplier&apos;s Chinese phone number, and your PH phone number.</li>
@@ -152,10 +179,7 @@ function Reminders({ code }: { code: string }) {
 
 export function DashboardView({ data, links }: ViewProps) {
   const active = data.shipments.filter((s) => s.active);
-  const transit = active.filter((s) => s.inTransit);
-  const delivered = data.shipments.filter((s) => s.status === "Delivered");
   const unpaid = data.bills.filter((b) => b.balance > 0);
-  const due = unpaid.reduce((sum, b) => sum + b.balance, 0);
   const code = data.customer.customer_code;
   return (
     <>
@@ -163,45 +187,15 @@ export function DashboardView({ data, links }: ViewProps) {
         <div>
           <h1>MY KargoDoorPH</h1>
           <div className="hi">Welcome, {data.customer.full_name}</div>
-          <div className="chip">Account / Cargo Code: <strong>{code}</strong> <CopyButton text={code} label="COPY" className="chipbtn" /></div>
         </div>
         <a className="pbtn pbtn-green" href={links.href("book")}>+ BOOK A SHIPMENT</a>
       </div>
-      <div className="ptiles">
-        <div className="ptile"><span className="k">Active shipments</span><span className="v">{active.length}</span><span className="s">{active.filter((s) => s.service === "Sea Freight").length} sea · {active.filter((s) => s.service === "Air Freight").length} air</span></div>
-        <div className="ptile t2"><span className="k">In transit</span><span className="v">{transit.length}</span><span className="s">{transit[0]?.trackingNumber ?? "None right now"}</span></div>
-        <div className="ptile t3"><span className="k">Delivered</span><span className="v">{delivered.length}</span><span className="s">{data.customer.created_at ? `since ${formatMonth(data.customer.created_at)}` : ""}</span></div>
-        <div className={`ptile t4${due ? " due" : ""}`}><span className="k">To pay</span><span className="v">{formatPeso(due).replace(/\.00$/, "")}</span><span className="s">{unpaid.length ? `${unpaid.length} bill${unpaid.length === 1 ? "" : "s"} unpaid` : "Nothing to pay"}</span></div>
-      </div>
       <section className="pcard">
-        <div className="prow"><h2>📦 How to ship with us</h2><a className="plink" href={links.href("warehouses")}>Warehouse addresses →</a></div>
+        <div className="prow"><h2>📦 Shipping Process</h2><a className="plink" href={links.href("how-to-ship")}>See all steps →</a></div>
+        <details className="pdetails"><summary>⚠️ Batteries, liquids, food, branded goods? Message us first. See reminders</summary><Reminders code={code} /></details>
         <CodeBox data={data} />
-        <details className="pdetails"><summary>All reminders: labels, packing list, items to check first</summary><Reminders code={code} /></details>
+        <ShippingGuide data={data} links={links} />
       </section>
-      <div className="pgrid2">
-        <section className="pcard">
-          <h2>Track your shipment</h2>
-          <form className="ptrack" method="get" action={links.preview ? undefined : "/customer/track"}>
-            <label className="sr" htmlFor="dash-track">Tracking number</label>
-            <input id="dash-track" name="q" placeholder="Your tracking number, e.g. KDSEA-123456" />
-            <button className="pbtn pbtn-blue" type="submit" disabled={links.preview}>TRACK</button>
-          </form>
-        </section>
-        <section className="pcard">
-          <h2>Payment due</h2>
-          {unpaid.length ? (
-            <>
-              {unpaid.slice(0, 3).map((bill) => (
-                <div className="prow" key={bill.invoiceId}>
-                  <div><span className="ptn">{bill.trackingNumber}</span><div className="pdue">{formatPeso(bill.balance)}</div></div>
-                  <a className="pbtn pbtn-blue" href={links.href("payments", `bill=${bill.invoiceId}`)}>PAY NOW</a>
-                </div>
-              ))}
-            </>
-          ) : <div className="pempty"><span className="big">🎉</span>Nothing to pay right now.</div>}
-          <a className="plink" href={links.href("payments")}>View payment history</a>
-        </section>
-      </div>
       <div className="pgrid2">
         <section className="pcard">
           <h2>Active shipments</h2>
@@ -213,16 +207,32 @@ export function DashboardView({ data, links }: ViewProps) {
           {data.bookings.length ? <p className="pmuted">Waiting for approval: {data.bookings.map((b) => b.ref).join(", ")}</p> : null}
           <a className="plink" href={links.href("shipments")}>View all shipments</a>
         </section>
-        <section className="pcard pref">
-          <h2>Refer &amp; Earn</h2>
-          <p>Invite a friend. Earn <b>10% commission</b> on their first 3 shipments. Not for your own shipments. Terms apply.</p>
-          <div className="prefnums"><div><b>{data.referrals}</b><small>FRIENDS</small></div></div>
-          <a className="plink" href={links.href("refer")}>See how it works</a>
-        </section>
+        <div className="pstack">
+          <section className="pcard">
+            <h2>Payment due</h2>
+            {unpaid.length ? (
+              <>
+                {unpaid.slice(0, 3).map((bill) => (
+                  <div className="prow" key={bill.invoiceId}>
+                    <div><span className="ptn">{bill.trackingNumber}</span><div className="pdue">{formatPeso(bill.balance)}</div></div>
+                    <a className="pbtn pbtn-blue" href={links.href("payments", `bill=${bill.invoiceId}`)}>PAY NOW</a>
+                  </div>
+                ))}
+              </>
+            ) : <div className="pempty"><span className="big">🎉</span>Nothing to pay right now.</div>}
+            <a className="plink" href={links.href("payments")}>View payment history</a>
+          </section>
+          <section className="pcard pref">
+            <h2>Refer &amp; Earn</h2>
+            <p>Invite a friend. Earn <b>10% commission</b> on their first 3 shipments. Not for your own shipments. Terms apply.</p>
+            <div className="prefnums"><div><b>{data.referrals}</b><small>FRIENDS</small></div></div>
+            <a className="plink" href={links.href("refer")}>See how it works</a>
+          </section>
+        </div>
       </div>
       <nav className="pcard pquick" aria-label="Quick actions">
         <a href={links.href("book")}><Icon name="plus" />Book a Shipment</a>
-        <a href={links.href("track")}><Icon name="track" />Track Shipment</a>
+        <a href={links.href("shipments")}><Icon name="box" />My Shipments</a>
         <a href={links.href("payments")}><Icon name="card" />Make Payment</a>
         <a href={links.href("support")}><Icon name="chat" />Contact Support</a>
       </nav>
@@ -230,31 +240,64 @@ export function DashboardView({ data, links }: ViewProps) {
   );
 }
 
-export function HowToShipView({ data, links }: ViewProps) {
+/** Picture of a carton with the shipping mark label: code, item and the customer's phone number. */
+function CartonLabel({ data }: { data: PortalData }) {
   const code = data.customer.customer_code;
   return (
-    <>
-      <PageHead eyebrow="Getting started" title="How to Ship: easy as 1-2-3-4" sub="Ganito lang mag-import with KargoDoor PH." />
-      <CodeBox data={data}>
-        <div className="pbtns">
-          <CopyButton text={`Cargo Code: ${code}\n\n${supplierRequirementsText(code)}`} label="Copy code + supplier instructions" className="pbtn pbtn-blue" />
-          <a className="pbtn pbtn-line" href={links.href("warehouses")}>View warehouse addresses →</a>
+    <figure className="pcarton" aria-label="Example carton label">
+      <div className="box">
+        <div className="tape" />
+        <div className="label">
+          <small>SHIPPING MARK / CARGO CODE</small>
+          <strong>{code}</strong>
+          <span>ITEM: <b>your item name</b></span>
+          <span>PHONE: <b>{data.customer.mobile}</b></span>
         </div>
-      </CodeBox>
-      <div className="pstack">
-        {[
-          ["Send your code and our China address to your supplier", `Copy your cargo code and the warehouse address. Ask your supplier to write SEA ${code} (AIR ${code} for air, ${hongKongMark(code)} for our Hong Kong warehouse) on every box.`, "warehouses", "See warehouse addresses →"],
-          ["Tell us what's coming", "Book your shipment with the item, number of boxes and your supplier's details so we can watch for it.", "book", "Book a shipment →"],
-          ["We receive and measure it in China", "Our China warehouse checks the real CBM and weight. Your final bill uses these verified numbers. Sea takes 3–5 weeks, air 5–7 days.", "shipments", "Track your shipments →"],
-          ["Pay and receive it", "Pay by UnionBank or GCash and upload your proof. Then pick up at our Malabon warehouse or have it delivered.", "payments", "Go to Payments →"],
-        ].map(([title, text, section, link], index) => (
-          <div className="pstep" key={title}>
-            <span className="n">{index + 1}</span>
-            <div><h3>{title}</h3><p>{text}</p><a className="plink" href={links.href(section as PortalSection)}>{link}</a></div>
-          </div>
-        ))}
       </div>
-      <section className="pcard"><h2>Reminders</h2><Reminders code={code} /></section>
+      <figcaption>Write this on <b>every</b> carton. Air: <b>AIR {code}</b> · Hong Kong: <b>{hongKongMark(code)}</b></figcaption>
+    </figure>
+  );
+}
+
+function Step({ n, title, children }: { n: number; title: string; children: ReactNode }) {
+  return (
+    <section className="pcard pstepcard">
+      <div className="pstephead"><span className="n">{n}</span><h2>{title}</h2></div>
+      {children}
+    </section>
+  );
+}
+
+export function HowToShipView({ data, links }: ViewProps) {
+  const code = data.customer.customer_code;
+  const waybill = onceShippedMessage();
+  return (
+    <>
+      <PageHead eyebrow="Getting started" title="Shipping Process" sub="Ganito lang mag-import with KargoDoor PH." />
+      <section className="pcard"><h2>⚠️ Reminders before you buy</h2><Reminders code={code} /></section>
+      <Step n={1} title="Send your code to your supplier">
+        <p className="pmuted">Your supplier writes your shipping mark, item and phone number on every carton, like this:</p>
+        <CartonLabel data={data} />
+        <CodeBox data={data} />
+        <ShippingGuide data={data} links={links} showWaybill={false} />
+      </Step>
+      <Step n={2} title="Send us the courier waybill">
+        <p className="pmuted">Once your supplier ships, send us the courier details on Messenger, Viber, WhatsApp or email (<b>support@kargodoorph.com</b>). Example:</p>
+        <pre className="ppre">{waybill}</pre>
+        <div className="pbtns">
+          <CopyButton text={waybill} label="COPY EXAMPLE" className="pbtn pbtn-blue" />
+          <MessengerLink className="pbtn pbtn-line" target="_blank" rel="noopener noreferrer">💬 SEND ON MESSENGER</MessengerLink>
+          <a className="pbtn pbtn-line" href="mailto:support@kargodoorph.com">✉️ EMAIL US</a>
+        </div>
+      </Step>
+      <Step n={3} title="We receive and measure it in China">
+        <p>Our China warehouse receives your boxes and measures the <b>actual</b> CBM and weight. Your final bill uses these verified numbers. Sea takes 3–5 weeks, air 5–7 days.</p>
+        <a className="plink" href={links.href("shipments")}>See my shipments →</a>
+      </Step>
+      <Step n={4} title="Malabon warehouse: pay and release">
+        <p>When your cargo reaches our Malabon warehouse, we send your bill. Pay by UnionBank or GCash and upload your proof. Once it shows <b>PAID</b>, pick it up or we deliver it.</p>
+        <div className="pbtns"><a className="pbtn pbtn-blue" href={links.href("payments")}>GO TO PAYMENTS</a><a className="pbtn pbtn-line" href={links.href("warehouses")}>MALABON ADDRESS →</a></div>
+      </Step>
     </>
   );
 }
@@ -281,26 +324,6 @@ export function ShipmentsView({ data, links }: ViewProps) {
           </tbody></table></div>
         ) : <p className="pempty">No delivered shipments yet. Your history builds up here.</p>}
       </section>
-    </>
-  );
-}
-
-export function TrackView({ data, links, query }: ViewProps) {
-  const q = String(query.q ?? "").trim().toUpperCase().replace(/\s+/g, "");
-  const found = q ? data.shipments.find((s) => s.trackingNumber.toUpperCase().replace(/\s+/g, "") === q) : null;
-  return (
-    <>
-      <PageHead title="Track Shipment" sub="Search by your KargoDoor tracking number (KDSEA-… or KDAIR-…)." />
-      <section className="pcard">
-        <form className="ptrack" method="get" action={links.preview ? undefined : "/customer/track"}>
-          <label className="sr" htmlFor="track-q">Tracking number</label>
-          <input id="track-q" name="q" defaultValue={query.q ?? ""} placeholder="e.g. KDSEA-123456" />
-          <button className="pbtn pbtn-blue" type="submit" disabled={links.preview}>TRACK</button>
-        </form>
-        {!q && data.shipments.some((s) => s.active) ? <div className="ppills">{data.shipments.filter((s) => s.active).map((s) => <a key={s.id} className="ppill link" href={links.href("track", `q=${encodeURIComponent(s.trackingNumber)}`)}>{s.trackingNumber}</a>)}</div> : null}
-      </section>
-      {q && !found ? <Notice kind="err">We couldn&apos;t find {q} in your account. Check the number, or try the <a className="plink" href={`/track?tracking=${encodeURIComponent(q)}`}>public tracker</a>.</Notice> : null}
-      {found ? <ShipmentCard shipment={found} links={links} code={data.customer.customer_code} /> : null}
     </>
   );
 }
@@ -532,6 +555,6 @@ export function AccountView({ data, links }: ViewProps) {
 }
 
 export const portalViews: Record<PortalSection, (props: ViewProps) => ReactNode> = {
-  dashboard: DashboardView, "how-to-ship": HowToShipView, shipments: ShipmentsView, track: TrackView, book: BookView,
+  dashboard: DashboardView, "how-to-ship": HowToShipView, shipments: ShipmentsView, book: BookView,
   payments: PaymentsView, refer: ReferView, warehouses: WarehousesView, support: SupportView, account: AccountView,
 };
