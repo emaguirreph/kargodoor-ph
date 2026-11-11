@@ -45,6 +45,7 @@ import { saveRecord, archiveOrCancelRecord } from "./data";
 import { page, esc, pesos, input, select, hidden, niHaoSourceTag } from "./ui";
 import { dashboard, finance, activity, saveStaffFollowUp } from "./reports";
 import { createPortal, disablePortal, portalFor, portalStatus, resetPortal } from "./customer-portal";
+import { checkEmailCode, emailVerificationSection, readEmailVerification, resendSender, sendEmailCode } from "./email-verification";
 import { notificationKeyFor, shipmentStatusMessages } from "./customer-messages";
 import { messageList } from "./message-list";
 import { copyButton, copyScript, customerPortalAccessMessage, customerWelcomeMessage, nihaoAddressBook, shipmentShippingInstructions, warehouseAddress } from "./shipping-instructions";
@@ -522,6 +523,16 @@ export async function handleAdmin(
       );
 
       const portalAction = form.get("action") ?? "";
+      if (entity === "customers" && (portalAction === "email_code_send" || portalAction === "email_code_check")) {
+        const allowed = new Set(["csrf", "action", "customer_id", "code"]);
+        for (const key of form.keys()) if (!allowed.has(key) || form.getAll(key).length !== 1) throw new AdminError("Unexpected or repeated form field.");
+        const customerId = form.get("customer_id") ?? "";
+        if (!/^[\da-f-]{36}$/i.test(customerId)) throw new AdminError("Invalid customer ID.");
+        const outcome = portalAction === "email_code_send"
+          ? (await sendEmailCode(db, customerId, resendSender(env), new Date(), env.ADMIN_ORIGIN), "sent")
+          : await checkEmailCode(db, customerId, form.get("code") ?? "");
+        return page("Saved", "", user.name, 303, { Location: `${path}?id=${customerId}&email_code=${outcome}#email-verification` });
+      }
       if (entity === "customers" && ["portal_create", "portal_reset", "portal_disable", "portal_reenable"].includes(portalAction)) {
         const allowed = new Set(["csrf", "action", "customer_id"]);
         for (const key of form.keys()) if (!allowed.has(key) || form.getAll(key).length !== 1) throw new AdminError("Unexpected or repeated form field.");
@@ -754,6 +765,14 @@ export async function handleAdmin(
       if (entity === "shipments") {
         // Ready to bill (charge + verified size or arrived in PH): make the Draft invoice.
         await autoDraftInvoice(db, recordId, user.id);
+      }
+
+      if (entity === "customers" && !id && String((values as RecordData).email ?? "").trim()) {
+        // New customer with an email: send the one-time code + confirm link right away.
+        let outcome = "autosent";
+        try { await sendEmailCode(db, recordId, resendSender(env), new Date(), env.ADMIN_ORIGIN); }
+        catch (error) { console.error("Verification email failed", error); outcome = "autofail"; }
+        return page("Saved", "", user.name, 303, { Location: `${path}?id=${encodeURIComponent(recordId)}&saved=1&email_code=${outcome}#email-verification` });
       }
 
       return page(
@@ -1966,6 +1985,9 @@ export async function handleAdmin(
             ? `<form method="post" action="${path}">${hidden("csrf",csrfToken(env,user.id,path))}${hidden("action","portal_reenable")}${hidden("customer_id",id)}<button>Re-enable Access</button></form>`
             : `<form method="post" action="${path}">${hidden("csrf",csrfToken(env,user.id,path))}${hidden("action","portal_reset")}${hidden("customer_id",id)}<button>Generate New Temporary Password</button></form><form method="post" action="${path}">${hidden("csrf",csrfToken(env,user.id,path))}${hidden("action","portal_disable")}${hidden("customer_id",id)}<button>Disable Access</button></form>`
         : "";
+      const emailSection = entity === "customers"
+        ? emailVerificationSection(await readEmailVerification(db, id), { path, csrf: csrfToken(env, user.id, path), customerId: id, canWrite, outcome: url.searchParams.get("email_code") })
+        : "";
       const referralSection = entity === "customers"
         ? await clientSourceSection(db, record, { path, csrf: csrfToken(env, user.id, path), canWrite, justPaid: url.searchParams.get("referral") === "paid" })
         : "";
@@ -2127,6 +2149,7 @@ export async function handleAdmin(
           </section>
           ${referralSection}
           ${portalSection}
+          ${emailSection}
           ${shippingInstructions}
           ${customerNotifications}
         `,

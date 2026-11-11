@@ -55,7 +55,7 @@ export function approvedMessage(signup: Row, customerCode: string) {
   ].join("\n");
 }
 
-export async function approveSignup(db: D1Database, user: AdminUser, id: string, form: FormData) {
+export async function approveSignup(db: D1Database, user: AdminUser, id: string, form: FormData, note?: string) {
   const signup = await db.prepare("SELECT * FROM customer_signups WHERE id = ?").bind(id).first<Row>();
   if (!signup) throw new AdminError("Sign-up not found.", 404);
   if (signup.status !== "New") throw new AdminError("This sign-up was already reviewed.", 409);
@@ -88,12 +88,43 @@ export async function approveSignup(db: D1Database, user: AdminUser, id: string,
     VALUES (?, ?, ?, ?, ?, ?, 'scrypt', ?, ?, ?, ?, 1, 'active', ?, ?)`)
     .bind(randomUUID(), customerId, signup.email, signup.mobile, signup.password_hash, signup.password_salt,
       signup.password_n, signup.password_r, signup.password_p, signup.password_key_length, now, now));
+  if (signup.email_verified_at) {
+    // They proved the email on sign-up: carry "Verified" over to the customer.
+    statements.push(db.prepare("UPDATE customers SET email_verified_at = ?, email_verified_address = ? WHERE id = ? AND lower(trim(email)) = ?")
+      .bind(signup.email_verified_at, signup.email, customerId, signup.email));
+  }
   statements.push(db.prepare("UPDATE customer_signups SET status = 'Approved', customer_id = ?, reviewed_by_admin_user_id = ?, reviewed_at = ?, updated_at = ? WHERE id = ? AND status = 'New'")
     .bind(customerId, user.id, now, now, id));
   statements.push(db.prepare("INSERT INTO activity_log (id, admin_user_id, action, entity_type, entity_id, old_value, new_value, notes, created_at) VALUES (?, ?, 'approve_signup', 'customer_signups', ?, NULL, ?, ?, ?)")
-    .bind(randomUUID(), user.id, id, JSON.stringify({ customer_code: customerCode, customer_created: !existing }), `Approved online sign-up of ${String(signup.full_name)}`, now));
+    .bind(randomUUID(), user.id, id, JSON.stringify({ customer_code: customerCode, customer_created: !existing }), note ? `${note}: ${String(signup.full_name)}` : `Approved online sign-up of ${String(signup.full_name)}`, now));
   const result = await db.batch(statements);
   if (!result[statements.length - 2]?.meta.changes) throw new AdminError("This sign-up was already reviewed.", 409);
+}
+
+/**
+ * Em (2026-11-11): once the client types the right email code, approve the sign-up
+ * automatically. Anything that needs a person still waits in Sign-ups: a sign-up that
+ * matches a customer Em already has, a mobile/email that already signs in, or several
+ * sign-ups from the same device in a day. Returns the new KDOOR code, or null if it waits.
+ */
+export async function autoApproveSignup(db: D1Database, id: string): Promise<string | null> {
+  const signup = await db.prepare("SELECT * FROM customer_signups WHERE id = ?").bind(id).first<Row>();
+  if (!signup || signup.status !== "New" || !signup.email_verified_at) return null;
+  if (await portalLoginTaken(db, String(signup.email), String(signup.mobile))) return null;
+  if ((await matchingCustomers(db, signup)).length) return null;
+  if (signup.client_key) {
+    const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    const recent = await db.prepare("SELECT COUNT(*) AS n FROM customer_signups WHERE client_key = ? AND created_at >= ?").bind(signup.client_key, since).first<{ n: number }>();
+    if (Number(recent?.n ?? 0) > 1) return null;
+  }
+  // The activity log needs an admin: record it under the owner, noted as automatic.
+  const owner = await db.prepare("SELECT id, name, email FROM admin_users WHERE role = 'owner' ORDER BY created_at LIMIT 1").first<{ id: string; name: string; email: string }>();
+  if (!owner) return null;
+  const form = new FormData();
+  form.set("customer_id", "new");
+  await approveSignup(db, { ...owner, role: "owner" }, id, form, "Auto-approved after the client confirmed their email code");
+  const row = await db.prepare("SELECT c.customer_code FROM customer_signups s JOIN customers c ON c.id = s.customer_id WHERE s.id = ?").bind(id).first<{ customer_code: string }>();
+  return row?.customer_code ?? null;
 }
 
 export async function rejectSignup(db: D1Database, user: AdminUser, id: string, form: FormData) {
@@ -111,7 +142,7 @@ export async function rejectSignup(db: D1Database, user: AdminUser, id: string, 
 /** List of sign-ups (the "Sign-ups" tab), with the link to send to clients. */
 export async function signupsList(db: D1Database, url: URL, tabs: string) {
   const show = ["New", "Approved", "Rejected"].includes(url.searchParams.get("show") ?? "") ? String(url.searchParams.get("show")) : "New";
-  const rows = (await db.prepare(`SELECT s.id, s.full_name, s.company_name, s.mobile, s.email, s.address, s.ships_what, s.status, s.created_at, c.customer_code
+  const rows = (await db.prepare(`SELECT s.id, s.full_name, s.company_name, s.mobile, s.email, s.email_verified_at, s.address, s.ships_what, s.status, s.created_at, c.customer_code
       FROM customer_signups s LEFT JOIN customers c ON c.id = s.customer_id WHERE s.status = ? ORDER BY s.created_at ${show === "New" ? "ASC" : "DESC"} LIMIT 200`)
     .bind(show).all<Row>().catch(() => ({ results: null as Row[] | null })));
   const list = rows.results;
@@ -124,7 +155,7 @@ export async function signupsList(db: D1Database, url: URL, tabs: string) {
     ${list === null ? '<p class="notice">Sign-ups are not set up yet (database migration 0044 is not applied).</p>'
       : list.length ? `<div class="table"><table><thead><tr><th>Name</th><th>Mobile / email</th><th>Address</th><th>Plans to ship</th><th>Signed up</th><th>Status</th></tr></thead><tbody>
       ${list.map((row) => `<tr class="inv-row" data-href="${path}?signup=${esc(row.id)}" tabindex="0"><td><a href="${path}?signup=${esc(row.id)}"><strong>${esc(row.full_name)}</strong></a>${row.company_name ? `<br><small class="muted">${esc(row.company_name)}</small>` : ""}</td>
-        <td>${esc(row.mobile)}<br><small class="muted">${esc(row.email)}</small></td><td><small>${esc(row.address)}</small></td><td><small>${esc(row.ships_what ?? "—")}</small></td>
+        <td>${esc(row.mobile)}<br><small class="muted">${esc(row.email)}</small>${row.email_verified_at ? '<br><small style="color:#3f8a1f;font-weight:700">✓ Email verified</small>' : '<br><small class="muted">Email not confirmed</small>'}</td><td><small>${esc(row.address)}</small></td><td><small>${esc(row.ships_what ?? "—")}</small></td>
         <td>${esc(when(row.created_at))}</td><td>${tag(row.status)}${row.customer_code ? `<br><small>${esc(row.customer_code)}</small>` : ""}</td></tr>`).join("")}
       </tbody></table></div><script src="/admin-row-link.js" defer></script>`
       : `<p class="muted">${show === "New" ? "No sign-ups to review. 🎉" : "None yet."}</p>`}
@@ -147,6 +178,9 @@ export async function signupDetail(db: D1Database, env: AdminEnv, user: AdminUse
   if (signup.status !== "New") { /* already reviewed: the flags below are only for deciding */ }
   else if (matches.length) flags.push(`<span class="booking-flag ok">👤 Already a customer: ${matches.map((row) => esc(`${row.customer_code} ${row.full_name}${row.account_id ? " (has a portal sign-in)" : ""}`)).join(", ")}</span>`);
   else flags.push(`<span class="booking-flag warn">🆕 New client, not in Customers yet</span>`);
+  if (signup.status === "New") flags.push(signup.email_verified_at
+    ? `<span class="booking-flag ok">📧 Email verified (they typed the code we emailed)</span>`
+    : `<span class="booking-flag warn">📧 Email not confirmed yet</span>`);
   if (signup.status === "New" && taken) flags.push(`<span class="booking-flag bad">⚠️ This email or mobile already signs in to the portal</span>`);
   if (signup.status === "New" && Number(recent?.n ?? 0) > 1) flags.push(`<span class="booking-flag bad">⚠️ ${Number(recent?.n)} sign-ups from the same device in 24 hours</span>`);
 
