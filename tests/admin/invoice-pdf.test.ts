@@ -20,6 +20,10 @@ test("unpaid invoice PDF shows charges, amount due and how to pay", () => {
     assert.ok(pdf.includes(text), text);
   }
   assert.ok(!pdf.includes("Payment received"));
+  assert.ok(pdf.includes("Emmaruth Aguirre"), "GCash account name");
+  assert.ok(!pdf.includes("Gallardo"));
+  assert.match(pdf, /\/Im2 8 0 R/, "GCash QR image is on the page");
+  assert.ok(pdf.includes("Scan the QR with GCash"));
   assert.ok(!pdf.includes("350.00"), "Ni Hao cost must never reach the customer");
 });
 
@@ -27,6 +31,7 @@ test("paid invoice PDF becomes a receipt with zero balance and no payment instru
   const pdf = read(customerInvoicePdf({ invoice: { ...invoice, status: "Paid" }, payments: [{ date: "2026-11-03", method: "GCash", reference: "GC123", amount: 76100 }] }));
   for (const text of ["PAID", "BALANCE DUE", "0.00", "Payment received. Salamat!", "3 Nov 2026", "GCash", "GC123"]) assert.ok(pdf.includes(text), text);
   assert.ok(!pdf.includes("How to pay"));
+  assert.ok(!pdf.includes("/Im2"), "no QR once the invoice is paid");
 });
 
 test("partial invoice PDF shows the remaining balance and both payment boxes", () => {
