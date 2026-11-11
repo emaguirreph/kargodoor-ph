@@ -1,6 +1,7 @@
 import type { D1Database } from "@cloudflare/workers-types";
 import { kargodoorBankAccounts } from "./bank-accounts";
 import { invoiceLogo } from "./invoice-logo";
+import { gcashQr } from "./invoice-gcash-qr";
 import { AdminError } from "./security";
 
 /**
@@ -144,8 +145,8 @@ class Canvas {
     }
     return w;
   }
-  image(x: number, y: number, w: number, h: number) {
-    this.ops.push(`q ${w} 0 0 ${h} ${x} ${y} cm /Im1 Do Q`);
+  image(x: number, y: number, w: number, h: number, name: "Im1" | "Im2" = "Im1") {
+    this.ops.push(`q ${w} 0 0 ${h} ${x} ${y} cm /${name} Do Q`);
   }
 }
 
@@ -325,7 +326,10 @@ export function customerInvoicePdf({ invoice, payments }: InvoicePdfData) {
   // How to pay (open balance) — UnionBank + GCash from bank-accounts.ts.
   const showHowToPay = !settled && status !== "Void" && balance > 0;
   if (showHowToPay) {
-    const boxH2 = 112;
+    // The GCash column carries the InstaPay QR, so the account row is taller than the old 52.
+    const colH = 82;
+    const qrSize = 72;
+    const boxH2 = 112 + (colH - 52);
     c.round(L, y - boxH2, R - L, boxH2, 7, undefined, C.green, 1.2);
     c.ops.push(`q ${L + 0.6} ${y - 26} ${R - L - 1.2} 25.4 re W n`);
     c.round(L + 0.6, y - 40, R - L - 1.2, 39.4, 6.5, C.greenSoft);
@@ -336,7 +340,7 @@ export function customerInvoicePdf({ invoice, payments }: InvoicePdfData) {
     c.text("Account name must match. Pay the exact amount: ", R - 12 - aw, y - 17, 8.3, { color: C.muted, align: "right" });
     const top = y - 26;
     const half = (R - L) / 2;
-    c.ops.push(`q ${rgb(C.line)} RG 0.75 w ${L + half} ${top} m ${L + half} ${top - 52} l S Q`);
+    c.ops.push(`q ${rgb(C.line)} RG 0.75 w ${L + half} ${top} m ${L + half} ${top - colH} l S Q`);
     kargodoorBankAccounts.forEach((acct, i) => {
       const x = L + 12 + i * half;
       c.text(acct.bank === "UnionBank of the Philippines" ? "UnionBank" : acct.bank, x, top - 15, 9.5, { bold: true, color: C.blue });
@@ -344,22 +348,28 @@ export function customerInvoicePdf({ invoice, payments }: InvoicePdfData) {
       const shown = /^\d{12}$/.test(digits) ? digits.replace(/(\d{4})(?=\d)/g, "$1 ") : acct.accountNumber;
       c.text(shown, x, top - 32, 13, { bold: true, spacing: 0.6 });
       c.text(acct.accountName.replace(/\b([A-Z])([A-Z]+)\b/g, (_, a: string, b: string) => a + b.toLowerCase()), x, top - 44, 8.3, { color: C.muted });
+      if (acct.id === "kd-gcash") {
+        c.image(R - 12 - qrSize, top - 6 - qrSize, qrSize, qrSize, "Im2");
+        wrap("Scan the QR with GCash or any InstaPay bank app.", 7.8, half - 24 - qrSize - 8).forEach((l, j) => c.text(l, x, top - 60 - j * 10, 7.8, { color: C.muted }));
+      }
     });
-    c.hline(L, R, top - 52);
+    c.hline(L, R, top - colH);
     const steps = [`Send ${amt} to any account above.`, "Send the receipt screenshot to us on Messenger or WhatsApp.", "We verify within the day and release or deliver your cargo."];
     const third = (R - L - 24) / 3;
     steps.forEach((s, i) => {
       const x = L + 12 + i * third;
-      c.round(x, top - 72, 13, 13, 6.5, C.blue);
-      c.text(String(i + 1), x + 6.5, top - 68, 7.5, { bold: true, color: C.white, align: "center" });
-      wrap(s, 8.4, third - 26).slice(0, 2).forEach((l, j) => c.text(l, x + 19, top - 68.5 - j * 11, 8.4));
+      c.round(x, top - colH - 20, 13, 13, 6.5, C.blue);
+      c.text(String(i + 1), x + 6.5, top - colH - 16, 7.5, { bold: true, color: C.white, align: "center" });
+      wrap(s, 8.4, third - 26).slice(0, 2).forEach((l, j) => c.text(l, x + 19, top - colH - 16.5 - j * 11, 8.4));
     });
     y -= boxH2 + 14;
   }
 
   // Payments received (any payment on record).
   if (payments.length) {
-    const shown = payments.slice(showHowToPay ? -2 : -5);
+    // Show the latest payments that still fit above "Good to know" (the totals box already has the sum).
+    const fit = Math.max(1, Math.floor((y - 134 - 50) / 22));
+    const shown = payments.slice(-Math.min(showHowToPay ? 2 : 5, fit));
     const boxH3 = 30 + 20 + shown.length * 22;
     c.round(L, y - boxH3, R - L, boxH3, 7, undefined, C.okLine, 1.2);
     c.ops.push(`q ${L + 0.6} ${y - 30} ${R - L - 1.2} 29.4 re W n`);
@@ -407,22 +417,27 @@ export function customerInvoicePdf({ invoice, payments }: InvoicePdfData) {
   c.text("KargoDoor PH · China to PH, made SIMPLE", L, 44, 7.6, { color: C.muted });
   c.text(`${number} · Page 1 of 1`, R, 44, 7.6, { color: C.muted, align: "right" });
 
-  return buildPdf(c.ops.join("\n"));
+  return buildPdf(c.ops.join("\n"), { gcashQr: showHowToPay });
 }
 
-function buildPdf(content: string) {
+/** Builds the one-page PDF. The logo is always /Im1; the GCash QR is /Im2 when asked for. */
+function buildPdf(content: string, opts: { gcashQr?: boolean } = {}) {
   const enc = new TextEncoder();
   const logo = Uint8Array.from(atob(invoiceLogo.jpegBase64), (ch) => ch.charCodeAt(0));
   const font = (name: string) => `<< /Type /Font /Subtype /Type1 /BaseFont /${name} /Encoding /WinAnsiEncoding >>`;
   const objects: (string | Uint8Array[])[] = [
     "<< /Type /Catalog /Pages 2 0 R >>",
     "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> /XObject << /Im1 6 0 R >> >> /Contents 7 0 R >>`,
+    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> /XObject << /Im1 6 0 R${opts.gcashQr ? " /Im2 8 0 R" : ""} >> >> /Contents 7 0 R >>`,
     font("Helvetica"),
     font("Helvetica-Bold"),
     [enc.encode(`<< /Type /XObject /Subtype /Image /Width ${invoiceLogo.width} /Height ${invoiceLogo.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${logo.length} >>\nstream\n`), logo, enc.encode("\nendstream")],
     `<< /Length ${enc.encode(content).length} >>\nstream\n${content}\nendstream`,
   ];
+  if (opts.gcashQr) {
+    const qr = Uint8Array.from(atob(gcashQr.jpegBase64), (ch) => ch.charCodeAt(0));
+    objects.push([enc.encode(`<< /Type /XObject /Subtype /Image /Width ${gcashQr.width} /Height ${gcashQr.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${qr.length} >>\nstream\n`), qr, enc.encode("\nendstream")]);
+  }
   const parts: Uint8Array[] = [];
   let length = 0;
   const push = (chunk: Uint8Array | string) => { const b = typeof chunk === "string" ? enc.encode(chunk) : chunk; parts.push(b); length += b.length; };
