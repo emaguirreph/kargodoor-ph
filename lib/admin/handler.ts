@@ -1173,7 +1173,7 @@ export async function handleAdmin(
          * SHIPMENT IDENTITY
          */
         fields +=
-          `<p class="wide muted"><strong>Tracking Number</strong><br>${id ? esc(record.tracking_number || "Not assigned at supplier intake") : "Automatically generated after supplier dispatch."}</p>` +
+          `<p class="wide muted"><strong>Tracking Number</strong><br>${id ? esc(record.tracking_number || "Assigned automatically when you save") : "Assigned automatically when you save."}</p>` +
           select(
             "service_type",
             "Service type",

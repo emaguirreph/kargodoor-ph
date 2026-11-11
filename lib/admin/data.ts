@@ -8,7 +8,6 @@ import type { Entity, RecordData } from "./validation";
 
 export async function generatedIdentifier(db: D1Database, entity: Entity, values: RecordData) {
   const field = entity === "customers" ? "customer_code" : "tracking_number";
-  if (entity === "shipments" && values.status === "Awaiting Supplier Dispatch") return undefined;
   if (values[field]) return undefined;
   const prefix = entity === "customers" ? "KDOOR" : values.service_type === "Air Freight" ? "KDAIR" : values.service_type === "FCL" ? "KDFCL" : "KDSEA";
   const rows = (await db.prepare(`SELECT ${field} FROM ${entity}`).all<RecordData>()).results;
@@ -44,11 +43,17 @@ export async function saveRecord(
       409,
     );
   const generatedField = entity === "customers" ? "customer_code" : "tracking_number";
-  const generated = !existing ? await generatedIdentifier(db, entity, values) : undefined;
-  const persistedValues: RecordData = existing
-    ? { ...values, [generatedField]: existing[generatedField] }
-    : generated
-      ? { ...values, [generatedField]: generated }
+  // Every shipment gets a tracking number. One saved without it (older rule: none until
+  // supplier dispatch) gets one the next time it is edited.
+  const generated = !existing
+    ? await generatedIdentifier(db, entity, values)
+    : entity === "shipments" && !existing[generatedField]
+      ? await generatedIdentifier(db, entity, { service_type: values.service_type ?? existing.service_type })
+      : undefined;
+  const persistedValues: RecordData = generated
+    ? { ...values, [generatedField]: generated }
+    : existing
+      ? { ...values, [generatedField]: existing[generatedField] }
       : values;
   const recordId = id || randomUUID();
   const now = new Date(
@@ -129,7 +134,7 @@ export async function saveRecord(
   } catch (error) {
     if (error instanceof AdminError) throw error;
     const message = String(error);
-    if (!existing && generated && message.includes("UNIQUE constraint")) {
+    if (generated && message.includes("UNIQUE constraint")) {
       if (attempt < 7) return saveRecord(db, entity, values, user, id, revision, attempt + 1);
       throw new AdminError("Unable to reserve an identifier. Please try again.", 409);
     }
