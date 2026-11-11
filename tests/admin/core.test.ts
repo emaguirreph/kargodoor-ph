@@ -875,6 +875,19 @@ test("one account number can own multiple shipments with unique tracking numbers
   assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM shipments WHERE customer_id = ?").get(customerId)!.n, 2);
   await assert.rejects(saveRecord(db, "shipments", { ...shipment(customerId), tracking_number: "KD-SEA-000001", cargo_code: null }, user, "", ""), /tracking number already exists/);
 });
+test("awaiting shipments get a tracking number, and an old one without it gets one when edited", async () => {
+  const { sql, db, user } = database();
+  const customerId = await saveRecord(db, "customers", { ...customer, customer_code: "KDOOR-0001" }, user, "", "");
+  const { tracking_number: _t, cargo_code: _c, ...newShipment } = shipment(customerId);
+  const fresh = await saveRecord(db, "shipments", { ...newShipment, status: "Awaiting Supplier Dispatch" }, user, "", "");
+  assert.match(String(sql.prepare("SELECT tracking_number FROM shipments WHERE id=?").get(fresh)!.tracking_number), /^KDSEA-[1-9]\d{5}$/);
+  const oldId = randomUUID();
+  sql.prepare("INSERT INTO shipments (id, customer_id, tracking_number, service_type, china_warehouse, cbm, weight_kg, status, shipping_charge, delivery_charge, payment_status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)").run(oldId, customerId, null, "Sea Freight", "Guangzhou", 1, 100, "Awaiting Supplier Dispatch", 500000, 0, "Unpaid", "2026-11-11", "2026-11-11");
+  await saveRecord(db, "shipments", { ...newShipment, status: "Awaiting Supplier Dispatch", cbm: 2 }, user, oldId, "2026-11-11");
+  const row = sql.prepare("SELECT tracking_number, cbm FROM shipments WHERE id=?").get(oldId)!;
+  assert.match(String(row.tracking_number), /^KDSEA-[1-9]\d{5}$/);
+  assert.equal(row.cbm, 2);
+});
 test("new records receive random immutable account and tracking numbers", async () => {
   const { sql, db, user } = database();
   const { customer_code: _account, ...newCustomer } = customer;
