@@ -2,6 +2,8 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { D1Database } from "@cloudflare/workers-types";
 import { parseSignupForm, saveSignup, SignupError } from "@/lib/customer/signup";
 import { sendSignupAlert } from "@/lib/leads/notify";
+import { resendSender, type EmailEnv } from "@/lib/admin/email-verification";
+import { sendSignupCode } from "@/lib/customer/signup-email";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,12 +19,15 @@ export async function POST(request: Request) {
     const { env, ctx } = await getCloudflareContext();
     const db = (env as unknown as { ADMIN_DB: D1Database }).ADMIN_DB;
     const input = parseSignupForm(await request.formData());
-    await saveSignup(db, input, request.headers.get("cf-connecting-ip"));
+    const { id } = await saveSignup(db, input, request.headers.get("cf-connecting-ip"));
     ctx.waitUntil(sendSignupAlert((env as unknown as { LEAD_EMAIL?: Parameters<typeof sendSignupAlert>[0] }).LEAD_EMAIL, {
       fullName: input.fullName, mobile: input.mobile, email: input.email, address: input.address,
       shipsWhat: input.shipsWhat, heardFrom: input.heardFrom, referralCode: input.referralCode,
     }));
-    return json({ ok: true });
+    // Send the 6-digit email code. If it can't go out, the sign-up is still saved.
+    const codeSent = await sendSignupCode(db, id, resendSender(env as unknown as EmailEnv)).then((r) => r === "sent")
+      .catch((error) => { console.error("Sign-up code email failed", error instanceof Error ? error.message : error); return false; });
+    return json({ ok: true, id, codeSent, email: input.email });
   } catch (error) {
     if (error instanceof SignupError) return json({ error: error.message }, error.status);
     console.error("Customer sign-up failed", error instanceof Error ? error.message : "Unknown error");

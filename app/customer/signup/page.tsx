@@ -16,11 +16,11 @@ export default function CustomerSignupPage() {
         <div className="lpanel">
           <span className="peyebrow" style={{ color: "#8fd36a" }}>MY KargoDoorPH · Sign up</span>
           <h1>Open your <em>KargoDoor account.</em></h1>
-          <p>Fill in your details once. We check every sign-up, then send you your KDOOR cargo code and you can sign in right away.</p>
+          <p>Fill in your details once. We check every sign-up, then you can sign in right away.</p>
           <ol className="perks">
             <li><i aria-hidden="true">1</i>Fill in this form and make your password</li>
-            <li><i aria-hidden="true">2</i>We check and approve it (usually same day)</li>
-            <li><i aria-hidden="true">3</i>We message you your KDOOR cargo code</li>
+            <li><i aria-hidden="true">2</i>Confirm your email with the code we send</li>
+            <li><i aria-hidden="true">3</i>We check and approve it (usually same day)</li>
             <li><i aria-hidden="true">4</i>Sign in to see your China warehouse address and shipments</li>
           </ol>
           <div className="route" aria-hidden="true"><span>CHINA</span><span className="line" /><span>PHILIPPINES</span></div>
