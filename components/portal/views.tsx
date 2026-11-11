@@ -135,8 +135,11 @@ function CodeBox({ data }: { data: PortalData }) {
         <div className="inner">
           <div>
             <small>SHIPPING MARK / CARGO CODE</small><strong>{code}</strong>
-            <div className="pcodelines"><span>Item: <b>your item name</b></span><span>Customer Phone Number: <b>{phone}</b></span></div>
-            <div className="pcodelines"><span>Sea: <b>SEA {code}</b></span><span>Air: <b>AIR {code}</b></span><span>Hong Kong: <b>{hongKongMark(code)}</b></span></div>
+            <dl className="pmarks">
+              <div><dt>Sea</dt><dd>SEA {code}</dd></div>
+              <div><dt>Air</dt><dd>AIR {code}</dd></div>
+              <div><dt>Hong Kong</dt><dd>{hongKongMark(code)}</dd></div>
+            </dl>
           </div>
         </div>
         <p>This code is how the warehouse knows the box is <b>yours</b>. Boxes without it can be refused or lost. Send it to your supplier and ask them to write it on <b>every</b> carton, not just the first one.</p>
@@ -209,28 +212,13 @@ function ShippingGuide({ data, showWaybill = true }: { data: PortalData; showWay
   return <ShippingTabs warehouses={warehouses} packaging={<PackagingInstructions code={code} />} waybill={showWaybill ? <WaybillBlock /> : undefined} />;
 }
 
-function DashboardCodeBox({ data, children }: { data: PortalData; children?: ReactNode }) {
-  const code = data.customer.customer_code;
-  return (
-    <div className="pcode">
-      <h3>Put your code on every carton</h3>
-      <div className="inner">
-        <div><small>YOUR ACCOUNT / CARGO CODE</small><strong>{code}</strong></div>
-        <div className="labels">Sea: <b>SEA {code}</b><br />Air: <b>AIR {code}</b></div>
-      </div>
-      <p>This code is how the warehouse knows the box is <b>yours</b>. Boxes without it can be refused or lost. Send it to your supplier and ask them to write it on <b>every</b> carton, not just the first one.</p>
-      {children}
-    </div>
-  );
-}
-
 const checkFirst = ["Batteries", "Liquids", "Chemicals", "Food", "Medicines", "Cosmetics", "Branded goods", "Hazardous materials", "Other regulated products"];
 
 function Reminders() {
   return (
     <div className="pstack">
       <div className="palert" role="note">
-        <div className="palert-head"><span className="palert-icon" aria-hidden="true">⚠️</span><div><strong>Message us FIRST before buying any of these</strong><span>Some can&apos;t be shipped or need special handling.</span></div></div>
+        <div className="palert-head"><span className="palert-icon" aria-hidden="true">⚠️</span><div><strong>Message us FIRST before buying any of these</strong><em className="palert-fake">🚫 Fake or counterfeit products are NOT allowed.</em><span>Some can&apos;t be shipped or need special handling.</span></div></div>
         <div className="palert-chips">{checkFirst.map((item) => <span key={item}>{item}</span>)}</div>
         <p>Contact us about these packages <b>before</b> your supplier sends them, and we&apos;ll tell you if we can ship it.</p>
         <div className="pbtns"><MessengerLink className="pbtn pbtn-red" target="_blank" rel="noopener noreferrer">💬 MESSAGE US ON MESSENGER</MessengerLink></div>
@@ -253,7 +241,7 @@ export function DashboardView({ data, links }: ViewProps) {
       </div>
       <section className="pcard">
         <div className="prow"><h2>📦 How to ship with us</h2><a className="plink" href={links.href("warehouses")}>Warehouse addresses →</a></div>
-        <DashboardCodeBox data={data} />
+        <CodeBox data={data} />
         <details className="pdetails"><summary>Reminders: items to check with us first</summary><Reminders /></details>
       </section>
       <div className="pgrid2">
