@@ -3,7 +3,7 @@ import Link from "next/link";
 import { MessengerLink } from "@/components/messenger-link";
 import { CopyButton } from "./copy-button";
 import { ShippingTabs, type ShippingTabWarehouse } from "./shipping-tabs";
-import { PackagingExamples, WaybillExample } from "./illustrations";
+import { WaybillExample } from "./illustrations";
 import { kargodoorBankAccounts } from "@/lib/admin/bank-accounts";
 import { riderPickupMessage } from "@/lib/admin/customer-messages";
 import { onceShippedMessage, supplierShipmentMessage } from "@/lib/admin/shipping-instructions";
@@ -153,14 +153,22 @@ const tabWarehouses: Array<[WarehouseName, "Sea" | "Air"]> = [["Guangzhou", "Sea
 function PackagingInstructions({ code }: { code: string }) {
   return (
     <>
-      <p className="pmuted">Show this to your supplier so your boxes are accepted by the warehouse.</p>
-      <PackagingExamples code={code} />
+      <div className="psplit">
+        <div className="pstack">
+      <p className="pmuted">Show this to your supplier so your goods are protected and accepted by the warehouse.</p>
       <ol className="plist">
         <li><b>Label every carton</b> with your shipping mark ({code}), item name, supplier&apos;s phone number and your PH phone number.</li>
         <li><b>Packing list</b> in every shipment: product description in Chinese, material, quantity and weight, and the supplier&apos;s phone number.</li>
         <li><b>Proper packaging:</b> securely packed and undamaged. Fragile items need extra protection.</li>
       </ol>
       <p className="phint">⚠️ Packages with incomplete labels or damaged packaging will NOT be accepted by the warehouse.</p>
+        </div>
+        <figure className="pphoto">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/assets/portal-packing-instructions.webp" alt="Packaging examples: insulation inside the box and fully wooden crates" width="982" height="1280" loading="lazy" />
+          <figcaption>Protect your shipment: proper insulation inside, or a full wooden crate for fragile and heavy items.</figcaption>
+        </figure>
+      </div>
     </>
   );
 }
@@ -169,21 +177,22 @@ function PackagingInstructions({ code }: { code: string }) {
 function WaybillBlock() {
   const waybill = onceShippedMessage();
   return (
-    <>
-      <p className="pmuted">Once your supplier ships, send us these details so we can watch for your boxes:</p>
-      <ul className="plist">
-        <li><b>Courier</b> (e.g. SF Express)</li>
-        <li><b>Tracking / Waybill No.</b></li>
-        <li><b>Total packages</b></li>
-        <li><b>Receipt or package photo</b> 📸</li>
-      </ul>
-      <WaybillExample />
-      <pre className="ppre">{waybill}</pre>
-      <div className="pbtns">
-        <CopyButton text={waybill} label="COPY EXAMPLE" className="pbtn pbtn-line" />
-        <MessengerLink className="pbtn pbtn-blue" target="_blank" rel="noopener noreferrer">💬 SEND ON MESSENGER</MessengerLink>
+    <div className="psplit">
+      <div className="pstack">
+        <p className="pmuted">Once your supplier ships, send us these details so we can watch for your boxes:</p>
+        <ul className="plist">
+          <li><b>Courier</b> (e.g. SF Express)</li>
+          <li><b>Tracking / Waybill No.</b></li>
+          <li><b>Total packages</b></li>
+          <li><b>Receipt or package photo</b> 📸</li>
+        </ul>
+        <div className="pbtns">
+          <MessengerLink className="pbtn pbtn-blue" target="_blank" rel="noopener noreferrer">💬 SEND ON MESSENGER</MessengerLink>
+          <CopyButton text={waybill} label="COPY EXAMPLE" className="pbtn pbtn-line" />
+        </div>
       </div>
-    </>
+      <WaybillExample />
+    </div>
   );
 }
 
@@ -320,7 +329,7 @@ function CartonLabel({ data }: { data: PortalData }) {
 
 function Step({ n, title, children }: { n: number; title: string; children: ReactNode }) {
   return (
-    <section className="pcard pstepcard">
+    <section className={`pcard pstepcard s${n}`}>
       <div className="pstephead"><span className="n">STEP {n}</span><h2>{title}</h2></div>
       {children}
     </section>
@@ -338,7 +347,6 @@ export function HowToShipView({ data, links }: ViewProps) {
       </Step>
       <Step n={2} title="Notify Us With Your Shipment">
         <WaybillBlock />
-        <p className="pmuted">Send it to us on Messenger or WhatsApp.</p>
       </Step>
       <Step n={3} title="China warehouse receives and measures">
         <p>Our China warehouse receives your boxes and measures the <b>actual</b> CBM and weight. Your final bill uses these verified numbers. Sea takes 3–5 weeks, air 5–7 days.</p>

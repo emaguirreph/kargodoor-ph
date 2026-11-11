@@ -265,3 +265,17 @@
 .v5 .pwaybill svg{width:min(100%,420px);height:auto}
 .v5 .pwaybill figcaption{font-size:.8rem;color:var(--muted);text-align:center}
 @media (max-width:900px){.v5 .pcodewide{grid-template-columns:1fr}.v5 .pexgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.v5 .psplit{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:16px;align-items:center}
+.v5 .pwaybill svg{width:min(100%,300px)}
+.v5 .pphoto{margin:0;display:grid;gap:6px}
+.v5 .pphoto img{width:100%;max-width:300px;height:auto;border-radius:12px;border:1px solid var(--line);justify-self:center}
+.v5 .pphoto figcaption{font-size:.78rem;color:var(--muted);text-align:center}
+.v5 .pstepcard.s1{background:#eef4ff;border-color:#c9daf8}
+.v5 .pstepcard.s2{background:#fff4e8;border-color:#f6d6b3}
+.v5 .pstepcard.s3{background:#f1f9ec;border-color:#cfe6c0}
+.v5 .pstepcard.s4{background:#f6f0ff;border-color:#ddd0f3}
+.v5 .pstepcard.s2 .pstephead .n{background:var(--orange)}
+.v5 .pstepcard.s3 .pstephead .n{background:var(--green)}
+.v5 .pstepcard.s4 .pstephead .n{background:#6b46c1}
+@media (prefers-color-scheme:dark){.v5 .pstepcard.s1,.v5 .pstepcard.s2,.v5 .pstepcard.s3,.v5 .pstepcard.s4{background:var(--surface);border-color:var(--line)}}
+@media (max-width:900px){.v5 .psplit{grid-template-columns:1fr}}
