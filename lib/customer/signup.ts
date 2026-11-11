@@ -26,7 +26,8 @@ export const signupInput = z.object({
   }),
   email: text(254).transform((value) => normalizeCustomerEmail(value))
     .refine((value) => z.string().email().safeParse(value).success, "Please enter a valid email address."),
-  address: text(400).min(8, "Please enter your address in the Philippines (street, barangay, city)."),
+  // Not asked on the sign-up form any more (Em, 2026-11-11); still accepted if sent.
+  address: text(400).optional().default(""),
   shipsWhat: text(300).optional().default(""),
   heardFrom: z.union([z.enum(signupHeardFrom), z.literal("")]).optional().default(""),
   referralCode: text(40).optional().default("").transform((value) => value.toUpperCase())

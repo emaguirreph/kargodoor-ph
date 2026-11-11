@@ -57,7 +57,6 @@ const signupForm = (values) => {
 };
 const maria = {
   full_name: "Maria Santos", company_name: "Maria's Online Shop", mobile: "0918 555 1234", email: "Maria@Example.test",
-  address: "12 Rizal St, Brgy. San Roque, Marikina City", ships_what: "Clothes and bags", heard_from: "Facebook", referral_code: "",
   password: "maria-pass-123", confirm_password: "maria-pass-123", consent: "1",
 };
 const login = (identifier, pw) => retry(() => fetch(origin + "/api/customer/login", {
