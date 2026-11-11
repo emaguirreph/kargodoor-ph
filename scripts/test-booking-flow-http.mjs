@@ -236,8 +236,8 @@ try {
   assert.ok(html.includes(approved.customer_code) && html.includes(made.ref), `dashboard shows cargo code + shipment (${res.status} ${res.headers.get("location")} ${html.slice(0, 300)})`);
   html = await (await browser("/customer/shipments")).text();
   assert.ok(html.includes(made.ref) && html.includes("PAID"), "My Shipments shows the paid shipment");
-  res = await browser(`/customer/track?q=${made.ref}`);
-  assert.equal(res.status, 307, "Track Shipment page now sends customers to My Shipments");
+  html = await (await browser(`/customer/track?q=${made.ref}`)).text();
+  assert.ok(html.includes("Malabon Warehouse"), "dashboard Track box still finds the shipment");
   html = await (await browser("/customer/how-to-ship")).text();
   assert.ok(html.includes("Shipping Process") && html.includes("Supplier Instructions") && html.includes(approved.customer_code), "Shipping Process page shows the code + tabs");
   html = await (await browser("/customer/warehouses?mode=air&wh=Guangzhou")).text();
@@ -249,7 +249,7 @@ try {
   assert.equal(res.status, 200); assert.match(res.headers.get("content-type"), /pdf/);
   const other = sqlRows("SELECT id FROM invoices LIMIT 1")[0].id;
   assert.equal(other, invoice.id);
-  step("Portal: admin creates login → temp password must be changed → dashboard, shipments, shipping process, warehouses (no contact numbers), refer, invoice PDF");
+  step("Portal: admin creates login → temp password must be changed → dashboard, shipments, track, shipping process, warehouses (no contact numbers), refer, invoice PDF");
 
   // 12. Portal Book a Shipment lands in admin Bookings, tagged Portal, linked to Juan.
   // (Step 10 used up today's 3 bookings for this phone; the same daily limit applies in the portal.)
