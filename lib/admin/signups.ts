@@ -55,7 +55,7 @@ export function approvedMessage(signup: Row, customerCode: string) {
   ].join("\n");
 }
 
-export async function approveSignup(db: D1Database, user: AdminUser, id: string, form: FormData) {
+export async function approveSignup(db: D1Database, user: AdminUser, id: string, form: FormData, note?: string) {
   const signup = await db.prepare("SELECT * FROM customer_signups WHERE id = ?").bind(id).first<Row>();
   if (!signup) throw new AdminError("Sign-up not found.", 404);
   if (signup.status !== "New") throw new AdminError("This sign-up was already reviewed.", 409);
@@ -96,9 +96,35 @@ export async function approveSignup(db: D1Database, user: AdminUser, id: string,
   statements.push(db.prepare("UPDATE customer_signups SET status = 'Approved', customer_id = ?, reviewed_by_admin_user_id = ?, reviewed_at = ?, updated_at = ? WHERE id = ? AND status = 'New'")
     .bind(customerId, user.id, now, now, id));
   statements.push(db.prepare("INSERT INTO activity_log (id, admin_user_id, action, entity_type, entity_id, old_value, new_value, notes, created_at) VALUES (?, ?, 'approve_signup', 'customer_signups', ?, NULL, ?, ?, ?)")
-    .bind(randomUUID(), user.id, id, JSON.stringify({ customer_code: customerCode, customer_created: !existing }), `Approved online sign-up of ${String(signup.full_name)}`, now));
+    .bind(randomUUID(), user.id, id, JSON.stringify({ customer_code: customerCode, customer_created: !existing }), note ? `${note}: ${String(signup.full_name)}` : `Approved online sign-up of ${String(signup.full_name)}`, now));
   const result = await db.batch(statements);
   if (!result[statements.length - 2]?.meta.changes) throw new AdminError("This sign-up was already reviewed.", 409);
+}
+
+/**
+ * Em (2026-11-11): once the client types the right email code, approve the sign-up
+ * automatically. Anything that needs a person still waits in Sign-ups: a sign-up that
+ * matches a customer Em already has, a mobile/email that already signs in, or several
+ * sign-ups from the same device in a day. Returns the new KDOOR code, or null if it waits.
+ */
+export async function autoApproveSignup(db: D1Database, id: string): Promise<string | null> {
+  const signup = await db.prepare("SELECT * FROM customer_signups WHERE id = ?").bind(id).first<Row>();
+  if (!signup || signup.status !== "New" || !signup.email_verified_at) return null;
+  if (await portalLoginTaken(db, String(signup.email), String(signup.mobile))) return null;
+  if ((await matchingCustomers(db, signup)).length) return null;
+  if (signup.client_key) {
+    const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    const recent = await db.prepare("SELECT COUNT(*) AS n FROM customer_signups WHERE client_key = ? AND created_at >= ?").bind(signup.client_key, since).first<{ n: number }>();
+    if (Number(recent?.n ?? 0) > 1) return null;
+  }
+  // The activity log needs an admin: record it under the owner, noted as automatic.
+  const owner = await db.prepare("SELECT id, name, email FROM admin_users WHERE role = 'owner' ORDER BY created_at LIMIT 1").first<{ id: string; name: string; email: string }>();
+  if (!owner) return null;
+  const form = new FormData();
+  form.set("customer_id", "new");
+  await approveSignup(db, { ...owner, role: "owner" }, id, form, "Auto-approved after the client confirmed their email code");
+  const row = await db.prepare("SELECT c.customer_code FROM customer_signups s JOIN customers c ON c.id = s.customer_id WHERE s.id = ?").bind(id).first<{ customer_code: string }>();
+  return row?.customer_code ?? null;
 }
 
 export async function rejectSignup(db: D1Database, user: AdminUser, id: string, form: FormData) {

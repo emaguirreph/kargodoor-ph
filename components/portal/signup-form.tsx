@@ -14,6 +14,7 @@ export function SignupForm() {
   const [sent, setSent] = useState(false);
   const [pending, setPending] = useState<{ id: string; email: string } | null>(null);
   const [verified, setVerified] = useState(false);
+  const [approved, setApproved] = useState(false);
   const [info, setInfo] = useState("");
 
   async function codeAction(action: "verify" | "resend", code = "") {
@@ -23,10 +24,10 @@ export function SignupForm() {
       const body = new FormData();
       body.set("id", pending.id); body.set("action", action); body.set("code", code);
       const response = await fetch("/api/customer/signup/verify", { method: "POST", body });
-      const result = (await response.json().catch(() => ({}))) as { error?: string };
+      const result = (await response.json().catch(() => ({}))) as { error?: string; approved?: boolean };
       if (!response.ok) setError(result.error ?? "Please try again.");
       else if (action === "resend") setInfo("New code sent. Check your inbox (and Spam).");
-      else { setVerified(true); setPending(null); setSent(true); }
+      else { setVerified(true); setApproved(Boolean(result.approved)); setPending(null); setSent(true); }
     } catch {
       setError("No internet connection? Please try again.");
     } finally {
@@ -66,6 +67,16 @@ export function SignupForm() {
       <button className="pbtn pbtn-blue" type="submit" disabled={busy}>{busy ? "CHECKING…" : "CONFIRM EMAIL"}</button>
       <button className="plink" type="button" disabled={busy} onClick={() => codeAction("resend")} style={{ background: "none", border: 0, padding: 0, cursor: "pointer", marginTop: 12 }}>Send a new code</button>
     </form>
+  );
+
+  if (sent && approved) return (
+    <div className="signup-done" role="status">
+      <p className="big">🎉 Your account is ready!</p>
+      <p>📧 Your email is confirmed and your KargoDoor account is approved.</p>
+      <p>Sign in with your email or mobile number and the password you just made. Inside, you&apos;ll find your China warehouse address and everything you need to start shipping.</p>
+      <p><Link href="/customer/login" className="pbtn pbtn-blue">SIGN IN NOW</Link></p>
+      <p className="pmuted">Questions? <MessengerLink target="_blank" rel="noopener noreferrer">Message us on Messenger</MessengerLink>.</p>
+    </div>
   );
 
   if (sent) return (

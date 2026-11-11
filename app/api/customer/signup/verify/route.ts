@@ -2,6 +2,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { D1Database } from "@cloudflare/workers-types";
 import { resendSender, type EmailEnv } from "@/lib/admin/email-verification";
 import { sendSignupCode, verifySignupCode } from "@/lib/customer/signup-email";
+import { autoApproveSignup } from "@/lib/admin/signups";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,7 +33,13 @@ export async function POST(request: Request) {
       return result === "sent" || result === "verified" ? json({ ok: true, result }) : json({ error: messages[result] }, 400);
     }
     const result = await verifySignupCode(db, id, String(form.get("code") ?? ""));
-    return result === "verified" ? json({ ok: true }) : json({ error: messages[result] }, 400);
+    if (result !== "verified") return json({ error: messages[result] }, 400);
+    // Right code: approve right away unless it needs Em to look at it.
+    const approved = await autoApproveSignup(db, id).then(Boolean).catch((error) => {
+      console.error("Auto-approve failed", error instanceof Error ? error.message : error);
+      return false;
+    });
+    return json({ ok: true, approved });
   } catch (error) {
     console.error("Sign-up code failed", error instanceof Error ? error.message : error);
     return json({ error: "We could not send the code right now. Please try again." }, 500);
