@@ -239,3 +239,64 @@ export function copyButton(id: string, label = "Copy shipping instructions"): st
 export function copyScript(): string {
   return `<script src="/admin-copy.js" defer></script>`;
 }
+
+export type SupplierMessageShipment = {
+  customerName?: unknown;
+  customerCode?: unknown;
+  /** Shipment tracking number (KDSEA-… or KDAIR-…). */
+  trackingNumber?: unknown;
+  /** Sea Freight, Air Freight or Full Container. */
+  service?: unknown;
+  warehouse?: unknown;
+  item?: unknown;
+  clientPhone?: unknown;
+};
+
+/** Shipping mark on the boxes: AIR KDOOR-XXXX for air, TD KDOOR-XXXX for Hong Kong, otherwise KDOOR-XXXX. */
+export function supplierShippingMark(code: string, service: unknown, warehouse: unknown): string {
+  if (/air/i.test(text(service))) return `AIR ${code}`;
+  if (isHongKongWarehouse(warehouse)) return hongKongMark(code);
+  return code;
+}
+
+/**
+ * Short message the client forwards to their supplier, filled in from the
+ * shipment (Em, 2026-11-11). Missing details show a [bracketed] placeholder.
+ */
+export function supplierShipmentMessage(shipment: SupplierMessageShipment): string {
+  const name = text(shipment.customerName, "there");
+  const service = text(shipment.service);
+  const type = !service ? "[Choose Sea or Air on Edit shipment]" : /air/i.test(service) ? "AIR ✈️" : "SEA 🚢";
+  const customerCode = text(shipment.customerCode);
+  const mark = customerCode ? supplierShippingMark(customerCode, service, shipment.warehouse) : "[Add the customer's KDOOR code]";
+  const warehouse = text(shipment.warehouse);
+  const address = warehouseAddress(warehouse) || "[Choose the China warehouse on Edit shipment]";
+  return [
+    `Hi ${name}! 😊`,
+    "Please send this to your supplier.",
+    "",
+    `🚚 SHIPMENT: ${type}`,
+    `🏷️ SHIPPING MARK / CARGO CODE: ${mark}`,
+    `🔢 CODE: ${text(shipment.trackingNumber, "[Save the shipment to get its tracking number]")}`,
+    `📦 ITEM: ${text(shipment.item, "[Add the item / product name]")}`,
+    `📱 CLIENT PHONE NUMBER: ${text(shipment.clientPhone, "[Add the client's phone number]")}`,
+    "",
+    "📍 CHINA WAREHOUSE ADDRESS",
+    address,
+    "",
+    "1. Packing List",
+    "",
+    "Every shipment must include:",
+    "• Product description in Chinese",
+    "• Material/composition",
+    "• Quantity and weight",
+    "• Supplier's phone number",
+    "",
+    "2. Proper Packaging",
+    "",
+    "All packages must be securely packed and undamaged. Fragile items require additional protection.",
+    "⚠️ IMPORTANT: Packages with incomplete labels or damaged packaging will NOT be accepted by the warehouse.",
+    "",
+    "Thank you for trusting KargoDoorph.com",
+  ].join("\n");
+}
