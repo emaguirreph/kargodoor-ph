@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Icon, portalSections, type PortalLinks, type PortalSection } from "./views";
+import { Icon, hiddenSections, portalSections, type PortalLinks, type PortalSection } from "./views";
 import type { PortalData } from "@/lib/customer/portal";
 
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "KD";
@@ -12,7 +12,7 @@ export function PortalShell({ data, links, active, banner, children }: {
   const current = portalSections.find(([key]) => key === active)?.[1] ?? "My Dashboard";
   const nav = (
     <nav className="pnav" aria-label="Portal menu">
-      {portalSections.map(([key, label, icon]) => (
+      {portalSections.filter(([key]) => !hiddenSections.includes(key)).map(([key, label, icon]) => (
         <a key={key} href={links.href(key)} aria-current={key === active ? "page" : undefined}>
           <Icon name={icon} />{label}
           {key === "payments" && unpaid ? <span className="pbadge" aria-label={`${unpaid} unpaid`}>{unpaid}</span> : null}
