@@ -275,7 +275,6 @@ export function supplierShipmentMessage(shipment: SupplierMessageShipment): stri
     "",
     `🚚 SHIPMENT: ${type}`,
     `🏷️ SHIPPING MARK / CARGO CODE: ${mark}`,
-    `🔢 CODE: ${mark}`,
     `📦 ITEM: ${text(shipment.item, "[Add the item / product name]")}`,
     `📱 CLIENT PHONE NUMBER: ${text(shipment.clientPhone, "[Add the client's phone number]")}`,
     "",

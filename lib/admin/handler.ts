@@ -2032,7 +2032,7 @@ export async function handleAdmin(
         : entity === "shipments" ? "" : `<section><h2>Send Warehouse Instructions</h2><p class="muted">The address of this shipment’s China warehouse is added automatically.</p><textarea id="${instructionId}" readonly aria-label="Warehouse instructions" style="min-height:260px;white-space:pre-wrap">${esc(instructionMessage)}</textarea><div class="actions">${copyButton(instructionId, "Copy warehouse instructions")}</div>${copyScript()}</section>`;
       const supplierMessageId = `supplier-message-${id}`;
       const supplierMessageSection = entity === "shipments" && canWrite
-        ? `<section class="supplier-message"><h2>Supplier Message</h2><p class="muted">Filled in from this shipment: Sea or Air, shipping mark, cargo code, item, client phone and the China warehouse address. Anything in [brackets] is missing, so fix it on Edit shipment first. Copying does not change the shipment.</p><textarea id="${supplierMessageId}" readonly aria-label="Supplier message" style="min-height:320px;white-space:pre-wrap">${esc(supplierShipmentMessage({
+        ? `<section class="supplier-message"><h2>Supplier Message</h2><p class="muted">Filled in from this shipment: Sea or Air, shipping mark / cargo code, item, client phone and the China warehouse address. Anything in [brackets] is missing, so fix it on Edit shipment first. Copying does not change the shipment.</p><textarea id="${supplierMessageId}" readonly aria-label="Supplier message" style="min-height:320px;white-space:pre-wrap">${esc(supplierShipmentMessage({
             customerName: linkedCustomer?.full_name,
             customerCode: record.cargo_code || linkedCustomer?.customer_code,
             service: record.service_type,

@@ -227,7 +227,7 @@ test("shipping instructions include the customer account code and supplier detai
   assert.match(seaSupplier, /^Hi Norie Vergara! 😊\nPlease send this to your supplier\./);
   assert.match(seaSupplier, /SHIPMENT: SEA 🚢/);
   assert.match(seaSupplier, /SHIPPING MARK \/ CARGO CODE: KDOOR-1234\n/);
-  assert.match(seaSupplier, /🔢 CODE: KDOOR-1234\n/);
+  assert.doesNotMatch(seaSupplier, /🔢 CODE/);
   assert.doesNotMatch(seaSupplier, /KDSEA/);
   assert.match(seaSupplier, /ITEM: Storage racks/);
   assert.match(seaSupplier, /CLIENT PHONE NUMBER: 09171234567/);
@@ -236,11 +236,10 @@ test("shipping instructions include the customer account code and supplier detai
   const airSupplier = supplierShipmentMessage({ customerCode: "KDOOR-1234", service: "Air Freight", warehouse: "Tongda Air Cargo" });
   assert.match(airSupplier, /SHIPMENT: AIR ✈️/);
   assert.match(airSupplier, /CARGO CODE: AIR KDOOR-1234/);
-  assert.match(airSupplier, /🔢 CODE: AIR KDOOR-1234\n/);
   assert.match(airSupplier, /ITEM: \[Add the item \/ product name\]/);
   assert.match(airSupplier, /CLIENT PHONE NUMBER: \[Add the client's phone number\]/);
   assert.match(supplierShipmentMessage({ customerCode: "KDOOR-1234", service: "Sea Freight", warehouse: "Hong Kong" }), /CARGO CODE: TD KDOOR-1234\n/);
-  assert.match(supplierShipmentMessage({}), /🔢 CODE: \[Add the customer's KDOOR code\][\s\S]*\[Choose the China warehouse on Edit shipment\]/);
+  assert.match(supplierShipmentMessage({}), /CARGO CODE: \[Add the customer's KDOOR code\][\s\S]*\[Choose the China warehouse on Edit shipment\]/);
 });
 
 function insertQuotation(sql: DatabaseSync, values: {
