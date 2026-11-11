@@ -5,7 +5,6 @@ import Link from "next/link";
 import { PasswordField } from "@/components/v5/password-field";
 import { MessengerLink } from "@/components/messenger-link";
 
-const heardFrom = ["Facebook", "TikTok", "Instagram", "Google", "Friend or referral", "Other"];
 
 /** Sign-up form: sends to /api/customer/signup and keeps what was typed if something needs fixing. */
 export function SignupForm() {
@@ -97,13 +96,6 @@ export function SignupForm() {
       <div className="two">
         <div className="field"><label htmlFor="su-mobile">Mobile number *</label><input id="su-mobile" name="mobile" type="tel" inputMode="tel" autoComplete="tel" placeholder="09XX XXX XXXX" required maxLength={20} /></div>
         <div className="field"><label htmlFor="su-email">Email *</label><input id="su-email" name="email" type="email" autoComplete="email" required maxLength={254} /></div>
-      </div>
-      <div className="field"><label htmlFor="su-address">Address in the Philippines *</label><textarea id="su-address" name="address" autoComplete="street-address" placeholder="House no., street, barangay, city, province" required minLength={8} maxLength={400} rows={2} /></div>
-      <div className="field"><label htmlFor="su-ships">What do you plan to ship? <span className="opt">(optional)</span></label><input id="su-ships" name="ships_what" placeholder="e.g. clothes, phone accessories, furniture" maxLength={300} /></div>
-      <div className="two">
-        <div className="field"><label htmlFor="su-heard">How did you find us? <span className="opt">(optional)</span></label>
-          <select id="su-heard" name="heard_from" defaultValue=""><option value="">Choose…</option>{heardFrom.map((h) => <option key={h}>{h}</option>)}</select></div>
-        <div className="field"><label htmlFor="su-ref">Referral code <span className="opt">(optional)</span></label><input id="su-ref" name="referral_code" placeholder="KDOOR-1234" maxLength={40} style={{ textTransform: "uppercase" }} /></div>
       </div>
       <div className="two">
         <PasswordField label="Make a password *" id="su-password" name="password" autoComplete="new-password" required minLength={8} maxLength={1024} />

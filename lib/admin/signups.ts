@@ -80,7 +80,7 @@ export async function approveSignup(db: D1Database, user: AdminUser, id: string,
   if (!existing) {
     statements.push(db.prepare(`INSERT INTO customers (id, customer_code, full_name, company_name, mobile, email, address, notes, referral_code, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .bind(customerId, customerCode, signup.full_name, signup.company_name ?? null, signup.mobile, signup.email, signup.address, notes,
+      .bind(customerId, customerCode, signup.full_name, signup.company_name ?? null, signup.mobile, signup.email, String(signup.address ?? "").trim() || null, notes,
         signup.referral_code && String(signup.referral_code).toUpperCase() !== customerCode ? signup.referral_code : null, now, now));
   }
   statements.push(db.prepare(`INSERT INTO customer_accounts (id, customer_id, login_email, login_mobile, password_hash, password_salt, password_algorithm,
