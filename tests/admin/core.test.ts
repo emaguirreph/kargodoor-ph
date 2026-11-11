@@ -223,22 +223,24 @@ test("shipping instructions include the customer account code and supplier detai
   assert.match(shipmentMessage, /Packing List/);
   assert.match(warehouseAddress("Tongda Air Cargo"), /TONGDA AIR CARGO/);
 
-  const seaSupplier = supplierShipmentMessage({ customerName: "Norie Vergara", customerCode: "KDOOR-1234", trackingNumber: "KDSEA-123456", service: "Sea Freight", warehouse: "Guangzhou", item: "Storage racks", clientPhone: "09171234567" });
+  const seaSupplier = supplierShipmentMessage({ customerName: "Norie Vergara", customerCode: "KDOOR-1234", service: "Sea Freight", warehouse: "Guangzhou", item: "Storage racks", clientPhone: "09171234567" });
   assert.match(seaSupplier, /^Hi Norie Vergara! 😊\nPlease send this to your supplier\./);
   assert.match(seaSupplier, /SHIPMENT: SEA 🚢/);
   assert.match(seaSupplier, /SHIPPING MARK \/ CARGO CODE: KDOOR-1234\n/);
-  assert.match(seaSupplier, /CODE: KDSEA-123456/);
+  assert.match(seaSupplier, /🔢 CODE: KDOOR-1234\n/);
+  assert.doesNotMatch(seaSupplier, /KDSEA/);
   assert.match(seaSupplier, /ITEM: Storage racks/);
   assert.match(seaSupplier, /CLIENT PHONE NUMBER: 09171234567/);
   assert.ok(seaSupplier.includes(warehouseAddress("Guangzhou")));
   assert.match(seaSupplier, /Thank you for trusting KargoDoorph\.com$/);
-  const airSupplier = supplierShipmentMessage({ customerCode: "KDOOR-1234", trackingNumber: "KDAIR-654321", service: "Air Freight", warehouse: "Tongda Air Cargo" });
+  const airSupplier = supplierShipmentMessage({ customerCode: "KDOOR-1234", service: "Air Freight", warehouse: "Tongda Air Cargo" });
   assert.match(airSupplier, /SHIPMENT: AIR ✈️/);
   assert.match(airSupplier, /CARGO CODE: AIR KDOOR-1234/);
+  assert.match(airSupplier, /🔢 CODE: AIR KDOOR-1234\n/);
   assert.match(airSupplier, /ITEM: \[Add the item \/ product name\]/);
   assert.match(airSupplier, /CLIENT PHONE NUMBER: \[Add the client's phone number\]/);
   assert.match(supplierShipmentMessage({ customerCode: "KDOOR-1234", service: "Sea Freight", warehouse: "Hong Kong" }), /CARGO CODE: TD KDOOR-1234\n/);
-  assert.match(supplierShipmentMessage({}), /CODE: \[Save the shipment to get its tracking number\][\s\S]*\[Choose the China warehouse on Edit shipment\]/);
+  assert.match(supplierShipmentMessage({}), /🔢 CODE: \[Add the customer's KDOOR code\][\s\S]*\[Choose the China warehouse on Edit shipment\]/);
 });
 
 function insertQuotation(sql: DatabaseSync, values: {

@@ -243,8 +243,6 @@ export function copyScript(): string {
 export type SupplierMessageShipment = {
   customerName?: unknown;
   customerCode?: unknown;
-  /** Shipment tracking number (KDSEA-… or KDAIR-…). */
-  trackingNumber?: unknown;
   /** Sea Freight, Air Freight or Full Container. */
   service?: unknown;
   warehouse?: unknown;
@@ -277,7 +275,7 @@ export function supplierShipmentMessage(shipment: SupplierMessageShipment): stri
     "",
     `🚚 SHIPMENT: ${type}`,
     `🏷️ SHIPPING MARK / CARGO CODE: ${mark}`,
-    `🔢 CODE: ${text(shipment.trackingNumber, "[Save the shipment to get its tracking number]")}`,
+    `🔢 CODE: ${mark}`,
     `📦 ITEM: ${text(shipment.item, "[Add the item / product name]")}`,
     `📱 CLIENT PHONE NUMBER: ${text(shipment.clientPhone, "[Add the client's phone number]")}`,
     "",
