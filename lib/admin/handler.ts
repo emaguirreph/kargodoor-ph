@@ -48,7 +48,7 @@ import { createPortal, disablePortal, portalFor, portalStatus, resetPortal } fro
 import { checkEmailCode, emailVerificationSection, readEmailVerification, resendSender, sendEmailCode } from "./email-verification";
 import { notificationKeyFor, shipmentStatusMessages } from "./customer-messages";
 import { messageList } from "./message-list";
-import { copyButton, copyScript, customerPortalAccessMessage, customerWelcomeMessage, nihaoAddressBook, shipmentShippingInstructions, supplierShipmentMessage, warehouseAddress } from "./shipping-instructions";
+import { copyButton, copyScript, customerPortalAccessMessage, customerWelcomeMessage, nihaoAddressBook, onceShippedMessage, shipmentShippingInstructions, supplierShipmentMessage, warehouseAddress } from "./shipping-instructions";
 import { leadsPage } from "./leads";
 import { manualShipmentRate, resolveManualShipmentCharge, resolveQuotationShipmentCharge, syncVerifiedFreightToInvoice, verifiedShipmentFreight } from "./shipment-verified-pricing";
 import { airItems, itemCategories } from "./quotation-pricing";
@@ -2076,6 +2076,7 @@ export async function handleAdmin(
             temporaryPassword: "[Generate a temporary password on the customer page]",
           })],
           ["supplier-instructions", "Supplier Instructions", instructionMessage],
+          ["once-shipped", "Once Shipped: Send Us the Courier Details", onceShippedMessage()],
         ];
         const category = (heading: string, note: string, tabs: string) =>
           `<div class="message-category"><h3 class="message-category-title">${esc(heading)}</h3><p class="muted">${esc(note)}</p>${tabs}</div>`;

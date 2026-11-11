@@ -297,3 +297,21 @@ export function supplierShipmentMessage(shipment: SupplierMessageShipment): stri
     "Thank you for trusting KargoDoorph.com",
   ].join("\n");
 }
+
+/** Asks the client for the supplier's courier details once shipped. Em's wording, 2026-11-11. */
+export function onceShippedMessage(): string {
+  return finishMessage([
+    "📲 ONCE SHIPPED, PLEASE SEND US:",
+    "",
+    "Example:",
+    "",
+    "• Courier: SF Express",
+    "• Tracking/Waybill No.: SF123456789",
+    "• Total Packages: 1",
+    "• Receipt or Package Photo: 📸",
+    "",
+    "This allows us to monitor your shipment before it reaches our China warehouse.",
+    "",
+    "📦 Shipping Reminder: Final shipping charges will be based on the actual CBM and weight verified by our China warehouse, using the applicable freight rates.",
+  ]);
+}

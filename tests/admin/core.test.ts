@@ -45,7 +45,7 @@ import {
 import { expensesPage, saveExpense, mutateExpense } from "../../lib/admin/expenses";
 import { proofCell, readProofFile, readProofs, saveProof } from "../../lib/admin/payment-proof";
 import { readShipmentPayments, shipmentPaymentsList } from "../../lib/admin/shipment-payment";
-import { customerShippingInstructions, customerWarehouseAddressMessage, nihaoAddressBook, shipmentShippingInstructions, supplierShipmentMessage, warehouseAddress } from "../../lib/admin/shipping-instructions";
+import { customerShippingInstructions, customerWarehouseAddressMessage, nihaoAddressBook, onceShippedMessage, shipmentShippingInstructions, supplierShipmentMessage, warehouseAddress } from "../../lib/admin/shipping-instructions";
 import { notificationKeyFor, shipmentStatusMessages } from "../../lib/admin/customer-messages";
 function database(includePhase1 = true) {
   const sql = new DatabaseSync(":memory:");
@@ -239,6 +239,10 @@ test("shipping instructions include the customer account code and supplier detai
   assert.match(airSupplier, /ITEM: \[Add the item \/ product name\]/);
   assert.match(airSupplier, /CLIENT PHONE NUMBER: \[Add the client's phone number\]/);
   assert.match(supplierShipmentMessage({ customerCode: "KDOOR-1234", service: "Sea Freight", warehouse: "Hong Kong" }), /CARGO CODE: TD KDOOR-1234\n/);
+  const onceShipped = onceShippedMessage();
+  assert.match(onceShipped, /^📲 ONCE SHIPPED, PLEASE SEND US:\n/);
+  assert.match(onceShipped, /• Total Packages: 1\n/);
+  assert.match(onceShipped, /applicable freight rates\.\n\nThank you for trusting KargoDoorPH\.com! 💚 💙$/);
   assert.match(supplierShipmentMessage({}), /CARGO CODE: \[Add the customer's KDOOR code\][\s\S]*\[Choose the China warehouse on Edit shipment\]/);
 });
 
