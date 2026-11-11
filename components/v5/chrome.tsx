@@ -23,6 +23,9 @@ const isCurrent = (pathname: string, href: string) =>
 
 export function Header() {
   const pathname = usePathname() ?? "/";
+  // Inside the customer portal the customer is already signed in.
+  const inPortal = /^\/customer(\/|$)/.test(pathname) && !/^\/customer\/(login|signup|change-password)/.test(pathname);
+  const account = inPortal ? { href: "/customer", label: "MY PORTAL" } : { href: "/customer/login", label: "SIGN IN" };
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -52,14 +55,14 @@ export function Header() {
             </Link>
           ))}
           <div className="mx">
-            <Link className="btn btn-outline" href="/customer/login" onClick={close}>SIGN IN</Link>
+            <Link className="btn btn-outline" href={account.href} onClick={close}>{account.label}</Link>
             <MessengerLink className="btn btn-green" target="_blank" rel="noopener noreferrer" analyticsEvent="generate_lead" onClick={close}>
               GET A QUOTE
             </MessengerLink>
           </div>
         </nav>
 
-        <Link className="btn btn-outline" href="/customer/login">SIGN IN</Link>
+        <Link className="btn btn-outline" href={account.href}>{account.label}</Link>
         <MessengerLink className="btn btn-green" target="_blank" rel="noopener noreferrer" analyticsEvent="generate_lead">
           GET A QUOTE
         </MessengerLink>

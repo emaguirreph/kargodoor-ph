@@ -136,7 +136,7 @@ function CodeBox({ data }: { data: PortalData }) {
           <div>
             <small>SHIPPING MARK / CARGO CODE</small><strong>{code}</strong>
             <dl className="pmarks">
-              <div><dt>Sea</dt><dd>SEA {code}</dd></div>
+              <div><dt>Sea</dt><dd>{code}</dd></div>
               <div><dt>Air</dt><dd>AIR {code}</dd></div>
               <div><dt>Hong Kong</dt><dd>{hongKongMark(code)}</dd></div>
             </dl>
@@ -214,10 +214,10 @@ function ShippingGuide({ data, showWaybill = true }: { data: PortalData; showWay
 
 const checkFirst = ["Batteries", "Liquids", "Chemicals", "Food", "Medicines", "Cosmetics", "Branded goods", "Hazardous materials", "Other regulated products"];
 
-function Reminders() {
+function Reminders({ compact = false }: { compact?: boolean }) {
   return (
     <div className="pstack">
-      <div className="palert" role="note">
+      <div className={`palert${compact ? " compact" : ""}`} role="note">
         <div className="palert-head"><span className="palert-icon" aria-hidden="true">⚠️</span><div><strong>Message us FIRST before buying any of these</strong><em className="palert-fake">🚫 Fake or counterfeit products are NOT allowed.</em><span>Some can&apos;t be shipped or need special handling.</span></div></div>
         <div className="palert-chips">{checkFirst.map((item) => <span key={item}>{item}</span>)}</div>
         <p>Contact us about these packages <b>before</b> your supplier sends them, and we&apos;ll tell you if we can ship it.</p>
@@ -327,8 +327,7 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
 export function HowToShipView({ data, links }: ViewProps) {
   return (
     <>
-      <PageHead eyebrow="Getting started" title="Shipping Process" sub="Ganito lang mag-import with KargoDoor PH." />
-      <section className="pcard"><h2>⚠️ Reminders before you buy</h2><Reminders /></section>
+      <PageHead eyebrow="Getting started" title="Shipping Process" sub="Ganito lang mag-import with KargoDoor PH." action={<Reminders compact />} />
       <Step n={1} title="Send your code to your supplier">
         <CodeBox data={data} />
         <ShippingGuide data={data} showWaybill={false} />
@@ -518,7 +517,7 @@ export function WarehousesView({ data, links, query }: ViewProps) {
   const list = mode === "air" ? airWarehouses : seaWarehouses;
   const selected = list.find((w) => w === query.wh) ?? list[0];
   const label = (name: WarehouseName) => mode === "air" ? `AIR ${code} · Item · Supplier no. · PH mobile`
-    : name === "Hong Kong" ? `${hongKongMark(code)} · Item · Supplier no. · PH mobile` : `SEA ${code} · Item · Supplier no. · PH mobile`;
+    : name === "Hong Kong" ? `${hongKongMark(code)} · Item · Supplier no. · PH mobile` : `${code} · Item · Supplier no. · PH mobile`;
   const address = warehouseAddresses[selected].replace(/（?\+客户唛头\.?）?/, `（+${code}）`);
   const q = (next: Record<string, string>) => new URLSearchParams({ mode, ...next }).toString();
   // Malabon: contact persons/phones stay in the admin only.
@@ -535,7 +534,7 @@ export function WarehousesView({ data, links, query }: ViewProps) {
       </div>
       <div className="pwh">
         <div className="pstack">
-          <p className="phint">{mode === "air" ? <>Air freight: write <b>AIR {code}</b> on every carton, plus item, supplier phone and your PH mobile.</> : <>Sea freight: write <b>SEA {code}</b> on every carton (Hong Kong warehouse: <b>{hongKongMark(code)}</b>), plus item, supplier phone and your PH mobile.</>}</p>
+          <p className="phint">{mode === "air" ? <>Air freight: write <b>AIR {code}</b> on every carton, plus item, supplier phone and your PH mobile.</> : <>Sea freight: write <b>{code}</b> on every carton (Hong Kong warehouse: <b>{hongKongMark(code)}</b>), plus item, supplier phone and your PH mobile.</>}</p>
           {list.map((name) => (
             <a key={name} className="pwhitem" aria-current={name === selected ? "true" : undefined} href={links.href("warehouses", q({ wh: name }))}>
               {name}<small>Label: {label(name)}</small>

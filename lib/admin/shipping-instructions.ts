@@ -53,7 +53,7 @@ export function supplierRequirementsText(code = "KDOOR-XXXX", warehouse?: unknow
     : [
         "🚢 SEA FREIGHT – Label Example",
         "",
-        `SEA ${code}`,
+        code,
         "Item: [Product Name]",
         "Supplier: [Chinese Phone Number]",
         "Recipient: [PH Phone Number]",

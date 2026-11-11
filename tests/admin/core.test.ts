@@ -184,7 +184,7 @@ test("shipping instructions include the customer account code and supplier detai
   assert.match(customerMessage, /广州市白云区江高镇沙溪东路18号166通达仓库/);
   assert.match(customerMessage, /中文说明（请转发供应商）/);
   assert.match(customerMessage, /ENGLISH – SHIPPING REMINDERS/);
-  assert.ok(customerMessage.includes("SEA KD-10025"));
+  assert.ok(customerMessage.includes("\nKD-10025\n") && !customerMessage.includes("SEA KD-10025"));
   assert.ok(customerMessage.includes("AIR KD-10025"));
   assert.match(customerMessage, /will NOT be accepted by the warehouse/);
   assert.match(customerMessage, /ONCE SHIPPED, PLEASE SEND US/);
@@ -198,14 +198,15 @@ test("shipping instructions include the customer account code and supplier detai
   assert.match(customerWarehouseAddressMessage({ name: "Maria", warehouse: "Taiwan" }), /\[Add warehouse address\]/);
   assert.match(warehouseAddress("Hong Kong"), /香港新界葵涌贷柜码头路51-63号葵顺工业中心9楼E室/);
 
-  // Hong Kong sea cargo is labelled TD KDOOR-XXXX; other sea routes keep SEA KDOOR-XXXX.
+  // Hong Kong sea cargo is labelled TD KDOOR-XXXX; other sea routes use the plain KDOOR-XXXX (Em, 2026-11-11).
   const hongKongMessage = customerShippingInstructions({ name: "Maria", customerCode: "KDOOR-1234", service: "Sea Freight", warehouse: "Hong Kong" });
   assert.match(hongKongMessage, /Shipping Mark: TD KDOOR-1234/);
   assert.match(hongKongMessage, /SEA FREIGHT \(HONG KONG\) – Label Example\n\nTD KDOOR-1234\n/);
   assert.doesNotMatch(hongKongMessage, /SEA KDOOR-1234|AIR KDOOR-1234/);
   assert.match(customerWarehouseAddressMessage({ name: "Maria", customerCode: "KDOOR-1234", warehouse: "Hong Kong" }), /place TD KDOOR-1234 clearly/);
   const guangzhouMessage = customerShippingInstructions({ name: "Maria", customerCode: "KDOOR-1234", service: "Sea Freight", warehouse: "Guangzhou" });
-  assert.match(guangzhouMessage, /\nSEA KDOOR-1234\n/);
+  assert.match(guangzhouMessage, /\nKDOOR-1234\n/);
+  assert.doesNotMatch(guangzhouMessage, /SEA KDOOR-1234/);
   assert.match(guangzhouMessage, /\(Hong Kong warehouse: TD KDOOR-1234\)/);
   assert.doesNotMatch(guangzhouMessage, /Shipping Mark:/);
 
