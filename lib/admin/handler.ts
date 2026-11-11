@@ -48,7 +48,7 @@ import { createPortal, disablePortal, portalFor, portalStatus, resetPortal } fro
 import { checkEmailCode, emailVerificationSection, readEmailVerification, resendSender, sendEmailCode } from "./email-verification";
 import { notificationKeyFor, shipmentStatusMessages } from "./customer-messages";
 import { messageList } from "./message-list";
-import { copyButton, copyScript, customerPortalAccessMessage, customerWelcomeMessage, nihaoAddressBook, shipmentShippingInstructions, warehouseAddress } from "./shipping-instructions";
+import { copyButton, copyScript, customerPortalAccessMessage, customerWelcomeMessage, nihaoAddressBook, shipmentShippingInstructions, supplierShipmentMessage, warehouseAddress } from "./shipping-instructions";
 import { leadsPage } from "./leads";
 import { manualShipmentRate, resolveManualShipmentCharge, resolveQuotationShipmentCharge, syncVerifiedFreightToInvoice, verifiedShipmentFreight } from "./shipment-verified-pricing";
 import { airItems, itemCategories } from "./quotation-pricing";
@@ -2030,6 +2030,17 @@ export async function handleAdmin(
       const shippingInstructions = !canWrite ? "" : entity === "customers"
         ? `<section><h2>Send Account Setup</h2><p class="muted">Send this first so the customer has their Account/Cargo Code and portal login before their supplier ships any package. Click Create Customer Account or Generate New Temporary Password above, and the same message appears with the temporary password filled in.</p><textarea id="${accountMessageId}" readonly aria-label="Account setup message" style="min-height:260px;white-space:pre-wrap">${esc(accountMessage)}</textarea><div class="actions">${copyButton(accountMessageId, "Copy account setup message")}</div>${copyScript()}</section>`
         : entity === "shipments" ? "" : `<section><h2>Send Warehouse Instructions</h2><p class="muted">The address of this shipment’s China warehouse is added automatically.</p><textarea id="${instructionId}" readonly aria-label="Warehouse instructions" style="min-height:260px;white-space:pre-wrap">${esc(instructionMessage)}</textarea><div class="actions">${copyButton(instructionId, "Copy warehouse instructions")}</div>${copyScript()}</section>`;
+      const supplierMessageId = `supplier-message-${id}`;
+      const supplierMessageSection = entity === "shipments" && canWrite
+        ? `<section class="supplier-message"><h2>Supplier Message</h2><p class="muted">Filled in from this shipment: Sea or Air, shipping mark / cargo code, item, client phone and the China warehouse address. Anything in [brackets] is missing, so fix it on Edit shipment first. Copying does not change the shipment.</p><textarea id="${supplierMessageId}" readonly aria-label="Supplier message" style="min-height:320px;white-space:pre-wrap">${esc(supplierShipmentMessage({
+            customerName: linkedCustomer?.full_name,
+            customerCode: record.cargo_code || linkedCustomer?.customer_code,
+            service: record.service_type,
+            warehouse: record.china_warehouse,
+            item: cargoInfo?.item,
+            clientPhone: linkedCustomer?.mobile,
+          }))}</textarea><div class="actions">${copyButton(supplierMessageId, "Copy supplier message")}</div>${copyScript()}</section>`
+        : "";
       const customerNotifications = entity === "shipments" && canWrite ? (() => {
         const messages = shipmentStatusMessages({
           customerName: linkedCustomer?.full_name,
@@ -2151,6 +2162,7 @@ export async function handleAdmin(
           ${portalSection}
           ${emailSection}
           ${shippingInstructions}
+          ${supplierMessageSection}
           ${customerNotifications}
         `,
         user.name,
