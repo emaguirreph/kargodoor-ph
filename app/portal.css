@@ -294,3 +294,12 @@
 .v5 .pmarks dt{font:800 .66rem var(--f-b);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .v5 .pmarks dd{margin:0;font:800 .95rem var(--f-b);color:var(--fg)}
 .v5 .palert-fake{display:block;font:800 .98rem var(--f-b);font-style:normal;color:#b42318;margin-top:4px}
+.v5 .phead > .pstack{flex:0 1 560px}
+.v5 .palert.compact{padding:12px 14px;gap:8px;border-left-width:6px}
+.v5 .palert.compact .palert-icon{font-size:1.3rem}
+.v5 .palert.compact .palert-head strong{font-size:.92rem}
+.v5 .palert.compact .palert-fake{font-size:.84rem}
+.v5 .palert.compact .palert-head span,.v5 .palert.compact p{font-size:.8rem}
+.v5 .palert.compact .palert-chips{gap:5px}
+.v5 .palert.compact .palert-chips span{font-size:.7rem;padding:4px 9px}
+.v5 .palert.compact .pbtn{padding:8px 12px;font-size:.72rem}
