@@ -21,7 +21,8 @@
     "test:money-flow": "node scripts/test-money-flow-http.mjs",
     "test:booking-flow": "node scripts/test-booking-flow-http.mjs",
     "test:email-verification": "node scripts/test-email-verification.mjs",
-    "test:signup-flow": "node scripts/test-signup-flow-http.mjs"
+    "test:signup-flow": "node scripts/test-signup-flow-http.mjs",
+    "test:shipment-packages": "node scripts/test-shipment-packages-http.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
