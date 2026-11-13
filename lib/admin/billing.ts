@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { allPicked, checkFilter, checkFilterAssets, filteredMarker, inClause, pickMany, pickSort, sortSelect, type SortOption } from "./list-sort";
 import { pendingProofsPanel } from "./booking-proofs-panel";
 import { philippineToday } from "./finance-dates";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
@@ -1963,6 +1964,18 @@ export async function createView(
   );
 }
 
+const invoiceDateSql = "COALESCE(NULLIF(i.issued_at, ''), i.created_at)";
+const invoiceSorts: readonly SortOption[] = [
+  { value: "updated", label: "Last updated", sql: "i.updated_at DESC, i.id" },
+  { value: "newest", label: "Date (newest)", sql: `${invoiceDateSql} DESC, i.id` },
+  { value: "oldest", label: "Date (oldest)", sql: `${invoiceDateSql} ASC, i.id` },
+  { value: "total-high", label: "Total (highest)", sql: "invoice_total DESC, i.id" },
+  { value: "total-low", label: "Total (lowest)", sql: "invoice_total ASC, i.id" },
+  { value: "balance", label: "Balance due (highest)", sql: "(invoice_total - amount_paid) DESC, i.id" },
+  { value: "name", label: "Customer name (A–Z)", sql: "c.full_name COLLATE NOCASE, i.id" },
+  { value: "number", label: "Invoice no.", sql: "i.invoice_number COLLATE NOCASE, i.id" },
+];
+
 export async function list(
   db: D1Database,
   user: {
@@ -1975,19 +1988,26 @@ export async function list(
     url.searchParams.get("q") ?? ""
   ).trim();
 
-  const status =
-    url.searchParams.get("status") ?? "";
+  // Tick-box filters, all ticked to start (Em, 2026-11-13).
+  const statusPicks = pickMany(url.searchParams, "status", invoiceStatuses);
+  const statusClause = inClause("i.status", statusPicks, invoiceStatuses);
 
   const number = Number(
     url.searchParams.get("page") ?? 1,
   );
 
+  // Sort and payment-method filter (Em, 2026-11-13). Default = old order.
+  const sort = pickSort(invoiceSorts, url.searchParams.get("sort"));
+  const methodOptions = [...paymentMethods.map((value) => [value, paymentMethodLabel(value)] as const), ["none", "Not paid yet"] as const];
+  const methodPicks = pickMany(url.searchParams, "method", methodOptions);
+  const paidMethods = methodPicks.filter((value) => value !== "none");
+  const methodClause = allPicked(methodPicks, methodOptions) ? "" : `AND (${[
+    paidMethods.length ? `EXISTS (SELECT 1 FROM payments pm WHERE pm.invoice_id = i.id AND pm.payment_method IN (${paidMethods.map(() => "?").join(", ")}))` : "",
+    methodPicks.includes("none") ? "NOT EXISTS (SELECT 1 FROM payments pm WHERE pm.invoice_id = i.id)" : "",
+  ].filter(Boolean).join(" OR ") || "0"})`;
+
   if (
     q.length > 160 ||
-    (status &&
-      !invoiceStatuses.includes(
-        status as (typeof invoiceStatuses)[number],
-      )) ||
     !Number.isSafeInteger(number) ||
     number < 1 ||
     number > 100_000
@@ -2039,14 +2059,11 @@ export async function list(
               lower(?)
             ) > 0
           )
-          AND (
-            ? = ''
-            OR i.status = ?
-          )
+          ${statusClause.sql ? `AND ${statusClause.sql}` : ""}
+          ${methodClause}
         GROUP BY i.id
         ORDER BY
-          i.updated_at DESC,
-          i.id
+          ${sort.sql}
         LIMIT 26
         OFFSET ?
         `,
@@ -2055,8 +2072,8 @@ export async function list(
         q,
         q,
         q,
-        status,
-        status,
+        ...statusClause.bindings,
+        ...paidMethods.filter(() => !allPicked(methodPicks, methodOptions)),
         (number - 1) * 25,
       )
       .all<RecordData>()
@@ -2140,26 +2157,10 @@ export async function list(
             >
           </label>
 
-          <label>
-            Status
-
-            <select name="status">
-              <option value="">
-                All statuses
-              </option>
-
-              ${invoiceStatuses
-                .map(
-                  (value) =>
-                    `<option${
-                      status === value
-                        ? " selected"
-                        : ""
-                    }>${esc(value)}</option>`,
-                )
-                .join("")}
-            </select>
-          </label>
+          ${checkFilter("status", "Status", invoiceStatuses, statusPicks)}
+          ${checkFilter("method", "Payment method", methodOptions, methodPicks)}
+          ${filteredMarker}${checkFilterAssets}
+          ${sortSelect(invoiceSorts, sort)}
 
           <button>Search</button>
           <a href="${route}">Clear</a>

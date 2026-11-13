@@ -53,8 +53,10 @@ import { leadsPage } from "./leads";
 import { manualShipmentRate, resolveManualShipmentCharge, resolveQuotationShipmentCharge, syncVerifiedFreightToInvoice, verifiedShipmentFreight } from "./shipment-verified-pricing";
 import { airItems, itemCategories } from "./quotation-pricing";
 import { cargoCategory, cargoCategorySql, cargoItemSql, shipmentCargo, type ShipmentCargo } from "./shipment-cargo";
+import { checkFilter, checkFilterAssets, customerShipmentFilters, customerSorts, filteredMarker, pickMany, pickSort, sortSelect } from "./list-sort";
+import { niHaoPaymentFilters, niHaoPaymentSql, readShipmentFilters, shipmentExportQuery, shipmentPaymentStatuses, shipmentServiceTypes, shipmentSorts, shipmentWhere } from "./shipment-list";
 import { resolveNiHaoCost, shipmentNiHaoEstimate, type NiHaoEstimate } from "./nihao-estimate";
-import { lastNiHaoTransferFee, niHaoExpenseCategory, niHaoPaymentSection, readNiHaoPayment, recordNiHaoPayment } from "./nihao-payment";
+import { lastNiHaoTransferFee, niHaoPaymentSection, readNiHaoPayment, recordNiHaoPayment } from "./nihao-payment";
 import { arrivalWindow, arrivalWindowDone, formatArrivalWindow, shortArrivalWindow } from "./arrival-window";
 import { readShipmentStatement, shipmentStatementPdf, shipmentsLedgerCsv, statementFilename } from "./shipment-statement";
 import { autoDraftInvoice } from "./billing";
@@ -1204,8 +1206,8 @@ export async function handleAdmin(
         // Order (two columns): CH warehouse received date | Estimated arrival,
         // Malabon warehouse received date | Delivered date,
         // Declared CBM | Declared weight, Verified CBM | Verified weight,
-        // Status. Air Freight: CH received | Flight date, then Estimated arrival. Supplier waybill and courier sit in
-        // the Ni Hao details box below.
+        // Status. Air Freight: CH received | Flight date, then Estimated arrival. Courier | Waybill
+        // number come right after.
         fields +=
           input(
             "warehouse_received_date",
@@ -1221,6 +1223,13 @@ export async function handleAdmin(
                 `name="departure_date" data-after="warehouse_received_date"${record.warehouse_received_date ? ` min="${esc(record.warehouse_received_date)}"` : ""}`,
               ) + arrivalEstimateField(record).replace('class="arrival-estimate"', 'class="arrival-estimate wide"')
             : arrivalEstimateField(record)) +
+          // Courier and waybill (Em, 2026-11-13): in the main form for new and
+          // edited shipments, to track where the package is. Internal only:
+          // the customer portal, tracking page and messages never show them.
+          input("supplier_courier", "Courier", record, "text", false, 120)
+            .replace("<label>", '<label style="grid-column-start:1">') +
+          input("supplier_waybill_number", "Waybill number", record, "text", false, 120) +
+          `<p class="muted wide" style="margin:0">Courier and waybill are for our tracking only. The customer does not see them.</p>` +
           // Below them: Malabon warehouse received date (from Malabon Warehouse
           // on) and Delivered date (at Delivered). Both always stay in the form
           // so a saved date is kept; /admin-arrival-window.js shows or hides
@@ -1367,9 +1376,6 @@ export async function handleAdmin(
           csrf: csrfToken(env, user.id, path),
           canWrite,
           uploaded: url.searchParams.get("nihao_file") === "1",
-          supplierFields:
-            input("supplier_waybill_number", "Supplier waybill number", record, "text", false, 120) +
-            input("supplier_courier", "Supplier courier", record, "text", false, 120),
         });
         paymentForms = customerBox.form + proofForms + deliveryBox.form + niHaoBox.form + niHaoDetailsCard.form;
         // Opens on the Ni Hao tab right after a Ni Hao upload or payment.
@@ -2186,16 +2192,6 @@ export async function handleAdmin(
         ) ?? ""
       ).trim();
 
-    const status =
-      url.searchParams.get(
-        "status",
-      ) ?? "";
-
-    const customer =
-      url.searchParams.get(
-        "customer_id",
-      ) ?? "";
-
     const pageNumber =
       Number(
         url.searchParams.get(
@@ -2205,14 +2201,6 @@ export async function handleAdmin(
 
     if (
       q.length > 160 ||
-      (
-        status &&
-        !statuses.includes(
-          status as (
-            typeof statuses
-          )[number],
-        )
-      ) ||
       !Number.isSafeInteger(
         pageNumber,
       ) ||
@@ -2229,6 +2217,14 @@ export async function handleAdmin(
       (pageNumber - 1) *
       25;
 
+    // Sort and filter choices (Em, 2026-11-13). Unknown values fall back to
+    // the defaults, which match the old list.
+    const shipmentFilters = readShipmentFilters(url.searchParams);
+    const { customer } = shipmentFilters;
+    const customerSort = pickSort(customerSorts, url.searchParams.get("sort"));
+    const customerShipmentPicks = pickMany(url.searchParams, "shipments", customerShipmentFilters);
+    const customerShipments = customerShipmentPicks.length === 2 ? "" : customerShipmentPicks[0] ?? "none";
+
     let rows:
       RecordData[];
 
@@ -2236,6 +2232,7 @@ export async function handleAdmin(
       entity ===
       "customers"
     ) {
+      const shipmentCountSql = "(SELECT COUNT(*) FROM shipments s WHERE s.customer_id = customers.id AND s.archived_at IS NULL)";
       rows =
         (
           await db
@@ -2285,10 +2282,10 @@ export async function handleAdmin(
                   lower(?)
                 ) > 0
                 )
+                ${customerShipments === "with" ? `AND ${shipmentCountSql} > 0` : customerShipments === "without" ? `AND ${shipmentCountSql} = 0` : customerShipments === "none" ? "AND 0" : ""}
 
               ORDER BY
-                created_at DESC,
-                id
+                ${customerSort.sql.replaceAll("{shipments}", shipmentCountSql)}
 
               LIMIT 26
               OFFSET ?
@@ -2305,9 +2302,7 @@ export async function handleAdmin(
             .all<RecordData>()
         ).results;
     } else {
-      const shipmentStatusClause = status ? "AND s.status = ?" : "AND s.status != 'Cancelled'";
-      const shipmentCustomerClause = customer ? "AND s.customer_id = ?" : "";
-      const shipmentBindings = [q, q, q, ...(status ? [status] : []), ...(customer ? [customer] : []), offset];
+      const where = shipmentWhere(shipmentFilters);
       rows =
         (
           await db
@@ -2324,11 +2319,7 @@ export async function handleAdmin(
                 s.service_type,
                 s.warehouse_received_date,
                 s.payment_status,
-                CASE WHEN EXISTS (
-                  SELECT 1 FROM expenses e
-                  WHERE e.category = '${niHaoExpenseCategory}'
-                    AND e.tracking_number = s.tracking_number COLLATE NOCASE
-                ) THEN 'Paid' ELSE 'Unpaid' END AS nihao_payment
+                ${niHaoPaymentSql} AS nihao_payment
               FROM shipments s
               JOIN customers c
                 ON c.id =
@@ -2337,48 +2328,16 @@ export async function handleAdmin(
                 ON q.id = s.source_quotation_id
               WHERE
                 s.archived_at IS NULL
-                AND (
-                  instr(
-                    lower(
-                      s.tracking_number
-                    ),
-                    lower(?)
-                  ) > 0
-
-                  OR
-
-                  instr(
-                    lower(
-                      COALESCE(
-                        s.cargo_code,
-                        ''
-                      )
-                    ),
-                    lower(?)
-                  ) > 0
-
-                  OR
-
-                  instr(
-                    lower(
-                      c.full_name
-                    ),
-                    lower(?)
-                  ) > 0
-                )
-
-                ${shipmentStatusClause}
-                ${shipmentCustomerClause}
+                ${where.sql}
 
               ORDER BY
-                s.created_at DESC,
-                s.id
+                ${shipmentFilters.sort.sql}
 
               LIMIT 26
               OFFSET ?
               `,
             )
-            .bind(...shipmentBindings)
+            .bind(...where.bindings, offset)
             .all<RecordData>()
         ).results;
     }
@@ -2532,40 +2491,17 @@ export async function handleAdmin(
             }
 
             ${
-              entity ===
-              "shipments"
-                ? `
-                  <label>
-                    Status
-
-                    <select
-                      name="status"
-                    >
-                      <option
-                        value=""
-                      >
-                        All statuses
-                      </option>
-
-                      ${statuses
-                        .map(
-                          (
-                            value,
-                          ) =>
-                            `<option${
-                              status ===
-                              value
-                                ? " selected"
-                                : ""
-                            }>${esc(
-                              value,
-                            )}</option>`,
-                        )
-                        .join("")}
-                    </select>
-                  </label>
-                `
-                : ""
+              entity === "shipments"
+                ? `${checkFilter("status", "Status", statuses, shipmentFilters.status)}
+                  ${checkFilter("service", "Service", shipmentServiceTypes, shipmentFilters.service)}
+                  ${checkFilter("warehouse", "Origin warehouse", warehouses, shipmentFilters.warehouse)}
+                  ${checkFilter("payment", "Customer payment", shipmentPaymentStatuses, shipmentFilters.payment)}
+                  ${checkFilter("nihao", "Ni Hao payment", niHaoPaymentFilters, shipmentFilters.nihao)}
+                  ${sortSelect(shipmentSorts, shipmentFilters.sort)}`
+                : `${checkFilter("shipments", "Shipments", customerShipmentFilters, customerShipmentPicks)}
+                  ${sortSelect(customerSorts, customerSort)}`
+            }
+            ${filteredMarker}${checkFilterAssets
             }
 
             <button
@@ -2594,6 +2530,7 @@ export async function handleAdmin(
               }
             </a>
             ${entity === "customers" ? `<a class="button secondary" href="/admin/bookings?status=Signups">Sign-ups &amp; sign-up link</a>` : ""}
+            ${entity === "shipments" ? `<a class="button secondary" href="/admin/import-export?${esc(shipmentExportQuery(url.searchParams))}">Export these shipments (CSV)</a>` : ""}
           </div>` : ""}
           </section>
 
