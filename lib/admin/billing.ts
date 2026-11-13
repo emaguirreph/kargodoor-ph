@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { filterSelect, pickFilter, pickSort, sortSelect, type SortOption } from "./list-sort";
 import { pendingProofsPanel } from "./booking-proofs-panel";
 import { philippineToday } from "./finance-dates";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
@@ -1963,6 +1964,18 @@ export async function createView(
   );
 }
 
+const invoiceDateSql = "COALESCE(NULLIF(i.issued_at, ''), i.created_at)";
+const invoiceSorts: readonly SortOption[] = [
+  { value: "updated", label: "Last updated", sql: "i.updated_at DESC, i.id" },
+  { value: "newest", label: "Date (newest)", sql: `${invoiceDateSql} DESC, i.id` },
+  { value: "oldest", label: "Date (oldest)", sql: `${invoiceDateSql} ASC, i.id` },
+  { value: "total-high", label: "Total (highest)", sql: "invoice_total DESC, i.id" },
+  { value: "total-low", label: "Total (lowest)", sql: "invoice_total ASC, i.id" },
+  { value: "balance", label: "Balance due (highest)", sql: "(invoice_total - amount_paid) DESC, i.id" },
+  { value: "name", label: "Customer name (A–Z)", sql: "c.full_name COLLATE NOCASE, i.id" },
+  { value: "number", label: "Invoice no.", sql: "i.invoice_number COLLATE NOCASE, i.id" },
+];
+
 export async function list(
   db: D1Database,
   user: {
@@ -1981,6 +1994,10 @@ export async function list(
   const number = Number(
     url.searchParams.get("page") ?? 1,
   );
+
+  // Sort and payment-method filter (Em, 2026-11-13). Default = old order.
+  const sort = pickSort(invoiceSorts, url.searchParams.get("sort"));
+  const method = pickFilter(paymentMethods, url.searchParams.get("method"));
 
   if (
     q.length > 160 ||
@@ -2043,10 +2060,13 @@ export async function list(
             ? = ''
             OR i.status = ?
           )
+          AND (
+            ? = ''
+            OR EXISTS (SELECT 1 FROM payments pm WHERE pm.invoice_id = i.id AND pm.payment_method = ?)
+          )
         GROUP BY i.id
         ORDER BY
-          i.updated_at DESC,
-          i.id
+          ${sort.sql}
         LIMIT 26
         OFFSET ?
         `,
@@ -2057,6 +2077,8 @@ export async function list(
         q,
         status,
         status,
+        method,
+        method,
         (number - 1) * 25,
       )
       .all<RecordData>()
@@ -2160,6 +2182,9 @@ export async function list(
                 .join("")}
             </select>
           </label>
+
+          ${filterSelect("method", "Payment method", paymentMethods.map((value) => [value, paymentMethodLabel(value)] as const), method, "Any method")}
+          ${sortSelect(invoiceSorts, sort)}
 
           <button>Search</button>
           <a href="${route}">Clear</a>

@@ -9,6 +9,7 @@ import { deliveryCategory, niHaoCategory, transferFeesCategory } from "./cost-br
 import { gcashTransferSection, lastGcashTransferFee } from "./transfer-fees";
 import { costBreakdown, costBreakdownCards } from "./cost-breakdown";
 import { bankAccountLabel, bankAccountSelect, kargodoorBankAccounts, nihaoBankAccounts } from "./bank-accounts";
+import { filterSelect, pickFilter, pickSort, sortSelect, type SortOption } from "./list-sort";
 
 const path = "/admin/finance/expenses";
 export async function saveExpense(db: D1Database, values: z.infer<typeof expenseSchema>, createdBy?: string) {
@@ -189,6 +190,10 @@ export async function expensesPage(db: D1Database, url: URL, user: AdminUser | s
   const filters = filterSchema.parse(Object.fromEntries(
     ["from", "to", "category", "payment_method", "q"].map((key) => [key, url.searchParams.get(key) ?? ""]),
   ));
+  // Sort and Paid-from filter (Em, 2026-11-13). Rows are sorted after the
+  // Ni Hao payment, its fee and the rider delivery are grouped into one row.
+  const sort = pickSort(expenseSorts, url.searchParams.get("sort"));
+  const paidFrom = pickFilter(kargodoorBankAccounts.map((account) => account.id), url.searchParams.get("paid_from"));
   const { results } = await db.prepare(`SELECT id, expense_date, category, payee, description,
     amount, payment_method, paid_from_account, paid_to_account, reference_number, tracking_number, notes FROM expenses
     WHERE (${staff ? "created_by_admin_user_id = ?" : "1 = 1"}) AND (? = '' OR expense_date >= ?) AND (? = '' OR expense_date <= ?)
@@ -197,15 +202,16 @@ export async function expensesPage(db: D1Database, url: URL, user: AdminUser | s
         OR instr(lower(description), lower(?)) > 0
         OR instr(lower(COALESCE(reference_number, '')), lower(?)) > 0
         OR instr(lower(COALESCE(notes, '')), lower(?)) > 0)
+      AND (? = '' OR paid_from_account = ?)
     ORDER BY expense_date DESC, created_at DESC, id DESC`)
     .bind(...(staff ? [actor.id] : []), filters.from, filters.from, filters.to, filters.to, filters.category, filters.category,
-      filters.payment_method, filters.payment_method, filters.q, filters.q, filters.q, filters.q, filters.q)
+      filters.payment_method, filters.payment_method, filters.q, filters.q, filters.q, filters.q, filters.q, paidFrom, paidFrom)
     .all<RecordData>();
   // Columns Em asked for (2026-11-03): Amount (the cost itself: Ni Hao
   // shipping, marketing...), transfer fee and delivery fee each in its own
   // column, one row per shipment, then the total. The
   // proof lives in Edit expense, not the list.
-  const lines = groupExpenses(results);
+  const lines = sortExpenseLines(groupExpenses(results), sort.value);
   const editHref = (row: RecordData) => `${path}?edit=${encodeURIComponent(String(row.id))}`;
   // Each amount opens its own record; the rest of the row opens the main one.
   const money = (row: RecordData | undefined) => !row ? '<span class="muted">—</span>' : canWrite ? `<a href="${esc(editHref(row))}" title="Edit">${esc(pesos(row.amount))}</a>` : esc(pesos(row.amount));
@@ -239,11 +245,36 @@ export async function expensesPage(db: D1Database, url: URL, user: AdminUser | s
       ${input("q", "Search", filters)}${input("from", "From Date", filters, "date")}${input("to", "To Date", filters, "date")}
       ${dropdown("category", "Category", expenseCategories, filters.category, "All Categories")}
       ${dropdown("payment_method", "Payment Method", expensePaymentMethods, filters.payment_method, "All Payment Methods")}
+      ${filterSelect("paid_from", "Paid from", kargodoorBankAccounts.map((account) => [account.id, bankAccountLabel(account.id)] as const), paidFrom, "Any account")}
+      ${sortSelect(expenseSorts, sort)}
       <button type="submit">Apply Filters</button><a href="${path}">Clear Filters</a></form></section>
     ${!staff && canWrite ? gcashTransferSection({ path, csrf, suggestedFee: await lastGcashTransferFee(db), justSaved: url.searchParams.get("transfer") === "1" }) : ""}
     ${costBreakdownCards(costBreakdown(results))}
     <section>${table}</section>
     ${moneyInSection}`, actor.name, 200, {}, canWrite, staff);
+}
+
+const expenseSorts: readonly SortOption[] = [
+  { value: "newest", label: "Date (newest)", sql: "" },
+  { value: "oldest", label: "Date (oldest)", sql: "" },
+  { value: "total-high", label: "Total (highest)", sql: "" },
+  { value: "total-low", label: "Total (lowest)", sql: "" },
+  { value: "category", label: "Category (A–Z)", sql: "" },
+  { value: "payee", label: "Payee (A–Z)", sql: "" },
+];
+
+/** Sorts the grouped rows. Ties keep the newest-first order. */
+export function sortExpenseLines(lines: ExpenseLine[], sort: string): ExpenseLine[] {
+  const text = (line: ExpenseLine, key: string) => String(line.main[key] ?? "").toLowerCase();
+  const compare: Record<string, (a: ExpenseLine, b: ExpenseLine) => number> = {
+    oldest: (a, b) => text(a, "expense_date").localeCompare(text(b, "expense_date")),
+    "total-high": (a, b) => b.total - a.total,
+    "total-low": (a, b) => a.total - b.total,
+    category: (a, b) => text(a, "category").localeCompare(text(b, "category")),
+    payee: (a, b) => (text(a, "payee") === "") !== (text(b, "payee") === "") ? (text(a, "payee") === "" ? 1 : -1) : text(a, "payee").localeCompare(text(b, "payee")),
+  };
+  const by = compare[sort];
+  return by ? [...lines].sort(by) : lines;
 }
 
 export type ExpenseLine = {
