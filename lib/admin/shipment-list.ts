@@ -2,7 +2,7 @@ import type { D1Database } from "@cloudflare/workers-types";
 
 import { niHaoExpenseCategory } from "./nihao-payment";
 import { cargoItemSql } from "./shipment-cargo";
-import { pickFilter, pickSort, type SortOption } from "./list-sort";
+import { inClause, pickMany, pickSort, type CheckOption, type SortOption } from "./list-sort";
 import { legacyShipmentStatuses, seaFreightStatuses, statuses, warehouses } from "./validation";
 
 // Shipments list and Shipments CSV share these filters and sorts, so
@@ -34,7 +34,7 @@ export const shipmentSorts: readonly SortOption[] = [
 
 export const shipmentServiceTypes = ["Sea Freight", "Air Freight", "FCL"] as const;
 export const shipmentPaymentStatuses = ["Unpaid", "Partial", "Paid"] as const;
-export const niHaoPaymentFilters = [["Paid", "Ni Hao paid"], ["Unpaid", "Ni Hao not paid yet"]] as const;
+export const niHaoPaymentFilters = [["Paid", "Ni Hao paid"], ["Unpaid", "Ni Hao not paid yet"]] as const satisfies readonly CheckOption[];
 
 const niHaoPaidSql = `EXISTS (
   SELECT 1 FROM expenses e
@@ -44,33 +44,35 @@ const niHaoPaidSql = `EXISTS (
 
 export type ShipmentFilters = {
   q: string;
-  status: string;
+  status: string[];
   customer: string;
-  service: string;
-  warehouse: string;
-  payment: string;
-  nihao: string;
+  service: string[];
+  warehouse: string[];
+  payment: string[];
+  nihao: string[];
   sort: SortOption;
 };
 
-export function readShipmentFilters(params: URLSearchParams): ShipmentFilters {
+/**
+ * Tick-box filters. The list starts with every status ticked except
+ * Cancelled (as before); the plain export from Import / Export starts with
+ * everything ticked.
+ */
+export function readShipmentFilters(params: URLSearchParams, hideCancelled = true): ShipmentFilters {
   return {
     q: (params.get("q") ?? "").trim().slice(0, 160),
-    status: pickFilter(statuses, params.get("status")),
+    status: pickMany(params, "status", statuses, hideCancelled ? statuses.filter((value) => value !== "Cancelled") : statuses),
     customer: (params.get("customer_id") ?? "").trim().slice(0, 80),
-    service: pickFilter(shipmentServiceTypes, params.get("service")),
-    warehouse: pickFilter(warehouses, params.get("warehouse")),
-    payment: pickFilter(shipmentPaymentStatuses, params.get("payment")),
-    nihao: pickFilter(niHaoPaymentFilters.map(([value]) => value), params.get("nihao")),
+    service: pickMany(params, "service", shipmentServiceTypes),
+    warehouse: pickMany(params, "warehouse", warehouses),
+    payment: pickMany(params, "payment", shipmentPaymentStatuses),
+    nihao: pickMany(params, "nihao", niHaoPaymentFilters),
     sort: pickSort(shipmentSorts, params.get("sort")),
   };
 }
 
-/**
- * WHERE clause (after "WHERE s.archived_at IS NULL") and its bindings.
- * With no status chosen the list hides Cancelled; the plain export keeps them.
- */
-export function shipmentWhere(filters: ShipmentFilters, hideCancelled: boolean) {
+/** WHERE clause (after "WHERE s.archived_at IS NULL") and its bindings. */
+export function shipmentWhere(filters: ShipmentFilters) {
   const parts: string[] = [];
   const bindings: unknown[] = [];
   if (filters.q) {
@@ -80,17 +82,17 @@ export function shipmentWhere(filters: ShipmentFilters, hideCancelled: boolean) 
       OR instr(lower(c.customer_code), lower(?)) > 0)`);
     bindings.push(filters.q, filters.q, filters.q, filters.q);
   }
-  if (filters.status) {
-    parts.push("s.status = ?");
-    bindings.push(filters.status);
-  } else if (hideCancelled) {
-    parts.push("s.status != 'Cancelled'");
-  }
   if (filters.customer) { parts.push("s.customer_id = ?"); bindings.push(filters.customer); }
-  if (filters.service) { parts.push("s.service_type = ?"); bindings.push(filters.service); }
-  if (filters.warehouse) { parts.push("s.china_warehouse = ?"); bindings.push(filters.warehouse); }
-  if (filters.payment) { parts.push("s.payment_status = ?"); bindings.push(filters.payment); }
-  if (filters.nihao) parts.push(filters.nihao === "Paid" ? niHaoPaidSql : `NOT ${niHaoPaidSql}`);
+  for (const clause of [
+    inClause("s.status", filters.status, statuses),
+    inClause("s.service_type", filters.service, shipmentServiceTypes),
+    inClause("s.china_warehouse", filters.warehouse, warehouses),
+    inClause("s.payment_status", filters.payment, shipmentPaymentStatuses),
+  ]) {
+    if (clause.sql) { parts.push(clause.sql); bindings.push(...clause.bindings); }
+  }
+  if (filters.nihao.length === 0) parts.push("0");
+  else if (filters.nihao.length === 1) parts.push(filters.nihao[0] === "Paid" ? niHaoPaidSql : `NOT ${niHaoPaidSql}`);
   return { sql: parts.map((part) => `AND ${part}`).join("\n"), bindings };
 }
 
@@ -108,11 +110,11 @@ export const shipmentCsvColumns = [
 const php = (centavos: unknown) => centavos === null || centavos === undefined || centavos === "" ? "" : String(Math.round(Number(centavos)) / 100);
 
 export async function shipmentCsvRows(db: D1Database, params: URLSearchParams) {
-  const filters = readShipmentFilters(params);
   // From the Shipments page: same rows as the list. From Import / Export:
   // every shipment that is not archived, oldest first like the sheet.
   const fromList = params.get("scope") === "list";
-  const where = shipmentWhere(filters, fromList);
+  const filters = readShipmentFilters(params, fromList);
+  const where = shipmentWhere(filters);
   const order = fromList || params.get("sort") ? filters.sort.sql : "s.created_at ASC, s.id";
   const records = (await db.prepare(`SELECT
       c.customer_code, ${cargoItemSql} AS cargo_item, s.service_type, s.china_warehouse,
@@ -143,9 +145,8 @@ export async function shipmentCsvRows(db: D1Database, params: URLSearchParams) {
 /** Query string for "Export these shipments": the list's filters and sort. */
 export function shipmentExportQuery(params: URLSearchParams) {
   const out = new URLSearchParams({ download: "shipments", scope: "list" });
-  for (const key of ["q", "status", "customer_id", "service", "warehouse", "payment", "nihao", "sort"]) {
-    const value = (params.get(key) ?? "").trim();
-    if (value) out.set(key, value);
+  for (const key of ["filtered", "q", "status", "customer_id", "service", "warehouse", "payment", "nihao", "sort"]) {
+    for (const value of params.getAll(key)) if (value.trim()) out.append(key, value.trim());
   }
   return out.toString();
 }

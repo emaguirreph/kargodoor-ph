@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { filterSelect, pickFilter, pickSort, sortSelect, type SortOption } from "./list-sort";
+import { allPicked, checkFilter, checkFilterAssets, filteredMarker, inClause, pickMany, pickSort, sortSelect, type SortOption } from "./list-sort";
 import { pendingProofsPanel } from "./booking-proofs-panel";
 import { philippineToday } from "./finance-dates";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
@@ -1988,8 +1988,9 @@ export async function list(
     url.searchParams.get("q") ?? ""
   ).trim();
 
-  const status =
-    url.searchParams.get("status") ?? "";
+  // Tick-box filters, all ticked to start (Em, 2026-11-13).
+  const statusPicks = pickMany(url.searchParams, "status", invoiceStatuses);
+  const statusClause = inClause("i.status", statusPicks, invoiceStatuses);
 
   const number = Number(
     url.searchParams.get("page") ?? 1,
@@ -1997,14 +1998,16 @@ export async function list(
 
   // Sort and payment-method filter (Em, 2026-11-13). Default = old order.
   const sort = pickSort(invoiceSorts, url.searchParams.get("sort"));
-  const method = pickFilter(paymentMethods, url.searchParams.get("method"));
+  const methodOptions = [...paymentMethods.map((value) => [value, paymentMethodLabel(value)] as const), ["none", "Not paid yet"] as const];
+  const methodPicks = pickMany(url.searchParams, "method", methodOptions);
+  const paidMethods = methodPicks.filter((value) => value !== "none");
+  const methodClause = allPicked(methodPicks, methodOptions) ? "" : `AND (${[
+    paidMethods.length ? `EXISTS (SELECT 1 FROM payments pm WHERE pm.invoice_id = i.id AND pm.payment_method IN (${paidMethods.map(() => "?").join(", ")}))` : "",
+    methodPicks.includes("none") ? "NOT EXISTS (SELECT 1 FROM payments pm WHERE pm.invoice_id = i.id)" : "",
+  ].filter(Boolean).join(" OR ") || "0"})`;
 
   if (
     q.length > 160 ||
-    (status &&
-      !invoiceStatuses.includes(
-        status as (typeof invoiceStatuses)[number],
-      )) ||
     !Number.isSafeInteger(number) ||
     number < 1 ||
     number > 100_000
@@ -2056,14 +2059,8 @@ export async function list(
               lower(?)
             ) > 0
           )
-          AND (
-            ? = ''
-            OR i.status = ?
-          )
-          AND (
-            ? = ''
-            OR EXISTS (SELECT 1 FROM payments pm WHERE pm.invoice_id = i.id AND pm.payment_method = ?)
-          )
+          ${statusClause.sql ? `AND ${statusClause.sql}` : ""}
+          ${methodClause}
         GROUP BY i.id
         ORDER BY
           ${sort.sql}
@@ -2075,10 +2072,8 @@ export async function list(
         q,
         q,
         q,
-        status,
-        status,
-        method,
-        method,
+        ...statusClause.bindings,
+        ...paidMethods.filter(() => !allPicked(methodPicks, methodOptions)),
         (number - 1) * 25,
       )
       .all<RecordData>()
@@ -2162,28 +2157,9 @@ export async function list(
             >
           </label>
 
-          <label>
-            Status
-
-            <select name="status">
-              <option value="">
-                All statuses
-              </option>
-
-              ${invoiceStatuses
-                .map(
-                  (value) =>
-                    `<option${
-                      status === value
-                        ? " selected"
-                        : ""
-                    }>${esc(value)}</option>`,
-                )
-                .join("")}
-            </select>
-          </label>
-
-          ${filterSelect("method", "Payment method", paymentMethods.map((value) => [value, paymentMethodLabel(value)] as const), method, "Any method")}
+          ${checkFilter("status", "Status", invoiceStatuses, statusPicks)}
+          ${checkFilter("method", "Payment method", methodOptions, methodPicks)}
+          ${filteredMarker}${checkFilterAssets}
           ${sortSelect(invoiceSorts, sort)}
 
           <button>Search</button>

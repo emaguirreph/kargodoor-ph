@@ -53,7 +53,7 @@ import { leadsPage } from "./leads";
 import { manualShipmentRate, resolveManualShipmentCharge, resolveQuotationShipmentCharge, syncVerifiedFreightToInvoice, verifiedShipmentFreight } from "./shipment-verified-pricing";
 import { airItems, itemCategories } from "./quotation-pricing";
 import { cargoCategory, cargoCategorySql, cargoItemSql, shipmentCargo, type ShipmentCargo } from "./shipment-cargo";
-import { customerShipmentFilters, customerSorts, filterSelect, pickFilter, pickSort, sortSelect } from "./list-sort";
+import { checkFilter, checkFilterAssets, customerShipmentFilters, customerSorts, filteredMarker, pickMany, pickSort, sortSelect } from "./list-sort";
 import { niHaoPaymentFilters, niHaoPaymentSql, readShipmentFilters, shipmentExportQuery, shipmentPaymentStatuses, shipmentServiceTypes, shipmentSorts, shipmentWhere } from "./shipment-list";
 import { resolveNiHaoCost, shipmentNiHaoEstimate, type NiHaoEstimate } from "./nihao-estimate";
 import { lastNiHaoTransferFee, niHaoPaymentSection, readNiHaoPayment, recordNiHaoPayment } from "./nihao-payment";
@@ -2220,9 +2220,10 @@ export async function handleAdmin(
     // Sort and filter choices (Em, 2026-11-13). Unknown values fall back to
     // the defaults, which match the old list.
     const shipmentFilters = readShipmentFilters(url.searchParams);
-    const { status, customer } = shipmentFilters;
+    const { customer } = shipmentFilters;
     const customerSort = pickSort(customerSorts, url.searchParams.get("sort"));
-    const customerShipments = pickFilter(customerShipmentFilters.map(([value]) => value), url.searchParams.get("shipments"));
+    const customerShipmentPicks = pickMany(url.searchParams, "shipments", customerShipmentFilters);
+    const customerShipments = customerShipmentPicks.length === 2 ? "" : customerShipmentPicks[0] ?? "none";
 
     let rows:
       RecordData[];
@@ -2281,7 +2282,7 @@ export async function handleAdmin(
                   lower(?)
                 ) > 0
                 )
-                ${customerShipments === "with" ? `AND ${shipmentCountSql} > 0` : customerShipments === "without" ? `AND ${shipmentCountSql} = 0` : ""}
+                ${customerShipments === "with" ? `AND ${shipmentCountSql} > 0` : customerShipments === "without" ? `AND ${shipmentCountSql} = 0` : customerShipments === "none" ? "AND 0" : ""}
 
               ORDER BY
                 ${customerSort.sql.replaceAll("{shipments}", shipmentCountSql)}
@@ -2301,7 +2302,7 @@ export async function handleAdmin(
             .all<RecordData>()
         ).results;
     } else {
-      const where = shipmentWhere(shipmentFilters, true);
+      const where = shipmentWhere(shipmentFilters);
       rows =
         (
           await db
@@ -2491,14 +2492,16 @@ export async function handleAdmin(
 
             ${
               entity === "shipments"
-                ? `${filterSelect("status", "Status", statuses, status, "All statuses")}
-                  ${filterSelect("service", "Service", shipmentServiceTypes, shipmentFilters.service, "All services")}
-                  ${filterSelect("warehouse", "Origin warehouse", warehouses, shipmentFilters.warehouse, "All warehouses")}
-                  ${filterSelect("payment", "Customer payment", shipmentPaymentStatuses, shipmentFilters.payment, "Any payment")}
-                  ${filterSelect("nihao", "Ni Hao payment", niHaoPaymentFilters, shipmentFilters.nihao, "Any")}
+                ? `${checkFilter("status", "Status", statuses, shipmentFilters.status)}
+                  ${checkFilter("service", "Service", shipmentServiceTypes, shipmentFilters.service)}
+                  ${checkFilter("warehouse", "Origin warehouse", warehouses, shipmentFilters.warehouse)}
+                  ${checkFilter("payment", "Customer payment", shipmentPaymentStatuses, shipmentFilters.payment)}
+                  ${checkFilter("nihao", "Ni Hao payment", niHaoPaymentFilters, shipmentFilters.nihao)}
                   ${sortSelect(shipmentSorts, shipmentFilters.sort)}`
-                : `${filterSelect("shipments", "Shipments", customerShipmentFilters, customerShipments, "All customers")}
+                : `${checkFilter("shipments", "Shipments", customerShipmentFilters, customerShipmentPicks)}
                   ${sortSelect(customerSorts, customerSort)}`
+            }
+            ${filteredMarker}${checkFilterAssets
             }
 
             <button
