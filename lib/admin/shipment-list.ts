@@ -96,16 +96,16 @@ export function shipmentWhere(filters: ShipmentFilters, hideCancelled: boolean) 
 
 export const niHaoPaymentSql = `CASE WHEN ${niHaoPaidSql} THEN 'Paid' ELSE 'Unpaid' END`;
 
-// Columns in the order of Em's shipments Google Sheet (2026-11-13), then the
-// extra columns the old export had, so nothing is lost.
+// Columns exactly as Em's shipments Google Sheet (2026-11-13, second
+// screenshot). Courier and Waybill Number are the supplier courier and
+// supplier waybill number from Edit shipment.
 export const shipmentCsvColumns = [
-  "Shipping Mark", "Item", "Service Type", "Origin Warehouse", "CH Received", "PH Received",
-  "CBM", "Weight KG", "Status", "Actual Arrival", "NIHAO Ship Cost",
-  "Tracking Number", "Customer Name", "KargoDoor Freight Charge", "Delivery Charge",
-  "Payment Status", "Ni Hao Payment", "Tracking Remarks", "Created", "Updated",
+  "Shipping Mark", "Item", "Service Type", "Origin Warehouse", "CH Received", "Courier",
+  "Waybill Number", "CBM", "Weight KG", "Status", "NIHAO Ship Cost", "PH Received",
 ] as const;
 
-const php = (centavos: unknown) => centavos === null || centavos === undefined || centavos === "" ? "" : (Number(centavos) / 100).toFixed(2);
+// Whole pesos like the sheet (25415), centavos only when there are some.
+const php = (centavos: unknown) => centavos === null || centavos === undefined || centavos === "" ? "" : String(Math.round(Number(centavos)) / 100);
 
 export async function shipmentCsvRows(db: D1Database, params: URLSearchParams) {
   const filters = readShipmentFilters(params);
@@ -115,11 +115,9 @@ export async function shipmentCsvRows(db: D1Database, params: URLSearchParams) {
   const where = shipmentWhere(filters, fromList);
   const order = fromList || params.get("sort") ? filters.sort.sql : "s.created_at ASC, s.id";
   const records = (await db.prepare(`SELECT
-      c.customer_code, c.full_name, ${cargoItemSql} AS cargo_item,
-      s.tracking_number, s.service_type, s.china_warehouse, s.warehouse_received_date,
-      s.actual_arrival, s.delivered_date, s.cbm, s.weight_kg, s.status, s.nihao_cost,
-      s.shipping_charge, s.delivery_charge, s.payment_status, ${niHaoPaymentSql} AS nihao_payment,
-      s.tracking_remarks, s.created_at, s.updated_at
+      c.customer_code, ${cargoItemSql} AS cargo_item, s.service_type, s.china_warehouse,
+      s.warehouse_received_date, s.supplier_courier, s.supplier_waybill_number,
+      s.cbm, s.weight_kg, s.status, s.nihao_cost, s.actual_arrival
     FROM shipments s
     JOIN customers c ON c.id = s.customer_id
     LEFT JOIN quotations q ON q.id = s.source_quotation_id
@@ -132,21 +130,13 @@ export async function shipmentCsvRows(db: D1Database, params: URLSearchParams) {
     "Service Type": record.service_type,
     "Origin Warehouse": record.china_warehouse,
     "CH Received": record.warehouse_received_date,
-    "PH Received": record.actual_arrival,
+    Courier: record.supplier_courier,
+    "Waybill Number": record.supplier_waybill_number,
     CBM: record.cbm,
     "Weight KG": record.weight_kg,
     Status: record.status,
-    "Actual Arrival": record.delivered_date,
     "NIHAO Ship Cost": php(record.nihao_cost),
-    "Tracking Number": record.tracking_number,
-    "Customer Name": record.full_name,
-    "KargoDoor Freight Charge": php(record.shipping_charge),
-    "Delivery Charge": php(record.delivery_charge),
-    "Payment Status": record.payment_status,
-    "Ni Hao Payment": record.nihao_payment,
-    "Tracking Remarks": record.tracking_remarks,
-    Created: record.created_at,
-    Updated: record.updated_at,
+    "PH Received": record.actual_arrival,
   }));
 }
 
