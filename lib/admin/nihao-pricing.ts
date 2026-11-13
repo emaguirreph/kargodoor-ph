@@ -1,8 +1,9 @@
-import { airVolumetricFactor, roundAirBillableWeight, type AirItem, type SeaCategory } from "./quotation-pricing";
+import { airVolumetricFactor, roundAirBillableWeight, usesEarlierSeaRates, type AirItem, type SeaCategory } from "./quotation-pricing";
 
 export const niHaoDensityThreshold = 500;
 
-export const niHaoSeaRates: Record<SeaCategory, { cbmRate: number; densityRate: number | null }> = {
+/** Ni Hao sea costs for records created before 2026-11-10 (see seaRatesEffectiveDate). */
+export const niHaoSeaRatesBeforeNov2026: Record<SeaCategory, { cbmRate: number; densityRate: number | null }> = {
   "LOW VALUE GOODS": { cbmRate: 7000, densityRate: 14 },
   "VOLUME GOODS": { cbmRate: 7500, densityRate: 15 },
   COMMODITIES: { cbmRate: 8500, densityRate: 17 },
@@ -12,6 +13,20 @@ export const niHaoSeaRates: Record<SeaCategory, { cbmRate: number; densityRate: 
   "MOBILE / COMPUTERS / TABLETS": { cbmRate: 10000, densityRate: null },
 };
 
+/** Current Ni Hao sea costs (from 2026-11-10). Density rates = CBM rate ÷ 500. */
+export const niHaoSeaRates: Record<SeaCategory, { cbmRate: number; densityRate: number | null }> = {
+  "LOW VALUE GOODS": { cbmRate: 8000, densityRate: 16 },
+  "VOLUME GOODS": { cbmRate: 8500, densityRate: 17 },
+  COMMODITIES: { cbmRate: 9500, densityRate: 19 },
+  "HIGH VALUE": { cbmRate: 10500, densityRate: 21 },
+  "SENSITIVE - BATTERIES": { cbmRate: 16000, densityRate: 32 },
+  "SENSITIVE - CHEMICALS": { cbmRate: 13000, densityRate: 26 },
+  "MOBILE / COMPUTERS / TABLETS": { cbmRate: 11000, densityRate: null },
+};
+
+/** Ni Hao sea costs for a record created on pricingDate (default: today). */
+export const niHaoSeaRatesOn = (pricingDate?: unknown) => usesEarlierSeaRates(pricingDate) ? niHaoSeaRatesBeforeNov2026 : niHaoSeaRates;
+
 export const niHaoPackagePricing = {
   mini: { maximumCbm: 0.01, rate: 200 },
   lite: { maximumCbm: 0.05, rate: 600 },
@@ -20,9 +35,9 @@ export const niHaoPackagePricing = {
 
 const valid = (value: number) => Number.isFinite(value) && value >= 0;
 
-export function niHaoSeaQuote(category: SeaCategory, cbm: number, weight: number, packageCount = 1) {
+export function niHaoSeaQuote(category: SeaCategory, cbm: number, weight: number, packageCount = 1, pricingDate?: unknown) {
   if (!valid(cbm) || !valid(weight) || cbm <= 0 || !Number.isInteger(packageCount) || packageCount < 1) throw new Error("Invalid Ni Hao sea pricing inputs.");
-  const rate = niHaoSeaRates[category], density = weight / cbm;
+  const rate = niHaoSeaRatesOn(pricingDate)[category], density = weight / cbm;
   const smallPackage = cbm <= niHaoPackagePricing.mini.maximumCbm
     ? { tier: "Mini", base: packageCount * niHaoPackagePricing.mini.rate, volumeCharge: 0 }
     : cbm <= niHaoPackagePricing.lite.maximumCbm

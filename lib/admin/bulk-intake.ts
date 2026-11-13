@@ -2,8 +2,8 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { randomUUID } from "node:crypto";
 import { AdminError, authenticate, canMutateAdmin, checkCsrf, csrfToken, type AdminEnv } from "./security";
 import { esc, page } from "./ui";
-import { itemCategories, seaQuote, seaRates, transferFeePesos, type SeaCategory } from "./quotation-pricing";
-import { niHaoDensityThreshold, niHaoPackagePricing, niHaoSeaQuote, niHaoSeaRates } from "./nihao-pricing";
+import { itemCategories, kdPlusPriceOn, seaQuote, seaRatesOn, transferFeePesos, type SeaCategory } from "./quotation-pricing";
+import { niHaoDensityThreshold, niHaoPackagePricing, niHaoSeaQuote, niHaoSeaRatesOn } from "./nihao-pricing";
 
 type Row = Record<string, unknown>;
 type PackageRow = {
@@ -60,8 +60,8 @@ function pageBody(user: any, env: AdminEnv, customers: Row[], values: Record<str
   const date = values.quotation_date ?? today();
   const itemOptions = Object.keys(itemCategories).map((item) => `<option value="${esc(item)}">${esc(item)}</option>`).join("");
   const pricing = {
-    itemCategories, seaRates, transferFee: transferFeePesos,
-    niHao: { rates: niHaoSeaRates, densityThreshold: niHaoDensityThreshold, packages: niHaoPackagePricing },
+    itemCategories, seaRates: seaRatesOn(), kdPlus: kdPlusPriceOn(), transferFee: transferFeePesos,
+    niHao: { rates: niHaoSeaRatesOn(), densityThreshold: niHaoDensityThreshold, packages: niHaoPackagePricing },
   };
   return page("Bulk Quotation", `<section data-bulk-intake data-pricing="${esc(JSON.stringify(pricing))}">
 <p class="notice"><strong>One customer, many packages, one quotation.</strong> Add one line per package. Long pieces that travel tied together can be one line: set Packages to how many are in the bundle. Each line becomes its own shipment and tracking number once the quotation is approved.</p>

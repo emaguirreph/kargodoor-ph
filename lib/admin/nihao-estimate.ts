@@ -22,6 +22,8 @@ export type NiHaoEstimateInput = {
   weight: number;
   packageCount?: number;
   quantity?: number;
+  /** Record date that picks the sea rates (created_at or YYYY-MM-DD); blank = today. */
+  pricingDate?: unknown;
 };
 
 const whole = (value: unknown, fallback: number) => {
@@ -41,7 +43,7 @@ export function estimateNiHaoCost(input: NiHaoEstimateInput): NiHaoEstimate | nu
     if (serviceType === "Sea Freight") {
       const category = String(input.category ?? "") as SeaCategory;
       if (!(category in seaRates)) return null;
-      const quote = niHaoSeaQuote(category, cbm, weight, whole(input.packageCount, 1));
+      const quote = niHaoSeaQuote(category, cbm, weight, whole(input.packageCount, 1), input.pricingDate);
       return {
         cost: Math.round(quote.final * 100),
         basis: `Sea · ${category} · ${quote.tier} · ${formatCbm(cbm)}, ${weight} kg${quote.pricingMethod === "Density-Based" ? " · density rate" : ""}`,
@@ -74,7 +76,7 @@ function parseCargo(value: unknown): Row | null {
 }
 
 /** Ni Hao estimate for a quotation's saved cargo details. */
-export function quotationNiHaoEstimate(freightType: string, cargo: Row | null): NiHaoEstimate | null {
+export function quotationNiHaoEstimate(freightType: string, cargo: Row | null, pricingDate?: unknown): NiHaoEstimate | null {
   if (!cargo || Array.isArray(cargo.bulkPackages)) return null;
   return estimateNiHaoCost({
     serviceType: freightType,
@@ -84,6 +86,7 @@ export function quotationNiHaoEstimate(freightType: string, cargo: Row | null): 
     weight: Number(cargo.weight),
     packageCount: Number(cargo.packageQuantity ?? 1),
     quantity: Number(cargo.calculatorQuantity ?? cargo.packageQuantity ?? 1),
+    pricingDate,
   });
 }
 
@@ -100,7 +103,8 @@ export async function shipmentNiHaoEstimate(
 ): Promise<NiHaoEstimate | null> {
   const shipment = shipmentId
     ? await db.prepare(
-      `SELECT s.tracking_remarks, s.source_quotation_id, s.cargo_item, s.cargo_category, s.cargo_quantity, q.cargo_snapshot
+      `SELECT s.tracking_remarks, s.source_quotation_id, s.cargo_item, s.cargo_category, s.cargo_quantity, s.created_at, q.cargo_snapshot,
+              q.created_at AS quotation_created_at
        FROM shipments s
        LEFT JOIN quotations q ON q.id = s.source_quotation_id
        WHERE s.id = ?`,
@@ -124,6 +128,7 @@ export async function shipmentNiHaoEstimate(
       item: cargo.airItem ?? "",
       packageCount: 1,
       quantity: Number(field("cargo_quantity") ?? 1),
+      pricingDate: shipment.created_at,
     });
   }
 
@@ -137,6 +142,8 @@ export async function shipmentNiHaoEstimate(
     item: String(cargo.item ?? remarksItem),
     packageCount: isBulk ? 1 : Number(cargo.packageQuantity ?? 1),
     quantity: Number(cargo.calculatorQuantity ?? cargo.packageQuantity ?? 1),
+    // A quotation's shipment keeps the rates of the quotation it came from.
+    pricingDate: shipment.quotation_created_at ?? shipment.created_at,
   });
 }
 

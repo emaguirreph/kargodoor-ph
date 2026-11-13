@@ -41,3 +41,57 @@ test("air recalculates billable weight from changed CBM or actual weight", () =>
 
 test("sea density and special-item mappings retain workbook rules",()=>{const smallDense=seaQuote("LOW VALUE GOODS",.01,100);assert.equal(smallDense.densityApplies,true);assert.equal(smallDense.packageTier,"KD Max");assert.equal(itemCategories["Mobile / computer parts & accessories"],"MOBILE / COMPUTERS / TABLETS");for(const item of ["Mobile phones","Computers","Tablets"]){assert.equal(itemCategories[item],"MOBILE / COMPUTERS / TABLETS");assert.equal(seaQuote(itemCategories[item],.5,20,2).final,5750);}});
 test("air categories round per-kilogram weights up and retain per-piece pricing",()=>{assert.equal(airQuote("Medicine and Food Supplements",.1,10,1).final,11050);assert.equal(airQuote("Ordinary Items",.01,10,1).billableWeight,10);const fractional=airQuote("Ordinary Items",.5,60,1);assert.equal(fractional.volumetricWeight,83.5);assert.equal(fractional.billableWeight,84);assert.equal(fractional.final,42000);assert.equal(airQuote("Mobile Phones",0,0,1).rate,950);assert.equal(airQuote("Tablets",0,0,1).rate,1200);assert.equal(airQuote("Laptop Computers",0,0,1).rate,2800);assert.throws(()=>airQuote("Ordinary Items",Infinity,1,1));});
+
+test("sea rates from 2026-11-10: KargoDoor price, Ni Hao cost and margin per category", async () => {
+  const { niHaoSeaQuote } = await import("../../lib/admin/nihao-pricing");
+  const after = "2026-11-10T01:00:00.000Z";
+  const cases: [Parameters<typeof seaQuote>[0], number, number][] = [
+    ["LOW VALUE GOODS", 9499, 8000],
+    ["VOLUME GOODS", 9999, 8500],
+    ["COMMODITIES", 11199, 9500],
+    ["HIGH VALUE", 12499, 10500],
+    ["SENSITIVE - CHEMICALS", 15499, 13000],
+    ["SENSITIVE - BATTERIES", 18999, 16000],
+  ];
+  for (const [category, kd, nh] of cases) {
+    for (const cbm of [0.2, 1, 2.5]) {
+      const weight = cbm * 200; // below both density thresholds
+      assert.equal(seaQuote(category, cbm, weight, 0, after).volumeCharge, cbm * kd, `${category} ${cbm} KD`);
+      // Every category keeps at least a 15% margin on the CBM rate.
+      assert.ok((kd - nh) / kd >= 0.149, `${category} margin about 15% or more`);
+      assert.equal(niHaoSeaQuote(category, cbm, weight, 1, after).final, cbm * nh, `${category} ${cbm} NH`);
+    }
+  }
+  const mobile = seaQuote("MOBILE / COMPUTERS / TABLETS", 1, 100, 2, after);
+  assert.equal(mobile.final, 12999 + 500 + 30);
+  assert.equal(niHaoSeaQuote("MOBILE / COMPUTERS / TABLETS", 1, 100, 1, after).final, 11000);
+});
+
+test("records created before 2026-11-10 (Manila) keep the earlier sea rates", async () => {
+  const { niHaoSeaQuote } = await import("../../lib/admin/nihao-pricing");
+  const { manilaDate, usesEarlierSeaRates } = await import("../../lib/admin/quotation-pricing");
+  // 2026-11-09 15:59 UTC is 23:59 on Nov 9 in Manila; 16:00 UTC is midnight Nov 10.
+  assert.equal(manilaDate("2026-11-09T15:59:59.000Z"), "2026-11-09");
+  assert.equal(manilaDate("2026-11-09T16:00:00.000Z"), "2026-11-10");
+  assert.equal(usesEarlierSeaRates("2026-11-09T15:59:59.000Z"), true);
+  assert.equal(usesEarlierSeaRates("2026-11-09T16:00:00.000Z"), false);
+  assert.equal(usesEarlierSeaRates(undefined), manilaDate() < "2026-11-10");
+  const old = "2026-11-05T03:00:00.000Z";
+  assert.equal(seaQuote("COMMODITIES", 2, 400, 0, old).final, 2 * 9500 + 30);
+  assert.equal(seaQuote("COMMODITIES", 2, 400, 0, "2026-11-10").final, 2 * 11199 + 30);
+  // KD Plus goes from ₱1,400 to ₱1,499.
+  assert.equal(seaQuote("HIGH VALUE", 0.1, 1, 0, old).final, 1430);
+  assert.equal(seaQuote("HIGH VALUE", 0.1, 1, 0, "2026-11-10").final, 1529);
+  assert.equal(seaQuote("HIGH VALUE", 0.1, 1, 0, "2026-11-10").packageTier, "KD Plus");
+  assert.equal(seaQuote("SENSITIVE - BATTERIES", 1, 400, 0, old).final, 16030);
+  assert.equal(seaQuote("MOBILE / COMPUTERS / TABLETS", 1, 100, 2, old).final, 10500 + 500 + 30);
+  assert.equal(niHaoSeaQuote("LOW VALUE GOODS", 1, 200, 1, old).final, 7000);
+  // Mini, Lite, the ₱1,700 minimum and density rates do not change.
+  for (const date of [old, "2026-11-10"]) {
+    assert.equal(seaQuote("HIGH VALUE", 0.01, 1, 0, date).final, 280);
+    assert.equal(seaQuote("HIGH VALUE", 0.05, 1, 0, date).final, 780);
+    assert.equal(seaQuote("LOW VALUE GOODS", 0.13, 1, 0, date).final, 1730);
+    assert.equal(seaQuote("COMMODITIES", 0.2, 500, 0, date).densityCharge, 500 * 22);
+    assert.equal(niHaoSeaQuote("COMMODITIES", 0.2, 500, 1, date).densityCharge, 500 * 17);
+  }
+});

@@ -6,11 +6,11 @@
     const rows = section.querySelector("[data-package-rows]"), template = section.querySelector("[data-package-template]"), form = section.querySelector("[data-bulk-form]"), encoded = section.querySelector("[data-package-data]"), add = section.querySelector("[data-add-package]");
     if (!(rows instanceof HTMLElement) || !(template instanceof HTMLTemplateElement) || !(form instanceof HTMLFormElement) || !(encoded instanceof HTMLInputElement) || !(add instanceof HTMLButtonElement)) return;
     const pricing = JSON.parse(section.dataset.pricing || "{}");
-    const categories = pricing.itemCategories || {}, rates = pricing.seaRates || {}, transferFee = Number(pricing.transferFee || 0), niHao = pricing.niHao || {};
+    const categories = pricing.itemCategories || {}, rates = pricing.seaRates || {}, transferFee = Number(pricing.transferFee || 0), kdPlus = Number(pricing.kdPlus) || 1400, niHao = pricing.niHao || {};
     // Same rules as seaQuote() in lib/admin/quotation-pricing.ts.
     const kargoDoorCharge = (category, cbm, kg, count) => {
       if (category === "MOBILE / COMPUTERS / TABLETS") return Math.max(1700, cbm * rates[category].cbmRate) + count * 250 + transferFee;
-      const rate = rates[category], fixed = cbm <= .01 ? 250 : cbm <= .05 ? 750 : cbm <= .125 ? 1400 : 0;
+      const rate = rates[category], fixed = cbm <= .01 ? 250 : cbm <= .05 ? 750 : cbm <= .125 ? kdPlus : 0;
       const base = fixed || Math.max(1700, cbm * rate.cbmRate), density = kg / cbm > 425 ? kg * rate.densityRate : 0;
       return Math.max(base, density) + transferFee;
     };
