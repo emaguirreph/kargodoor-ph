@@ -13,7 +13,7 @@ export const niHaoSeaRatesBeforeNov2026: Record<SeaCategory, { cbmRate: number; 
   "MOBILE / COMPUTERS / TABLETS": { cbmRate: 10000, densityRate: null },
 };
 
-/** Current Ni Hao sea costs (from 2026-11-10). Density rates = CBM rate ÷ 500. */
+/** Current Ni Hao sea costs (from 2026-11-10; matches the Nov 13, 2026 rate table). */
 export const niHaoSeaRates: Record<SeaCategory, { cbmRate: number; densityRate: number | null }> = {
   "LOW VALUE GOODS": { cbmRate: 8000, densityRate: 16 },
   "VOLUME GOODS": { cbmRate: 8500, densityRate: 17 },
@@ -21,7 +21,7 @@ export const niHaoSeaRates: Record<SeaCategory, { cbmRate: number; densityRate: 
   "HIGH VALUE": { cbmRate: 10500, densityRate: 21 },
   "SENSITIVE - BATTERIES": { cbmRate: 16000, densityRate: 32 },
   "SENSITIVE - CHEMICALS": { cbmRate: 13000, densityRate: 26 },
-  "MOBILE / COMPUTERS / TABLETS": { cbmRate: 11000, densityRate: null },
+  "MOBILE / COMPUTERS / TABLETS": { cbmRate: 11000, densityRate: 22 },
 };
 
 /** Ni Hao sea costs for a record created on pricingDate (default: today). */

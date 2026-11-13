@@ -244,7 +244,7 @@ test("rates guide renders authoritative pricing, navigation, and item filtering"
   const html = await response.text();
   assert.match(html, /href="\/admin\/rates-guide"[^>]*>Rates &amp; Pricing/);
   assert.match(html, /Mobile \/ computer parts &amp; accessories/);
-  assert.match(html, /₱12,999 \/ CBM/);
+  assert.match(html, /₱12,650 \/ CBM/);
   assert.match(html, /₱950 \/ piece/);
   assert.match(html, /₱1,200 \/ piece/);
   assert.match(html, /₱2,800 \/ piece/);
@@ -266,7 +266,7 @@ test("Ni Hao rates page compares supplier costs with reused KargoDoorPH rates an
 
   assert.equal(response.status, 200);
   const html = await response.text();
-  for (const value of ["INTERNAL REFERENCE", "₱8,000 / CBM", "₱8,500 / CBM", "₱9,500 / CBM", "₱1,000 / piece", "₱12,999 / CBM", "₱950 / piece", "Return to Rates &amp; Pricing Guide", "Ni Hao reference rules"]) assert.ok(html.includes(value), value);
+  for (const value of ["INTERNAL REFERENCE", "₱8,000 / CBM", "₱8,500 / CBM", "₱9,500 / CBM", "₱1,000 / piece", "₱12,650 / CBM", "₱22 / kg density", "₱30 / kg density", "Updated November 13, 2026", "₱950 / piece", "Return to Rates &amp; Pricing Guide", "Ni Hao reference rules"]) assert.ok(html.includes(value), value);
   assert.match(html, /nihao-category[^]*width:14%[^]*width:42%[^]*width:22%/);
   assert.match(html, /nihao-comparison th,.nihao-comparison td\{word-break:normal;overflow-wrap:anywhere\}/);
   assert.match(html, /href="\/admin\/rates-guide">Rates &amp; Pricing<\/a>[\s\S]*href="\/admin\/nihao-rates">Ni Hao Rates<\/a>/);

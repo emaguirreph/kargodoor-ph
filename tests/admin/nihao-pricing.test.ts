@@ -27,7 +27,7 @@ test("Ni Hao small packages compare their base with density pricing", () => {
   assert.equal(niHaoSeaQuote("LOW VALUE GOODS", 0.01, 10, 2, OLD).base, 400);
 });
 
-test("Ni Hao mobile, computers, and tablets are density exempt", () => {
+test("Ni Hao mobile, computers, and tablets were density exempt before 2026-11-10", () => {
   const quote = niHaoSeaQuote("MOBILE / COMPUTERS / TABLETS", 0.01, 100, 1, OLD);
   assert.equal(quote.densityApplies, false);
   assert.equal(quote.densityCharge, 0);
@@ -72,7 +72,8 @@ test("Ni Hao sea costs from 2026-11-10 and the estimate follow the record date",
   assert.equal(niHaoSeaQuote("LOW VALUE GOODS", 1, 400, 1, NEW).final, 8000);
   assert.equal(niHaoSeaQuote("SENSITIVE - BATTERIES", 1, 400, 1, NEW).final, 16000);
   assert.equal(niHaoSeaQuote("SENSITIVE - CHEMICALS", 1, 501, 1, NEW).final, 13026, "density 501 × ₱26 is above the CBM cost");
-  assert.equal(niHaoSeaQuote("MOBILE / COMPUTERS / TABLETS", 1, 1000, 1, NEW).final, 11000);
+  assert.equal(niHaoSeaQuote("MOBILE / COMPUTERS / TABLETS", 1, 400, 1, NEW).final, 11000);
+  assert.equal(niHaoSeaQuote("MOBILE / COMPUTERS / TABLETS", 1, 1000, 1, NEW).final, 22000, "Nov 13 table: ₱22/kg above 500 kg/CBM");
   assert.equal(niHaoSeaQuote("COMMODITIES", 0.125, 200, 1, NEW).final, 3800, "Plus tier unchanged; new density rate ₱19/kg");
   assert.equal(estimateNiHaoCost({ serviceType: "Sea Freight", category: "HIGH VALUE", cbm: 2, weight: 300, pricingDate: NEW })?.cost, 2100000);
   assert.equal(estimateNiHaoCost({ serviceType: "Sea Freight", category: "HIGH VALUE", cbm: 2, weight: 300, pricingDate: OLD })?.cost, 1900000);

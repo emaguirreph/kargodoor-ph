@@ -46,24 +46,26 @@ test("sea rates from 2026-11-10: KargoDoor price, Ni Hao cost and margin per cat
   const { niHaoSeaQuote } = await import("../../lib/admin/nihao-pricing");
   const after = "2026-11-10T01:00:00.000Z";
   const cases: [Parameters<typeof seaQuote>[0], number, number][] = [
-    ["LOW VALUE GOODS", 9499, 8000],
-    ["VOLUME GOODS", 9999, 8500],
-    ["COMMODITIES", 11199, 9500],
-    ["HIGH VALUE", 12499, 10500],
-    ["SENSITIVE - CHEMICALS", 15499, 13000],
-    ["SENSITIVE - BATTERIES", 18999, 16000],
+    ["LOW VALUE GOODS", 9500, 8000],
+    ["VOLUME GOODS", 10000, 8500],
+    ["COMMODITIES", 11000, 9500],
+    ["HIGH VALUE", 12075, 10500],
+    ["SENSITIVE - CHEMICALS", 15000, 13000],
+    ["SENSITIVE - BATTERIES", 18500, 16000],
   ];
   for (const [category, kd, nh] of cases) {
     for (const cbm of [0.2, 1, 2.5]) {
       const weight = cbm * 200; // below both density thresholds
       assert.equal(seaQuote(category, cbm, weight, 0, after).volumeCharge, cbm * kd, `${category} ${cbm} KD`);
-      // Every category keeps at least a 15% margin on the CBM rate.
-      assert.ok((kd - nh) / kd >= 0.149, `${category} margin about 15% or more`);
+      // Nov 13, 2026 table: every category keeps at least a 13% margin on the CBM rate.
+      assert.ok((kd - nh) / kd >= 0.13, `${category} margin 13% or more`);
       assert.equal(niHaoSeaQuote(category, cbm, weight, 1, after).final, cbm * nh, `${category} ${cbm} NH`);
     }
   }
   const mobile = seaQuote("MOBILE / COMPUTERS / TABLETS", 1, 100, 2, after);
-  assert.equal(mobile.final, 12999 + 500 + 30);
+  assert.equal(mobile.final, 12650 + 500 + 30);
+  // Dense phones (>425 kg/CBM) use the ₱30/kg density rate, plus ₱250/unit.
+  assert.equal(seaQuote("MOBILE / COMPUTERS / TABLETS", 1, 500, 2, after).final, 500 * 30 + 500 + 30);
   assert.equal(niHaoSeaQuote("MOBILE / COMPUTERS / TABLETS", 1, 100, 1, after).final, 11000);
 });
 
@@ -78,7 +80,7 @@ test("records created before 2026-11-10 (Manila) keep the earlier sea rates", as
   assert.equal(usesEarlierSeaRates(undefined), manilaDate() < "2026-11-10");
   const old = "2026-11-05T03:00:00.000Z";
   assert.equal(seaQuote("COMMODITIES", 2, 400, 0, old).final, 2 * 9500 + 30);
-  assert.equal(seaQuote("COMMODITIES", 2, 400, 0, "2026-11-10").final, 2 * 11199 + 30);
+  assert.equal(seaQuote("COMMODITIES", 2, 400, 0, "2026-11-10").final, 2 * 11000 + 30);
   // KD Plus goes from ₱1,400 to ₱1,499.
   assert.equal(seaQuote("HIGH VALUE", 0.1, 1, 0, old).final, 1430);
   assert.equal(seaQuote("HIGH VALUE", 0.1, 1, 0, "2026-11-10").final, 1529);
