@@ -16,15 +16,15 @@ export const seaRatesBeforeNov2026: SeaRateTable = {
   "SENSITIVE - CHEMICALS": { cbmRate: 13000, densityRate: 31 },
   "MOBILE / COMPUTERS / TABLETS": { cbmRate: 10500, densityRate: null },
 };
-/** Current KargoDoor sea rates (from 2026-11-10). Density rates ≈ CBM rate ÷ 425. */
+/** Current KargoDoor sea rates (from 2026-11-10; values updated to the Nov 13, 2026 rate table). */
 export const seaRates: SeaRateTable = {
-  "LOW VALUE GOODS": { cbmRate: 9499, densityRate: 22 },
-  "VOLUME GOODS": { cbmRate: 9999, densityRate: 24 },
-  COMMODITIES: { cbmRate: 11199, densityRate: 26 },
-  "HIGH VALUE": { cbmRate: 12499, densityRate: 29 },
-  "SENSITIVE - BATTERIES": { cbmRate: 18999, densityRate: 45 },
-  "SENSITIVE - CHEMICALS": { cbmRate: 15499, densityRate: 36 },
-  "MOBILE / COMPUTERS / TABLETS": { cbmRate: 12999, densityRate: null },
+  "LOW VALUE GOODS": { cbmRate: 9500, densityRate: 23 },
+  "VOLUME GOODS": { cbmRate: 10000, densityRate: 24 },
+  COMMODITIES: { cbmRate: 11000, densityRate: 26 },
+  "HIGH VALUE": { cbmRate: 12075, densityRate: 29 },
+  "SENSITIVE - BATTERIES": { cbmRate: 18500, densityRate: 44 },
+  "SENSITIVE - CHEMICALS": { cbmRate: 15000, densityRate: 36 },
+  "MOBILE / COMPUTERS / TABLETS": { cbmRate: 12650, densityRate: 30 },
 };
 /** KD Plus fixed price (>0.05–0.125 CBM): ₱1,400 before 2026-11-10, ₱1,499 from then. Mini and Lite are unchanged. */
 export const kdPlusPriceBeforeNov2026 = 1400;
@@ -76,7 +76,10 @@ export function seaQuote(category: SeaCategory, cbm: number, weight: number, uni
   const rate = seaRatesOn(pricingDate)[category], density = weight / cbm;
   if (category === "MOBILE / COMPUTERS / TABLETS") {
     const volumeCharge = cbm * rate.cbmRate, base = Math.max(1700, volumeCharge), unitCharge = units * 250;
-    return { packageTier:"KD Standard", density, base, volumeCharge, densityCharge:0, unitCharge, densityApplies:false, final:base+unitCharge+transferFeePesos, transferFee:transferFeePesos, pricingMethod:`₱${rate.cbmRate.toLocaleString("en-PH")}/CBM + ₱250/unit` };
+    // Density pricing applies only where the rate table has a ₱/kg rate (from the Nov 13, 2026 table).
+    const densityApplies = rate.densityRate !== null && density > 425, densityCharge = rate.densityRate === null ? 0 : weight * rate.densityRate;
+    const byDensity = densityApplies && densityCharge > base, freight = byDensity ? densityCharge : base;
+    return { packageTier: byDensity ? "KD Max" : "KD Standard", density, base, volumeCharge, densityCharge, unitCharge, densityApplies, final:freight+unitCharge+transferFeePesos, transferFee:transferFeePesos, pricingMethod: byDensity ? "Density-Based + ₱250/unit" : `₱${rate.cbmRate.toLocaleString("en-PH")}/CBM + ₱250/unit` };
   }
   const tier = cbm <= .01 ? "KD Mini" : cbm <= .05 ? "KD Lite" : cbm <= .125 ? "KD Plus" : "KD Standard";
   const fixed = tier === "KD Mini" ? 250 : tier === "KD Lite" ? 750 : tier === "KD Plus" ? kdPlusPriceOn(pricingDate) : null;

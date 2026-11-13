@@ -323,10 +323,10 @@ test("live admin Sea calculation delegates to the authoritative pricing engine",
   assert.equal(solar.packageTier, "KD Standard");
   assert.equal(solar.densityApplies, false);
   assert.equal(solar.final.toFixed(2), "79696.34");
-  // The same cargo on a quotation created from 2026-11-10 uses the new rates (KargoDoor ₱11,199, Ni Hao ₱9,500).
+  // The same cargo on a quotation created from 2026-11-10 uses the new rates (KargoDoor ₱11,000, Ni Hao ₱9,500).
   const solarNew = calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Solar panels", cbm: "8.38593", weight: "3400", units: "0", pricingDate: "2026-11-10T00:30:00.000Z" });
-  assert.equal(solarNew.cbmRate, 11199);
-  assert.equal(solarNew.final.toFixed(2), (8.38593 * 11199 + 30).toFixed(2));
+  assert.equal(solarNew.cbmRate, 11000);
+  assert.equal(solarNew.final.toFixed(2), (8.38593 * 11000 + 30).toFixed(2));
   assert.equal(solarNew.niHaoEstimate, Math.round(8.38593 * 9500 * 100) / 100);
   assert.equal(solar.niHaoEstimate, Math.round(8.38593 * 8500 * 100) / 100);
   const denseSolar = calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Solar panels", cbm: "0.126", weight: "1000", units: "0" });
@@ -344,7 +344,7 @@ test("live admin Sea calculation delegates to the authoritative pricing engine",
   assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Bags", cbm: "0.01", weight: "100", units: "0" }).packageTier, "KD Max");
   for (const item of ["Mobile phones", "Computers", "Tablets"]) {
     assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item, cbm: "1", weight: "1", units: "1", pricingDate: "2026-11-09" }).final, 10780);
-    assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item, cbm: "1", weight: "1", units: "1", pricingDate: "2026-11-10" }).final, 13279);
+    assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item, cbm: "1", weight: "1", units: "1", pricingDate: "2026-11-10" }).final, 12930);
   }
   assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Mobile / computer parts & accessories", cbm: "1", weight: "1", units: "1" }).category, "MOBILE / COMPUTERS / TABLETS");
 });
@@ -544,13 +544,13 @@ test("from 2026-11-10 new sea rates price new work while earlier quotations and 
   const newQuotation = insertQuotation(sql, { cargo });
   sql.prepare("UPDATE quotations SET created_at = '2026-11-09T16:00:00.000Z' WHERE id = ?").run(newQuotation);
   const newShipment = await createShipmentFromApprovedQuotation(db, user, newQuotation);
-  assert.deepEqual(await verifiedShipmentFreight(db, newShipment.shipmentId, 2, 300), { shippingCharge: (2 * 9499 + 30) * 100, pricingMethod: "CBM-Based" });
+  assert.deepEqual(await verifiedShipmentFreight(db, newShipment.shipmentId, 2, 300), { shippingCharge: (2 * 9500 + 30) * 100, pricingMethod: "CBM-Based" });
   assert.equal((await shipmentNiHaoEstimate(db, newShipment.shipmentId, { service_type: "Sea Freight", verified_cbm: 2, verified_weight_kg: 300 }))?.cost, 2 * 8000 * 100);
 
   // Shipments added by hand follow their own date.
   const values = { service_type: "Sea Freight", cargo_item: "Batteries", cargo_category: "SENSITIVE - BATTERIES", cbm: 1, weight_kg: 300, shipping_charge: null };
   assert.deepEqual(resolveManualShipmentCharge({ ...values, created_at: "2026-11-01T02:00:00.000Z" }, null), { cost: 1603000, source: "rate" }, "before: ₱16,000 + ₱30");
-  assert.deepEqual(resolveManualShipmentCharge({ ...values, created_at: null }, null), { cost: 1902900, source: "rate" }, "new shipment: ₱18,999 + ₱30");
+  assert.deepEqual(resolveManualShipmentCharge({ ...values, created_at: null }, null), { cost: 1853000, source: "rate" }, "new shipment: ₱18,500 + ₱30");
 });
 test("verified warehouse measurements recalculate Sea and Air freight and refresh only eligible invoices", async (t) => {
   pinBeforeNewSeaRates(t); // expected amounts below use the sea rates before 2026-11-10
