@@ -334,8 +334,8 @@ test("live admin Sea calculation delegates to the authoritative pricing engine",
   assert.equal(denseSolar.packageTier, "KD Max");
   assert.equal(denseSolar.densityApplies, true);
   assert.equal(denseSolar.base, 1700);
-  assert.equal(denseSolar.densityCharge, 22000);
-  assert.equal(denseSolar.final, 22030);
+  assert.equal(denseSolar.densityCharge, 26000);
+  assert.equal(denseSolar.final, 26030);
   assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Bags", cbm: "0.01", weight: "1", units: "0" }).packageTier, "KD Mini");
   assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Bags", cbm: "0.05", weight: "1", units: "0" }).packageTier, "KD Lite");
   assert.equal(calculateAdminSeaQuote({ freightType: "Sea Freight", item: "Bags", cbm: "0.125", weight: "1", units: "0" }).packageTier, "KD Plus");

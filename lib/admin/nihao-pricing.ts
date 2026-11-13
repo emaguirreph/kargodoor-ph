@@ -13,14 +13,14 @@ export const niHaoSeaRatesBeforeNov2026: Record<SeaCategory, { cbmRate: number; 
   "MOBILE / COMPUTERS / TABLETS": { cbmRate: 10000, densityRate: null },
 };
 
-/** Current Ni Hao sea costs (from 2026-11-10). Density rates are unchanged. */
+/** Current Ni Hao sea costs (from 2026-11-10). Density rates = CBM rate ÷ 500. */
 export const niHaoSeaRates: Record<SeaCategory, { cbmRate: number; densityRate: number | null }> = {
-  "LOW VALUE GOODS": { cbmRate: 8000, densityRate: 14 },
-  "VOLUME GOODS": { cbmRate: 8500, densityRate: 15 },
-  COMMODITIES: { cbmRate: 9500, densityRate: 17 },
-  "HIGH VALUE": { cbmRate: 10500, densityRate: 19 },
-  "SENSITIVE - BATTERIES": { cbmRate: 16000, densityRate: 30 },
-  "SENSITIVE - CHEMICALS": { cbmRate: 13000, densityRate: 24 },
+  "LOW VALUE GOODS": { cbmRate: 8000, densityRate: 16 },
+  "VOLUME GOODS": { cbmRate: 8500, densityRate: 17 },
+  COMMODITIES: { cbmRate: 9500, densityRate: 19 },
+  "HIGH VALUE": { cbmRate: 10500, densityRate: 21 },
+  "SENSITIVE - BATTERIES": { cbmRate: 16000, densityRate: 32 },
+  "SENSITIVE - CHEMICALS": { cbmRate: 13000, densityRate: 26 },
   "MOBILE / COMPUTERS / TABLETS": { cbmRate: 11000, densityRate: null },
 };
 

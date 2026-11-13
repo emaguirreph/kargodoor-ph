@@ -16,14 +16,14 @@ export const seaRatesBeforeNov2026: SeaRateTable = {
   "SENSITIVE - CHEMICALS": { cbmRate: 13000, densityRate: 31 },
   "MOBILE / COMPUTERS / TABLETS": { cbmRate: 10500, densityRate: null },
 };
-/** Current KargoDoor sea rates (from 2026-11-10). Density rates are unchanged. */
+/** Current KargoDoor sea rates (from 2026-11-10). Density rates ≈ CBM rate ÷ 425. */
 export const seaRates: SeaRateTable = {
-  "LOW VALUE GOODS": { cbmRate: 9499, densityRate: 19 },
-  "VOLUME GOODS": { cbmRate: 9999, densityRate: 20 },
-  COMMODITIES: { cbmRate: 11199, densityRate: 22 },
-  "HIGH VALUE": { cbmRate: 12499, densityRate: 26 },
-  "SENSITIVE - BATTERIES": { cbmRate: 18999, densityRate: 38 },
-  "SENSITIVE - CHEMICALS": { cbmRate: 15499, densityRate: 31 },
+  "LOW VALUE GOODS": { cbmRate: 9499, densityRate: 22 },
+  "VOLUME GOODS": { cbmRate: 9999, densityRate: 24 },
+  COMMODITIES: { cbmRate: 11199, densityRate: 26 },
+  "HIGH VALUE": { cbmRate: 12499, densityRate: 29 },
+  "SENSITIVE - BATTERIES": { cbmRate: 18999, densityRate: 45 },
+  "SENSITIVE - CHEMICALS": { cbmRate: 15499, densityRate: 36 },
   "MOBILE / COMPUTERS / TABLETS": { cbmRate: 12999, densityRate: null },
 };
 /** KD Plus fixed price (>0.05–0.125 CBM): ₱1,400 before 2026-11-10, ₱1,499 from then. Mini and Lite are unchanged. */

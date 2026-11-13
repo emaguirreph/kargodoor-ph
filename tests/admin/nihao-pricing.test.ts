@@ -71,9 +71,9 @@ test("Ni Hao sea costs from 2026-11-10 and the estimate follow the record date",
   const NEW = "2026-11-10";
   assert.equal(niHaoSeaQuote("LOW VALUE GOODS", 1, 400, 1, NEW).final, 8000);
   assert.equal(niHaoSeaQuote("SENSITIVE - BATTERIES", 1, 400, 1, NEW).final, 16000);
-  assert.equal(niHaoSeaQuote("SENSITIVE - CHEMICALS", 1, 501, 1, NEW).final, 13000, "density 501 × ₱24 is below the CBM cost");
+  assert.equal(niHaoSeaQuote("SENSITIVE - CHEMICALS", 1, 501, 1, NEW).final, 13026, "density 501 × ₱26 is above the CBM cost");
   assert.equal(niHaoSeaQuote("MOBILE / COMPUTERS / TABLETS", 1, 1000, 1, NEW).final, 11000);
-  assert.equal(niHaoSeaQuote("COMMODITIES", 0.125, 200, 1, NEW).final, 3400, "Plus tier and density rate unchanged");
+  assert.equal(niHaoSeaQuote("COMMODITIES", 0.125, 200, 1, NEW).final, 3800, "Plus tier unchanged; new density rate ₱19/kg");
   assert.equal(estimateNiHaoCost({ serviceType: "Sea Freight", category: "HIGH VALUE", cbm: 2, weight: 300, pricingDate: NEW })?.cost, 2100000);
   assert.equal(estimateNiHaoCost({ serviceType: "Sea Freight", category: "HIGH VALUE", cbm: 2, weight: 300, pricingDate: OLD })?.cost, 1900000);
 });
