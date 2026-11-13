@@ -47,6 +47,7 @@ import { proofCell, readProofFile, readProofs, saveProof } from "../../lib/admin
 import { readShipmentPayments, shipmentPaymentsList } from "../../lib/admin/shipment-payment";
 import { customerShippingInstructions, customerWarehouseAddressMessage, nihaoAddressBook, onceShippedMessage, shipmentShippingInstructions, supplierShipmentMessage, warehouseAddress } from "../../lib/admin/shipping-instructions";
 import { notificationKeyFor, shipmentStatusMessages } from "../../lib/admin/customer-messages";
+import { readShipmentPackages, saveShipmentPackages, shipmentPackagesBox, shipmentPackagesSummary, takeShipmentPackages } from "../../lib/admin/shipment-packages";
 function database(includePhase1 = true) {
   const sql = new DatabaseSync(":memory:");
   sql.exec("PRAGMA foreign_keys=ON");
@@ -89,6 +90,7 @@ function database(includePhase1 = true) {
   if (includePhase1)
     sql.exec(readFileSync("migrations/admin/0035_air_transit_status.sql", "utf8"));
   sql.exec(readFileSync("migrations/admin/0036_shipment_nihao_details.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0047_shipment_packages.sql", "utf8"));
   sql.exec(readFileSync("migrations/admin/0037_shipment_delivered_date.sql", "utf8"));
   sql.exec(readFileSync("migrations/admin/0038_payment_proofs.sql", "utf8"));
   sql.exec(readFileSync("migrations/admin/0039_account_transfers.sql", "utf8"));
@@ -2476,4 +2478,43 @@ test("Ni Hao quote request fills from the quotation and leaves unknowns blank", 
   ]);
   assert.deepEqual(nihaoQuoteLines("Air Freight", { description: "Phone cases" }), ["Sea or Air: Air", "Item: Phone cases", "Item Picture:", "Dimensions:", "Declared Total CBM:", "Declared Weight:"]);
   assert.equal(nihaoQuoteLines("Full Container", { containerSize: "40 ft HQ" })[0], "Sea or Air: Sea (FCL, 40 ft HQ)");
+});
+
+test("Multiple packages on one shipment: Norie's 2 cartons total 0.063798 CBM / 28 kg; one package saves as before", async () => {
+  const { db, user } = database();
+  const customerId = await saveRecord(db, "customers", { ...customer, full_name: "Norie Vergara", customer_code: "KD-PKG" }, user, "", "");
+  const shipmentId = await saveRecord(db, "shipments", { ...shipment(customerId), tracking_number: "KDSEA900047" }, user, "", "");
+
+  // Two cartons 49 × 31 × 21 cm, 14 kg each: the form's Declared CBM / weight become the totals.
+  const form = new URLSearchParams([["csrf", "x"], ["cbm", "0.0332"], ["weight_kg", "12.5"], ["pkg_present", "1"],
+    ["pkg_length", "49"], ["pkg_width", "31"], ["pkg_height", "21"], ["pkg_cbm", ""], ["pkg_weight", "14"],
+    ["pkg_length", "49"], ["pkg_width", "31"], ["pkg_height", "21"], ["pkg_cbm", "9"], ["pkg_weight", "14"],
+    ["pkg_length", ""], ["pkg_width", ""], ["pkg_height", ""], ["pkg_cbm", ""], ["pkg_weight", ""]]);
+  const packages = takeShipmentPackages(form)!;
+  assert.equal(packages.length, 2, "the blank third row is skipped");
+  assert.deepEqual(packages[1], { length: 49, width: 31, height: 21, cbm: 0.031899, weight: 14 }, "L × W × H wins over a typed CBM");
+  assert.equal(form.get("cbm"), "0.063798");
+  assert.equal(form.get("weight_kg"), "28");
+  assert.deepEqual([...new Set(form.keys())], ["csrf", "cbm", "weight_kg"], "no package fields reach the shipment fields");
+
+  assert.equal(await saveShipmentPackages(db, shipmentId, packages, user), true);
+  assert.equal(await saveShipmentPackages(db, shipmentId, packages, user), false, "no change, no second log");
+  assert.deepEqual(await readShipmentPackages(db, shipmentId), packages);
+  assert.match(shipmentPackagesSummary(packages), /49 × 31 × 21 cm · 0\.031899 CBM · 14 kg/);
+  assert.match(shipmentPackagesBox(packages), /Package 2/);
+
+  // CBM typed without a size still works; a partial size does not.
+  const typed = takeShipmentPackages(new URLSearchParams([["pkg_present", "1"], ["pkg_length", ""], ["pkg_width", ""], ["pkg_height", ""], ["pkg_cbm", ".02"], ["pkg_weight", "3"]]))!;
+  assert.deepEqual(typed, [{ length: null, width: null, height: null, cbm: 0.02, weight: 3 }]);
+  assert.throws(() => takeShipmentPackages(new URLSearchParams([["pkg_length", "49"], ["pkg_width", ""], ["pkg_height", ""], ["pkg_cbm", ""], ["pkg_weight", "1"]])), /Length, Width and Height/);
+  assert.throws(() => takeShipmentPackages(new URLSearchParams([["pkg_length", ""], ["pkg_width", ""], ["pkg_height", ""], ["pkg_cbm", "0.02"], ["pkg_weight", ""]])), /weight/);
+
+  // One package (or the box with every extra row removed): Declared CBM / weight are left as typed, and the list is cleared.
+  const single = new URLSearchParams({ cbm: "0.0332", weight_kg: "12.5", pkg_present: "1" });
+  assert.deepEqual(takeShipmentPackages(single), []);
+  assert.equal(single.get("cbm"), "0.0332");
+  assert.equal(await saveShipmentPackages(db, shipmentId, [], user), true);
+  assert.deepEqual(await readShipmentPackages(db, shipmentId), []);
+  assert.equal(takeShipmentPackages(new URLSearchParams({ cbm: "1" })), null, "forms without the box are untouched");
+  assert.doesNotMatch(shipmentPackagesBox([]), /name="pkg_length"[^>]*>[\s\S]*<template/, "a one-package form has no package rows outside the template");
 });

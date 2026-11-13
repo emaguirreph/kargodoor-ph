@@ -63,6 +63,7 @@ import { readTransferFeesPaid, recordGcashTransfer, splitFreightCharge, transfer
 import { proofCell, proofCss, readProofs } from "./payment-proof";
 import { detachForm } from "./detached-form";
 import { niHaoDetailsBox, niHaoDetailsCss, readNiHaoDetails, saveNiHaoDetails, takeNiHaoDetails } from "./nihao-details";
+import { readShipmentPackages, saveShipmentPackages, shipmentPackagesBox, shipmentPackagesSummary, takeShipmentPackages } from "./shipment-packages";
 import { clientSourceFields, clientSourceSection, readCustomerSource, recordReferralPayment, shipmentSourceLines } from "./partner-split";
 
 /** Ni Hao cost input with the system estimate shown under it. Clearing the box saves the estimate. */
@@ -664,6 +665,8 @@ export async function handleAdmin(
 
       // Ni Hao details have their own table; take them out before the shipment fields are checked.
       const niHaoDetails = entity === "shipments" ? takeNiHaoDetails(form) : null;
+      // So are the package rows; with 2+ packages they set Declared CBM / weight to the totals first.
+      const shipmentPackages = entity === "shipments" ? takeShipmentPackages(form) : null;
 
       let values =
         parseForm(
@@ -744,6 +747,7 @@ export async function handleAdmin(
         );
 
       if (niHaoDetails) await saveNiHaoDetails(db, recordId, niHaoDetails, user.id);
+      if (shipmentPackages) await saveShipmentPackages(db, recordId, shipmentPackages, user.id);
 
       if (
         entity === "shipments" &&
@@ -1245,6 +1249,7 @@ export async function handleAdmin(
             "number",
             true,
           ) +
+          shipmentPackagesBox(await readShipmentPackages(db, id)) +
           input(
             "verified_cbm",
             "Verified CBM (number only, e.g. 0.36)",
@@ -1565,7 +1570,7 @@ export async function handleAdmin(
               </div>
             </form>
             ${paymentForms}
-            ${entity === "shipments" ? '<script src="/admin-shipment-pricing.js" defer></script><script src="/admin-arrival-window.js" defer></script>' : ""}
+            ${entity === "shipments" ? '<script src="/admin-shipment-pricing.js" defer></script><script src="/admin-arrival-window.js" defer></script><script src="/admin-shipment-packages.js" defer></script>' : ""}
           </section>
         `,
         user.name,
@@ -1801,6 +1806,7 @@ export async function handleAdmin(
       const transferFeesPaid = entity === "shipments" ? await readTransferFeesPaid(db, record.tracking_number) : [];
       const deliveryPaid = entity === "shipments" ? await readDeliveryPayment(db, record.tracking_number) : null;
 
+      const shipmentPackageList = entity === "shipments" ? await readShipmentPackages(db, id) : [];
       const shipmentDetails = entity === "shipments" ? (() => {
         const status = String(record.status || "");
         const actualArrivalVisible = ["Malabon Warehouse", "Delivered"].includes(status);
@@ -1822,6 +1828,9 @@ export async function handleAdmin(
           shipmentDetail("Service type", esc(record.service_type) || "—"),
           shipmentDetail("Declared CBM", esc(record.cbm) || "—"),
           shipmentDetail("Declared weight (kg)", esc(record.weight_kg) || "—"),
+          ...(shipmentPackageList.length >= 2
+            ? [shipmentDetail(`Packages (${shipmentPackageList.length})`, shipmentPackagesSummary(shipmentPackageList))]
+            : []),
           shipmentDetail("Origin warehouse", esc(record.china_warehouse) || "—"),
           shipmentDetail("Status", esc(status) || "—"),
           shipmentDetail("CH warehouse received date", esc(record.warehouse_received_date) || "—"),
