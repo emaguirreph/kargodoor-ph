@@ -144,7 +144,7 @@ export async function createShipmentFromApprovedQuotation(
   const finalAmount = Number(quote.final_amount);
   if (!Number.isSafeInteger(finalAmount) || finalAmount < 0)
     throw new AdminError("This approved quotation has an invalid saved final amount.", 422);
-  const estimate = quotationNiHaoEstimate(serviceType, cargoSnapshot as Record<string, unknown>);
+  const estimate = quotationNiHaoEstimate(serviceType, cargoSnapshot as Record<string, unknown>, quote.created_at);
   const niHaoCost = quote.backend_cost === null || quote.backend_cost === undefined
     ? estimate?.cost ?? null
     : Number(quote.backend_cost);

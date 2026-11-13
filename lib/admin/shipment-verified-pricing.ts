@@ -48,12 +48,14 @@ export function manualShipmentFreight(input: {
   remarks?: unknown;
   cbm: number;
   weight: number;
+  /** Shipment created_at; picks the sea rates. Blank = today. */
+  pricingDate?: unknown;
 }): (VerifiedFreightRecalculation & { basis: string }) | null {
   const cargo = manualCargoPricing(input);
   const quantity = Number(input.quantity ?? 1) || 1;
   try {
     if (input.serviceType === "Sea Freight" && cargo.seaCategory) {
-      const calculation = seaQuote(cargo.seaCategory, input.cbm, input.weight, quantity);
+      const calculation = seaQuote(cargo.seaCategory, input.cbm, input.weight, quantity, input.pricingDate);
       return { shippingCharge: Math.round(calculation.final * 100), pricingMethod: calculation.pricingMethod, basis: `Sea · ${cargo.seaCategory}` };
     }
     if (input.serviceType === "Air Freight" && cargo.airItem) {
@@ -77,6 +79,7 @@ export function manualShipmentRate(values: Row): { cost: number; basis: string }
     remarks: values.tracking_remarks,
     cbm: Number(measured ? values.verified_cbm : values.cbm),
     weight: Number(measured ? values.verified_weight_kg : values.weight_kg),
+    pricingDate: values.created_at,
   });
   return rate ? { cost: rate.shippingCharge, basis: `${rate.basis} · ${measured ? "verified" : "declared"} size` } : null;
 }
@@ -142,7 +145,7 @@ export async function verifiedShipmentFreight(
   verifiedWeight: number,
 ): Promise<VerifiedFreightRecalculation | null> {
   const shipment = await db.prepare(
-    `SELECT s.service_type, s.source_quotation_id, s.tracking_remarks, q.cargo_snapshot
+    `SELECT s.service_type, s.source_quotation_id, s.tracking_remarks, q.cargo_snapshot, q.created_at AS quotation_created_at
      FROM shipments s
      LEFT JOIN quotations q ON q.id = s.source_quotation_id
      WHERE s.id = ?`,
@@ -161,7 +164,8 @@ export async function verifiedShipmentFreight(
       throw new AdminError("The source quotation is missing a valid Sea Freight category.", 422);
     }
     const units = isBulk ? 1 : Number(cargo.units ?? 0);
-    const calculation = seaQuote(category, verifiedCbm, verifiedWeight, units);
+    // Priced on the rates of the quotation's date, so pre-2026-11-10 quotations keep the earlier rates.
+    const calculation = seaQuote(category, verifiedCbm, verifiedWeight, units, shipment.quotation_created_at);
     return {
       shippingCharge: Math.round(calculation.final * 100),
       pricingMethod: calculation.pricingMethod,

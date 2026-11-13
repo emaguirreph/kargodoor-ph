@@ -22,6 +22,7 @@ import {
   itemCategories,
   seaQuote,
   seaRates,
+  seaRatesOn,
   type AirItem,
   type SeaCategory,
 } from "./quotation-pricing";
@@ -582,11 +583,13 @@ export async function quotationsPage(
                 throw new AdminError(
                   "The selected item does not match its Sea Freight category.",
                 );
+              // A quotation keeps the sea rates of the day it was created (new rates from 2026-11-10).
               calc = seaQuote(
                 cargo.category as SeaCategory,
                 Number(cargo.cbm),
                 Number(cargo.weight),
                 Number(cargo.units),
+                existing.created_at,
               );
             } else {
               if (!airItems.includes(cargo.item as AirItem))
@@ -653,7 +656,7 @@ export async function quotationsPage(
           : resolveNiHaoCost(
             String(niHaoCostField).trim() ? cents(String(niHaoCostField).trim()) : null,
             { cost: existing.backend_cost, source: existing.backend_cost_source },
-            quotationNiHaoEstimate(freight, cargo),
+            quotationNiHaoEstimate(freight, cargo, existing.created_at),
           );
         const niHaoCost = niHaoResolved.cost;
         const now = new Date().toISOString();
@@ -890,6 +893,7 @@ export async function quotationsPage(
         );
       }
       const savedCategory = String(cargo.category || "");
+      const savedRates = seaRatesOn(q.created_at);
       const savedSea = {
         ...pricing,
         item: cargo.item,
@@ -898,11 +902,11 @@ export async function quotationsPage(
         weight: cargo.weight,
         cbmRate:
           savedCategory in seaRates
-            ? seaRates[savedCategory as SeaCategory].cbmRate
+            ? savedRates[savedCategory as SeaCategory].cbmRate
             : null,
         densityRate:
           savedCategory in seaRates
-            ? seaRates[savedCategory as SeaCategory].densityRate
+            ? savedRates[savedCategory as SeaCategory].densityRate
             : null,
       };
       const savedAir = {
@@ -936,7 +940,7 @@ export async function quotationsPage(
       );
       return page(
         "Edit quotation",
-        `<section><div class="actions"><a class="button" href="${path}?id=${value(q.id)}">Back</a></div><p class="notice">Loaded from the saved quotation. Saving preserves the snapshot unless a pricing-relevant input changes; then it recalculates using the existing pricing engine.</p><form method="post" class="grid"><input type="hidden" name="csrf" value="${value(csrfToken(env, user.id, path))}"><input type="hidden" name="action" value="update"><input type="hidden" name="quotation_id" value="${value(q.id)}"><p class="wide"><strong>Quotation No.</strong> ${value(q.quotation_number)}</p>${choices("status", "Status", q.status, ["Draft", "Sent", "Approved", "Revised", "Cancelled"])}${text("quotation_date", "Quotation date", q.quotation_date, "date")}${text("valid_until", "Valid until", q.valid_until || "", "date")}${customerPicker(customers, String(q.customer_id ?? ""))}${text("customer_name", "Customer name", customer.name)}${text("company", "Company", customer.company)}${text("mobile", "Contact number", customer.mobile)}${text("email", "Email", customer.email, "email")}<label class="wide">Address<textarea name="address">${value(customer.address)}</textarea></label>${text("description", "Customer cargo description", cargo.description)}<section class="wide" data-cargo-details data-sea-categories="${esc(JSON.stringify(itemCategories))}" data-air-items="${esc(JSON.stringify(airItems))}"><h2>2. CARGO DETAILS</h2><div class="grid">${choices("item", "Item / Commodity", cargo.item, itemOptions)}<label>Category<input data-category-output value="${value(cargo.category)}" readonly></label>${text("supplier_name", "Supplier Name", cargo.supplierName)}${text("origin", "Supplier / Origin Location", cargo.origin)}${choices("origin_warehouse", "KargoDoor Warehouse", cargo.originWarehouse, [...originWarehouses])}<label>Declared CBM<input name="cbm" data-cbm-output type="number" min="0" step="any" value="${value(cargo.cbm)}" required><small>Editable — use the supplier's declared package CBM.</small></label>${choices("freight_type", "Freight Type", q.freight_type, ["Sea Freight", "Air Freight"])}${text("weight", "Declared Weight (kg)", cargo.weight, "number")}<label data-units-field>Units<input name="units" type="number" min="0" step="1" value="${value(cargo.units)}"><small>Applicable to Mobile Phones / Computers / Tablets.</small></label></div>${cbmConverter(cargo)}</section>${seaPricingSection("", savedSea)}${airPricingSection("")}${staff ? "" : overrideFields(q.override_amount, q.override_reason, q.backend_cost, q.backend_cost_source)}<label class="wide">Admin notes<textarea name="notes">${value(q.notes)}</textarea></label><section class="wide"><h3>Saved pricing snapshot</h3><dl><dt>Final amount</dt><dd>${pesos(q.final_amount)}</dd><dt>Calculated amount</dt><dd>${pesos(q.calculated_amount)}</dd><dt>Override amount</dt><dd>${q.override_amount === null ? "—" : pesos(q.override_amount)}</dd><dt>Override reason</dt><dd>${value(q.override_reason || "—")}</dd><dt>Snapshot</dt><dd>${value(JSON.stringify(pricing))}</dd></dl><p class="muted">This snapshot remains unchanged unless a pricing-relevant input changes; an override remains editable until you clear it.</p></section><p class="wide actions"><button type="button" data-quotation-calculate>CALCULATE</button><button>Save changes</button></p></form><script src="/admin-quotation-cargo.js" defer></script></section>`,
+        `<section><div class="actions"><a class="button" href="${path}?id=${value(q.id)}">Back</a></div><p class="notice">Loaded from the saved quotation. Saving preserves the snapshot unless a pricing-relevant input changes; then it recalculates using the existing pricing engine.</p><form method="post" class="grid"><input type="hidden" name="csrf" value="${value(csrfToken(env, user.id, path))}"><input type="hidden" name="action" value="update"><input type="hidden" name="quotation_id" value="${value(q.id)}"><input type="hidden" data-pricing-date value="${value(q.created_at)}"><p class="wide"><strong>Quotation No.</strong> ${value(q.quotation_number)}</p>${choices("status", "Status", q.status, ["Draft", "Sent", "Approved", "Revised", "Cancelled"])}${text("quotation_date", "Quotation date", q.quotation_date, "date")}${text("valid_until", "Valid until", q.valid_until || "", "date")}${customerPicker(customers, String(q.customer_id ?? ""))}${text("customer_name", "Customer name", customer.name)}${text("company", "Company", customer.company)}${text("mobile", "Contact number", customer.mobile)}${text("email", "Email", customer.email, "email")}<label class="wide">Address<textarea name="address">${value(customer.address)}</textarea></label>${text("description", "Customer cargo description", cargo.description)}<section class="wide" data-cargo-details data-sea-categories="${esc(JSON.stringify(itemCategories))}" data-air-items="${esc(JSON.stringify(airItems))}"><h2>2. CARGO DETAILS</h2><div class="grid">${choices("item", "Item / Commodity", cargo.item, itemOptions)}<label>Category<input data-category-output value="${value(cargo.category)}" readonly></label>${text("supplier_name", "Supplier Name", cargo.supplierName)}${text("origin", "Supplier / Origin Location", cargo.origin)}${choices("origin_warehouse", "KargoDoor Warehouse", cargo.originWarehouse, [...originWarehouses])}<label>Declared CBM<input name="cbm" data-cbm-output type="number" min="0" step="any" value="${value(cargo.cbm)}" required><small>Editable — use the supplier's declared package CBM.</small></label>${choices("freight_type", "Freight Type", q.freight_type, ["Sea Freight", "Air Freight"])}${text("weight", "Declared Weight (kg)", cargo.weight, "number")}<label data-units-field>Units<input name="units" type="number" min="0" step="1" value="${value(cargo.units)}"><small>Applicable to Mobile Phones / Computers / Tablets.</small></label></div>${cbmConverter(cargo)}</section>${seaPricingSection("", savedSea)}${airPricingSection("")}${staff ? "" : overrideFields(q.override_amount, q.override_reason, q.backend_cost, q.backend_cost_source)}<label class="wide">Admin notes<textarea name="notes">${value(q.notes)}</textarea></label><section class="wide"><h3>Saved pricing snapshot</h3><dl><dt>Final amount</dt><dd>${pesos(q.final_amount)}</dd><dt>Calculated amount</dt><dd>${pesos(q.calculated_amount)}</dd><dt>Override amount</dt><dd>${q.override_amount === null ? "—" : pesos(q.override_amount)}</dd><dt>Override reason</dt><dd>${value(q.override_reason || "—")}</dd><dt>Snapshot</dt><dd>${value(JSON.stringify(pricing))}</dd></dl><p class="muted">This snapshot remains unchanged unless a pricing-relevant input changes; an override remains editable until you clear it.</p></section><p class="wide actions"><button type="button" data-quotation-calculate>CALCULATE</button><button>Save changes</button></p></form><script src="/admin-quotation-cargo.js" defer></script></section>`,
         user.name,
         200,
         {
