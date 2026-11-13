@@ -1206,8 +1206,8 @@ export async function handleAdmin(
         // Order (two columns): CH warehouse received date | Estimated arrival,
         // Malabon warehouse received date | Delivered date,
         // Declared CBM | Declared weight, Verified CBM | Verified weight,
-        // Status. Air Freight: CH received | Flight date, then Estimated arrival. Supplier waybill and courier sit in
-        // the Ni Hao details box below.
+        // Status. Air Freight: CH received | Flight date, then Estimated arrival. Courier | Waybill
+        // number come right after.
         fields +=
           input(
             "warehouse_received_date",
@@ -1223,6 +1223,13 @@ export async function handleAdmin(
                 `name="departure_date" data-after="warehouse_received_date"${record.warehouse_received_date ? ` min="${esc(record.warehouse_received_date)}"` : ""}`,
               ) + arrivalEstimateField(record).replace('class="arrival-estimate"', 'class="arrival-estimate wide"')
             : arrivalEstimateField(record)) +
+          // Courier and waybill (Em, 2026-11-13): in the main form for new and
+          // edited shipments, to track where the package is. Internal only:
+          // the customer portal, tracking page and messages never show them.
+          input("supplier_courier", "Courier", record, "text", false, 120)
+            .replace("<label>", '<label style="grid-column-start:1">') +
+          input("supplier_waybill_number", "Waybill number", record, "text", false, 120) +
+          `<p class="muted wide" style="margin:0">Courier and waybill are for our tracking only. The customer does not see them.</p>` +
           // Below them: Malabon warehouse received date (from Malabon Warehouse
           // on) and Delivered date (at Delivered). Both always stay in the form
           // so a saved date is kept; /admin-arrival-window.js shows or hides
@@ -1369,9 +1376,6 @@ export async function handleAdmin(
           csrf: csrfToken(env, user.id, path),
           canWrite,
           uploaded: url.searchParams.get("nihao_file") === "1",
-          supplierFields:
-            input("supplier_waybill_number", "Supplier waybill number", record, "text", false, 120) +
-            input("supplier_courier", "Supplier courier", record, "text", false, 120),
         });
         paymentForms = customerBox.form + proofForms + deliveryBox.form + niHaoBox.form + niHaoDetailsCard.form;
         // Opens on the Ni Hao tab right after a Ni Hao upload or payment.
