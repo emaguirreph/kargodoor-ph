@@ -234,6 +234,15 @@ try {
   res = await browser("/customer");
   html = await res.text();
   assert.ok(html.includes(approved.customer_code) && html.includes(made.ref), `dashboard shows cargo code + shipment (${res.status} ${res.headers.get("location")} ${html.slice(0, 300)})`);
+  assert.ok(html.includes("pterms-dash-title"), "first sign-in shows the Shipping Terms pop-up");
+  const termsVersion = html.match(/name="terms" value="([^"]+)"/)[1];
+  res = await browser("/customer/actions/terms", { method: "POST", body: new URLSearchParams({ terms: termsVersion }) });
+  assert.match(res.headers.get("location"), /\/customer\?terms=1/);
+  html = await (await browser("/customer")).text();
+  assert.ok(!html.includes("pterms-dash-title"), "pop-up gone after agreeing");
+  assert.ok(sqlRows(`SELECT terms_accepted_at FROM customer_accounts WHERE customer_id='${saved2.customer_id}'`)[0].terms_accepted_at, "agreement saved on the account");
+  html = await (await get(`/admin/customers?id=${saved2.customer_id}`)).text();
+  assert.ok(html.includes("✅ Agreed"), "admin customer page shows the agreement");
   html = await (await browser("/customer/shipments")).text();
   assert.ok(html.includes(made.ref) && html.includes("PAID"), "My Shipments shows the paid shipment");
   html = await (await browser(`/customer/track?q=${made.ref}`)).text();

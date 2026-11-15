@@ -2010,6 +2010,7 @@ export async function handleAdmin(
           <dl class="customer-portal-status">
             <dt>Status</dt>
             <dd>${portalStatus(portal)}</dd>
+            ${portal ? `<dt>Shipping Terms</dt><dd>${portal.terms_accepted_at ? `✅ Agreed ${esc(String(portal.terms_accepted_at).replace("T", " ").slice(0, 16))}${portal.terms_version ? ` (v${esc(portal.terms_version)})` : ""}` : "Not agreed yet"}</dd>` : ""}
           </dl>
         </section>` : "";
       const accountMessageId = `account-created-${id}`;

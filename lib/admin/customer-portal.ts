@@ -2,9 +2,9 @@ import { randomBytes, randomUUID } from "node:crypto";
 import type { D1Database } from "@cloudflare/workers-types";
 import { customerPasswordHash, normalizeCustomerEmail, normalizeCustomerMobile } from "@/lib/customer/security";
 import { AdminError } from "./security";
-export type Portal={id:string;login_email:string;login_mobile:string|null;enabled:number;password_state:"temporary"|"active"};
+export type Portal={id:string;login_email:string;login_mobile:string|null;enabled:number;password_state:"temporary"|"active";terms_version?:string|null;terms_accepted_at?:string|null};
 export type PortalCredential={login:string;loginLabel:"email"|"mobile number";email:string;mobile:string|null;password:string};
-export const portalFor=(db:D1Database,id:string)=>db.prepare("SELECT id,login_email,login_mobile,enabled,password_state FROM customer_accounts WHERE customer_id=?").bind(id).first<Portal>();
+export const portalFor=(db:D1Database,id:string)=>db.prepare("SELECT id,login_email,login_mobile,enabled,password_state,terms_version,terms_accepted_at FROM customer_accounts WHERE customer_id=?").bind(id).first<Portal>();
 export const portalStatus=(p:Portal|null)=>!p?"NOT ACTIVATED":!p.enabled?"DISABLED":p.password_state==="temporary"?"TEMPORARY PASSWORD":"ACTIVE";
 const temp=()=>randomBytes(18).toString("base64url");
 async function setTemp(db:D1Database,p:Portal,enabled=1){const password=temp(),salt=randomBytes(32).toString("hex"),now=new Date().toISOString();await db.prepare("UPDATE customer_accounts SET password_hash=?,password_salt=?,password_algorithm='scrypt',password_n=32768,password_r=8,password_p=1,password_key_length=64,enabled=?,password_state='temporary',updated_at=? WHERE id=?").bind(customerPasswordHash(password,salt),salt,enabled,now,p.id).run();await db.prepare("DELETE FROM customer_sessions WHERE customer_account_id=?").bind(p.id).run();return password;}

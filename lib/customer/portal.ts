@@ -11,6 +11,8 @@ export type PortalCustomer = {
   id: string; customer_code: string; full_name: string; company_name: string | null;
   mobile: string; email: string | null; address: string | null; created_at: string;
   login_email?: string | null;
+  /** Shipping Terms version agreed on the portal account (null = never). */
+  terms_version?: string | null;
 };
 
 export type PortalShipment = {
@@ -81,7 +83,8 @@ const visibleBill = (status: unknown) => ["Unpaid", "Partial", "Paid"].includes(
 
 export async function loadPortal(db: D1Database, customerId: string): Promise<PortalData | null> {
   const customer = await db.prepare(`SELECT c.id, c.customer_code, c.full_name, c.company_name, c.mobile, c.email, c.address, c.created_at,
-      (SELECT a.login_email FROM customer_accounts a WHERE a.customer_id = c.id LIMIT 1) AS login_email
+      (SELECT a.login_email FROM customer_accounts a WHERE a.customer_id = c.id LIMIT 1) AS login_email,
+      (SELECT a.terms_version FROM customer_accounts a WHERE a.customer_id = c.id LIMIT 1) AS terms_version
     FROM customers c WHERE c.id = ? AND c.archived_at IS NULL`).bind(customerId).first<PortalCustomer>();
   if (!customer) return null;
 

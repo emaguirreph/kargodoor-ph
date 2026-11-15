@@ -318,3 +318,5 @@
 .v5 .pterms{background:var(--surface,#fff);color:var(--fg,#0b1f45);border-radius:18px;border-top:8px solid #d93a2b;max-width:560px;width:100%;max-height:calc(100vh - 32px);overflow:auto;padding:20px 22px;display:grid;gap:10px;box-shadow:0 20px 60px rgba(0,0,0,.35)}
 .v5 .pterms h2{margin:0;color:#b42318}
 .v5 .pterms ol{margin:0;padding-left:20px;display:grid;gap:8px;font-weight:600}
+.v5 .pnotice .plink{background:none;border:0;padding:0;font:inherit;font-weight:800;cursor:pointer;text-decoration:underline}
+.v5 .pterms ol{list-style:decimal}

@@ -4,7 +4,7 @@ import { MessengerLink } from "@/components/messenger-link";
 import { CopyButton } from "./copy-button";
 import { ShippingTabs, type ShippingTabWarehouse } from "./shipping-tabs";
 import { WaybillExample } from "./illustrations";
-import { TermsGate } from "./terms-gate";
+import { TermsGate, TermsPopup } from "./terms-gate";
 import { shippingTerms, shippingTermsVersion } from "@/lib/customer/shipping-terms";
 import { kargodoorBankAccounts } from "@/lib/admin/bank-accounts";
 import { riderPickupMessage } from "@/lib/admin/customer-messages";
@@ -233,11 +233,15 @@ function Reminders({ compact = false }: { compact?: boolean }) {
   );
 }
 
-export function DashboardView({ data, links }: ViewProps) {
+export function DashboardView({ data, links, query }: ViewProps) {
   const active = data.shipments.filter((s) => s.active);
   const unpaid = data.bills.filter((b) => b.balance > 0);
   return (
     <>
+      {/* Once per account, and again when the terms change (Em, 2026-11-16). */}
+      {!links.preview && data.customer.terms_version !== shippingTermsVersion ? <TermsPopup terms={shippingTerms} version={shippingTermsVersion} /> : null}
+      {query.terms === "1" ? <Notice>Salamat! You agreed to the Shipping Terms. You can read them again on Book a Shipment.</Notice> : null}
+      {query.error ? <Notice kind="err">{query.error}</Notice> : null}
       <div className="pbanner">
         <div>
           <h1>MY KargoDoorPH</h1>

@@ -39,3 +39,8 @@ CREATE INDEX customer_courier_notices_shipment ON customer_courier_notices(shipm
 -- when (Em, 2026-11-16: refused packages are the customer's responsibility).
 ALTER TABLE bookings ADD COLUMN terms_version TEXT;
 ALTER TABLE bookings ADD COLUMN terms_accepted_at TEXT;
+
+-- Customer portal account: Shipping Terms agreed on first sign-in (and again
+-- when the terms change). Covers customers whose shipments admin creates.
+ALTER TABLE customer_accounts ADD COLUMN terms_version TEXT;
+ALTER TABLE customer_accounts ADD COLUMN terms_accepted_at TEXT;

@@ -99,10 +99,12 @@ export async function sendBooking(request: Request) {
       input: parsed.data, photos, packing: packing instanceof File && packing.size > 0 ? packing : null,
       key: clientKey(request.headers.get("cf-connecting-ip")), customerId: account.customer_id, source: "portal",
     });
-    // Proof of which Shipping Terms they agreed to, and when (column from migration 0048).
-    await db.prepare("UPDATE bookings SET terms_version = ?, terms_accepted_at = ? WHERE id = ?")
-      .bind(shippingTermsVersion, new Date().toISOString(), saved.id).run()
-      .catch((error) => console.error("Saving terms agreement failed", error instanceof Error ? error.message : error));
+    // Proof of which Shipping Terms they agreed to, and when (columns from migration 0048).
+    const agreedAt = new Date().toISOString();
+    await db.batch([
+      db.prepare("UPDATE bookings SET terms_version = ?, terms_accepted_at = ? WHERE id = ?").bind(shippingTermsVersion, agreedAt, saved.id),
+      db.prepare("UPDATE customer_accounts SET terms_version = ?, terms_accepted_at = ? WHERE customer_id = ?").bind(shippingTermsVersion, agreedAt, account.customer_id),
+    ]).catch((error) => console.error("Saving terms agreement failed", error instanceof Error ? error.message : error));
     return back(request, "/customer/book", { done: "1", ref: saved.ref });
   } catch (error) {
     if (!(error instanceof BookingError)) console.error("Portal booking failed", error instanceof Error ? error.message : "Unknown error");
@@ -200,4 +202,16 @@ export async function sendCourier(request: Request) {
     if (!(error instanceof BookingError)) console.error("Portal courier details failed", error instanceof Error ? error.message : "Unknown error");
     return back(request, page, { error: message(error) });
   }
+}
+
+/** Shipping Terms agreed from the one-time pop-up on the dashboard (Em, 2026-11-16). */
+export async function agreeTerms(request: Request) {
+  const ctx = await portalRequest(request);
+  if (ctx instanceof Response) return ctx;
+  const { db, account } = ctx;
+  const form = await request.formData();
+  if (String(form.get("terms") ?? "") !== shippingTermsVersion) return back(request, "/customer", { error: "Please agree to the current Shipping Terms." });
+  await db.prepare("UPDATE customer_accounts SET terms_version = ?, terms_accepted_at = ? WHERE customer_id = ?")
+    .bind(shippingTermsVersion, new Date().toISOString(), account.customer_id).run();
+  return back(request, "/customer", { terms: "1" });
 }
