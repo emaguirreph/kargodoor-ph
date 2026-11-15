@@ -149,6 +149,7 @@ function shippingInstructionsMessage(details: ShippingInstructionCustomer): stri
     "• Receipt or Package Photo: 📸",
     "",
     "This allows us to monitor your shipment before it reaches our China warehouse.",
+    "You can also send it in your portal: kargodoorph.com/customer/courier",
     "",
     "📦 Shipping Reminder: Final shipping charges will be based on the actual CBM and weight verified by our China warehouse, using the applicable freight rates.",
     "",
@@ -311,6 +312,7 @@ export function onceShippedMessage(): string {
     "• Receipt or Package Photo: 📸",
     "",
     "This allows us to monitor your shipment before it reaches our China warehouse.",
+    "You can also send it in your portal: kargodoorph.com/customer/courier",
     "",
     "📦 Shipping Reminder: Final shipping charges will be based on the actual CBM and weight verified by our China warehouse, using the applicable freight rates.",
   ]);

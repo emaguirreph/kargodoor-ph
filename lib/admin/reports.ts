@@ -189,11 +189,25 @@ export async function readAttention(db: D1Database) {
     .all<{ id: string; tracking_number: string | null; full_name: string; status: string; nihao_cost: string | null; nihao_cost_source: string | null }>();
 
   const referrals = await readReferralsToPay(db);
+  // Courier details customers sent from the portal that Em has not looked at yet
+  // (shipments coming to the China warehouse). Empty before migration 0048.
+  const { results: incoming } = await db
+    .prepare(
+      `SELECT n.id, n.courier, n.waybill_number, n.packages, n.shipment_id, c.full_name, c.customer_code, s.tracking_number
+      FROM customer_courier_notices n
+      JOIN customers c ON c.id = n.customer_id
+      LEFT JOIN shipments s ON s.id = n.shipment_id
+      WHERE n.status = 'New'
+      ORDER BY n.created_at ASC LIMIT 20`,
+    )
+    .all<{ id: string; courier: string; waybill_number: string; packages: number | null; shipment_id: string | null; full_name: string; customer_code: string; tracking_number: string | null }>()
+    .catch(() => ({ results: [] as { id: string; courier: string; waybill_number: string; packages: number | null; shipment_id: string | null; full_name: string; customer_code: string; tracking_number: string | null }[] }));
   const count = (value: unknown) => Number(value ?? 0);
   const needCost = simple.goingOutUnknown + count(summary?.estimated_costs);
   const total = count(summary?.new_leads) + simple.unbilled.results.length + collections.length + niHaoDue.length
     + needCost + count(summary?.at_malabon) + referrals.length;
-  return { today, summary, unpaid, collections, simple, niHaoDue, referrals, needCost, total, niHaoExpenseCategory };
+  // `incoming` is not in `total`: the red Bookings number in the menu already counts it.
+  return { today, summary, unpaid, collections, simple, niHaoDue, referrals, incoming, needCost, total, niHaoExpenseCategory };
 }
 
 export async function dashboard(
@@ -204,7 +218,7 @@ export async function dashboard(
   referralCsrf = "",
   referralPaid = false,
 ) {
-  const { today, summary, unpaid, collections, simple, niHaoDue, referrals, needCost, niHaoExpenseCategory } = await readAttention(db);
+  const { today, summary, unpaid, collections, simple, niHaoDue, referrals, incoming, needCost, niHaoExpenseCategory } = await readAttention(db);
   void today;
   const { financePesos } = await import("./finance-summary");
   const { referralPayForm, nth } = await import("./partner-split");
@@ -283,6 +297,22 @@ export async function dashboard(
 
   type Attention = { show: boolean; n: number; label: string; detail: string; href: string; action: string; warn?: boolean; rows?: string; id?: string };
   const attention: Attention[] = [
+    {
+      show: incoming.length > 0,
+      n: incoming.length,
+      id: "attention-incoming",
+      label: `📦 ${plural(incoming.length, "shipment", "shipments")} coming to the China warehouse`,
+      detail: "The customer sent the supplier's courier and waybill number. Note it, then mark it Arrived when the warehouse receives it.",
+      warn: true,
+      href: "/admin/bookings?status=Incoming",
+      action: "Open",
+      rows: table(incoming.map((item) => row([
+        `${esc(item.customer_code)} · ${esc(item.full_name)}`,
+        `${esc(item.courier)} <strong>${esc(item.waybill_number)}</strong>${item.packages ? ` <span class="muted">· ${esc(String(item.packages))} pkg</span>` : ""}`,
+        item.shipment_id ? shipmentLink(item.shipment_id, item.tracking_number) : '<span class="muted">New order, not booked</span>',
+        go("/admin/bookings?status=Incoming", "Open"),
+      ]))),
+    },
     {
       show: count(summary?.new_leads) > 0,
       n: count(summary?.new_leads),

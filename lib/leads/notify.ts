@@ -81,6 +81,28 @@ export async function sendSignupAlert(binding: SendEmailBinding | undefined, sig
   await sendAlert(binding, signupAlertMessage(signup));
 }
 
+export type CourierAlert = { customerCode: string; fullName: string; mobile: string; courier: string; waybill: string; packages: number | null; shipment: string; item: string; hasPhoto: boolean };
+
+export function courierAlertMessage(notice: CourierAlert, now = new Date()) {
+  return alertMessage(`Incoming shipment: ${notice.customerCode} sent courier ${notice.courier} ${notice.waybill}`, [
+    `A customer sent their supplier's courier details in the portal. A shipment is on its way to the China warehouse.`,
+    ``,
+    `Customer: ${oneLine(notice.customerCode)} · ${oneLine(notice.fullName)} (${oneLine(notice.mobile)})`,
+    `Courier: ${oneLine(notice.courier)}`,
+    `Tracking / waybill no.: ${oneLine(notice.waybill)}`,
+    `Packages: ${notice.packages ?? "—"}`,
+    `Shipment: ${oneLine(notice.shipment)}`,
+    `Item: ${oneLine(notice.item) || "—"}`,
+    `Waybill photo: ${notice.hasPhoto ? "yes (see admin)" : "none"}`,
+    ``,
+    `See it in admin: https://kargodoorph.com/admin/bookings?status=Incoming`,
+  ], now);
+}
+
+export async function sendCourierAlert(binding: SendEmailBinding | undefined, notice: CourierAlert) {
+  await sendAlert(binding, courierAlertMessage(notice));
+}
+
 function alertMessage(subjectText: string, lines: string[], now: Date) {
   const subject = encodeHeader(oneLine(subjectText));
   const body = lines.join("\r\n");

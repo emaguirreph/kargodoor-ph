@@ -6,8 +6,9 @@ import { ShippingTabs, type ShippingTabWarehouse } from "./shipping-tabs";
 import { WaybillExample } from "./illustrations";
 import { kargodoorBankAccounts } from "@/lib/admin/bank-accounts";
 import { riderPickupMessage } from "@/lib/admin/customer-messages";
-import { onceShippedMessage, supplierShipmentMessage } from "@/lib/admin/shipping-instructions";
+import { supplierShipmentMessage } from "@/lib/admin/shipping-instructions";
 import { hongKongMark, malabonWarehouseAddress, warehouseAddresses, type WarehouseName } from "@/lib/warehouse-addresses";
+import { courierChoices, courierStatusLabel } from "@/lib/customer/courier";
 import {
   concernTopics, formatDate, formatMonth, formatPeso, portalStages, stageIndex,
   type PortalBill, type PortalData, type PortalShipment,
@@ -16,6 +17,7 @@ import {
 export const portalSections = [
   ["dashboard", "My Dashboard", "home"],
   ["shipments", "My Shipments", "box"],
+  ["courier", "Courier Details", "truck"],
   ["how-to-ship", "Shipping Process", "how"],
   ["warehouses", "Warehouses", "house"],
   ["book", "Book a Shipment", "plus"],
@@ -44,6 +46,7 @@ const iconPaths: Record<string, ReactNode> = {
   award: <><circle cx="12" cy="8" r="5" /><path d="M9 13l-2 8 5-3 5 3-2-8" /></>,
   house: <path d="M3 21V9l9-6 9 6v12M8 21v-7h8v7" />,
   chat: <path d="M4 5h16v11H8l-4 4z" />,
+  truck: <path d="M2 6h12v10H2zM14 10h4l4 4v2h-8M6 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM18 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" />,
   user: <><circle cx="12" cy="8" r="4" /><path d="M4 21c1-4 4-6 8-6s7 2 8 6" /></>,
 };
 export const Icon = ({ name }: { name: string }) => (
@@ -110,6 +113,7 @@ function ShipmentCard({ shipment, links, code, customer }: { shipment: PortalShi
           {owes ? <div className="bal"><span>Balance</span><b>{formatPeso(shipment.balance)}</b></div> : null}
         </div>
         <div className="pbtns">
+          {stageIndex(shipment.status) < 0 && !shipment.receivedDate ? <a className="pbtn pbtn-green" href={links.href("courier", `shipment=${shipment.id}`)}>📮 SEND COURIER DETAILS</a> : null}
           {owes ? <a className="pbtn pbtn-blue" href={links.href("payments", `bill=${shipment.invoiceId}`)}>PAY NOW</a> : null}
           {shipment.invoiceId && !links.preview ? <a className="pbtn pbtn-line" href={`/customer/invoice?id=${shipment.invoiceId}`}>{shipment.payment === "PAID" ? "RECEIPT (PDF)" : "VIEW BILL (PDF)"}</a> : null}
         </div>
@@ -177,12 +181,11 @@ function PackagingInstructions({ code }: { code: string }) {
 }
 
 /** Courier waybill example: what to send us once the supplier ships. */
-function WaybillBlock() {
-  const waybill = onceShippedMessage();
+function WaybillBlock({ links }: { links: PortalLinks }) {
   return (
     <div className="psplit">
       <div className="pstack">
-        <p className="pmuted">Once your supplier ships, send us these details so we can watch for your boxes:</p>
+        <p className="pmuted">Once your supplier ships, send us these details here in your portal so we can watch for your boxes:</p>
         <ul className="plist">
           <li><b>Courier</b> (e.g. SF Express)</li>
           <li><b>Tracking / Waybill No.</b></li>
@@ -190,8 +193,8 @@ function WaybillBlock() {
           <li><b>Receipt or package photo</b> 📸</li>
         </ul>
         <div className="pbtns">
-          <MessengerLink className="pbtn pbtn-blue" target="_blank" rel="noopener noreferrer">💬 SEND ON MESSENGER</MessengerLink>
-          <CopyButton text={waybill} label="COPY EXAMPLE" className="pbtn pbtn-line" />
+          <a className="pbtn pbtn-green" href={links.href("courier")}>📮 SEND COURIER DETAILS</a>
+          <MessengerLink className="pbtn pbtn-line" target="_blank" rel="noopener noreferrer">💬 OR SEND ON MESSENGER</MessengerLink>
         </div>
       </div>
       <WaybillExample />
@@ -200,7 +203,7 @@ function WaybillBlock() {
 }
 
 /** Supplier Instructions, Packaging Instructions (and on the dashboard, Courier Waybill Example) tabs, shown below the cargo code. */
-function ShippingGuide({ data, showWaybill = true }: { data: PortalData; showWaybill?: boolean }) {
+function ShippingGuide({ data, links, showWaybill = true }: { data: PortalData; links: PortalLinks; showWaybill?: boolean }) {
   const code = data.customer.customer_code;
   const warehouses: ShippingTabWarehouse[] = tabWarehouses.map(([name, mode]) => ({
     name, mode,
@@ -209,7 +212,7 @@ function ShippingGuide({ data, showWaybill = true }: { data: PortalData; showWay
       .replace(/^Hi [^\n]*\n[^\n]*\n\n/, "")
       .replace("[Add the item / product name]", "[Your item name]"),
   }));
-  return <ShippingTabs warehouses={warehouses} packaging={<PackagingInstructions code={code} />} waybill={showWaybill ? <WaybillBlock /> : undefined} />;
+  return <ShippingTabs warehouses={warehouses} packaging={<PackagingInstructions code={code} />} waybill={showWaybill ? <WaybillBlock links={links} /> : undefined} />;
 }
 
 const checkFirst = ["Batteries", "Liquids", "Chemicals", "Food", "Medicines", "Cosmetics", "Branded goods", "Hazardous materials", "Other regulated products"];
@@ -288,6 +291,7 @@ export function DashboardView({ data, links }: ViewProps) {
       </div>
       <nav className="pcard pquick" aria-label="Quick actions">
         <a href={links.href("book")}><Icon name="plus" />Book a Shipment</a>
+        <a href={links.href("courier")}><Icon name="truck" />Send Courier Details</a>
         <a href={links.href("track")}><Icon name="track" />Track Shipment</a>
         <a href={links.href("payments")}><Icon name="card" />Make Payment</a>
         <a href={links.href("support")}><Icon name="chat" />Contact Support</a>
@@ -330,10 +334,10 @@ export function HowToShipView({ data, links }: ViewProps) {
       <PageHead eyebrow="Getting started" title="Shipping Process" sub="Ganito lang mag-import with KargoDoor PH." action={<Reminders compact />} />
       <Step n={1} title="Send your code to your supplier">
         <CodeBox data={data} />
-        <ShippingGuide data={data} showWaybill={false} />
+        <ShippingGuide data={data} links={links} showWaybill={false} />
       </Step>
       <Step n={2} title="Notify Us With Your Shipment">
-        <WaybillBlock />
+        <WaybillBlock links={links} />
       </Step>
       <Step n={3} title="China warehouse receives and measures">
         <p>Our China warehouse receives your boxes and measures the <b>actual</b> CBM and weight. Your final bill uses these verified numbers. Sea takes 3–5 weeks, air 5–7 days.</p>
@@ -563,6 +567,56 @@ export function WarehousesView({ data, links, query }: ViewProps) {
   );
 }
 
+const courierTone = (status: string) => status === "Arrived" ? "paid" : "";
+
+/** Courier details from the customer once the supplier ships, so we know a shipment is coming (Em, 2026-11-15). */
+export function CourierView({ data, links, query }: ViewProps) {
+  const waiting = data.shipments.filter((s) => s.active && stageIndex(s.status) < 0 && !s.receivedDate);
+  const others = data.shipments.filter((s) => s.active && !waiting.includes(s));
+  const chosen = data.shipments.find((s) => s.id === query.shipment)?.id ?? (waiting.length === 1 ? waiting[0].id : "");
+  return (
+    <>
+      <PageHead eyebrow="Step 2 · Notify us" title="Courier Details" sub="Supplier shipped your order? Send us the courier and tracking / waybill number so we can watch for your boxes at our China warehouse." />
+      {query.done === "1" ? <Notice>Salamat! We got your courier details. We&apos;ll watch for your boxes and update your shipment once our China warehouse receives them.</Notice> : null}
+      {query.error ? <Notice kind="err">{query.error}</Notice> : null}
+      <div className="psplit">
+        <form className="pcard pform" method="post" action="/customer/actions/courier" encType="multipart/form-data">
+          <fieldset disabled={links.preview}>
+            <label className="pfield"><span>Which shipment</span>
+              <select name="shipment_id" defaultValue={chosen}>
+                <option value="">New order (not booked yet)</option>
+                {waiting.map((s) => <option key={s.id} value={s.id}>{s.trackingNumber}{s.item ? ` · ${s.item}` : ""}</option>)}
+                {others.map((s) => <option key={s.id} value={s.id}>{s.trackingNumber}{s.item ? ` · ${s.item}` : ""} ({s.status})</option>)}
+              </select></label>
+            <div className="pgrid2 tight">
+              <label className="pfield"><span>Courier</span><input name="courier" required minLength={2} maxLength={80} list="courier-choices" placeholder="e.g. SF Express" autoComplete="off" />
+                <datalist id="courier-choices">{courierChoices.map((c) => <option key={c} value={c} />)}</datalist></label>
+              <label className="pfield"><span>Tracking / waybill no.</span><input name="waybill" required minLength={3} maxLength={80} placeholder="e.g. SF1234567890123" autoComplete="off" /></label>
+              <label className="pfield"><span>Number of packages (optional)</span><input name="packages" inputMode="numeric" pattern="[0-9]*" maxLength={3} placeholder="e.g. 3" /></label>
+              <label className="pfield"><span>Item (needed for a new order)</span><input name="item" maxLength={200} placeholder="e.g. Phone cases" /></label>
+            </div>
+            <label className="pfield"><span>Photo of the waybill or receipt (optional, up to 1.5 MB)</span><input type="file" name="photo" accept="image/jpeg,image/png,image/webp,application/pdf" /></label>
+            <label className="pfield"><span>Note (optional)</span><textarea name="note" maxLength={500} placeholder="e.g. Supplier says 2 more boxes ship next week" /></label>
+            <div className="pbtns"><button className="pbtn pbtn-green" type="submit">SEND COURIER DETAILS</button></div>
+          </fieldset>
+        </form>
+        <WaybillExample />
+      </div>
+      <section className="pcard">
+        <h2>Courier details you sent</h2>
+        {data.couriers.length ? (
+          <div className="ptable"><table><thead><tr><th>Sent</th><th>Courier</th><th>Waybill no.</th><th>Shipment</th><th>Status</th></tr></thead><tbody>
+            {data.couriers.map((c, i) => <tr key={i}><td>{formatDate(c.createdAt)}</td><td>{c.courier}{c.packages ? <small>{c.packages} package{c.packages === 1 ? "" : "s"}</small> : null}</td>
+              <td className="ptn">{c.waybill}{c.hasPhoto ? <small>📸 Photo sent</small> : null}</td>
+              <td>{c.trackingNumber ? <span className="ptn">{c.trackingNumber}</span> : "New order"}{c.item ? <small>{c.item}</small> : null}</td>
+              <td><Pill tone={courierTone(c.status)}>{courierStatusLabel[c.status] ?? c.status}</Pill>{c.adminNote ? <small>KargoDoor: {c.adminNote}</small> : null}</td></tr>)}
+          </tbody></table></div>
+        ) : <p className="pempty">Nothing sent yet. Once your supplier ships, send the courier details here.</p>}
+      </section>
+    </>
+  );
+}
+
 export function SupportView({ data, links, query }: ViewProps) {
   return (
     <>
@@ -620,6 +674,6 @@ export function AccountView({ data, links }: ViewProps) {
 }
 
 export const portalViews: Record<PortalSection, (props: ViewProps) => ReactNode> = {
-  dashboard: DashboardView, "how-to-ship": HowToShipView, shipments: ShipmentsView, track: TrackView, book: BookView,
+  dashboard: DashboardView, "how-to-ship": HowToShipView, shipments: ShipmentsView, courier: CourierView, track: TrackView, book: BookView,
   payments: PaymentsView, refer: ReferView, warehouses: WarehousesView, support: SupportView, account: AccountView,
 };
