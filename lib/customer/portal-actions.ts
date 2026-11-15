@@ -11,6 +11,7 @@ import { customerSession, customerSessionCookie, requestCookie } from "@/lib/cus
 import { concernTopics } from "@/lib/customer/portal";
 import { contentsChecks, courierDailyLimit, courierText } from "@/lib/customer/courier";
 import { sendCourierAlert } from "@/lib/leads/notify";
+import { shippingTermsVersion } from "@/lib/customer/shipping-terms";
 
 type Account = NonNullable<Awaited<ReturnType<typeof customerSession>>>;
 
@@ -76,6 +77,7 @@ export async function sendBooking(request: Request) {
   try {
     if (Number(request.headers.get("content-length") ?? 0) > 10 * 1024 * 1024) throw new BookingError("Your photos are too big. Please use smaller photos (up to 1.5 MB each).");
     const form = await request.formData();
+    if (String(form.get("terms") ?? "") !== shippingTermsVersion) throw new BookingError("Please read and agree to the Shipping Terms before booking.");
     const customer = await db.prepare("SELECT full_name, mobile, email FROM customers WHERE id = ?").bind(account.customer_id).first<{ full_name: string; mobile: string; email: string | null }>();
     if (!customer) throw new BookingError("We couldn't find your account. Please message us on Messenger.");
     const parsed = bookingInput.safeParse({
@@ -97,6 +99,10 @@ export async function sendBooking(request: Request) {
       input: parsed.data, photos, packing: packing instanceof File && packing.size > 0 ? packing : null,
       key: clientKey(request.headers.get("cf-connecting-ip")), customerId: account.customer_id, source: "portal",
     });
+    // Proof of which Shipping Terms they agreed to, and when (column from migration 0048).
+    await db.prepare("UPDATE bookings SET terms_version = ?, terms_accepted_at = ? WHERE id = ?")
+      .bind(shippingTermsVersion, new Date().toISOString(), saved.id).run()
+      .catch((error) => console.error("Saving terms agreement failed", error instanceof Error ? error.message : error));
     return back(request, "/customer/book", { done: "1", ref: saved.ref });
   } catch (error) {
     if (!(error instanceof BookingError)) console.error("Portal booking failed", error instanceof Error ? error.message : "Unknown error");

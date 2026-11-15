@@ -443,7 +443,12 @@ export const faqs = [
 
         <p>
           Batteries • Liquids • Chemicals • Food • Medicines • Cosmetics •
-          Branded Goods • Hazardous Materials • Other Regulated Products
+          Hazardous Materials • Other Regulated Products
+        </p>
+
+        <p>
+          Branded items are OK only if they are original. Fake or counterfeit
+          products are not allowed.
         </p>
 
         <p>

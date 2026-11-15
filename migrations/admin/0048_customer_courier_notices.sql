@@ -34,3 +34,8 @@ CREATE TABLE customer_courier_notices (
 CREATE INDEX customer_courier_notices_status ON customer_courier_notices(status, created_at);
 CREATE INDEX customer_courier_notices_customer ON customer_courier_notices(customer_id, created_at);
 CREATE INDEX customer_courier_notices_shipment ON customer_courier_notices(shipment_id);
+
+-- Book a Shipment in the portal: which Shipping Terms the customer agreed to and
+-- when (Em, 2026-11-16: refused packages are the customer's responsibility).
+ALTER TABLE bookings ADD COLUMN terms_version TEXT;
+ALTER TABLE bookings ADD COLUMN terms_accepted_at TEXT;

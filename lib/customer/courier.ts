@@ -8,7 +8,7 @@ export const courierChoices = ["SF Express", "ZTO Express", "YTO Express", "STO 
 export const courierDailyLimit = 15;
 
 /** Items that need a check with us first: some are only accepted at certain warehouses, or refused. Same list as the portal reminders. */
-export const restrictedItems = ["Batteries", "Liquids", "Chemicals", "Food", "Medicines", "Cosmetics", "Branded goods", "Hazardous materials", "Other regulated products"] as const;
+export const restrictedItems = ["Batteries", "Liquids", "Chemicals", "Food", "Medicines", "Cosmetics", "Hazardous materials", "Other regulated products"] as const;
 
 /** The customer's answer about restricted items, as admin sees it. */
 export const contentsCheckLabel: Record<string, string> = {

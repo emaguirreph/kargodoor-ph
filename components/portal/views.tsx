@@ -4,6 +4,8 @@ import { MessengerLink } from "@/components/messenger-link";
 import { CopyButton } from "./copy-button";
 import { ShippingTabs, type ShippingTabWarehouse } from "./shipping-tabs";
 import { WaybillExample } from "./illustrations";
+import { TermsGate } from "./terms-gate";
+import { shippingTerms, shippingTermsVersion } from "@/lib/customer/shipping-terms";
 import { kargodoorBankAccounts } from "@/lib/admin/bank-accounts";
 import { riderPickupMessage } from "@/lib/admin/customer-messages";
 import { supplierShipmentMessage } from "@/lib/admin/shipping-instructions";
@@ -186,7 +188,7 @@ function WaybillBlock({ links }: { links: PortalLinks }) {
     <div className="psplit">
       <div className="pstack">
         <p className="pmuted">Once your supplier ships, send us these details here in your portal so we can watch for your boxes:</p>
-        <p className="pred"><b>⚠️ Message us BEFORE your supplier ships</b> if your order has batteries, liquids, food, cosmetics, branded or other regulated items. Some are only accepted at certain warehouses, and packages may be refused.</p>
+        <p className="pred"><b>⚠️ Message us BEFORE your supplier ships</b> if your order has batteries, liquids, food, cosmetics or other regulated items. Branded items are OK only if original; fakes are not allowed. Some are only accepted at certain warehouses, and packages may be refused.</p>
         <ul className="plist">
           <li><b>Courier</b> (e.g. SF Express)</li>
           <li><b>Tracking / Waybill No.</b></li>
@@ -426,6 +428,7 @@ export function BookView({ data, links, query }: ViewProps) {
           <label className="pfield"><span>Packing list or supplier invoice (optional)</span><input type="file" name="packing" accept="image/jpeg,image/png,image/webp,application/pdf" /></label>
           <label className="pfield"><span>Notes (optional)</span><textarea name="notes" maxLength={1000} /></label>
           <p className="pmuted">Final charges are based on the CBM and weight verified by our China warehouse.</p>
+          <TermsGate terms={shippingTerms} version={shippingTermsVersion} backHref={links.href("dashboard")} disabled={disabled} />
           <div className="pbtns"><button className="pbtn pbtn-green" type="submit">SEND BOOKING</button></div>
         </fieldset>
       </form>
@@ -573,7 +576,7 @@ export function WarehousesView({ data, links, query }: ViewProps) {
 function RestrictedWarning() {
   return (
     <div className="palert" role="note">
-      <div className="palert-head"><span className="palert-icon" aria-hidden="true">⚠️</span><div><strong>Contact us BEFORE your supplier ships</strong><span>Some items are only accepted at certain China warehouses. Packages with restricted items may be REFUSED by the warehouse, and we can&apos;t take them back.</span><em className="palert-fake">🚫 Fake or counterfeit products are NOT allowed.</em></div></div>
+      <div className="palert-head"><span className="palert-icon" aria-hidden="true">⚠️</span><div><strong>Contact us BEFORE your supplier ships</strong><span>Some items are only accepted at certain China warehouses. Packages with restricted items may be REFUSED by the warehouse, and we can&apos;t take them back.</span><em className="palert-fake">🚫 Fake or counterfeit products are NOT allowed. Branded items are OK only if original.</em></div></div>
       <div className="palert-chips">{restrictedItems.map((item) => <span key={item}>{item}</span>)}</div>
       <p>Has any of these? Message us first so we can tell you if we can ship it and which warehouse to use.</p>
       <div className="pbtns"><MessengerLink className="pbtn pbtn-red" target="_blank" rel="noopener noreferrer">💬 MESSAGE US ON MESSENGER</MessengerLink></div>
@@ -612,7 +615,7 @@ export function CourierView({ data, links, query }: ViewProps) {
               <label className="pfield"><span>What&apos;s inside</span><input name="item" required maxLength={200} placeholder="e.g. Phone cases" /></label>
             </div>
             <fieldset className="pfield pchoice">
-              <legend>Does it have batteries, liquids, food, cosmetics, branded or other restricted items?</legend>
+              <legend>Does it have batteries, liquids, food, cosmetics or other restricted items?</legend>
               <label><input type="radio" name="contents" value="none" required /> No, none of these</label>
               <label><input type="radio" name="contents" value="asked" /> Yes, and I already checked with KargoDoor</label>
               <label><input type="radio" name="contents" value="not_asked" /> Yes, but I haven&apos;t asked KargoDoor yet</label>

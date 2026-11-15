@@ -258,6 +258,10 @@ try {
   for (const [k, v] of Object.entries({ service: "air", warehouse: "Yiwu", item: "Phone cases", quantity: "3 boxes", cbm: "", weight: "15", supplier: "Supplier Wang", itemValue: "8000", deliveryMode: "pickup", deliveryAddress: "", notes: "" })) book.set(k, v);
   book.append("photos", new Blob([png], { type: "image/png" }), "case.png");
   res = await browser("/customer/actions/book", { method: "POST", body: book });
+  assert.match(decodeURIComponent(res.headers.get("location").replace(/\+/g, " ")), /agree to the Shipping Terms/, "booking without agreeing to the terms is refused");
+  html = await (await browser("/customer/book")).text();
+  book.set("terms", html.match(/name="terms" value="([^"]+)"/)[1]);
+  res = await browser("/customer/actions/book", { method: "POST", body: book });
   assert.equal(res.status, 303, await res.text());
   assert.match(res.headers.get("location"), /\/customer\/book\?done=1&ref=KDAIR-\d{6}/);
   const portalBooking = sqlRows("SELECT id, booking_ref, source, customer_id, phone FROM bookings WHERE source='portal'")[0];
@@ -266,7 +270,7 @@ try {
   html = await (await get("/admin/bookings")).text();
   assert.ok(html.includes(portalBooking.booking_ref) && html.includes("🔐 Portal"));
   html = await (await get(`/admin/bookings?id=${portalBooking.id}`)).text();
-  assert.ok(html.includes("Booked in the customer portal"));
+  assert.ok(html.includes("Booked in the customer portal") && html.includes("Agreed to the Shipping Terms"));
   html = await (await browser("/customer/shipments")).text();
   assert.ok(html.includes(portalBooking.booking_ref), "pending booking shows in the portal");
   sqlRows(`UPDATE bookings SET status='Declined' WHERE id='${portalBooking.id}'`);

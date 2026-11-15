@@ -216,6 +216,7 @@ async function acceptProof(db: D1Database, user: AdminUser, booking: Row | null,
 function bookingFlags(booking: Row, matches: Row[], recent: number) {
   const flags: string[] = [];
   if (booking.source === "portal") flags.push(`<span class="booking-flag ok">🔐 Booked in the customer portal (logged in)</span>`);
+  if (booking.terms_accepted_at) flags.push(`<span class="booking-flag ok">✅ Agreed to the Shipping Terms (${esc(booking.terms_version)}) on ${esc(String(booking.terms_accepted_at).replace("T", " ").slice(0, 16))}</span>`);
   flags.push(booking.messenger_confirmed_at
     ? `<span class="booking-flag ok">✅ Confirmed on Messenger</span>`
     : `<span class="booking-flag warn">⏳ Not confirmed on Messenger yet</span>`);
