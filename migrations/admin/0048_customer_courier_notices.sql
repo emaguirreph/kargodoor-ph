@@ -12,6 +12,11 @@ CREATE TABLE customer_courier_notices (
  waybill_number TEXT NOT NULL CHECK(length(trim(waybill_number)) BETWEEN 3 AND 80),
  packages INTEGER CHECK(packages IS NULL OR packages BETWEEN 1 AND 999),
  item TEXT CHECK(item IS NULL OR length(item) <= 200),
+ -- What the customer said about restricted items (Em, 2026-11-16: some items
+ -- are only accepted at certain warehouses, and packages can be refused):
+ -- none = no restricted items; asked = has some and already checked with us;
+ -- not_asked = has some and did NOT check with us yet (red flag in admin).
+ contents_check TEXT NOT NULL DEFAULT 'none' CHECK(contents_check IN ('none','asked','not_asked')),
  note TEXT CHECK(note IS NULL OR length(note) <= 500),
  file_name TEXT,
  file_mime TEXT CHECK(file_mime IS NULL OR file_mime IN ('application/pdf','image/jpeg','image/png','image/webp')),

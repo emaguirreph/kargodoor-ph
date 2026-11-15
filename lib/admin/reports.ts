@@ -130,6 +130,8 @@ export async function saveStaffFollowUp(
  * to-do lists live on the Dashboard; Money Today left the menu). Also used
  * for the red number next to Dashboard in the menu.
  */
+type IncomingRow = { id: string; courier: string; waybill_number: string; packages: number | null; shipment_id: string | null; contents_check: string; full_name: string; customer_code: string; tracking_number: string | null };
+
 export async function readAttention(db: D1Database) {
   const today = philippineToday();
   const summary = await db
@@ -193,15 +195,15 @@ export async function readAttention(db: D1Database) {
   // (shipments coming to the China warehouse). Empty before migration 0048.
   const { results: incoming } = await db
     .prepare(
-      `SELECT n.id, n.courier, n.waybill_number, n.packages, n.shipment_id, c.full_name, c.customer_code, s.tracking_number
+      `SELECT n.id, n.courier, n.waybill_number, n.packages, n.shipment_id, n.contents_check, c.full_name, c.customer_code, s.tracking_number
       FROM customer_courier_notices n
       JOIN customers c ON c.id = n.customer_id
       LEFT JOIN shipments s ON s.id = n.shipment_id
       WHERE n.status = 'New'
       ORDER BY n.created_at ASC LIMIT 20`,
     )
-    .all<{ id: string; courier: string; waybill_number: string; packages: number | null; shipment_id: string | null; full_name: string; customer_code: string; tracking_number: string | null }>()
-    .catch(() => ({ results: [] as { id: string; courier: string; waybill_number: string; packages: number | null; shipment_id: string | null; full_name: string; customer_code: string; tracking_number: string | null }[] }));
+    .all<IncomingRow>()
+    .catch(() => ({ results: [] as IncomingRow[] }));
   const count = (value: unknown) => Number(value ?? 0);
   const needCost = simple.goingOutUnknown + count(summary?.estimated_costs);
   const total = count(summary?.new_leads) + simple.unbilled.results.length + collections.length + niHaoDue.length
@@ -307,7 +309,7 @@ export async function dashboard(
       href: "/admin/bookings?status=Incoming",
       action: "Open",
       rows: table(incoming.map((item) => row([
-        `${esc(item.customer_code)} · ${esc(item.full_name)}`,
+        `${esc(item.customer_code)} · ${esc(item.full_name)}${item.contents_check === "not_asked" ? ' <span class="k-pill" data-k="red">Restricted items, not checked</span>' : ""}`,
         `${esc(item.courier)} <strong>${esc(item.waybill_number)}</strong>${item.packages ? ` <span class="muted">· ${esc(String(item.packages))} pkg</span>` : ""}`,
         item.shipment_id ? shipmentLink(item.shipment_id, item.tracking_number) : '<span class="muted">New order, not booked</span>',
         go("/admin/bookings?status=Incoming", "Open"),

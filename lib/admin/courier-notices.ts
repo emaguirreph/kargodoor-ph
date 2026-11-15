@@ -4,6 +4,7 @@
 import type { D1Database } from "@cloudflare/workers-types";
 import { AdminError, type AdminUser } from "./security";
 import { esc } from "./ui";
+import { contentsCheckLabel } from "../customer/courier";
 
 type Row = Record<string, unknown>;
 export const courierStatuses = ["New", "Noted", "Arrived"] as const;
@@ -26,7 +27,7 @@ const when = (value: unknown) => String(value ?? "").replace("T", " ").slice(0, 
 export async function incomingList(db: D1Database, url: URL, path: string, tabs: string, csrfField: string, canWrite: boolean) {
   const raw = url.searchParams.get("show") ?? "New";
   const show = ([...courierStatuses, "All"] as string[]).includes(raw) ? raw : "New";
-  const rows = (await db.prepare(`SELECT n.id, n.customer_id, n.shipment_id, n.courier, n.waybill_number, n.packages, n.item, n.note, n.file_name, n.file_mime,
+  const rows = (await db.prepare(`SELECT n.id, n.customer_id, n.shipment_id, n.courier, n.waybill_number, n.packages, n.item, n.contents_check, n.note, n.file_name, n.file_mime,
         n.status, n.admin_note, n.created_at, c.customer_code, c.full_name, c.mobile, s.tracking_number, s.status AS shipment_status
       FROM customer_courier_notices n JOIN customers c ON c.id = n.customer_id LEFT JOIN shipments s ON s.id = n.shipment_id
       WHERE (? = 'All' OR n.status = ?) ORDER BY n.created_at ${show === "New" ? "ASC" : "DESC"} LIMIT 200`).bind(show, show).all<Row>()).results;
@@ -43,6 +44,7 @@ export async function incomingList(db: D1Database, url: URL, path: string, tabs:
       const file = `${path}?courier_file=${encodeURIComponent(String(row.id))}`;
       return `<div class="booking-proof">
       <div><p>${tag(row.status)}</p>
+        ${row.contents_check === "not_asked" ? '<p><span class="booking-flag bad">⚠️ Restricted items, NOT checked with us. Message them before it reaches the warehouse.</span></p>' : row.contents_check === "asked" ? '<p><span class="booking-flag">Restricted items, says they checked with us</span></p>' : ""}
         <p><a href="/admin/customers?id=${esc(row.customer_id)}">${esc(row.customer_code)} · ${esc(row.full_name)}</a><br><small class="muted">${esc(row.mobile)} · sent ${esc(when(row.created_at))}</small></p>
         ${row.file_name ? isImage ? `<a href="${file}" target="_blank" rel="noopener"><img src="${file}" alt="Waybill photo" style="max-width:100%;max-height:220px;border-radius:10px;border:1px solid #c6dce9"></a>` : `<p><a href="${file}" target="_blank" rel="noopener">📄 ${esc(row.file_name)}</a></p>` : '<p class="muted">No photo</p>'}</div>
       <div><dl class="booking-details">
@@ -50,7 +52,8 @@ export async function incomingList(db: D1Database, url: URL, path: string, tabs:
           <div><dt>Tracking / waybill no.</dt><dd><strong>${esc(row.waybill_number)}</strong></dd></div>
           <div><dt>Packages</dt><dd>${row.packages ? esc(row.packages) : "—"}</dd></div>
           <div><dt>Shipment</dt><dd>${row.shipment_id ? `<a href="/admin/shipments?id=${esc(row.shipment_id)}">${esc(row.tracking_number)}</a> <small class="muted">${esc(row.shipment_status)}</small>` : '<span class="booking-flag bad">New order, not booked yet</span>'}</dd></div>
-          ${row.item ? `<div><dt>Item</dt><dd>${esc(row.item)}</dd></div>` : ""}
+          ${row.item ? `<div><dt>What's inside</dt><dd>${esc(row.item)}</dd></div>` : ""}
+          <div><dt>Restricted items</dt><dd>${esc(contentsCheckLabel[String(row.contents_check)] ?? "—")}</dd></div>
           ${row.note ? `<div><dt>Customer note</dt><dd style="white-space:pre-wrap">${esc(row.note)}</dd></div>` : ""}
           ${row.admin_note ? `<div><dt>Your note</dt><dd>${esc(row.admin_note)}</dd></div>` : ""}
         </dl>

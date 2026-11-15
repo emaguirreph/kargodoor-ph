@@ -318,16 +318,19 @@ try {
   html = await (await browser(`/customer/courier?shipment=${sid4}`)).text();
   assert.ok(html.includes("Courier Details") && html.includes("KDSEA-333444"), "courier page lists the shipment");
   const courier = new FormData();
-  for (const [k, v] of Object.entries({ shipment_id: sid4, courier: "SF Express", waybill: "sf1234567890", packages: "3", item: "", note: "2 boxes more next week" })) courier.set(k, v);
+  for (const [k, v] of Object.entries({ shipment_id: sid4, courier: "SF Express", waybill: "sf1234567890", packages: "3", item: "Phone stands", contents: "none", note: "2 boxes more next week" })) courier.set(k, v);
   courier.append("photo", new Blob([png], { type: "image/png" }), "waybill.png");
   res = await browser("/customer/actions/courier", { method: "POST", body: courier });
   assert.equal(res.status, 303, await res.text());
   assert.match(res.headers.get("location"), /\/customer\/courier\?done=1/);
   res = await browser("/customer/actions/courier", { method: "POST", body: courier });
   assert.match(decodeURIComponent(res.headers.get("location").replace(/\+/g, " ")), /already have waybill SF1234567890/, "same waybill twice is refused");
-  const noItem = new FormData(); noItem.set("shipment_id", ""); noItem.set("courier", "ZTO"); noItem.set("waybill", "ZT999");
+  const noItem = new FormData(); noItem.set("shipment_id", ""); noItem.set("courier", "ZTO"); noItem.set("waybill", "ZT999"); noItem.set("contents", "none");
   res = await browser("/customer/actions/courier", { method: "POST", body: noItem });
-  assert.match(decodeURIComponent(res.headers.get("location").replace(/\+/g, " ")), /tell us the item/, "a new order needs the item");
+  assert.match(decodeURIComponent(res.headers.get("location").replace(/\+/g, " ")), /what's inside/, "what's inside is required");
+  noItem.set("item", "Hair dryers"); noItem.delete("contents");
+  res = await browser("/customer/actions/courier", { method: "POST", body: noItem });
+  assert.match(decodeURIComponent(res.headers.get("location").replace(/\+/g, " ")), /restricted items/, "restricted items question is required");
   const ship4 = sqlRows(`SELECT supplier_courier, supplier_waybill_number FROM shipments WHERE id='${sid4}'`)[0];
   assert.deepEqual([ship4.supplier_courier, ship4.supplier_waybill_number], ["SF Express", "SF1234567890"], "empty shipment courier boxes are filled");
   assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 2, proofs: 0, concerns: 0, signups: 0, incoming: 1 });
@@ -343,6 +346,14 @@ try {
   assert.equal((await (await get("/admin/bookings?count=1")).json()).incoming, 0);
   html = await (await browser("/customer/courier")).text();
   assert.ok(html.includes("SF1234567890") && html.includes("WATCHING FOR IT") && html.includes("Ni Hao is watching for it."), "customer sees the status + note");
+  // Restricted items not checked with us: saved, red flag in admin, customer told to message us now.
+  noItem.set("contents", "not_asked"); noItem.set("item", "Power banks");
+  res = await browser("/customer/actions/courier", { method: "POST", body: noItem });
+  assert.match(res.headers.get("location"), /done=check/);
+  html = await (await browser(res.headers.get("location").replace(origin, ""))).text();
+  assert.ok(html.includes("please message us on Messenger NOW"), "customer is told to message us");
+  html = await (await get("/admin/bookings?status=Incoming")).text();
+  assert.ok(html.includes("Restricted items, NOT checked with us") && html.includes("Power banks"), "admin sees the red flag");
   step("Courier details from the portal → shipment Courier/Waybill filled → admin Incoming count 1 + Dashboard warning → Got it, customer sees status");
 
   // 15. Own code can't be the referral code; cross-site posts are refused.

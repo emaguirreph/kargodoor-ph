@@ -81,10 +81,11 @@ export async function sendSignupAlert(binding: SendEmailBinding | undefined, sig
   await sendAlert(binding, signupAlertMessage(signup));
 }
 
-export type CourierAlert = { customerCode: string; fullName: string; mobile: string; courier: string; waybill: string; packages: number | null; shipment: string; item: string; hasPhoto: boolean };
+export type CourierAlert = { customerCode: string; fullName: string; mobile: string; courier: string; waybill: string; packages: number | null; shipment: string; item: string; hasPhoto: boolean; contents: string };
 
 export function courierAlertMessage(notice: CourierAlert, now = new Date()) {
-  return alertMessage(`Incoming shipment: ${notice.customerCode} sent courier ${notice.courier} ${notice.waybill}`, [
+  const flag = notice.contents === "not_asked" ? "⚠️ RESTRICTED ITEMS NOT CHECKED · " : "";
+  return alertMessage(`${flag}Incoming shipment: ${notice.customerCode} sent courier ${notice.courier} ${notice.waybill}`, [
     `A customer sent their supplier's courier details in the portal. A shipment is on its way to the China warehouse.`,
     ``,
     `Customer: ${oneLine(notice.customerCode)} · ${oneLine(notice.fullName)} (${oneLine(notice.mobile)})`,
@@ -92,7 +93,8 @@ export function courierAlertMessage(notice: CourierAlert, now = new Date()) {
     `Tracking / waybill no.: ${oneLine(notice.waybill)}`,
     `Packages: ${notice.packages ?? "—"}`,
     `Shipment: ${oneLine(notice.shipment)}`,
-    `Item: ${oneLine(notice.item) || "—"}`,
+    `What's inside: ${oneLine(notice.item) || "—"}`,
+    `Restricted items: ${notice.contents === "not_asked" ? "YES, and the customer did NOT check with us. Message them now." : notice.contents === "asked" ? "Yes, customer says they already checked with us" : "None"}`,
     `Waybill photo: ${notice.hasPhoto ? "yes (see admin)" : "none"}`,
     ``,
     `See it in admin: https://kargodoorph.com/admin/bookings?status=Incoming`,

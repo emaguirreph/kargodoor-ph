@@ -9,7 +9,7 @@ import { BookingError, clientKey, readUpload, saveBooking } from "@/lib/bookings
 import { bookingMaxPhotos } from "@/lib/booking-rules";
 import { customerSession, customerSessionCookie, requestCookie } from "@/lib/customer/security";
 import { concernTopics } from "@/lib/customer/portal";
-import { courierDailyLimit, courierText } from "@/lib/customer/courier";
+import { contentsChecks, courierDailyLimit, courierText } from "@/lib/customer/courier";
 import { sendCourierAlert } from "@/lib/leads/notify";
 
 type Account = NonNullable<Awaited<ReturnType<typeof customerSession>>>;
@@ -150,16 +150,18 @@ export async function sendCourier(request: Request) {
     const packagesText = courierText(form.get("packages"), 6);
     const packages = packagesText ? Number(packagesText) : null;
     const shipmentId = String(form.get("shipment_id") ?? "");
+    const contents = String(form.get("contents") ?? "");
     const file = form.get("photo");
     if (courier.length < 2) throw new BookingError("Please enter the courier (e.g. SF Express).");
     if (waybill.length < 3) throw new BookingError("Please enter the tracking / waybill number.");
+    if (!(contentsChecks as readonly string[]).includes(contents)) throw new BookingError("Please answer if your package has batteries, liquids or other restricted items.");
     if (packages !== null && (!Number.isInteger(packages) || packages < 1 || packages > 999)) throw new BookingError("Please enter the number of packages as a whole number (1 to 999).");
     const shipment = shipmentId
       ? await db.prepare("SELECT id, tracking_number, supplier_courier, supplier_waybill_number FROM shipments WHERE id = ? AND customer_id = ? AND archived_at IS NULL")
         .bind(shipmentId, account.customer_id).first<{ id: string; tracking_number: string; supplier_courier: string | null; supplier_waybill_number: string | null }>()
       : null;
     if (shipmentId && !shipment) throw new BookingError("We couldn't find that shipment. Please choose it again.");
-    if (!shipment && !item) throw new BookingError("Please tell us the item, so we know which order this is.");
+    if (!item) throw new BookingError("Please tell us what's inside the package.");
     const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
     const [recent, same] = await Promise.all([
       db.prepare("SELECT COUNT(*) AS n FROM customer_courier_notices WHERE customer_id = ? AND created_at >= ?").bind(account.customer_id, since).first<{ n: number }>(),
@@ -172,9 +174,9 @@ export async function sendCourier(request: Request) {
       .first<{ customer_code: string; full_name: string; mobile: string }>();
     const now = new Date().toISOString();
     await db.batch([
-      db.prepare(`INSERT INTO customer_courier_notices (id, customer_id, shipment_id, courier, waybill_number, packages, item, note,
-          file_name, file_mime, file_size, file_data, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'New',?,?)`)
-        .bind(randomUUID(), account.customer_id, shipment?.id ?? null, courier, waybill, packages, item || null, note || null,
+      db.prepare(`INSERT INTO customer_courier_notices (id, customer_id, shipment_id, courier, waybill_number, packages, item, contents_check, note,
+          file_name, file_mime, file_size, file_data, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'New',?,?)`)
+        .bind(randomUUID(), account.customer_id, shipment?.id ?? null, courier, waybill, packages, item, contents, note || null,
           upload?.name ?? null, upload?.mime ?? null, upload ? upload.bytes.byteLength : null, upload?.bytes ?? null, now, now),
       // Fill the shipment's own Courier / Waybill boxes only when they are still empty (never overwrite what admin typed).
       ...(shipment && (!shipment.supplier_courier || !shipment.supplier_waybill_number) ? [db.prepare(`UPDATE shipments SET
@@ -184,9 +186,10 @@ export async function sendCourier(request: Request) {
     const { env, ctx: workerCtx } = await getCloudflareContext();
     workerCtx.waitUntil(sendCourierAlert((env as unknown as { LEAD_EMAIL?: Parameters<typeof sendCourierAlert>[0] }).LEAD_EMAIL, {
       customerCode: customer?.customer_code ?? "", fullName: customer?.full_name ?? "", mobile: customer?.mobile ?? "",
-      courier, waybill, packages, shipment: shipment?.tracking_number ?? "New order (not booked yet)", item, hasPhoto: Boolean(upload),
+      courier, waybill, packages, shipment: shipment?.tracking_number ?? "New order (not booked yet)", item, hasPhoto: Boolean(upload), contents,
     }));
-    return back(request, page, { done: "1" });
+    // Restricted items not checked with us yet: the page asks them to message us right away.
+    return back(request, page, { done: contents === "not_asked" ? "check" : "1" });
   } catch (error) {
     if (!(error instanceof BookingError)) console.error("Portal courier details failed", error instanceof Error ? error.message : "Unknown error");
     return back(request, page, { error: message(error) });

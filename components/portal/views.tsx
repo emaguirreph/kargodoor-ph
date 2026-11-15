@@ -8,7 +8,7 @@ import { kargodoorBankAccounts } from "@/lib/admin/bank-accounts";
 import { riderPickupMessage } from "@/lib/admin/customer-messages";
 import { supplierShipmentMessage } from "@/lib/admin/shipping-instructions";
 import { hongKongMark, malabonWarehouseAddress, warehouseAddresses, type WarehouseName } from "@/lib/warehouse-addresses";
-import { courierChoices, courierStatusLabel } from "@/lib/customer/courier";
+import { courierChoices, courierStatusLabel, restrictedItems } from "@/lib/customer/courier";
 import {
   concernTopics, formatDate, formatMonth, formatPeso, portalStages, stageIndex,
   type PortalBill, type PortalData, type PortalShipment,
@@ -186,6 +186,7 @@ function WaybillBlock({ links }: { links: PortalLinks }) {
     <div className="psplit">
       <div className="pstack">
         <p className="pmuted">Once your supplier ships, send us these details here in your portal so we can watch for your boxes:</p>
+        <p className="pred"><b>⚠️ Message us BEFORE your supplier ships</b> if your order has batteries, liquids, food, cosmetics, branded or other regulated items. Some are only accepted at certain warehouses, and packages may be refused.</p>
         <ul className="plist">
           <li><b>Courier</b> (e.g. SF Express)</li>
           <li><b>Tracking / Waybill No.</b></li>
@@ -215,7 +216,7 @@ function ShippingGuide({ data, links, showWaybill = true }: { data: PortalData; 
   return <ShippingTabs warehouses={warehouses} packaging={<PackagingInstructions code={code} />} waybill={showWaybill ? <WaybillBlock links={links} /> : undefined} />;
 }
 
-const checkFirst = ["Batteries", "Liquids", "Chemicals", "Food", "Medicines", "Cosmetics", "Branded goods", "Hazardous materials", "Other regulated products"];
+const checkFirst = restrictedItems;
 
 function Reminders({ compact = false }: { compact?: boolean }) {
   return (
@@ -578,7 +579,14 @@ export function CourierView({ data, links, query }: ViewProps) {
     <>
       <PageHead eyebrow="Step 2 · Notify us" title="Courier Details" sub="Supplier shipped your order? Send us the courier and tracking / waybill number so we can watch for your boxes at our China warehouse." />
       {query.done === "1" ? <Notice>Salamat! We got your courier details. We&apos;ll watch for your boxes and update your shipment once our China warehouse receives them.</Notice> : null}
+      {query.done === "check" ? <Notice kind="err"><b>We got your courier details, but please message us on Messenger NOW.</b> Your package has restricted items we haven&apos;t checked yet. It may be refused by the warehouse or need a different warehouse. <br /><MessengerLink className="pbtn pbtn-red" target="_blank" rel="noopener noreferrer">💬 MESSAGE US ON MESSENGER</MessengerLink></Notice> : null}
       {query.error ? <Notice kind="err">{query.error}</Notice> : null}
+      <div className="palert" role="note">
+        <div className="palert-head"><span className="palert-icon" aria-hidden="true">⚠️</span><div><strong>Contact us BEFORE your supplier ships</strong><span>Some items are only accepted at certain China warehouses. Packages with restricted items may be REFUSED by the warehouse, and we can&apos;t take them back.</span><em className="palert-fake">🚫 Fake or counterfeit products are NOT allowed.</em></div></div>
+        <div className="palert-chips">{restrictedItems.map((item) => <span key={item}>{item}</span>)}</div>
+        <p>Has any of these? Message us first so we can tell you if we can ship it and which warehouse to use.</p>
+        <div className="pbtns"><MessengerLink className="pbtn pbtn-red" target="_blank" rel="noopener noreferrer">💬 MESSAGE US ON MESSENGER</MessengerLink></div>
+      </div>
       <div className="psplit">
         <form className="pcard pform" method="post" action="/customer/actions/courier" encType="multipart/form-data">
           <fieldset disabled={links.preview}>
@@ -593,8 +601,14 @@ export function CourierView({ data, links, query }: ViewProps) {
                 <datalist id="courier-choices">{courierChoices.map((c) => <option key={c} value={c} />)}</datalist></label>
               <label className="pfield"><span>Tracking / waybill no.</span><input name="waybill" required minLength={3} maxLength={80} placeholder="e.g. SF1234567890123" autoComplete="off" /></label>
               <label className="pfield"><span>Number of packages (optional)</span><input name="packages" inputMode="numeric" pattern="[0-9]*" maxLength={3} placeholder="e.g. 3" /></label>
-              <label className="pfield"><span>Item (needed for a new order)</span><input name="item" maxLength={200} placeholder="e.g. Phone cases" /></label>
+              <label className="pfield"><span>What&apos;s inside</span><input name="item" required maxLength={200} placeholder="e.g. Phone cases" /></label>
             </div>
+            <fieldset className="pfield pchoice">
+              <legend>Does it have batteries, liquids, food, cosmetics, branded or other restricted items?</legend>
+              <label><input type="radio" name="contents" value="none" required /> No, none of these</label>
+              <label><input type="radio" name="contents" value="asked" /> Yes, and I already checked with KargoDoor</label>
+              <label><input type="radio" name="contents" value="not_asked" /> Yes, but I haven&apos;t asked KargoDoor yet</label>
+            </fieldset>
             <label className="pfield"><span>Photo of the waybill or receipt (optional, up to 1.5 MB)</span><input type="file" name="photo" accept="image/jpeg,image/png,image/webp,application/pdf" /></label>
             <label className="pfield"><span>Note (optional)</span><textarea name="note" maxLength={500} placeholder="e.g. Supplier says 2 more boxes ship next week" /></label>
             <div className="pbtns"><button className="pbtn pbtn-green" type="submit">SEND COURIER DETAILS</button></div>
