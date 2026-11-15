@@ -407,6 +407,7 @@ export function BookView({ data, links, query }: ViewProps) {
       <PageHead title="Book a Shipment" sub="Tell us what your supplier is sending so we can watch for it. Your name, mobile and code are added automatically." />
       {query.done === "1" ? <Notice>Booking sent! Your booking number is <b>{query.ref}</b>. We&apos;ll check it and message you on Messenger. It shows under My Shipments while we review it.</Notice> : null}
       {query.error ? <Notice kind="err">{query.error}</Notice> : null}
+      <RestrictedWarning />
       <form className="pcard pform" method="post" action="/customer/actions/book" encType="multipart/form-data">
         <fieldset disabled={disabled}>
           <div className="pgrid2 tight">
@@ -568,6 +569,18 @@ export function WarehousesView({ data, links, query }: ViewProps) {
   );
 }
 
+/** Big red box: restricted items need a check with us first (Em, 2026-11-16). Courier Details + Book a Shipment. */
+function RestrictedWarning() {
+  return (
+    <div className="palert" role="note">
+      <div className="palert-head"><span className="palert-icon" aria-hidden="true">⚠️</span><div><strong>Contact us BEFORE your supplier ships</strong><span>Some items are only accepted at certain China warehouses. Packages with restricted items may be REFUSED by the warehouse, and we can&apos;t take them back.</span><em className="palert-fake">🚫 Fake or counterfeit products are NOT allowed.</em></div></div>
+      <div className="palert-chips">{restrictedItems.map((item) => <span key={item}>{item}</span>)}</div>
+      <p>Has any of these? Message us first so we can tell you if we can ship it and which warehouse to use.</p>
+      <div className="pbtns"><MessengerLink className="pbtn pbtn-red" target="_blank" rel="noopener noreferrer">💬 MESSAGE US ON MESSENGER</MessengerLink></div>
+    </div>
+  );
+}
+
 const courierTone = (status: string) => status === "Arrived" ? "paid" : "";
 
 /** Courier details from the customer once the supplier ships, so we know a shipment is coming (Em, 2026-11-15). */
@@ -581,12 +594,7 @@ export function CourierView({ data, links, query }: ViewProps) {
       {query.done === "1" ? <Notice>Salamat! We got your courier details. We&apos;ll watch for your boxes and update your shipment once our China warehouse receives them.</Notice> : null}
       {query.done === "check" ? <Notice kind="err"><b>We got your courier details, but please message us on Messenger NOW.</b> Your package has restricted items we haven&apos;t checked yet. It may be refused by the warehouse or need a different warehouse. <br /><MessengerLink className="pbtn pbtn-red" target="_blank" rel="noopener noreferrer">💬 MESSAGE US ON MESSENGER</MessengerLink></Notice> : null}
       {query.error ? <Notice kind="err">{query.error}</Notice> : null}
-      <div className="palert" role="note">
-        <div className="palert-head"><span className="palert-icon" aria-hidden="true">⚠️</span><div><strong>Contact us BEFORE your supplier ships</strong><span>Some items are only accepted at certain China warehouses. Packages with restricted items may be REFUSED by the warehouse, and we can&apos;t take them back.</span><em className="palert-fake">🚫 Fake or counterfeit products are NOT allowed.</em></div></div>
-        <div className="palert-chips">{restrictedItems.map((item) => <span key={item}>{item}</span>)}</div>
-        <p>Has any of these? Message us first so we can tell you if we can ship it and which warehouse to use.</p>
-        <div className="pbtns"><MessengerLink className="pbtn pbtn-red" target="_blank" rel="noopener noreferrer">💬 MESSAGE US ON MESSENGER</MessengerLink></div>
-      </div>
+      <RestrictedWarning />
       <div className="psplit">
         <form className="pcard pform" method="post" action="/customer/actions/courier" encType="multipart/form-data">
           <fieldset disabled={links.preview}>
