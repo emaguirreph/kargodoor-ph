@@ -60,10 +60,21 @@ export function bookingAlertMessage(booking: BookingAlert, now = new Date()) {
 }
 
 export type SignupAlert = { fullName: string; mobile: string; email: string; address: string; shipsWhat: string; heardFrom: string; referralCode: string };
+/**
+ * created = the client confirmed their email code and the account was made
+ * automatically (Em, 2026-11-16: let them create an account, just notify me).
+ * review = it was NOT auto-approved and waits for Em in Bookings → Sign-ups.
+ */
+export type SignupOutcome = { kind: "created"; customerCode: string } | { kind: "review"; reason: string };
 
-export function signupAlertMessage(signup: SignupAlert, now = new Date()) {
-  return alertMessage(`New customer sign-up: ${signup.fullName}`, [
-    `Someone signed up for a KargoDoor account on kargodoorph.com/customer/signup.`,
+export function signupAlertMessage(signup: SignupAlert, outcome: SignupOutcome, now = new Date()) {
+  const created = outcome.kind === "created";
+  return alertMessage(created
+    ? `New account created: ${signup.fullName} (${outcome.customerCode}), no action needed`
+    : `Sign-up needs your approval: ${signup.fullName}`, [
+    created
+      ? `${oneLine(signup.fullName)} signed up on kargodoorph.com and confirmed their email. Their account is already created and approved as ${outcome.customerCode}. They can sign in to the portal now. You don't need to do anything.`
+      : `${oneLine(signup.fullName)} signed up on kargodoorph.com, but the account was NOT created automatically: ${oneLine(outcome.reason)}`,
     ``,
     `Name: ${oneLine(signup.fullName)}`,
     `Mobile: ${oneLine(signup.mobile)}`,
@@ -73,12 +84,14 @@ export function signupAlertMessage(signup: SignupAlert, now = new Date()) {
     `Heard from: ${oneLine(signup.heardFrom) || "—"}`,
     `Referral code: ${oneLine(signup.referralCode) || "—"}`,
     ``,
-    `Approve or reject it in admin: https://kargodoorph.com/admin/bookings?status=Signups`,
+    created
+      ? `See it in admin (optional): https://kargodoorph.com/admin/bookings?status=Signups&show=Approved`
+      : `Approve or reject it in admin: https://kargodoorph.com/admin/bookings?status=Signups`,
   ], now);
 }
 
-export async function sendSignupAlert(binding: SendEmailBinding | undefined, signup: SignupAlert) {
-  await sendAlert(binding, signupAlertMessage(signup));
+export async function sendSignupAlert(binding: SendEmailBinding | undefined, signup: SignupAlert, outcome: SignupOutcome) {
+  await sendAlert(binding, signupAlertMessage(signup, outcome));
 }
 
 export type CourierAlert = { customerCode: string; fullName: string; mobile: string; courier: string; waybill: string; packages: number | null; shipment: string; item: string; hasPhoto: boolean; contents: string };
