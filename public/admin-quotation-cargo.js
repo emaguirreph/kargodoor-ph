@@ -446,6 +446,14 @@
     item?.addEventListener("input", calculate);
     item?.addEventListener("change", calculate);
     freight?.addEventListener("change", () => {
+      // Air <-> Sea re-prices the whole quotation: an old override no longer applies.
+      const overrideAmount = form.querySelector('[name="override_amount"]');
+      const overrideReason = form.querySelector('[name="override_reason"]');
+      if (overrideAmount?.value.trim()) {
+        overrideAmount.value = "";
+        if (overrideReason) overrideReason.value = "";
+        overrideAmount.dispatchEvent(new Event("input", { bubbles: true }));
+      }
       syncWarehouseForFreight();
       updateItems();
       calculate();
@@ -495,6 +503,12 @@
     niHaoInput.addEventListener("input", (event) => {
       if (!event.isTrusted) return;
       niHaoInput.dataset.auto = niHaoInput.value.trim() ? "" : "1";
+      showTag();
+    });
+    // Air <-> Sea: go back to the Ni Hao estimate for the new freight type.
+    form.querySelector('select[name="freight_type"]')?.addEventListener("change", () => {
+      niHaoInput.dataset.auto = "1";
+      niHaoInput.value = "";
       showTag();
     });
     form.addEventListener("nihao-estimate", (event) => {
