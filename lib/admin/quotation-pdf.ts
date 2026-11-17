@@ -27,6 +27,7 @@ type CargoSnapshot = {
 type QuotationPdfData = {
   customer_snapshot?: unknown; cargo_snapshot?: unknown; pricing_snapshot?: unknown; quotation_date?: unknown;
   quotation_number?: unknown; valid_until?: unknown; freight_type?: unknown; final_amount?: unknown; notes?: unknown;
+  discount_percent?: unknown; discount_amount?: unknown; additional_fee?: unknown; additional_fee_label?: unknown;
 };
 
 function snapshot<T extends object>(value: unknown): T {
@@ -54,7 +55,9 @@ function customerQuotationPdf(q: QuotationPdfData, _logoJpeg?: Uint8Array) {
   const cargo = snapshot<CargoSnapshot>(q.cargo_snapshot);
   const number = str(q.quotation_number);
   const freightType = str(q.freight_type);
-  const total = num(q.final_amount);
+  // final_amount is the freight after any special discount; the additional fee is quoted on top.
+  const discount = num(q.discount_amount), extraFee = num(q.additional_fee);
+  const total = num(q.final_amount) + extraFee;
   const firstName = str(customer.name).split(/\s+/)[0] || "po";
 
   // Top colour band, logo, company lines: same as the invoice.
@@ -199,6 +202,16 @@ function customerQuotationPdf(q: QuotationPdfData, _logoJpeg?: Uint8Array) {
   cells.forEach((cell, i) => cell.lines.forEach((line, j) => c.text(line, cell.x, y - 16 - j * 11.5, 8.8, { bold: i === 0 && j === 0, align: cell.align ?? "left" })));
   y -= rowH;
   c.hline(L, R, y);
+  }
+
+  // Fee before discount, special discount and additional fee, only when there are some.
+  if (discount || extraFee) {
+    y -= 6;
+    const tx = R - 230;
+    const row = (k: string, v: string, color?: typeof C.ok) => { c.text(k, tx, y - 11, 9, color ? { color } : {}); c.text(v, R - 14, y - 11, 9, { align: "right", ...(color ? { color } : {}) }); y -= 16; };
+    row("Shipping fee", peso(num(q.final_amount) + discount));
+    if (discount) row(`Special discount ${Math.round(num(q.discount_percent) * 100) / 100}%`, `- ${peso(discount)}`, C.ok);
+    if (extraFee) row(str(q.additional_fee_label) || "Additional fee", peso(extraFee));
   }
 
   // Estimated all-in rate, full width under the table.

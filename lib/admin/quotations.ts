@@ -31,6 +31,7 @@ import { densityThreshold } from "./quotation-density";
 import { quotationNiHaoEstimate, resolveNiHaoCost } from "./nihao-estimate";
 import { defaultQuotationTerms } from "./quotation-pdf";
 import { bulkPackageLines, bulkPackageTable, isBulkCargo } from "./bulk-quotation";
+import { applySpecialDiscount, discountLabel, grossMargin, percentNumber } from "./special-discount";
 type Row = Record<string, unknown>;
 type Snapshot = Record<string, unknown>;
 
@@ -101,6 +102,28 @@ const overrideFields = (amount: unknown = null, reason: unknown = "", niHaoCost:
   const value = amount === null || amount === undefined ? "" : (Number(amount) / 100).toFixed(2);
   return `<section class="wide"><h3>Override quoted amount</h3><p class="muted">Optional — enter a final quoted amount only when you need to override the calculated rate. A reason is required when an override is used.</p><div class="grid"><label>Override amount<input name="override_amount" type="number" min="0" step=".01" value="${esc(value)}"></label><label>Override reason<input name="override_reason" value="${esc(reason)}"></label></div></section><input type="hidden" data-existing-nihao-cost value="${esc(niHaoCost === null || niHaoCost === undefined ? "" : (Number(niHaoCost) / 100).toFixed(2))}"><input type="hidden" data-existing-nihao-source value="${esc(niHaoSource ?? "")}">`;
 };
+/** Special discount % and Additional fee on a quotation (Em, 2026-11-17); same rules as the shipment. */
+const quotationExtraFields = (q: Row | null = null) => {
+  const percent = Number(q?.discount_percent ?? 0) || 0;
+  const fee = Number(q?.additional_fee ?? 0) || 0;
+  return `<section class="wide"><h3>Special discount &amp; additional fee</h3><p class="muted">Optional. The discount is a % off the base fee (not the ₱30 transfer fee) and must keep at least 10% gross margin over the Ni Hao cost. The additional fee is added on top, e.g. Ni Hao's large-shipment fee. Both carry to the shipment and invoice when the quotation is approved.</p><div class="grid"><label>Special discount (%)<input name="discount_percent" type="text" inputmode="decimal" maxlength="6" placeholder="0" value="${percent ? esc(percentNumber(percent)) : ""}"></label><label>Additional fee (PHP)<input name="additional_fee" type="text" inputmode="decimal" maxlength="30" placeholder="0" value="${fee ? (fee / 100).toFixed(2) : ""}"></label><label>Additional fee label<input name="additional_fee_label" maxlength="80" placeholder="e.g. Large shipment fee" value="${esc(fee ? q?.additional_fee_label ?? "" : "")}"></label></div></section>`;
+};
+
+/** Reads the discount/fee from the form (or keeps the saved ones) and applies them to the fee before discount. */
+function quotationExtras(form: { has(key: string): boolean; get(key: string): unknown }, gross: number, niHaoCost: unknown, existing: Row | null, staff: boolean) {
+  const has = form.has("discount_percent") || form.has("additional_fee");
+  if (staff && has && (String(form.get("discount_percent") ?? "").trim() || String(form.get("additional_fee") ?? "").trim()))
+    throw new AdminError("Staff cannot give discounts or add fees to quotations.", 403);
+  const rawPercent = has ? String(form.get("discount_percent") ?? "").trim().replace(/%$/, "").trim() : String(existing?.discount_percent ?? 0);
+  if (rawPercent && !/^\d{1,3}(\.\d{1,2})?$/.test(rawPercent)) throw new AdminError("Type the discount as a percent, e.g. 10 or 12.5.");
+  const rawFee = has ? String(form.get("additional_fee") ?? "").trim() : ((Number(existing?.additional_fee ?? 0) || 0) / 100).toFixed(2);
+  if (rawFee && !/^\d+(\.\d{1,2})?$/.test(rawFee)) throw new AdminError("Enter the additional fee as a peso amount, e.g. 850.");
+  const fee = rawFee ? cents(rawFee) : 0;
+  const label = fee ? (String(has ? form.get("additional_fee_label") ?? "" : existing?.additional_fee_label ?? "").trim().slice(0, 80) || "Additional fee") : null;
+  const discount = applySpecialDiscount({ grossCharge: gross, transferFee: 3000, percent: Number(rawPercent || 0), niHaoCost, additionalFee: fee });
+  return { percent: discount.percent, amount: discount.amount, net: discount.netCharge, fee, label };
+}
+
 const internalProfitPanel = (niHaoCost: unknown = null) => {
   const cost = niHaoCost === null || niHaoCost === undefined ? "" : (Number(niHaoCost) / 100).toFixed(2);
   return `<section class="wide" data-quotation-profit><h3>Internal cost &amp; profit — Admin use only</h3><p class="muted">Enter the Ni Hao quotation once received. These figures are never included in the customer quotation or PDF.</p><div class="grid"><label>Ni Hao cost<input name="nihao_cost" data-nihao-cost type="number" min="0" step=".01" value="${esc(cost)}" placeholder="Enter supplier cost"></label><dl><dt>KargoDoor charge</dt><dd data-quotation-profit-charge>—</dd><dt>Gross profit</dt><dd data-quotation-profit-gross>—</dd><dt>Gross margin</dt><dd data-quotation-profit-margin>—</dd></dl></div></section>`;
@@ -165,6 +188,21 @@ export function nihaoQuoteLines(freightType: string, cargo: Record<string, unkno
     `Declared Weight: ${kg ? `${fmt(kg)} kg` : ""}`.trimEnd(),
   ];
 }
+/** Freight after discount + additional fee: what the customer is quoted. */
+export const quotationTotal = (q: Row) => Number(q.final_amount ?? 0) + Number(q.additional_fee ?? 0);
+
+/** "Estimated Amount" lines; the fee before discount, discount and additional fee only when there are some. */
+function quotationAmountLines(q: Row) {
+  const discount = Number(q.discount_amount ?? 0), fee = Number(q.additional_fee ?? 0);
+  if (!discount && !fee) return [`Estimated Amount: ${pesos(q.final_amount)}`];
+  return [
+    `Shipping Fee: ${pesos(Number(q.final_amount) + discount)}`,
+    ...(discount ? [`${discountLabel(q.discount_percent)}: -${pesos(discount)}`] : []),
+    ...(fee ? [`${String(q.additional_fee_label || "Additional fee")}: ${pesos(fee)}`] : []),
+    `Estimated Amount: ${pesos(quotationTotal(q))}`,
+  ];
+}
+
 function quotationCustomerMessage(q: Row, accountNumber = "") {
   const customer = snapshot(q.customer_snapshot).data;
   const cargo = snapshot(q.cargo_snapshot).data;
@@ -197,7 +235,7 @@ function quotationCustomerMessage(q: Row, accountNumber = "") {
         "",
         "📄 Quotation Details",
         `Quotation No.: ${quotationNumber}`,
-        `Estimated Amount: ${pesos(q.final_amount)}`,
+        ...quotationAmountLines(q),
         `Service: ${String(q.freight_type || "")}`,
         warehouse ? `Origin Warehouse: ${warehouse}` : "",
         validUntil ? `Valid Until: ${validUntil}` : "",
@@ -220,7 +258,7 @@ function quotationCustomerMessage(q: Row, accountNumber = "") {
         `Just following up on your KargoDoor Quotation ${quotationNumber}.`,
         "",
         "📄 Quotation Details",
-        `Estimated Amount: ${pesos(q.final_amount)}`,
+        ...quotationAmountLines(q),
         `Service: ${String(q.freight_type || "")}`,
         "",
         "Next Steps:",
@@ -291,8 +329,17 @@ export function customerPreview(q: Row, accountNumber = "") {
     return itemValue === "—" ? "" : `<div class="quotation-detail-item"><dt>${esc(displayLabel)}</dt><dd>${esc(itemValue)}</dd></div>`;
   };
   const cost = q.backend_cost === null || q.backend_cost === undefined ? "Not entered" : `${pesos(q.backend_cost)} ${niHaoSourceTag(q.backend_cost_source)}`;
-  const gross = q.backend_cost === null || q.backend_cost === undefined ? "Enter Ni Hao cost to calculate" : pesos(Number(q.final_amount) - Number(q.backend_cost));
-  const margin = q.backend_cost === null || q.backend_cost === undefined || Number(q.final_amount) === 0 ? "—" : `${(((Number(q.final_amount) - Number(q.backend_cost)) / Number(q.final_amount)) * 100).toFixed(2)}%`;
+  // Income = freight after discount + additional fee (the fee pays for Ni Hao's extra charge inside the Ni Hao cost).
+  const income = quotationTotal(q);
+  const gross = q.backend_cost === null || q.backend_cost === undefined ? "Enter Ni Hao cost to calculate" : pesos(income - Number(q.backend_cost));
+  const marginValue = grossMargin(income, q.backend_cost);
+  const margin = marginValue === null ? "—" : `${(marginValue * 100).toFixed(2)}%`;
+  const discount = Number(q.discount_amount ?? 0), fee = Number(q.additional_fee ?? 0);
+  const priceLines = discount || fee
+    ? `<div class="quotation-detail-item"><dt>Shipping fee</dt><dd>${pesos(Number(q.final_amount) + discount)}</dd></div>` +
+      (discount ? `<div class="quotation-detail-item"><dt>${esc(discountLabel(q.discount_percent))}</dt><dd style="color:#1d6b3a">− ${pesos(discount)}</dd></div>` : "") +
+      (fee ? `<div class="quotation-detail-item"><dt>${esc(String(q.additional_fee_label || "Additional fee"))}</dt><dd>${pesos(fee)}</dd></div>` : "")
+    : "";
 
   return `${warning}<article class="quotation-print quotation-detail-view">
     <dl class="quotation-meta">
@@ -301,8 +348,8 @@ export function customerPreview(q: Row, accountNumber = "") {
     </dl>
     <div class="quotation-detail-cards">
       <section class="quotation-detail-card"><h2>Customer details</h2><dl class="quotation-detail-grid">${detail("Customer", c.name)}${detail("Company", c.company)}${detail("Mobile", c.mobile)}${detail("Email", c.email)}${detail("Address", c.address)}</dl></section>
-      <section class="quotation-detail-card"><h2>Cargo &amp; price</h2><dl class="quotation-detail-grid">${detail("Item", item)}${detail("Freight type", q.freight_type)}${detail("Declared CBM", shipment.cbm)}${detail("Declared weight", shipment.weight === undefined || shipment.weight === null || shipment.weight === "" ? "" : `${shipment.weight} kg`)}${detail("Origin warehouse", shipment.originWarehouse)}<div class="quotation-detail-item quotation-total"><dt>KargoDoor shipping total</dt><dd>${pesos(q.final_amount)}</dd></div></dl></section>
-      <section class="quotation-detail-card quotation-internal-card"><h2>Internal cost &amp; profit</h2><dl class="quotation-detail-grid"><div class="quotation-detail-item"><dt>Ni Hao cost</dt><dd>${cost}</dd></div><div class="quotation-detail-item"><dt>KargoDoor charge</dt><dd>${pesos(q.final_amount)}</dd></div><div class="quotation-detail-item"><dt>Gross profit</dt><dd>${gross}</dd></div><div class="quotation-detail-item"><dt>Gross margin</dt><dd>${margin}</dd></div></dl></section>
+      <section class="quotation-detail-card"><h2>Cargo &amp; price</h2><dl class="quotation-detail-grid">${detail("Item", item)}${detail("Freight type", q.freight_type)}${detail("Declared CBM", shipment.cbm)}${detail("Declared weight", shipment.weight === undefined || shipment.weight === null || shipment.weight === "" ? "" : `${shipment.weight} kg`)}${detail("Origin warehouse", shipment.originWarehouse)}${priceLines}<div class="quotation-detail-item quotation-total"><dt>KargoDoor shipping total</dt><dd>${pesos(quotationTotal(q))}</dd></div></dl></section>
+      <section class="quotation-detail-card quotation-internal-card"><h2>Internal cost &amp; profit</h2><dl class="quotation-detail-grid"><div class="quotation-detail-item"><dt>Ni Hao cost</dt><dd>${cost}</dd></div><div class="quotation-detail-item"><dt>KargoDoor charge</dt><dd>${pesos(income)}</dd></div><div class="quotation-detail-item"><dt>Gross profit</dt><dd>${gross}</dd></div><div class="quotation-detail-item"><dt>Gross margin</dt><dd>${margin}</dd></div></dl></section>
     </div>
     ${bulkPackageTable(bulkPackageLines(shipment), true)}
   </article>`;
@@ -405,7 +452,7 @@ export async function quotationsPage(
           qn = await number(db);
         await db
           .prepare(
-            "INSERT INTO quotations (id,quotation_number,customer_id,status,freight_type,quotation_date,valid_until,prepared_by,customer_snapshot,cargo_snapshot,pricing_snapshot,calculated_amount,override_amount,override_reason,final_amount,backend_cost,backend_cost_source,additional_cost,delivery_cost,notes,created_at,updated_at) SELECT ?,?,customer_id,'Draft',freight_type,?,valid_until,?,customer_snapshot,cargo_snapshot,pricing_snapshot,calculated_amount,override_amount,override_reason,final_amount,backend_cost,backend_cost_source,additional_cost,delivery_cost,notes,?,? FROM quotations WHERE id=?",
+            "INSERT INTO quotations (id,quotation_number,customer_id,status,freight_type,quotation_date,valid_until,prepared_by,customer_snapshot,cargo_snapshot,pricing_snapshot,calculated_amount,override_amount,override_reason,final_amount,backend_cost,backend_cost_source,additional_cost,delivery_cost,notes,created_at,updated_at,discount_percent,discount_amount,additional_fee,additional_fee_label) SELECT ?,?,customer_id,'Draft',freight_type,?,valid_until,?,customer_snapshot,cargo_snapshot,pricing_snapshot,calculated_amount,override_amount,override_reason,final_amount,backend_cost,backend_cost_source,additional_cost,delivery_cost,notes,?,?,discount_percent,discount_amount,additional_fee,additional_fee_label FROM quotations WHERE id=?",
           )
           .bind(newId, qn, date(), user.name, now, now, sourceId)
           .run();
@@ -566,7 +613,7 @@ export async function quotationsPage(
           try {
             if (freight === "Full Container") {
               const manualRate = String(form.get("manual_rate") || "").trim();
-              calc = { final: manualRate ? Number(manualRate) : Number(existing.final_amount) / 100, pricingMethod: "Manual full-container all-in rate", rateBasis: "Per container" };
+              calc = { final: manualRate ? Number(manualRate) : (Number(existing.final_amount) + Number(existing.discount_amount ?? 0)) / 100, pricingMethod: "Manual full-container all-in rate", rateBasis: "Per container" };
               if (!Number.isFinite(calc.final) || calc.final < 0) throw new AdminError("Enter a valid full-container all-in rate.");
             } else if (freight === "Sea Freight") {
               if (
@@ -659,10 +706,13 @@ export async function quotationsPage(
             quotationNiHaoEstimate(freight, cargo, existing.created_at),
           );
         const niHaoCost = niHaoResolved.cost;
+        // final_amount is saved after the special discount; the fee before it is the override or the calculated rate.
+        const extras = quotationExtras(form, Number(overrideAmount ?? calculatedAmount), niHaoCost, existing, staff);
+        finalAmount = extras.net;
         const now = new Date().toISOString();
         await db
           .prepare(
-            "UPDATE quotations SET customer_id=?,status=?,freight_type=?,quotation_date=?,valid_until=?,customer_snapshot=?,cargo_snapshot=?,pricing_snapshot=?,calculated_amount=?,override_amount=?,override_reason=?,final_amount=?,backend_cost=?,backend_cost_source=?,notes=?,updated_at=? WHERE id=?",
+            "UPDATE quotations SET customer_id=?,status=?,freight_type=?,quotation_date=?,valid_until=?,customer_snapshot=?,cargo_snapshot=?,pricing_snapshot=?,calculated_amount=?,override_amount=?,override_reason=?,final_amount=?,backend_cost=?,backend_cost_source=?,notes=?,discount_percent=?,discount_amount=?,additional_fee=?,additional_fee_label=?,updated_at=? WHERE id=?",
           )
           .bind(
             customerId,
@@ -680,6 +730,10 @@ export async function quotationsPage(
             niHaoCost,
             niHaoResolved.source ?? null,
             String(form.get("notes") ?? ""),
+            extras.percent,
+            extras.amount,
+            extras.fee,
+            extras.label,
             now,
             id,
           )
@@ -809,9 +863,10 @@ export async function quotationsPage(
         null,
         quotationNiHaoEstimate(freight, cargo as Record<string, unknown>),
       );
+      const extras = quotationExtras(form, final, niHaoResolved.cost, null, staff);
       await db
         .prepare(
-          "INSERT INTO quotations (id,quotation_number,customer_id,status,freight_type,quotation_date,valid_until,prepared_by,customer_snapshot,cargo_snapshot,pricing_snapshot,calculated_amount,override_amount,override_reason,final_amount,backend_cost,backend_cost_source,additional_cost,delivery_cost,notes,prepared_by_admin_user_id,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+          "INSERT INTO quotations (id,quotation_number,customer_id,status,freight_type,quotation_date,valid_until,prepared_by,customer_snapshot,cargo_snapshot,pricing_snapshot,calculated_amount,override_amount,override_reason,final_amount,backend_cost,backend_cost_source,additional_cost,delivery_cost,notes,prepared_by_admin_user_id,created_at,updated_at,discount_percent,discount_amount,additional_fee,additional_fee_label) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         )
         .bind(
           id,
@@ -831,7 +886,7 @@ export async function quotationsPage(
           Math.round(calc.final * 100),
           override ? final : null,
           override ? String(form.get("override_reason")) : null,
-          final,
+          extras.net,
           niHaoResolved.cost,
           niHaoResolved.source,
           null,
@@ -840,6 +895,10 @@ export async function quotationsPage(
           user.id,
           now,
           now,
+          extras.percent,
+          extras.amount,
+          extras.fee,
+          extras.label,
         )
         .run();
       await db
@@ -855,7 +914,9 @@ export async function quotationsPage(
           JSON.stringify({
             quotation_number: qn,
             calculated_amount: Math.round(calc.final * 100),
-            final_amount: final,
+            final_amount: extras.net,
+            discount_amount: extras.amount,
+            additional_fee: extras.fee,
           }),
           now,
         )
@@ -940,7 +1001,7 @@ export async function quotationsPage(
       );
       return page(
         "Edit quotation",
-        `<section><div class="actions"><a class="button" href="${path}?id=${value(q.id)}">Back</a></div><p class="notice">Loaded from the saved quotation. Saving preserves the snapshot unless a pricing-relevant input changes; then it recalculates using the existing pricing engine.</p><form method="post" class="grid"><input type="hidden" name="csrf" value="${value(csrfToken(env, user.id, path))}"><input type="hidden" name="action" value="update"><input type="hidden" name="quotation_id" value="${value(q.id)}"><input type="hidden" data-pricing-date value="${value(q.created_at)}"><p class="wide"><strong>Quotation No.</strong> ${value(q.quotation_number)}</p>${choices("status", "Status", q.status, ["Draft", "Sent", "Approved", "Revised", "Cancelled"])}${text("quotation_date", "Quotation date", q.quotation_date, "date")}${text("valid_until", "Valid until", q.valid_until || "", "date")}${customerPicker(customers, String(q.customer_id ?? ""))}${text("customer_name", "Customer name", customer.name)}${text("company", "Company", customer.company)}${text("mobile", "Contact number", customer.mobile)}${text("email", "Email", customer.email, "email")}<label class="wide">Address<textarea name="address">${value(customer.address)}</textarea></label>${text("description", "Customer cargo description", cargo.description)}<section class="wide" data-cargo-details data-sea-categories="${esc(JSON.stringify(itemCategories))}" data-air-items="${esc(JSON.stringify(airItems))}"><h2>2. CARGO DETAILS</h2><div class="grid">${choices("item", "Item / Commodity", cargo.item, itemOptions)}<label>Category<input data-category-output value="${value(cargo.category)}" readonly></label>${text("supplier_name", "Supplier Name", cargo.supplierName)}${text("origin", "Supplier / Origin Location", cargo.origin)}${choices("origin_warehouse", "KargoDoor Warehouse", cargo.originWarehouse, [...originWarehouses])}<label>Declared CBM<input name="cbm" data-cbm-output type="number" min="0" step="any" value="${value(cargo.cbm)}" required><small>Editable — use the supplier's declared package CBM.</small></label>${choices("freight_type", "Freight Type", q.freight_type, ["Sea Freight", "Air Freight"])}${text("weight", "Declared Weight (kg)", cargo.weight, "number")}<label data-units-field>Units<input name="units" type="number" min="0" step="1" value="${value(cargo.units)}"><small>Applicable to Mobile Phones / Computers / Tablets.</small></label></div>${cbmConverter(cargo)}</section>${seaPricingSection("", savedSea)}${airPricingSection("")}${staff ? "" : overrideFields(q.override_amount, q.override_reason, q.backend_cost, q.backend_cost_source)}<label class="wide">Admin notes<textarea name="notes">${value(q.notes)}</textarea></label><section class="wide"><h3>Saved pricing snapshot</h3><dl><dt>Final amount</dt><dd>${pesos(q.final_amount)}</dd><dt>Calculated amount</dt><dd>${pesos(q.calculated_amount)}</dd><dt>Override amount</dt><dd>${q.override_amount === null ? "—" : pesos(q.override_amount)}</dd><dt>Override reason</dt><dd>${value(q.override_reason || "—")}</dd><dt>Snapshot</dt><dd>${value(JSON.stringify(pricing))}</dd></dl><p class="muted">This snapshot remains unchanged unless a pricing-relevant input changes; an override remains editable until you clear it.</p></section><p class="wide actions"><button type="button" data-quotation-calculate>CALCULATE</button><button>Save changes</button></p></form><script src="/admin-quotation-cargo.js" defer></script></section>`,
+        `<section><div class="actions"><a class="button" href="${path}?id=${value(q.id)}">Back</a></div><p class="notice">Loaded from the saved quotation. Saving preserves the snapshot unless a pricing-relevant input changes; then it recalculates using the existing pricing engine.</p><form method="post" class="grid"><input type="hidden" name="csrf" value="${value(csrfToken(env, user.id, path))}"><input type="hidden" name="action" value="update"><input type="hidden" name="quotation_id" value="${value(q.id)}"><input type="hidden" data-pricing-date value="${value(q.created_at)}"><p class="wide"><strong>Quotation No.</strong> ${value(q.quotation_number)}</p>${choices("status", "Status", q.status, ["Draft", "Sent", "Approved", "Revised", "Cancelled"])}${text("quotation_date", "Quotation date", q.quotation_date, "date")}${text("valid_until", "Valid until", q.valid_until || "", "date")}${customerPicker(customers, String(q.customer_id ?? ""))}${text("customer_name", "Customer name", customer.name)}${text("company", "Company", customer.company)}${text("mobile", "Contact number", customer.mobile)}${text("email", "Email", customer.email, "email")}<label class="wide">Address<textarea name="address">${value(customer.address)}</textarea></label>${text("description", "Customer cargo description", cargo.description)}<section class="wide" data-cargo-details data-sea-categories="${esc(JSON.stringify(itemCategories))}" data-air-items="${esc(JSON.stringify(airItems))}"><h2>2. CARGO DETAILS</h2><div class="grid">${choices("item", "Item / Commodity", cargo.item, itemOptions)}<label>Category<input data-category-output value="${value(cargo.category)}" readonly></label>${text("supplier_name", "Supplier Name", cargo.supplierName)}${text("origin", "Supplier / Origin Location", cargo.origin)}${choices("origin_warehouse", "KargoDoor Warehouse", cargo.originWarehouse, [...originWarehouses])}<label>Declared CBM<input name="cbm" data-cbm-output type="number" min="0" step="any" value="${value(cargo.cbm)}" required><small>Editable — use the supplier's declared package CBM.</small></label>${choices("freight_type", "Freight Type", q.freight_type, ["Sea Freight", "Air Freight"])}${text("weight", "Declared Weight (kg)", cargo.weight, "number")}<label data-units-field>Units<input name="units" type="number" min="0" step="1" value="${value(cargo.units)}"><small>Applicable to Mobile Phones / Computers / Tablets.</small></label></div>${cbmConverter(cargo)}</section>${seaPricingSection("", savedSea)}${airPricingSection("")}${staff ? "" : overrideFields(q.override_amount, q.override_reason, q.backend_cost, q.backend_cost_source) + quotationExtraFields(q)}<label class="wide">Admin notes<textarea name="notes">${value(q.notes)}</textarea></label><section class="wide"><h3>Saved pricing snapshot</h3><dl><dt>Final amount</dt><dd>${pesos(q.final_amount)}</dd><dt>Calculated amount</dt><dd>${pesos(q.calculated_amount)}</dd><dt>Override amount</dt><dd>${q.override_amount === null ? "—" : pesos(q.override_amount)}</dd><dt>Override reason</dt><dd>${value(q.override_reason || "—")}</dd><dt>Snapshot</dt><dd>${value(JSON.stringify(pricing))}</dd></dl><p class="muted">This snapshot remains unchanged unless a pricing-relevant input changes; an override remains editable until you clear it.</p></section><p class="wide actions"><button type="button" data-quotation-calculate>CALCULATE</button><button>Save changes</button></p></form><script src="/admin-quotation-cargo.js" defer></script></section>`,
         user.name,
         200,
         {
@@ -1014,7 +1075,7 @@ export async function quotationsPage(
     const rows = (
       await db
         .prepare(
-          "SELECT id,quotation_number,quotation_date,freight_type,status,final_amount,customer_snapshot,cargo_snapshot,updated_at,prepared_by_admin_user_id FROM quotations WHERE archived_at IS NULL AND (?=\'\' OR status=?) AND (?=\'\' OR freight_type=?) AND (?=\'\' OR quotation_date>=?) AND (?=\'\' OR instr(lower(quotation_number),lower(?))>0 OR instr(lower(customer_snapshot),lower(?))>0 OR instr(lower(cargo_snapshot),lower(?))>0) ORDER BY updated_at DESC LIMIT 100",
+          "SELECT id,quotation_number,quotation_date,freight_type,status,final_amount,additional_fee,customer_snapshot,cargo_snapshot,updated_at,prepared_by_admin_user_id FROM quotations WHERE archived_at IS NULL AND (?=\'\' OR status=?) AND (?=\'\' OR freight_type=?) AND (?=\'\' OR quotation_date>=?) AND (?=\'\' OR instr(lower(quotation_number),lower(?))>0 OR instr(lower(customer_snapshot),lower(?))>0 OR instr(lower(cargo_snapshot),lower(?))>0) ORDER BY updated_at DESC LIMIT 100",
         )
         .bind(
           statusFilter,
@@ -1047,10 +1108,10 @@ export async function quotationsPage(
     const items = Object.keys(itemCategories)
       .map((x) => `<option value="${esc(x)}"${x === leadItem ? " selected" : ""}>${esc(x)}</option>`)
       .join("");
-    const savedQuotations = `<section><h2>Saved quotations</h2><p><a class="button" href="${path}?new=1">Create New Quotation</a></p><form method="get" class="search"><label>Search<input name="q" value="${esc(q)}" placeholder="Quotation, customer, company, cargo"></label><label>Status<select name="status"><option value="">All</option>${["Draft", "Sent", "Approved", "Revised", "Cancelled"].map((value) => `<option${statusFilter === value ? " selected" : ""}>${value}</option>`).join("")}</select></label><label>Freight type<select name="freight_type"><option value="">All</option>${["Sea Freight", "Air Freight"].map((value) => `<option${freightFilter === value ? " selected" : ""}>${value}</option>`).join("")}</select></label><label>Date<select name="date"><option value="">All Dates</option><option value="today"${dateFilter === "today" ? " selected" : ""}>Today</option><option value="7"${dateFilter === "7" ? " selected" : ""}>Last 7 Days</option><option value="30"${dateFilter === "30" ? " selected" : ""}>Last 30 Days</option></select></label><button>Filter</button><a href="${path}">Clear</a></form><details class="admin-collapsible"><summary>Quotation records</summary><div class="table"><table><thead><tr><th>Quotation</th><th>Date</th><th>Customer</th><th>Freight</th><th>Cargo / item</th><th>Total</th><th>Status</th><th>Updated</th></tr></thead><tbody>${rows.map((quotation) => { const customer = snapshot(quotation.customer_snapshot).data; const cargo = snapshot(quotation.cargo_snapshot).data; return `<tr><td><a class="record-identifier" href="${path}?id=${quotation.id}">${esc(quotation.quotation_number)}</a></td><td>${esc(quotation.quotation_date)}</td><td>${esc(detailValue(customer.name))}<br>${esc(detailValue(customer.company))}</td><td>${esc(quotation.freight_type)}</td><td>${esc(detailValue(cargo.description ?? cargo.item))}</td><td>${pesos(quotation.final_amount)}</td><td>${esc(quotation.status)}</td><td>${esc(quotation.updated_at)}</td></tr>`; }).join("")}</tbody></table></div></details></section>`;
+    const savedQuotations = `<section><h2>Saved quotations</h2><p><a class="button" href="${path}?new=1">Create New Quotation</a></p><form method="get" class="search"><label>Search<input name="q" value="${esc(q)}" placeholder="Quotation, customer, company, cargo"></label><label>Status<select name="status"><option value="">All</option>${["Draft", "Sent", "Approved", "Revised", "Cancelled"].map((value) => `<option${statusFilter === value ? " selected" : ""}>${value}</option>`).join("")}</select></label><label>Freight type<select name="freight_type"><option value="">All</option>${["Sea Freight", "Air Freight"].map((value) => `<option${freightFilter === value ? " selected" : ""}>${value}</option>`).join("")}</select></label><label>Date<select name="date"><option value="">All Dates</option><option value="today"${dateFilter === "today" ? " selected" : ""}>Today</option><option value="7"${dateFilter === "7" ? " selected" : ""}>Last 7 Days</option><option value="30"${dateFilter === "30" ? " selected" : ""}>Last 30 Days</option></select></label><button>Filter</button><a href="${path}">Clear</a></form><details class="admin-collapsible"><summary>Quotation records</summary><div class="table"><table><thead><tr><th>Quotation</th><th>Date</th><th>Customer</th><th>Freight</th><th>Cargo / item</th><th>Total</th><th>Status</th><th>Updated</th></tr></thead><tbody>${rows.map((quotation) => { const customer = snapshot(quotation.customer_snapshot).data; const cargo = snapshot(quotation.cargo_snapshot).data; return `<tr><td><a class="record-identifier" href="${path}?id=${quotation.id}">${esc(quotation.quotation_number)}</a></td><td>${esc(quotation.quotation_date)}</td><td>${esc(detailValue(customer.name))}<br>${esc(detailValue(customer.company))}</td><td>${esc(quotation.freight_type)}</td><td>${esc(detailValue(cargo.description ?? cargo.item))}</td><td>${pesos(quotationTotal(quotation))}</td><td>${esc(quotation.status)}</td><td>${esc(quotation.updated_at)}</td></tr>`; }).join("")}</tbody></table></div></details></section>`;
     return page(
       "Quotations",
-      url.searchParams.get("new") === "1" ? `<section><h2>Create quotation</h2>${lead ? '<p class="notice">Lead details prefilled. Confirm all quotation details before saving.</p>' : ""}<form method="post" class="grid"><input type="hidden" name="csrf" value="${esc(csrf)}"><input type="hidden" name="action" value="save"><label>Status<select name="status"><option>Draft</option><option>Sent</option><option>Approved</option><option>Revised</option><option>Cancelled</option></select></label><label>Quotation date<input name="quotation_date" type="date" value="${date()}"></label><label>Valid until<input name="valid_until" type="date" value="${validUntilDate(date())}"></label>${customerPicker(customers, requestedCustomerId)}<label>Customer name *<input name="customer_name" required value="${esc(lead?.full_name ?? "")}"></label><label>Company<input name="company"></label><label>Contact number<input name="mobile" value="${esc(lead?.phone ?? "")}"></label><label>Email<input name="email" type="email" value="${esc(lead?.email ?? "")}"></label><label class="wide">Address<textarea name="address"></textarea></label><label>Customer cargo description<input name="description" value="${lead ? "Website calculator inquiry" : ""}"></label><section class="wide" data-cargo-details data-sea-categories="${esc(JSON.stringify(itemCategories))}" data-air-items="${esc(JSON.stringify(airItems))}"><h2>2. CARGO DETAILS</h2><div class="grid"><label>Item / Commodity<select name="item">${items}${airItems.map((x) => `<option${x === leadItem ? " selected" : ""}>${x}</option>`).join("")}</select></label><label>Category<input data-category-output readonly></label><label>Supplier Name<input name="supplier_name"></label><label>Supplier / Origin Location<input name="origin"></label><label>KargoDoor Warehouse<select name="origin_warehouse">${originWarehouses.map((x) => `<option value="${esc(x)}">${esc(x)}</option>`).join("")}</select></label><label>Declared CBM<input name="cbm" data-cbm-output type="number" min="0" step="any" required value="${esc(lead?.cbm ?? "")}"><small>Editable — use the supplier's declared package CBM.</small></label><label>Freight Type<select name="freight_type"><option${createFreight === "Sea Freight" ? " selected" : ""}>Sea Freight</option><option${createFreight === "Air Freight" ? " selected" : ""}>Air Freight</option></select></label><label>Declared Weight (kg)<input name="weight" type="number" min="0" step="any" required value="${esc(lead?.weight_kg ?? "")}"></label><label data-units-field>Units<input name="units" type="number" min="0" step="1" value="0"><small>Applicable to Mobile Phones / Computers / Tablets.</small></label></div>${cbmConverter()}</section>${seaPricingSection("")}${airPricingSection("")}<label>Override amount<input name="override_amount" type="number" min="0" step=".01"></label><label>Override reason<input name="override_reason"></label><label class="wide">Admin notes<textarea name="notes">${esc(leadNotes)}</textarea></label><p class="wide muted"><strong>INTERNAL CALCULATION — ADMIN USE ONLY.</strong> The saved quotation retains its pricing snapshot. Customer output shows no internal rates, density rules, costs, margins, formulas, or override reason.</p><p class="wide actions"><button type="button" data-quotation-calculate>CALCULATE</button><button>Save Draft</button></p></form><script src="/admin-quotation-cargo.js" defer></script></section>` : savedQuotations,
+      url.searchParams.get("new") === "1" ? `<section><h2>Create quotation</h2>${lead ? '<p class="notice">Lead details prefilled. Confirm all quotation details before saving.</p>' : ""}<form method="post" class="grid"><input type="hidden" name="csrf" value="${esc(csrf)}"><input type="hidden" name="action" value="save"><label>Status<select name="status"><option>Draft</option><option>Sent</option><option>Approved</option><option>Revised</option><option>Cancelled</option></select></label><label>Quotation date<input name="quotation_date" type="date" value="${date()}"></label><label>Valid until<input name="valid_until" type="date" value="${validUntilDate(date())}"></label>${customerPicker(customers, requestedCustomerId)}<label>Customer name *<input name="customer_name" required value="${esc(lead?.full_name ?? "")}"></label><label>Company<input name="company"></label><label>Contact number<input name="mobile" value="${esc(lead?.phone ?? "")}"></label><label>Email<input name="email" type="email" value="${esc(lead?.email ?? "")}"></label><label class="wide">Address<textarea name="address"></textarea></label><label>Customer cargo description<input name="description" value="${lead ? "Website calculator inquiry" : ""}"></label><section class="wide" data-cargo-details data-sea-categories="${esc(JSON.stringify(itemCategories))}" data-air-items="${esc(JSON.stringify(airItems))}"><h2>2. CARGO DETAILS</h2><div class="grid"><label>Item / Commodity<select name="item">${items}${airItems.map((x) => `<option${x === leadItem ? " selected" : ""}>${x}</option>`).join("")}</select></label><label>Category<input data-category-output readonly></label><label>Supplier Name<input name="supplier_name"></label><label>Supplier / Origin Location<input name="origin"></label><label>KargoDoor Warehouse<select name="origin_warehouse">${originWarehouses.map((x) => `<option value="${esc(x)}">${esc(x)}</option>`).join("")}</select></label><label>Declared CBM<input name="cbm" data-cbm-output type="number" min="0" step="any" required value="${esc(lead?.cbm ?? "")}"><small>Editable — use the supplier's declared package CBM.</small></label><label>Freight Type<select name="freight_type"><option${createFreight === "Sea Freight" ? " selected" : ""}>Sea Freight</option><option${createFreight === "Air Freight" ? " selected" : ""}>Air Freight</option></select></label><label>Declared Weight (kg)<input name="weight" type="number" min="0" step="any" required value="${esc(lead?.weight_kg ?? "")}"></label><label data-units-field>Units<input name="units" type="number" min="0" step="1" value="0"><small>Applicable to Mobile Phones / Computers / Tablets.</small></label></div>${cbmConverter()}</section>${seaPricingSection("")}${airPricingSection("")}<label>Override amount<input name="override_amount" type="number" min="0" step=".01"></label><label>Override reason<input name="override_reason"></label>${staff ? "" : quotationExtraFields()}<label class="wide">Admin notes<textarea name="notes">${esc(leadNotes)}</textarea></label><p class="wide muted"><strong>INTERNAL CALCULATION — ADMIN USE ONLY.</strong> The saved quotation retains its pricing snapshot. Customer output shows no internal rates, density rules, costs, margins, formulas, or override reason.</p><p class="wide actions"><button type="button" data-quotation-calculate>CALCULATE</button><button>Save Draft</button></p></form><script src="/admin-quotation-cargo.js" defer></script></section>` : savedQuotations,
       user.name,
       200,
       {

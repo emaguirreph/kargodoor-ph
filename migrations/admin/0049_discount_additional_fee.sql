@@ -11,3 +11,10 @@ ALTER TABLE invoices ADD COLUMN discount_reason TEXT;
 ALTER TABLE shipments ADD COLUMN additional_fee INTEGER NOT NULL DEFAULT 0 CHECK (additional_fee >= 0);
 ALTER TABLE shipments ADD COLUMN additional_fee_label TEXT;
 ALTER TABLE invoices ADD COLUMN other_charge_label TEXT;
+-- Same on quotations: final_amount stays the freight AFTER the discount (what the shipment's charge
+-- starts from); the fee before it is final_amount + discount_amount. The additional fee is quoted
+-- on top and carried to the shipment when the quotation is approved.
+ALTER TABLE quotations ADD COLUMN discount_percent REAL NOT NULL DEFAULT 0 CHECK (discount_percent >= 0 AND discount_percent <= 100);
+ALTER TABLE quotations ADD COLUMN discount_amount INTEGER NOT NULL DEFAULT 0 CHECK (discount_amount >= 0);
+ALTER TABLE quotations ADD COLUMN additional_fee INTEGER NOT NULL DEFAULT 0 CHECK (additional_fee >= 0);
+ALTER TABLE quotations ADD COLUMN additional_fee_label TEXT;
