@@ -29,6 +29,7 @@ import { invoiceMessages } from "./customer-messages";
 import { copyButton, copyScript } from "./shipping-instructions";
 import { proofCell, proofCss, readProofs } from "./payment-proof";
 import { splitFreightCharge } from "./transfer-fees";
+import { discountLabel } from "./special-discount";
 
 const route = "/admin/invoices";
 
@@ -429,6 +430,10 @@ export async function createInvoice(
         s.customer_id,
         s.tracking_number,
         s.shipping_charge,
+        s.discount_amount,
+        s.discount_percent,
+        s.additional_fee,
+        s.additional_fee_label,
         c.customer_code,
         c.full_name
       FROM shipments s
@@ -472,6 +477,7 @@ export async function createInvoice(
     customer_code: shipment.customer_code,
     customer_name: shipment.full_name,
     kargodoor_charge: shipment.shipping_charge,
+    discount_amount: Number(shipment.discount_amount ?? 0),
     delivery_charge: values.delivery_charge,
     other_charge: values.other_charge,
     invoice_total: grandTotal,
@@ -497,9 +503,12 @@ export async function createInvoice(
           due_at,
           created_at,
           updated_at,
-          other_charge
+          other_charge,
+          discount_amount,
+          discount_reason,
+          other_charge_label
         )
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         `,
       )
       .bind(
@@ -516,6 +525,10 @@ export async function createInvoice(
         timestamp,
         timestamp,
         values.other_charge,
+        Number(shipment.discount_amount ?? 0),
+        Number(shipment.discount_amount ?? 0) > 0 ? discountLabel(shipment.discount_percent) : null,
+        // The shipment's additional fee label goes with it when the other charge is that fee.
+        values.other_charge > 0 && values.other_charge === Number(shipment.additional_fee ?? 0) ? (shipment.additional_fee_label ?? "Additional fee") : null,
       ),
 
     db
@@ -1275,6 +1288,8 @@ async function detail(
         s.service_type,
         s.china_warehouse,
         s.shipping_charge AS shipment_shipping_charge,
+        s.discount_amount AS shipment_discount_amount,
+        s.additional_fee AS shipment_additional_fee,
         COALESCE(SUM(p.amount),0) AS amount_paid
       FROM invoices i
       JOIN customers c
@@ -1395,12 +1410,14 @@ async function detail(
 
   const outdated =
     invoice.status !== "Void" &&
-    Number(invoice.subtotal) !== Number(invoice.shipment_shipping_charge);
+    (Number(invoice.subtotal) !== Number(invoice.shipment_shipping_charge) ||
+      Number(invoice.discount_amount ?? 0) !== Number(invoice.shipment_discount_amount ?? 0) ||
+      (Number(invoice.shipment_additional_fee ?? 0) > 0 && Number(invoice.other_charge ?? 0) !== Number(invoice.shipment_additional_fee)));
 
   const notice = (saved
     ? `<p class="notice" role="status">${saved === "proof" ? "Proof of payment uploaded." : saved === "payment" ? 'Payment recorded. You can now drop the proof of payment on it under <a href="#payment-history">Payment history</a>.' : "Changes saved."}</p>`
     : "") + (outdated
-    ? `<p class="notice" role="status">The shipment's shipping charge is now ${esc(pesos(invoice.shipment_shipping_charge))}, but this invoice shows ${esc(pesos(invoice.subtotal))}. ${
+    ? `<p class="notice" role="status">The shipment's charges changed (shipping charge ${esc(pesos(invoice.shipment_shipping_charge))}${Number(invoice.shipment_discount_amount ?? 0) > 0 ? ` after ${esc(pesos(invoice.shipment_discount_amount))} discount` : ""}${Number(invoice.shipment_additional_fee ?? 0) > 0 ? `, additional fee ${esc(pesos(invoice.shipment_additional_fee))}` : ""}), but this invoice shows ${esc(pesos(invoice.subtotal))}${Number(invoice.discount_amount ?? 0) > 0 ? ` after ${esc(pesos(invoice.discount_amount))} discount` : ""}${Number(invoice.other_charge ?? 0) > 0 ? `, other charge ${esc(pesos(invoice.other_charge))}` : ""}. ${
         invoice.status === "Draft" || invoice.status === "Unpaid"
           ? "Save the shipment again to update this invoice."
           : "Payments are already recorded, so it was not changed automatically. Void it and create a new invoice if the customer should pay the new amount."
@@ -1439,12 +1456,25 @@ async function detail(
             </td>
           </tr>
 
+          ${Number(invoice.discount_amount ?? 0) > 0
+            ? `<tr>
+            <th>KargoDoor charge before discount</th>
+            <td>${esc(pesos(Number(invoice.subtotal) + Number(invoice.discount_amount)))}</td>
+          </tr>
           <tr>
+            <th>${esc(invoice.discount_reason || "Special discount")}</th>
+            <td style="color:#1d6b3a">− ${esc(pesos(invoice.discount_amount))}</td>
+          </tr>
+          <tr>
+            <th>KargoDoor charge after discount</th>
+            <td>${esc(pesos(invoice.subtotal))}</td>
+          </tr>`
+            : `<tr>
             <th>KargoDoor charge</th>
             <td>${esc(
               pesos(invoice.subtotal),
             )}</td>
-          </tr>
+          </tr>`}
 
           <tr>
             <th>Delivery charge</th>
@@ -1454,7 +1484,7 @@ async function detail(
           </tr>
 
           <tr>
-            <th>Other charge</th>
+            <th>${esc(invoice.other_charge_label || "Other charge")}</th>
             <td>${esc(
               pesos(invoice.other_charge),
             )}</td>
@@ -1641,8 +1671,11 @@ function invoiceMessageSection(invoice: RecordData, grand: number, paid: number)
     invoiceNumber: invoice.invoice_number,
     tracking: invoice.tracking_number,
     shippingFee: invoice.subtotal,
+    discount: invoice.discount_amount,
+    discountLabel: invoice.discount_reason,
     deliveryFee: invoice.delivery_charge,
     otherCharge: invoice.other_charge,
+    otherChargeLabel: invoice.other_charge_label,
     total: grand,
     paid,
     dueDate: invoice.due_at,
@@ -1731,6 +1764,7 @@ export async function createView(
           s.tracking_number,
           s.shipping_charge,
           s.delivery_charge,
+          s.additional_fee,
           c.customer_code,
           c.full_name
         FROM shipments s
@@ -1916,7 +1950,7 @@ export async function createView(
               <input
                 name="other_charge"
                 inputmode="decimal"
-                value="0"
+                value="${chosen ? (Number(chosen.additional_fee ?? 0) / 100).toFixed(2) : "0"}"
                 required
               >
             </label>
@@ -2552,12 +2586,12 @@ const readyToBillStatuses = ["Gatepass", "Malabon Warehouse", "Delivered", "Arri
  * new invoice id, or null when nothing was made.
  */
 export async function autoDraftInvoice(db: D1Database, shipmentId: string, adminId: string) {
-  const shipment = await db.prepare(`SELECT s.id, s.shipping_charge, s.delivery_charge, s.status, s.archived_at,
+  const shipment = await db.prepare(`SELECT s.id, s.shipping_charge, s.discount_amount, s.additional_fee, s.delivery_charge, s.status, s.archived_at,
       s.verified_cbm, s.verified_weight_kg,
       EXISTS (SELECT 1 FROM invoices i WHERE i.shipment_id = s.id AND i.status != 'Void' AND i.archived_at IS NULL) AS invoiced
     FROM shipments s WHERE s.id = ?`).bind(shipmentId).first<RecordData>();
   if (!shipment || shipment.archived_at || shipment.status === "Cancelled" || Number(shipment.invoiced)) return null;
-  if (!(Number(shipment.shipping_charge) > 0)) return null;
+  if (!(Number(shipment.shipping_charge) + Number(shipment.discount_amount ?? 0) > 0)) return null;
   const measured = shipment.verified_cbm !== null && shipment.verified_cbm !== undefined
     || shipment.verified_weight_kg !== null && shipment.verified_weight_kg !== undefined;
   if (!measured && !readyToBillStatuses.includes(String(shipment.status))) return null;
@@ -2565,7 +2599,7 @@ export async function autoDraftInvoice(db: D1Database, shipmentId: string, admin
     return await createInvoice(db, {
       shipment_id: shipmentId,
       delivery_charge: Number(shipment.delivery_charge ?? 0),
-      other_charge: 0,
+      other_charge: Number(shipment.additional_fee ?? 0),
       status: "Draft",
       issued_at: null,
       due_at: null,

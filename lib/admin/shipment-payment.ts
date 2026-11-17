@@ -19,7 +19,7 @@ export type ShipmentBilling = {
   lastPaymentDate: string | null;
 };
 
-export async function readShipmentBilling(db: D1Database, shipmentId: string, shipment: { shipping_charge?: unknown; delivery_charge?: unknown }): Promise<ShipmentBilling> {
+export async function readShipmentBilling(db: D1Database, shipmentId: string, shipment: { shipping_charge?: unknown; delivery_charge?: unknown; additional_fee?: unknown }): Promise<ShipmentBilling> {
   const invoice = await db.prepare(`SELECT i.id, i.invoice_number, i.status, i.total + i.other_charge AS total,
       COALESCE((SELECT SUM(amount) FROM payments WHERE invoice_id = i.id), 0) AS paid,
       (SELECT MAX(payment_date) FROM payments WHERE invoice_id = i.id) AS last_payment
@@ -29,7 +29,7 @@ export async function readShipmentBilling(db: D1Database, shipmentId: string, sh
   if (!invoice) {
     return {
       invoiceId: null, invoiceNumber: null, status: null, paid: 0, lastPaymentDate: null,
-      total: Number(shipment.shipping_charge ?? 0) + Number(shipment.delivery_charge ?? 0),
+      total: Number(shipment.shipping_charge ?? 0) + Number(shipment.delivery_charge ?? 0) + Number(shipment.additional_fee ?? 0),
     };
   }
   return {
@@ -47,8 +47,8 @@ export async function recordShipmentPayment(db: D1Database, form: URLSearchParam
   }
   const id = form.get("id") ?? "";
   if (!/^[\da-f-]{36}$/i.test(id)) throw new AdminError("Invalid shipment ID.");
-  const shipment = await db.prepare("SELECT id, shipping_charge, delivery_charge, status, archived_at FROM shipments WHERE id = ?")
-    .bind(id).first<{ id: string; shipping_charge: number; delivery_charge: number; status: string; archived_at: string | null }>();
+  const shipment = await db.prepare("SELECT id, shipping_charge, delivery_charge, additional_fee, status, archived_at FROM shipments WHERE id = ?")
+    .bind(id).first<{ id: string; shipping_charge: number; delivery_charge: number; additional_fee: number; status: string; archived_at: string | null }>();
   if (!shipment) throw new AdminError("Shipment not found.", 404);
   if (shipment.status === "Cancelled" || shipment.archived_at) throw new AdminError("This shipment is cancelled or archived.");
   if (!(Number(shipment.shipping_charge) > 0)) throw new AdminError("Add the KargoDoor charge before recording a payment.");
@@ -58,7 +58,7 @@ export async function recordShipmentPayment(db: D1Database, form: URLSearchParam
     invoiceId = await createInvoice(db, {
       shipment_id: id,
       delivery_charge: Number(shipment.delivery_charge ?? 0),
-      other_charge: 0,
+      other_charge: Number(shipment.additional_fee ?? 0),
       status: "Draft",
       issued_at: null,
       due_at: null,

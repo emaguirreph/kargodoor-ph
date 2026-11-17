@@ -38,3 +38,16 @@ test("partial invoice PDF shows the remaining balance and both payment boxes", (
   const pdf = read(customerInvoicePdf({ invoice: { ...invoice, status: "Partial", full_name: "José Peña" }, payments: [{ date: "2026-11-01", method: "UnionBank", reference: "", amount: 30000 }] }));
   for (const text of ["PARTIAL", "461.00", "How to pay", "Payments received", "Jos\\351 Pe\\361a"]) assert.ok(pdf.includes(text), text);
 });
+
+test("special discount PDF shows the fee before discount, the discount line and the same total; no line without a discount", () => {
+  // ₱530 before discount (₱500 base + ₱30), 10% off the base = ₱50, customer pays ₱480 + ₱231 = ₱711.
+  const pdf = read(customerInvoicePdf({ invoice: { ...invoice, subtotal: 48000, total: 71100, discount_amount: 5000, discount_reason: "Special discount 10%" }, payments: [] }));
+  for (const text of ["Special discount 10%", "Off the KargoDoor shipping fee", "50.00", "530.00", "711.00"]) assert.ok(pdf.includes(text), text);
+  const plain = read(customerInvoicePdf({ invoice, payments: [] }));
+  assert.ok(!plain.includes("discount"), "no discount line when there is no discount");
+});
+
+test("additional fee shows on the PDF with its label and adds to the total", () => {
+  const pdf = read(customerInvoicePdf({ invoice: { ...invoice, other_charge: 85000, other_charge_label: "Large shipment fee" }, payments: [] }));
+  for (const text of ["Large shipment fee", "850.00", "1,611.00"]) assert.ok(pdf.includes(text), text);
+});

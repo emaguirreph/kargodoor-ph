@@ -8,9 +8,9 @@ import { page, esc, pesos, hidden } from "./ui";
 export const marginSummarySql = `SELECT
  COUNT(*) AS shipments,
  COUNT(nihao_cost) AS costed,
- COALESCE(SUM(CASE WHEN nihao_cost IS NOT NULL THEN shipping_charge ELSE 0 END),0) AS charges,
+ COALESCE(SUM(CASE WHEN nihao_cost IS NOT NULL THEN shipping_charge+additional_fee ELSE 0 END),0) AS charges,
  COALESCE(SUM(nihao_cost),0) AS costs,
- COALESCE(SUM(CASE WHEN nihao_cost IS NOT NULL THEN shipping_charge-nihao_cost ELSE 0 END),0) AS margin
+ COALESCE(SUM(CASE WHEN nihao_cost IS NOT NULL THEN shipping_charge+additional_fee-nihao_cost ELSE 0 END),0) AS margin
 FROM shipments WHERE status != 'Cancelled' AND archived_at IS NULL`;
 
 // Reuse the original aggregate unchanged; add only a bound business-date restriction.
@@ -628,7 +628,7 @@ export async function finance(
   const rows = (
     await db
       .prepare(
-        `SELECT s.id,s.tracking_number,c.full_name,s.status,s.shipping_charge,s.nihao_cost
+        `SELECT s.id,s.tracking_number,c.full_name,s.status,s.shipping_charge+s.additional_fee AS shipping_charge,s.nihao_cost
         FROM shipments s
         JOIN customers c ON c.id=s.customer_id
         WHERE s.status != 'Cancelled'

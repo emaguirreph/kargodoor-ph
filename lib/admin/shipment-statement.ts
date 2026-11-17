@@ -41,11 +41,12 @@ function summarize(shipment: Row, invoice: Row | null, payments: StatementPaymen
   // An issued invoice is what the customer owes; before that, the shipment's charges.
   const billed = invoice
     ? num(invoice.total) + num(invoice.other_charge)
-    : charge + num(shipment.delivery_charge);
+    : charge + num(shipment.delivery_charge) + num(shipment.additional_fee);
   const collected = payments.reduce((sum, p) => sum + p.amount, 0);
   const niHaoCost = shipment.nihao_cost === null || shipment.nihao_cost === undefined ? null : num(shipment.nihao_cost);
   const niHaoPaid = niHaoPayments.reduce((sum, p) => sum + p.amount, 0);
-  const profit = niHaoCost === null ? null : charge - niHaoCost;
+  // The additional fee pays for Ni Hao's extra charge, which is inside the Ni Hao cost.
+  const profit = niHaoCost === null ? null : charge + num(shipment.additional_fee) - niHaoCost;
   return {
     billed,
     collected,
@@ -182,7 +183,9 @@ export function shipmentStatementPdf(statement: ShipmentStatement, today = phili
     row("Declared size", `${or(s.cbm)} CBM  |  ${or(s.weight_kg)} kg`),
     row("Verified size", `${or(s.verified_cbm)} CBM  |  ${or(s.verified_weight_kg)} kg`),
     ...heading("KargoDoor billing (money in)"),
+    ...(num(s.discount_amount) ? [row("Freight before discount", peso(num(s.shipping_charge) + num(s.discount_amount))), row(`Special discount ${Math.round(num(s.discount_percent) * 100) / 100}%`, `- ${peso(num(s.discount_amount))}`)] : []),
     row("Freight charge", peso(num(s.shipping_charge))),
+    ...(num(s.additional_fee) ? [row(text(s.additional_fee_label) || "Additional fee", peso(num(s.additional_fee)))] : []),
     ...(num(s.delivery_charge) ? [row("Delivery charge", peso(num(s.delivery_charge)))] : []),
     ...(statement.invoice
       ? [row("Invoice", `${or(statement.invoice.invoice_number)}  (${or(statement.invoice.status)}${statement.invoice.issued_at ? `, issued ${statement.invoice.issued_at}` : ""})`)]

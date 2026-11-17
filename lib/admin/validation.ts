@@ -329,6 +329,19 @@ const shipmentObjectSchema = z
     delivery_charge:
       money,
 
+    // Special discount, % off the KargoDoor base fee (Em, 2026-11-17), e.g. 10 or 12.5. Blank = none.
+    discount_percent: z.preprocess(
+      (value) => String(value ?? "").trim().replace(/%$/, "").trim() || "0",
+      z.string()
+        .regex(/^\d{1,3}(\.\d{1,2})?$/, "Type the discount as a percent, e.g. 10 or 12.5")
+        .transform(Number)
+        .refine((value) => value >= 0 && value < 100, "The discount must be below 100%"),
+    ),
+
+    // Extra fee passed on to the customer (e.g. Ni Hao's large-shipment fee), with a short label. Blank = none.
+    additional_fee: z.preprocess((value) => String(value ?? "").trim() || "0", money),
+    additional_fee_label: z.preprocess((value) => value ?? "", optional(80)),
+
     payment_status: z.enum([
       "Unpaid",
       "Partial",
@@ -481,6 +494,9 @@ export const schemaKeys: Record<
     "shipping_charge",
     "nihao_cost",
     "delivery_charge",
+    "discount_percent",
+    "additional_fee",
+    "additional_fee_label",
     "payment_status",
     "supplier_waybill_number",
     "supplier_courier",
