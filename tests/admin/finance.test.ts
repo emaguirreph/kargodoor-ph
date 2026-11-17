@@ -19,6 +19,8 @@ export function fixture() {
   sql.exec("ALTER TABLE invoices ADD COLUMN archived_at TEXT");
   sql.exec("ALTER TABLE shipments ADD COLUMN nihao_cost_source TEXT");
   sql.exec(readFileSync("migrations/admin/0033_transfer_fee_collected.sql", "utf8"));
+  // This fixture has no quotations table: run only the shipment and invoice columns.
+  sql.exec(readFileSync("migrations/admin/0049_discount_additional_fee.sql", "utf8").split(";").filter((statement) => !/TABLE quotations/.test(statement)).join(";"));
   sql.exec("INSERT INTO customers VALUES ('c','KDOOR0001','Test customer',NULL,'12345',NULL,NULL,NULL,'2026-01-01','2026-01-01')");
   const queries: string[] = [];
   const db = { prepare(query: string) {

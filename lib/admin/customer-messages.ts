@@ -422,7 +422,11 @@ export type InvoiceMessageInput = {
   /** Centavos. */
   shippingFee?: unknown;
   deliveryFee?: unknown;
+  /** Special discount already taken off shippingFee (centavos), and its label. */
+  discount?: unknown;
+  discountLabel?: unknown;
   otherCharge?: unknown;
+  otherChargeLabel?: unknown;
   total?: unknown;
   paid?: unknown;
   dueDate?: unknown;
@@ -450,9 +454,14 @@ export function invoiceMessages(input: InvoiceMessageInput): Array<[string, stri
   ];
   const charges = [
     "💰 Charges",
-    `Shipping Fee: ${peso(num(input.shippingFee))}`,
+    ...(num(input.discount) > 0
+      ? [
+          `Shipping Fee: ${peso(num(input.shippingFee) + num(input.discount))}`,
+          `${text(input.discountLabel) || "Special discount"}: -${peso(num(input.discount))}`,
+        ]
+      : [`Shipping Fee: ${peso(num(input.shippingFee))}`]),
     deliveryFee > 0 && `Delivery Fee: ${peso(deliveryFee)}`,
-    otherCharge > 0 && `Other Charges: ${peso(otherCharge)}`,
+    otherCharge > 0 && `${text(input.otherChargeLabel) || "Other Charges"}: ${peso(otherCharge)}`,
     `Total Amount Due: ${peso(total)}`,
     dueDate && `Due Date: ${dueDate}`,
   ];

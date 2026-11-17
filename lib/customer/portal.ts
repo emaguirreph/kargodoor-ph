@@ -85,7 +85,7 @@ export async function loadPortal(db: D1Database, customerId: string): Promise<Po
   const [shipmentRows, billRows, proofRows, bookingRows, concernRows, referralRow] = await Promise.all([
     db.prepare(`SELECT s.id, s.tracking_number, COALESCE(${cargoItemSql}, '') AS item, ${cargoCategorySql.item} AS category_item, ${cargoCategorySql.group} AS category_group,
         s.service_type, s.status, s.china_warehouse, s.cbm, s.weight_kg, s.verified_cbm, s.verified_weight_kg,
-        s.warehouse_received_date, s.actual_arrival, s.delivered_date, s.shipping_charge, s.delivery_charge, s.updated_at,
+        s.warehouse_received_date, s.actual_arrival, s.delivered_date, s.shipping_charge, s.delivery_charge, s.additional_fee, s.updated_at,
         i.id AS invoice_id, i.invoice_number, i.status AS invoice_status, i.delivery_charge AS invoice_delivery_charge,
         i.total + i.other_charge AS invoice_total,
         COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.invoice_id = i.id AND p.customer_id = s.customer_id), 0) AS paid
@@ -113,7 +113,7 @@ export async function loadPortal(db: D1Database, customerId: string): Promise<Po
   const shipments: PortalShipment[] = shipmentRows.results.map((row) => {
     const invoiceStatus = str(row.invoice_status);
     const billed = visibleBill(invoiceStatus);
-    const total = billed ? num(row.invoice_total) : num(row.shipping_charge) + num(row.delivery_charge);
+    const total = billed ? num(row.invoice_total) : num(row.shipping_charge) + num(row.delivery_charge) + num(row.additional_fee);
     const paid = billed ? num(row.paid) : 0;
     const delivery = invoiceStatus && row.invoice_delivery_charge !== null ? num(row.invoice_delivery_charge) : num(row.delivery_charge);
     const status = String(row.status);

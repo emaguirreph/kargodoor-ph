@@ -196,17 +196,29 @@ export async function syncVerifiedFreightToInvoice(
   adminUserId: string,
   note = "Invoice freight updated from verified warehouse measurements.",
   deliveryCharge?: number,
+  /** The shipment's special discount; given, the invoice's discount line follows it. */
+  discount?: { amount: number; reason: string | null },
+  /** The shipment's additional fee; given, the invoice's other charge follows it. */
+  additional?: { amount: number; label: string | null },
 ) {
   // When the shipment's delivery charge is given, keep the invoice's delivery line in step too.
   const syncDelivery = Number.isSafeInteger(deliveryCharge) && Number(deliveryCharge) >= 0;
+  const syncDiscount = discount !== undefined;
+  const syncAdditional = additional !== undefined;
   const invoices = (await db.prepare(
-    `SELECT id, subtotal, delivery_charge, total, other_charge, status
+    `SELECT id, subtotal, delivery_charge, total, other_charge, status, discount_amount, discount_reason, other_charge_label
      FROM invoices
      WHERE shipment_id = ?
        AND archived_at IS NULL
        AND status IN ('Draft', 'Unpaid')
-       AND (subtotal != ? OR (? = 1 AND delivery_charge != ?))`,
-  ).bind(shipmentId, shippingCharge, syncDelivery ? 1 : 0, syncDelivery ? Number(deliveryCharge) : 0).all<Row>()).results;
+       AND (subtotal != ? OR (? = 1 AND delivery_charge != ?)
+         OR (? = 1 AND (discount_amount != ? OR COALESCE(discount_reason, '') != ?))
+         OR (? = 1 AND (other_charge != ? OR COALESCE(other_charge_label, '') != ?)))`,
+  ).bind(
+    shipmentId, shippingCharge, syncDelivery ? 1 : 0, syncDelivery ? Number(deliveryCharge) : 0,
+    syncDiscount ? 1 : 0, discount?.amount ?? 0, discount?.reason ?? "",
+    syncAdditional ? 1 : 0, additional?.amount ?? 0, additional?.amount ? (additional.label ?? "") : "",
+  ).all<Row>()).results;
 
   if (!invoices.length) return 0;
 
@@ -220,13 +232,17 @@ export async function syncVerifiedFreightToInvoice(
       subtotal: shippingCharge,
       delivery_charge: delivery,
       total,
+      discount_amount: syncDiscount ? discount.amount : Number(invoice.discount_amount ?? 0),
+      discount_reason: syncDiscount ? (discount.amount ? discount.reason : null) : (invoice.discount_reason ?? null),
+      other_charge: syncAdditional ? additional.amount : Number(invoice.other_charge ?? 0),
+      other_charge_label: syncAdditional ? (additional.amount ? additional.label : null) : (invoice.other_charge_label ?? null),
     };
     statements.push(
       db.prepare(
         `UPDATE invoices
-         SET subtotal = ?, delivery_charge = ?, total = ?, updated_at = ?
+         SET subtotal = ?, delivery_charge = ?, total = ?, discount_amount = ?, discount_reason = ?, other_charge = ?, other_charge_label = ?, updated_at = ?
          WHERE id = ? AND status IN ('Draft', 'Unpaid') AND archived_at IS NULL`,
-      ).bind(next.subtotal, next.delivery_charge, next.total, timestamp, invoice.id),
+      ).bind(next.subtotal, next.delivery_charge, next.total, next.discount_amount, next.discount_reason, next.other_charge, next.other_charge_label, timestamp, invoice.id),
       db.prepare(
         `INSERT INTO activity_log
           (id, admin_user_id, action, entity_type, entity_id, old_value, new_value, notes, created_at)
@@ -235,7 +251,7 @@ export async function syncVerifiedFreightToInvoice(
         randomUUID(),
         adminUserId,
         invoice.id,
-        JSON.stringify({ subtotal: invoice.subtotal, delivery_charge: invoice.delivery_charge, total: invoice.total }),
+        JSON.stringify({ subtotal: invoice.subtotal, delivery_charge: invoice.delivery_charge, total: invoice.total, discount_amount: invoice.discount_amount, other_charge: invoice.other_charge }),
         JSON.stringify(next),
         note,
         timestamp,

@@ -165,7 +165,10 @@ const serviceLine: Record<string, string> = {
 export function customerInvoicePdf({ invoice, payments }: InvoicePdfData) {
   const c = new Canvas();
   const status = str(invoice.status) || "Unpaid";
-  const freight = num(invoice.subtotal);
+  // subtotal is the freight after any special discount; the line shows the fee before it.
+  const discount = Math.max(num(invoice.discount_amount), 0);
+  const discountName = str(invoice.discount_reason) || "Special discount";
+  const freight = num(invoice.subtotal) + discount;
   const delivery = num(invoice.delivery_charge);
   const other = num(invoice.other_charge);
   const total = num(invoice.total) + other;
@@ -262,11 +265,13 @@ export function customerInvoicePdf({ invoice, payments }: InvoicePdfData) {
   const verified = invoice.verified_cbm !== null && invoice.verified_cbm !== undefined || invoice.verified_weight_kg !== null && invoice.verified_weight_kg !== undefined;
   const cbm = verified && invoice.verified_cbm !== null && invoice.verified_cbm !== undefined ? num(invoice.verified_cbm) : num(invoice.cbm);
   const kg = verified && invoice.verified_weight_kg !== null && invoice.verified_weight_kg !== undefined ? num(invoice.verified_weight_kg) : num(invoice.weight_kg);
-  const lines: { title: string; detail: string; size: [string, string]; amount: number }[] = [
+  const lines: { title: string; detail: string; size: [string, string]; amount: number; minus?: boolean }[] = [
     { title: serviceLine[str(invoice.service_type)] ?? "Freight, China to Manila", detail, size: [cbm ? `${trimNumber(cbm)} CBM` : "", kg ? `${trimNumber(kg)} kg ${verified ? "verified" : "declared"}` : ""], amount: freight },
   ];
+  if (discount > 0) lines.push({ title: discountName, detail: "Off the KargoDoor shipping fee", size: ["—", ""], amount: discount, minus: true });
   if (delivery > 0) lines.push({ title: "Delivery to your address", detail: "Malabon warehouse to your door", size: ["—", ""], amount: delivery });
-  if (other > 0) lines.push({ title: "Other charges", detail: "", size: ["—", ""], amount: other });
+  const otherName = str(invoice.other_charge_label) || "Other charges";
+  if (other > 0) lines.push({ title: otherName, detail: "", size: ["—", ""], amount: other });
 
   lines.forEach((line, i) => {
     const detailLines = line.detail ? wrap(line.detail, 8, colSize - colDesc - 14) : [];
@@ -276,7 +281,7 @@ export function customerInvoicePdf({ invoice, payments }: InvoicePdfData) {
     detailLines.forEach((d, j) => c.text(d, colDesc, y - 29 - j * 10.5, 8, { color: C.muted }));
     c.text(line.size[0], colSize, y - 17, 9.5);
     if (line.size[1]) c.text(line.size[1], colSize, y - 29, 8, { color: C.muted });
-    c.text(peso(line.amount), R - 9, y - 17, 9.5, { align: "right" });
+    c.text(line.minus ? `- ${peso(line.amount)}` : peso(line.amount), R - 9, y - 17, 9.5, { align: "right", ...(line.minus ? { color: C.ok } : {}) });
     y -= rowH;
     c.hline(L, R, y);
   });
@@ -297,8 +302,9 @@ export function customerInvoicePdf({ invoice, payments }: InvoicePdfData) {
     y -= 18;
   };
   totalRow("Freight", peso(freight));
+  if (discount > 0) totalRow(discountName, `- ${peso(discount)}`, { color: C.ok });
   if (delivery > 0) totalRow("Delivery", peso(delivery));
-  if (other > 0) totalRow("Other charges", peso(other));
+  if (other > 0) totalRow(otherName, peso(other));
   c.hline(tx, R, y + 2);
   y -= 4;
   totalRow("Total", peso(total), { bold: true });

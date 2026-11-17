@@ -50,6 +50,7 @@ import { notificationKeyFor, shipmentStatusMessages } from "./customer-messages"
 import { messageList } from "./message-list";
 import { copyButton, copyScript, customerPortalAccessMessage, customerWelcomeMessage, nihaoAddressBook, onceShippedMessage, shipmentShippingInstructions, supplierShipmentMessage, warehouseAddress } from "./shipping-instructions";
 import { leadsPage } from "./leads";
+import { applySpecialDiscount, discountLabel, maxDiscountPercent, percentNumber } from "./special-discount";
 import { manualShipmentRate, resolveManualShipmentCharge, resolveQuotationShipmentCharge, syncVerifiedFreightToInvoice, verifiedShipmentFreight } from "./shipment-verified-pricing";
 import { airItems, itemCategories } from "./quotation-pricing";
 import { cargoCategory, cargoCategorySql, cargoItemSql, shipmentCargo, type ShipmentCargo } from "./shipment-cargo";
@@ -119,6 +120,40 @@ const shippingChargeField = (record: RecordData) => {
   return field
     .replace('name="shipping_charge"', `name="shipping_charge" data-live-amount="kargodoor"${auto ? ` data-auto="${esc(record.shipping_charge === null || record.shipping_charge === undefined ? "" : (Number(record.shipping_charge) / 100).toFixed(2))}"` : ""}`)
     .replace("</label>", ` ${chargeSourceTag(record.shipping_charge_source)}<small class="muted" style="display:block" data-live-hint="kargodoor">${hint}</small></label>`);
+};
+
+/** The shipment with its charge shown BEFORE the special discount (the box Em types in). */
+const grossChargeRecord = (record: RecordData): RecordData =>
+  record.shipping_charge === null || record.shipping_charge === undefined || record.shipping_charge === ""
+    ? record
+    : { ...record, shipping_charge: Number(record.shipping_charge) + Number(record.discount_amount ?? 0) };
+
+/** Special discount: any % off the base fee, with the most this shipment's margin allows. */
+const specialDiscountField = (record: RecordData) => {
+  const chosen = Number(record.discount_percent ?? 0) || 0;
+  const hasCharge = record.shipping_charge !== null && record.shipping_charge !== undefined && record.shipping_charge !== "";
+  const gross = hasCharge ? Number(record.shipping_charge) + Number(record.discount_amount ?? 0) : 0;
+  const fee = record.transfer_fee_collected ?? 3000;
+  const hasCost = record.nihao_cost !== null && record.nihao_cost !== undefined && record.nihao_cost !== "";
+  const best = hasCharge && hasCost ? maxDiscountPercent(gross, fee, record.nihao_cost, Number(record.additional_fee ?? 0)) : 0;
+  const status = chosen && Number(record.discount_amount ?? 0) > 0
+    ? `Customer pays ${esc(pesos(record.shipping_charge))} freight after ${esc(pesos(record.discount_amount))} off. Invoice shows "${esc(discountLabel(chosen))}". `
+    : "";
+  const limit = !hasCharge
+    ? "Needs the charge and Ni Hao cost first."
+    : !hasCost
+      ? "Enter the Ni Hao cost first so the 10% minimum margin can be checked."
+      : best
+        ? `Most you can give here: ${esc(percentNumber(best))}% (keeps at least 10% gross margin).`
+        : "Margin too thin for a discount here (must keep at least 10% gross margin).";
+  return `<label>Special discount (%)<input name="discount_percent" type="text" inputmode="decimal" maxlength="6" placeholder="0" value="${chosen ? esc(percentNumber(chosen)) : ""}"><small class="muted" style="display:block">${status}Off the base fee, not the ₱30 transfer fee. Leave blank for none. ${limit}</small></label>`;
+};
+
+/** Additional fee the customer pays (e.g. Ni Hao's large-shipment fee), typed in pesos, with its invoice label. */
+const additionalFeeFields = (record: RecordData) => {
+  const fee = Number(record.additional_fee ?? 0) || 0;
+  return `<label>Additional fee (PHP)<input name="additional_fee" type="text" inputmode="decimal" maxlength="30" placeholder="0" value="${fee ? (fee / 100).toFixed(2) : ""}"><small class="muted" style="display:block">Extra charge the customer pays, e.g. Ni Hao's large-shipment fee. Put Ni Hao's own charge in the Ni Hao cost too. Leave blank for none.</small></label>` +
+    `<label>Additional fee label<input name="additional_fee_label" type="text" maxlength="80" placeholder="e.g. Large shipment fee" value="${esc(fee ? record.additional_fee_label ?? "" : "")}"><small class="muted" style="display:block">Shown on the invoice. Blank = "Additional fee".</small></label>`;
 };
 
 /** Status choices for a shipment's service. Air Freight gets Air Transit; an older status it already has stays selectable. */
@@ -703,8 +738,12 @@ export async function handleAdmin(
       let measuredCharge = false;
       if (entity === "shipments") {
         const current = values as RecordData;
-        const previous = id
-          ? await db.prepare("SELECT nihao_cost, nihao_cost_source, shipping_charge, shipping_charge_source, source_quotation_id, payment_status, created_at FROM shipments WHERE id = ?").bind(id).first<RecordData>()
+        const previousRow = id
+          ? await db.prepare("SELECT nihao_cost, nihao_cost_source, shipping_charge, shipping_charge_source, discount_amount, transfer_fee_collected, source_quotation_id, payment_status, created_at FROM shipments WHERE id = ?").bind(id).first<RecordData>()
+          : null;
+        // The charge box holds the fee BEFORE any special discount; shipping_charge is saved after it.
+        const previous = previousRow
+          ? { ...previousRow, shipping_charge: previousRow.shipping_charge === null || previousRow.shipping_charge === undefined ? previousRow.shipping_charge : Number(previousRow.shipping_charge) + Number(previousRow.discount_amount ?? 0) } as RecordData
           : null;
         // Only invoice payments change the payment status, so it can never say
         // Paid without the money being recorded.
@@ -732,6 +771,20 @@ export async function handleAdmin(
           previous ? { cost: previous.nihao_cost, source: previous.nihao_cost_source } : null,
           await shipmentNiHaoEstimate(db, String(id), current),
         );
+        // Additional fee passed on to the customer; label only when there is a fee.
+        current.additional_fee = Number(current.additional_fee ?? 0) || 0;
+        current.additional_fee_label = current.additional_fee ? (String(current.additional_fee_label ?? "").trim() || "Additional fee") : null;
+        // Special discount (% off the base fee), never below 10% gross margin.
+        const discount = applySpecialDiscount({
+          grossCharge: Number(current.shipping_charge),
+          transferFee: previousRow?.transfer_fee_collected ?? 3000,
+          percent: Number(current.discount_percent ?? 0),
+          niHaoCost: niHao.cost,
+          additionalFee: Number(current.additional_fee),
+        });
+        current.discount_percent = discount.percent;
+        current.discount_amount = discount.amount;
+        current.shipping_charge = discount.netCharge;
         values = { ...current, nihao_cost: niHao.cost, nihao_cost_source: niHao.source } as unknown as typeof values;
       }
 
@@ -764,6 +817,10 @@ export async function handleAdmin(
           Number.isSafeInteger((values as RecordData).delivery_charge)
             ? Number((values as RecordData).delivery_charge)
             : undefined,
+          Number((values as RecordData).discount_percent ?? 0)
+            ? { amount: Number((values as RecordData).discount_amount ?? 0), reason: discountLabel((values as RecordData).discount_percent) }
+            : { amount: 0, reason: null },
+          { amount: Number((values as RecordData).additional_fee ?? 0), label: ((values as RecordData).additional_fee_label as string | null) ?? null },
         );
       }
 
@@ -1390,7 +1447,9 @@ export async function handleAdmin(
           `<div class="wide shipment-money shipment-money-kd">
             <h3><span class="shipment-money-tag">Money in</span> KargoDoor · customer pays us</h3>
             <div class="grid">` +
-          shippingChargeField(record) +
+          shippingChargeField(grossChargeRecord(record)) +
+          specialDiscountField(record) +
+          additionalFeeFields(record) +
           input(
             "delivery_charge",
             "Delivery charge (PHP)",
@@ -1719,7 +1778,10 @@ export async function handleAdmin(
             (key) =>
               key !== "customer_id" &&
               (key !== "departure_date" || record.service_type === "Air Freight") &&
-              key !== "estimated_arrival",
+              key !== "estimated_arrival" &&
+              key !== "discount_percent" &&
+              key !== "additional_fee" &&
+              key !== "additional_fee_label",
           )
           .concat([
             "created_at",
@@ -1814,7 +1876,7 @@ export async function handleAdmin(
           record[key] === null ? "Not entered" : pesos(record[key]);
         const marginValue = record.nihao_cost === null
           ? "Enter Ni Hao cost to calculate"
-          : pesos(Number(record.shipping_charge) - Number(record.nihao_cost));
+          : pesos(Number(record.shipping_charge) + Number(record.additional_fee ?? 0) - Number(record.nihao_cost));
 
         const shipment = [
           shipmentDetail("Tracking number", esc(record.tracking_number) || "—"),
@@ -1851,7 +1913,17 @@ export async function handleAdmin(
         ].join("");
 
         const split = splitFreightCharge(record.shipping_charge, record.transfer_fee_collected);
+        const discounted = Number(record.discount_amount ?? 0) > 0;
         const finance = [
+          ...(discounted && record.shipping_charge !== null
+            ? [
+                shipmentDetail("KargoDoor fee before discount", pesos(Number(record.shipping_charge) + Number(record.discount_amount))),
+                shipmentDetail(discountLabel(record.discount_percent), `<span style="color:#1d6b3a">− ${esc(pesos(record.discount_amount))}</span>`),
+              ]
+            : []),
+          ...(Number(record.additional_fee ?? 0) > 0
+            ? [shipmentDetail(String(record.additional_fee_label || "Additional fee"), `${esc(pesos(record.additional_fee))} <small class="muted">customer pays, on the invoice</small>`)]
+            : []),
           ...(split.fee > 0 && record.shipping_charge !== null
             ? [
                 shipmentDetail("KargoDoor base fee", pesos(split.base)),

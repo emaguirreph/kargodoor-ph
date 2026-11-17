@@ -169,8 +169,11 @@ export async function createShipmentFromApprovedQuotation(
     ).bind(customer.customerId, customerCode!, customer.create.fullName, customer.create.companyName, customer.create.mobile, customer.create.email, customer.create.address, now, now));
   }
   statements.push(db.prepare(
-    "INSERT INTO shipments (id, customer_id, source_quotation_id, tracking_number, service_type, china_warehouse, cbm, weight_kg, status, estimated_arrival, actual_arrival, shipping_charge, delivery_charge, payment_status, nihao_cost, nihao_cost_source, cargo_code, warehouse_received_date, departure_date, tracking_remarks, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, 0, 'Unpaid', ?, ?, NULL, NULL, NULL, NULL, ?, ?)",
-  ).bind(shipmentId, customer.customerId, quotationId, trackingNumber, serviceType, chinaWarehouse, cbm, weight, serviceType === "Sea Freight" ? "Awaiting Supplier Dispatch" : "Pending Warehouse Receipt", finalAmount, niHaoCost, niHaoCostSource, now, now));
+    "INSERT INTO shipments (id, customer_id, source_quotation_id, tracking_number, service_type, china_warehouse, cbm, weight_kg, status, estimated_arrival, actual_arrival, shipping_charge, delivery_charge, payment_status, nihao_cost, nihao_cost_source, cargo_code, warehouse_received_date, departure_date, tracking_remarks, created_at, updated_at, discount_percent, discount_amount, additional_fee, additional_fee_label) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, 0, 'Unpaid', ?, ?, NULL, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?)",
+  ).bind(shipmentId, customer.customerId, quotationId, trackingNumber, serviceType, chinaWarehouse, cbm, weight, serviceType === "Sea Freight" ? "Awaiting Supplier Dispatch" : "Pending Warehouse Receipt", finalAmount, niHaoCost, niHaoCostSource, now, now,
+    // The quotation's special discount and additional fee carry over (final_amount is already after the discount).
+    Number(quote.discount_percent ?? 0) || 0, Number(quote.discount_amount ?? 0) || 0, Number(quote.additional_fee ?? 0) || 0,
+    Number(quote.additional_fee ?? 0) > 0 ? String(quote.additional_fee_label || "Additional fee") : null));
   statements.push(db.prepare(
     "INSERT INTO activity_log (id, admin_user_id, action, entity_type, entity_id, old_value, new_value, notes, created_at) VALUES (?, ?, 'create_from_approved_quotation', 'shipments', ?, NULL, ?, ?, ?)",
   ).bind(randomUUID(), adminUserId, shipmentId, JSON.stringify({

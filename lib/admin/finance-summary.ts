@@ -392,7 +392,7 @@ export async function readSimpleSummary(db: D1Database, now = new Date()) {
         s.tracking_number,
         c.full_name,
         s.status,
-        CAST(s.shipping_charge + s.delivery_charge AS TEXT) AS amount,
+        CAST(s.shipping_charge + s.delivery_charge + s.additional_fee AS TEXT) AS amount,
         CAST(s.nihao_cost AS TEXT) AS nihao_cost,
         (
           SELECT i.id FROM invoices i
@@ -411,7 +411,7 @@ export async function readSimpleSummary(db: D1Database, now = new Date()) {
             AND i.status NOT IN ('Draft', 'Void')
             AND i.archived_at IS NULL
         )
-      ORDER BY s.shipping_charge + s.delivery_charge DESC, s.created_at ASC`,
+      ORDER BY s.shipping_charge + s.delivery_charge + s.additional_fee DESC, s.created_at ASC`,
     )
     .all<UnbilledShipment>();
 

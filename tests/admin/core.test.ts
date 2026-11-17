@@ -93,6 +93,7 @@ function database(includePhase1 = true) {
   sql.exec(readFileSync("migrations/admin/0038_payment_proofs.sql", "utf8"));
   sql.exec(readFileSync("migrations/admin/0039_account_transfers.sql", "utf8"));
   sql.exec(readFileSync("migrations/admin/0041_client_source_referrals.sql", "utf8"));
+  sql.exec(readFileSync("migrations/admin/0049_discount_additional_fee.sql", "utf8"));
   const user = randomUUID();
   sql
     .prepare("INSERT INTO admin_users VALUES (?,?,?,?,?,?)")
@@ -1403,6 +1404,47 @@ test("editing a shipment delivery charge updates its Draft or Unpaid invoice", a
   assert.equal(invoice.total, 76100);
 });
 
+test("special discount on a shipment goes on its new invoice and follows the shipment on Draft/Unpaid invoices", async () => {
+  const { sql, db, user } = database();
+  const customerId = await saveRecord(db, "customers", customer, user, "", "");
+  // ₱530 before discount, 10% off the base = ₱50, customer pays ₱480 freight.
+  const shipmentId = await saveRecord(db, "shipments", { ...shipment(customerId), shipping_charge: 48000, discount_percent: 10, discount_amount: 5000 }, user, "", "");
+  const invoiceId = await createInvoice(db, { shipment_id: shipmentId, delivery_charge: "231", other_charge: "0", status: "Draft", issued_at: "", due_at: "" }, user);
+  let invoice = sql.prepare("SELECT subtotal, total, discount_amount, discount_reason FROM invoices WHERE id=?").get(invoiceId)!;
+  assert.deepEqual({ ...invoice }, { subtotal: 48000, total: 71100, discount_amount: 5000, discount_reason: "Special discount 10%" });
+  // Discount changed to 20% on the shipment: invoice follows.
+  assert.equal(await syncVerifiedFreightToInvoice(db, shipmentId, 43000, user, "Edited charge.", 23100, { amount: 10000, reason: "Special discount 20%" }), 1);
+  invoice = sql.prepare("SELECT subtotal, total, discount_amount, discount_reason FROM invoices WHERE id=?").get(invoiceId)!;
+  assert.deepEqual({ ...invoice }, { subtotal: 43000, total: 66100, discount_amount: 10000, discount_reason: "Special discount 20%" });
+  // Discount removed: no discount line left on the invoice.
+  assert.equal(await syncVerifiedFreightToInvoice(db, shipmentId, 53000, user, "Edited charge.", 23100, { amount: 0, reason: null }), 1);
+  invoice = sql.prepare("SELECT subtotal, total, discount_amount, discount_reason FROM invoices WHERE id=?").get(invoiceId)!;
+  assert.deepEqual({ ...invoice }, { subtotal: 53000, total: 76100, discount_amount: 0, discount_reason: null });
+  assert.equal(await syncVerifiedFreightToInvoice(db, shipmentId, 53000, user, "Edited charge.", 23100, { amount: 0, reason: null }), 0);
+});
+
+test("additional fee on a shipment becomes the invoice's labelled other charge and adds to what the customer owes", async () => {
+  const { sql, db, user } = database();
+  const customerId = await saveRecord(db, "customers", customer, user, "", "");
+  const shipmentId = await saveRecord(db, "shipments", { ...shipment(customerId), shipping_charge: 53000, additional_fee: 85000, additional_fee_label: "Large shipment fee" }, user, "", "");
+  const invoiceId = await createInvoice(db, { shipment_id: shipmentId, delivery_charge: "231", other_charge: "850", status: "Draft", issued_at: "", due_at: "" }, user);
+  let invoice = sql.prepare("SELECT subtotal, total, other_charge, other_charge_label FROM invoices WHERE id=?").get(invoiceId)!;
+  // total holds freight + delivery; the other charge is added on top (₱530 + ₱231 + ₱850 = ₱1,611).
+  assert.deepEqual({ ...invoice }, { subtotal: 53000, total: 76100, other_charge: 85000, other_charge_label: "Large shipment fee" });
+  // Fee removed on the shipment: invoice drops it.
+  assert.equal(await syncVerifiedFreightToInvoice(db, shipmentId, 53000, user, "Edited.", 23100, { amount: 0, reason: null }, { amount: 0, label: null }), 1);
+  invoice = sql.prepare("SELECT other_charge, other_charge_label FROM invoices WHERE id=?").get(invoiceId)!;
+  assert.deepEqual({ ...invoice }, { other_charge: 0, other_charge_label: null });
+  // Fee added back: invoice follows; nothing to do when it already matches.
+  assert.equal(await syncVerifiedFreightToInvoice(db, shipmentId, 53000, user, "Edited.", 23100, { amount: 0, reason: null }, { amount: 85000, label: "Large shipment fee" }), 1);
+  assert.equal(await syncVerifiedFreightToInvoice(db, shipmentId, 53000, user, "Edited.", 23100, { amount: 0, reason: null }, { amount: 85000, label: "Large shipment fee" }), 0);
+  invoice = sql.prepare("SELECT other_charge, other_charge_label FROM invoices WHERE id=?").get(invoiceId)!;
+  assert.deepEqual({ ...invoice }, { other_charge: 85000, other_charge_label: "Large shipment fee" });
+  // Payment of the full ₱1,611 settles the invoice.
+  await recordPayment(db, { invoice_id: invoiceId, amount: "1611", payment_method: "GCash", reference_number: "", payment_date: "2026-11-17", notes: "" }, user);
+  assert.equal(sql.prepare("SELECT status FROM invoices WHERE id=?").get(invoiceId)!.status, "Paid");
+});
+
 test("draft invoices can be issued and reject invalid charges, dates and overpayments", async () => {
   const { sql, db, user } = database();
   const customerId = await saveRecord(db, "customers", customer, user, "", "");
@@ -1633,6 +1675,7 @@ test("expense filters and search combine with exact integer totals and clear res
 });
 
 import "./finance.test";
+import "./special-discount.test";
 import "./finance-phase4.test";
 import "./nihao-pricing.test";
 import "../messenger.test";
