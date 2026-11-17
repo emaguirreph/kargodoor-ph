@@ -680,7 +680,17 @@ export async function quotationsPage(
           overrideReason = null;
           activity = "recalculate";
         }
-        if (form.has("override_amount")) {
+        // Switching Air <-> Sea (Em, 2026-11-17): the whole quotation re-prices. An
+        // override or a typed Ni Hao cost that was only carried over from the old
+        // freight type no longer applies, so it is dropped unless it was changed.
+        const freightSwitched = freight !== String(existing.freight_type);
+        const carriedOver = (field: string, saved: unknown) => {
+          const raw = String(form.get(field) ?? "").trim();
+          return freightSwitched && raw !== "" && saved !== null && saved !== undefined && cents(raw) === Number(saved);
+        };
+        const dropOverride = carriedOver("override_amount", existing.override_amount);
+        const dropNiHao = carriedOver("nihao_cost", existing.backend_cost);
+        if (form.has("override_amount") && !dropOverride) {
           const override = String(form.get("override_amount") || "").trim();
           const reason = String(form.get("override_reason") || "").trim();
           if (staff && override)
@@ -697,7 +707,7 @@ export async function quotationsPage(
             finalAmount = calculatedAmount;
           }
         }
-        const niHaoCostField = form.get("nihao_cost");
+        const niHaoCostField = dropNiHao ? "" : form.get("nihao_cost");
         const niHaoResolved = niHaoCostField === null
           ? { cost: existing.backend_cost, source: existing.backend_cost_source }
           : resolveNiHaoCost(

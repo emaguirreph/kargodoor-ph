@@ -526,3 +526,43 @@ test("quotation detail uses the compact three-column layout and tolerates legacy
   );
   assert.equal(archivedDetail.status, 200, "archived quotations remain available by direct detail link");
 });
+
+test("switching a quotation from Air to Sea re-prices it: old override and typed Ni Hao cost are dropped", async () => {
+  const { sql, env, user } = quotationDatabase();
+  const post = (fields: Record<string, string>) =>
+    quotationsPage(
+      new Request("http://localhost:3000/admin/quotations", {
+        method: "POST",
+        headers: { ...authHeaders(), "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ csrf: csrfToken(env, user, "/admin/quotations"), ...fields }),
+      }),
+      env,
+    );
+  const base = { status: "Draft", quotation_date: "2026-11-17", customer_name: "Air Customer", cbm: "4.43", weight: "740", units: "0" };
+  assert.equal((await post({ ...base, action: "save", freight_type: "Air Freight", item: "Ordinary Items", override_amount: "444030", override_reason: "Special rate", nihao_cost: "311600" })).status, 303);
+  const saved = sql.prepare("SELECT id, override_amount, backend_cost, backend_cost_source FROM quotations LIMIT 1").get() as { id: string; override_amount: number; backend_cost: number; backend_cost_source: string };
+  assert.equal(saved.override_amount, 44_403_000);
+  assert.equal(saved.backend_cost_source, "actual");
+
+  // The edit form sends the old values back unchanged; only the freight type and item change.
+  const res = await post({ ...base, action: "update", quotation_id: saved.id, freight_type: "Sea Freight", item: "Solar panels", override_amount: "444030.00", override_reason: "Special rate", nihao_cost: "311600.00" });
+  assert.equal(res.status, 303);
+  const updated = sql.prepare("SELECT freight_type, override_amount, calculated_amount, final_amount, backend_cost, backend_cost_source FROM quotations WHERE id=?").get(saved.id) as Record<string, unknown>;
+  assert.equal(updated.freight_type, "Sea Freight");
+  assert.equal(updated.override_amount, null);
+  assert.equal(updated.final_amount, updated.calculated_amount);
+  assert.notEqual(updated.backend_cost, 31_160_000);
+  assert.equal(updated.backend_cost_source, "estimate");
+
+  // A new override typed while switching back is kept.
+  await post({ ...base, action: "update", quotation_id: saved.id, freight_type: "Air Freight", item: "Ordinary Items", override_amount: "450000", override_reason: "New air rate", nihao_cost: "" });
+  const back = sql.prepare("SELECT override_amount, final_amount FROM quotations WHERE id=?").get(saved.id) as Record<string, unknown>;
+  assert.equal(back.override_amount, 45_000_000);
+  assert.equal(back.final_amount, 45_000_000);
+});
+
+test("quotation edit script clears the override and goes back to the Ni Hao estimate when the freight type changes", () => {
+  const js = readFileSync("public/admin-quotation-cargo.js", "utf8");
+  assert.match(js, /Air <-> Sea re-prices the whole quotation[\s\S]*overrideAmount\.value = ""/);
+  assert.match(js, /select\[name="freight_type"\]'\)\?\.addEventListener\("change", \(\) => \{\s*niHaoInput\.dataset\.auto = "1";/);
+});
