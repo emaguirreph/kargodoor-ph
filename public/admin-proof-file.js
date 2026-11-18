@@ -1,34 +1,14 @@
 (() => {
   // Proof of payment boxes (customer payments and expenses): drop a screenshot
-  // or PDF on a box, or choose one, and it uploads right away. A photo over
-  // 1.5 MB is made smaller in the browser first so phone screenshots fit.
+  // or PDF on a box, or choose one, and it uploads right away. Photos are made
+  // smaller in the browser first; PDFs upload as they are.
   const allowed = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
   const maxBytes = 1.5 * 1024 * 1024;
   const hasFiles = (event) => Array.from(event.dataTransfer?.types || []).includes("Files");
 
-  // createImageBitmap reads the file directly, so it works under the admin
-  // page's img-src 'self' rule (a blob: image URL would be blocked).
-  const shrink = async (file) => {
-    if (file.size <= maxBytes || !file.type.startsWith("image/") || typeof createImageBitmap !== "function") return file;
-    try {
-      const bitmap = await createImageBitmap(file);
-      const scale = Math.min(1, 1800 / Math.max(bitmap.width, bitmap.height));
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.round(bitmap.width * scale);
-      canvas.height = Math.round(bitmap.height * scale);
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return file;
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-      if (typeof bitmap.close === "function") bitmap.close();
-      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85));
-      if (!blob) return file;
-      return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
-    } catch {
-      return file;
-    }
-  };
+  // Every photo is shrunk in the browser first (admin-image-shrink.js), so
+  // phone photos and big screenshots upload fast and stay small in the database.
+  const shrink = (file) => (typeof window.kdShrinkImage === "function" ? window.kdShrinkImage(file, "doc") : Promise.resolve(file));
 
   const setup = () => {
     document.querySelectorAll("[data-proof-drop]").forEach((zone) => {
@@ -58,7 +38,8 @@
           transfer.items.add(file);
           input.files = transfer.files;
         }
-        say(`Uploading ${file.name}…`);
+        const note = typeof window.kdShrinkNote === "function" ? window.kdShrinkNote(picked, file) : "";
+        say(`${note ? note + " " : ""}Uploading ${file.name}…`);
         if (typeof form.requestSubmit === "function") form.requestSubmit();
         else form.submit();
       };

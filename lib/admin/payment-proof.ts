@@ -113,7 +113,7 @@ export const proofCss = `<style>
 .proof-drop.is-dragover{border-color:#1f4f8f;border-style:solid;background:#e8f0fb;box-shadow:0 0 0 3px #c9daf3}
 .proof-drop.is-uploading{opacity:.7}
 .proof-hint{margin:4px 0 0}
-</style><script src="/admin-proof-file.js" defer></script>`;
+</style><script src="/admin-image-shrink.js" defer></script><script src="/admin-proof-file.js" defer></script>`;
 
 /** GET shows a proof file; POST uploads or replaces it. */
 export async function proofRequest(request: Request) {
