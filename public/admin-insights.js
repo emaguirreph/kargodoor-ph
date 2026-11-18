@@ -1,11 +1,14 @@
 (() => {
+  // Blog cover: shrink the photo in the browser (admin-image-shrink.js,
+  // "photo" size: 1600 px, about 300 KB) before the form is sent.
   const form = document.querySelector("[data-insight-editor]");
   const input = document.querySelector("[data-insight-image]");
-  if (!form || !input || !window.HTMLCanvasElement) return;
+  if (!form || !input || typeof window.kdShrinkImage !== "function") return;
+  let ready = false;
   form.addEventListener("submit", async (event) => {
+    if (ready) return;
     const file = input.files && input.files[0];
-    if (!file || file.type === "image/webp") return;
-    if (!/^image\/(jpeg|png)$/.test(file.type)) return;
+    if (!file) return;
     event.preventDefault();
     const action = event.submitter && event.submitter.value;
     if (action) {
@@ -15,24 +18,13 @@
       hidden.value = action;
       form.append(hidden);
     }
-    const image = new Image();
-    const objectUrl = URL.createObjectURL(file);
-    image.onload = () => {
-      const scale = Math.min(1, 1600 / Math.max(image.naturalWidth, image.naturalHeight));
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.round(image.naturalWidth * scale);
-      canvas.height = Math.round(image.naturalHeight * scale);
-      canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
-      canvas.toBlob((blob) => {
-        URL.revokeObjectURL(objectUrl);
-        if (!blob) return form.submit();
-        const transfer = new DataTransfer();
-        transfer.items.add(new File([blob], `${file.name.replace(/\.[^.]+$/, "")}.webp`, { type: "image/webp" }));
-        input.files = transfer.files;
-        form.submit();
-      }, "image/webp", .82);
-    };
-    image.onerror = () => { URL.revokeObjectURL(objectUrl); form.submit(); };
-    image.src = objectUrl;
-  }, { once: true });
+    const small = await window.kdShrinkImage(file, "photo");
+    if (small !== file) {
+      const transfer = new DataTransfer();
+      transfer.items.add(small);
+      input.files = transfer.files;
+    }
+    ready = true;
+    form.submit();
+  });
 })();

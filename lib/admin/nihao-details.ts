@@ -103,7 +103,7 @@ export function niHaoDetailsBox(options: { shipmentId: string; record: RecordDat
   const upload = shipmentId && options.canWrite
     ? detachForm(`<form method="post" action="${niHaoFilePath}" enctype="multipart/form-data">${hidden("csrf", options.csrf)}${hidden("id", shipmentId)}
         <label class="nihao-file-pick">${details?.file_name ? "Replace file" : "⬆ Upload Ni Hao file"}<input type="file" name="file" accept="application/pdf,image/jpeg,image/png,image/webp" required></label>
-        <button type="submit" class="nihao-file-upload">Upload</button><span class="muted">or drag the file here · PDF or photo, up to 1.5 MB</span><span class="nihao-drop-status" data-nihao-drop-status role="status"></span></form>`, "nihao-file-form")
+        <button type="submit" class="nihao-file-upload">Upload</button><span class="muted">or drag the file here · PDF or photo · photos are made smaller automatically</span><span class="nihao-drop-status" data-nihao-drop-status role="status"></span></form>`, "nihao-file-form")
     : { inline: "", form: "" };
   const inline = `<div class="shipment-pay-box nihao-details" id="nihao-details"><h4>Ni Hao details</h4>
     ${options.uploaded ? `<p class="notice" role="status">Ni Hao file uploaded.</p>` : ""}
@@ -129,7 +129,7 @@ export const niHaoDetailsCss = `<style>
 .nihao-drop-status:empty{display:none}
 .nihao-supplier-more{margin-top:12px}.nihao-supplier-more>summary{cursor:pointer;font-weight:700;color:#a3261f;font-size:.92rem}.nihao-supplier-more>.grid{margin-top:10px}
 html body .shipment-money-nh .nihao-details .nihao-copy{background:#fff;color:#a3261f;border:1.5px solid #a3261f;box-shadow:none}
-</style><script src="/admin-nihao-file.js" defer></script>`;
+</style><script src="/admin-image-shrink.js" defer></script><script src="/admin-nihao-file.js" defer></script>`;
 
 /** Reads the first bytes so a renamed file cannot pretend to be a PDF or photo. */
 export function sniffNiHaoFile(bytes: Uint8Array): FileType | null {
