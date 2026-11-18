@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { MessengerLink } from "@/components/messenger-link";
 import { CopyButton } from "./copy-button";
+import { ShrinkOnSubmit } from "./shrink-on-submit";
 import { ShippingTabs, type ShippingTabWarehouse } from "./shipping-tabs";
 import { WaybillExample } from "./illustrations";
 import { kargodoorBankAccounts } from "@/lib/admin/bank-accounts";
@@ -403,6 +404,7 @@ export function BookView({ data, links, query }: ViewProps) {
       {query.done === "1" ? <Notice>Booking sent! Your booking number is <b>{query.ref}</b>. We&apos;ll check it and message you on Messenger. It shows under My Shipments while we review it.</Notice> : null}
       {query.error ? <Notice kind="err">{query.error}</Notice> : null}
       <form className="pcard pform" method="post" action="/customer/actions/book" encType="multipart/form-data">
+        <ShrinkOnSubmit />
         <fieldset disabled={disabled}>
           <div className="pgrid2 tight">
             <label className="pfield"><span>Sea or air</span><select name="service" defaultValue="sea"><option value="sea">Sea Freight</option><option value="air">Air Freight</option></select></label>
@@ -416,8 +418,8 @@ export function BookView({ data, links, query }: ViewProps) {
             <label className="pfield"><span>In the Philippines</span><select name="deliveryMode" defaultValue="pickup"><option value="pickup">Pickup at Malabon</option><option value="delivery">Deliver to my address</option></select></label>
             <label className="pfield"><span>Delivery address (if delivery)</span><input name="deliveryAddress" maxLength={400} defaultValue={data.customer.address ?? ""} /></label>
           </div>
-          <label className="pfield"><span>Product photos (1 to 5, required)</span><input type="file" name="photos" accept="image/jpeg,image/png,image/webp" multiple required /></label>
-          <label className="pfield"><span>Packing list or supplier invoice (optional)</span><input type="file" name="packing" accept="image/jpeg,image/png,image/webp,application/pdf" /></label>
+          <label className="pfield"><span>Product photos (1 to 5, required)</span><input type="file" name="photos" accept="image/jpeg,image/png,image/webp" multiple required data-shrink="photo" /></label>
+          <label className="pfield"><span>Packing list or supplier invoice (optional)</span><input type="file" name="packing" accept="image/jpeg,image/png,image/webp,application/pdf" data-shrink="doc" /></label>
           <label className="pfield"><span>Notes (optional)</span><textarea name="notes" maxLength={1000} /></label>
           <p className="pmuted">Final charges are based on the CBM and weight verified by our China warehouse.</p>
           <div className="pbtns"><button className="pbtn pbtn-green" type="submit">SEND BOOKING</button></div>
@@ -463,12 +465,13 @@ export function PaymentsView({ data, links, query }: ViewProps) {
           </section>
         ))}
         <form className="pcard pform" method="post" action="/customer/actions/proof" encType="multipart/form-data">
+          <ShrinkOnSubmit />
           <h3>Nakapagbayad na? Send your proof</h3>
           {open.length ? (
             <fieldset disabled={links.preview}>
               <label className="pfield"><span>For which bill</span>
                 <select name="invoice_id" defaultValue={chosen}>{open.map((b) => <option key={b.invoiceId} value={b.invoiceId}>{b.trackingNumber} · {formatPeso(b.balance)}</option>)}</select></label>
-              <label className="pfield"><span>Screenshot or receipt (JPG, PNG, WebP or PDF, up to 1.5 MB)</span><input type="file" name="file" required accept="image/jpeg,image/png,image/webp,application/pdf" /></label>
+              <label className="pfield"><span>Screenshot or receipt (JPG, PNG, WebP or PDF; photos are made smaller automatically)</span><input type="file" name="file" required accept="image/jpeg,image/png,image/webp,application/pdf" data-shrink="doc" /></label>
               <button className="pbtn pbtn-green" type="submit">SEND PROOF OF PAYMENT</button>
               <small className="pmuted">We check it, then mark your bill PAID, usually within the day.</small>
             </fieldset>

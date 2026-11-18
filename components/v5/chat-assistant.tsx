@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type
 import { preload } from "react-dom";
 import { MessengerLink } from "@/components/messenger-link";
 import { trackEvent } from "@/lib/analytics";
+import { shrinkImage } from "@/lib/shrink-image";
 import { getAirEstimate, getSeaEstimate } from "@/lib/shipping-estimate.mjs";
 import { hongKongMark, isHongKongWarehouse, warehouseAddresses, type WarehouseName } from "@/lib/warehouse-addresses";
 
@@ -275,23 +276,6 @@ function Calculator({ act }: { act: (key: string, data?: Record<string, string>)
 
 // ---------- booking ----------
 
-async function compressPhoto(file: File): Promise<Blob> {
-  if (!file.type.startsWith("image/") || typeof createImageBitmap !== "function") return file;
-  try {
-    const bitmap = await createImageBitmap(file);
-    const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
-    if (scale === 1 && file.size < 700 * 1024) return file;
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.round(bitmap.width * scale);
-    canvas.height = Math.round(bitmap.height * scale);
-    canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.8));
-    return blob && blob.size < file.size ? blob : file;
-  } catch {
-    return file;
-  }
-}
-
 type BookingDraft = Record<string, string>;
 
 function BookingForm({ preset, done }: { preset?: Record<string, string>; done: (ref: string, phone: string) => void }) {
@@ -333,8 +317,8 @@ function BookingForm({ preset, done }: { preset?: Record<string, string>; done: 
         itemValue: d.itemValue ? Number(d.itemValue.replace(/[^\d.]/g, "")) : undefined, warehouse: d.warehouse, supplier: d.supplier,
         notes: d.notes ?? "", consent,
       }));
-      for (const [i, photo] of photos.entries()) form.append("photos", await compressPhoto(photo), photo.name || `photo-${i + 1}.jpg`);
-      if (packing) form.append("packing", packing, packing.name);
+      for (const [i, photo] of photos.entries()) { const small = await shrinkImage(photo, "photo"); form.append("photos", small, small.name || `photo-${i + 1}.jpg`); }
+      if (packing) { const small = await shrinkImage(packing, "doc"); form.append("packing", small, small.name); }
       const response = await fetch("/api/bookings", { method: "POST", body: form });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || "Your booking was not sent. Please try again.");
@@ -419,7 +403,8 @@ function ProofUpload({ bookingRef, last4, sent }: { bookingRef: string; last4: s
     try {
       const form = new FormData();
       form.set("ref", bookingRef); form.set("last4", last4);
-      form.append("file", file.type.startsWith("image/") ? await compressPhoto(file) : file, file.name);
+      const small = await shrinkImage(file, "doc");
+      form.append("file", small, small.name);
       const r = await fetch("/api/bookings/proof", { method: "POST", body: form });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(body.error || "The upload failed. Please try again.");
