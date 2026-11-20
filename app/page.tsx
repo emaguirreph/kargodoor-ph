@@ -7,6 +7,7 @@ import { MessengerLink } from "@/components/messenger-link";
 import { faqs } from "@/lib/faq-content";
 import { pageMetadata } from "@/lib/seo";
 import { icon, stepIcons } from "@/components/v5/icons";
+import { FollowUs } from "@/components/v5/follow-us";
 
 export const metadata = pageMetadata(
   "Shipping from China to the Philippines | KargoDoor PH",
@@ -211,6 +212,8 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      <FollowUs />
 
       <section className="band" aria-labelledby="rates-title">
         <div className="wrap">
