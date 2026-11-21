@@ -16,7 +16,7 @@ test("unpaid invoice PDF shows charges, amount due and how to pay", () => {
   assert.ok(pdf.startsWith("%PDF-1.4"));
   assert.match(pdf, /\/Count 1/);
   assert.match(pdf, /\/Filter \/DCTDecode/);
-  for (const text of ["INVOICE", "INV-20261102-DA201FBC", "Michaela Juan", "0917 509 8267", "Air freight, China to Manila", "1 kg verified", "530.00", "231.00", "761.00", "AMOUNT DUE", "How to pay", "0021 7001 7106", "0919 932 3077"]) {
+  for (const text of ["INVOICE", "INV-20261102-DA201FBC", "Michaela Juan", "KDOOR CODE ", "KDOOR-5560", "KDOOR code", "0917 509 8267", "Air freight, China to Manila", "1 kg verified", "530.00", "231.00", "761.00", "AMOUNT DUE", "How to pay", "0021 7001 7106", "0919 932 3077"]) {
     assert.ok(pdf.includes(text), text);
   }
   assert.ok(!pdf.includes("Payment received"));

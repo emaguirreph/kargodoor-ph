@@ -559,7 +559,7 @@ export function ChatAssistant() {
         <p className="kc-small">These are estimates. Times can change because of schedules, customs, weather or holidays.</p>
       </>);
       case "restricted": return say(<>
-        <p>Our team needs to check items like <b>batteries, liquids, chemicals, food, medicines, cosmetics and branded goods</b> first. 🙏</p>
+        <p>Our team needs to check items like <b>batteries, liquids, chemicals, food, medicines and cosmetics</b> first. 🙏 Branded items are OK only if original; fake or counterfeit items are not allowed.</p>
         <p>Send us a photo or details of the item before you buy or ship:</p><TeamButton />
       </>);
       case "hello": return say(<p>Hello! 😊 Pick a button below, or type your question.</p>);

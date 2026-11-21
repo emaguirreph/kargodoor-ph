@@ -20,13 +20,15 @@ export async function POST(request: Request) {
     const db = (env as unknown as { ADMIN_DB: D1Database }).ADMIN_DB;
     const input = parseSignupForm(await request.formData());
     const { id } = await saveSignup(db, input, request.headers.get("cf-connecting-ip"));
-    ctx.waitUntil(sendSignupAlert((env as unknown as { LEAD_EMAIL?: Parameters<typeof sendSignupAlert>[0] }).LEAD_EMAIL, {
-      fullName: input.fullName, mobile: input.mobile, email: input.email, address: input.address,
-      shipsWhat: input.shipsWhat, heardFrom: input.heardFrom, referralCode: input.referralCode,
-    }));
     // Send the 6-digit email code. If it can't go out, the sign-up is still saved.
     const codeSent = await sendSignupCode(db, id, resendSender(env as unknown as EmailEnv)).then((r) => r === "sent")
       .catch((error) => { console.error("Sign-up code email failed", error instanceof Error ? error.message : error); return false; });
+    // Em hears about it once the client types the code (verify route). If the code
+    // could not go out, they can't confirm, so tell Em now that it needs her.
+    if (!codeSent) ctx.waitUntil(sendSignupAlert((env as unknown as { LEAD_EMAIL?: Parameters<typeof sendSignupAlert>[0] }).LEAD_EMAIL, {
+      fullName: input.fullName, mobile: input.mobile, email: input.email, address: input.address,
+      shipsWhat: input.shipsWhat, heardFrom: input.heardFrom, referralCode: input.referralCode,
+    }, { kind: "review", reason: "we could not email them the confirmation code." }));
     return json({ ok: true, id, codeSent, email: input.email });
   } catch (error) {
     if (error instanceof SignupError) return json({ error: error.message }, error.status);

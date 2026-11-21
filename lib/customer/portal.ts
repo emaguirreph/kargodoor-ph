@@ -11,6 +11,8 @@ export type PortalCustomer = {
   id: string; customer_code: string; full_name: string; company_name: string | null;
   mobile: string; email: string | null; address: string | null; created_at: string;
   login_email?: string | null;
+  /** Shipping Terms version agreed on the portal account (null = never). */
+  terms_version?: string | null;
 };
 
 export type PortalShipment = {
@@ -36,12 +38,15 @@ export type PortalBill = {
 export type PortalBooking = { ref: string; status: string; service: string; item: string; createdAt: string };
 export type PortalConcern = { topic: string; status: string; message: string; createdAt: string; trackingNumber: string | null; adminNote: string | null };
 
+export type PortalCourier = { courier: string; waybill: string; packages: number | null; item: string | null; status: string; createdAt: string; trackingNumber: string | null; shipmentId: string | null; adminNote: string | null; hasPhoto: boolean };
+
 export type PortalData = {
   customer: PortalCustomer;
   shipments: PortalShipment[];
   bills: PortalBill[];
   bookings: PortalBooking[];
   concerns: PortalConcern[];
+  couriers: PortalCourier[];
   referrals: number;
 };
 
@@ -78,11 +83,12 @@ const visibleBill = (status: unknown) => ["Unpaid", "Partial", "Paid"].includes(
 
 export async function loadPortal(db: D1Database, customerId: string): Promise<PortalData | null> {
   const customer = await db.prepare(`SELECT c.id, c.customer_code, c.full_name, c.company_name, c.mobile, c.email, c.address, c.created_at,
-      (SELECT a.login_email FROM customer_accounts a WHERE a.customer_id = c.id LIMIT 1) AS login_email
+      (SELECT a.login_email FROM customer_accounts a WHERE a.customer_id = c.id LIMIT 1) AS login_email,
+      (SELECT a.terms_version FROM customer_accounts a WHERE a.customer_id = c.id LIMIT 1) AS terms_version
     FROM customers c WHERE c.id = ? AND c.archived_at IS NULL`).bind(customerId).first<PortalCustomer>();
   if (!customer) return null;
 
-  const [shipmentRows, billRows, proofRows, bookingRows, concernRows, referralRow] = await Promise.all([
+  const [shipmentRows, billRows, proofRows, bookingRows, concernRows, referralRow, courierRows] = await Promise.all([
     db.prepare(`SELECT s.id, s.tracking_number, COALESCE(${cargoItemSql}, '') AS item, ${cargoCategorySql.item} AS category_item, ${cargoCategorySql.group} AS category_group,
         s.service_type, s.status, s.china_warehouse, s.cbm, s.weight_kg, s.verified_cbm, s.verified_weight_kg,
         s.warehouse_received_date, s.actual_arrival, s.delivered_date, s.shipping_charge, s.delivery_charge, s.additional_fee, s.updated_at,
@@ -108,6 +114,10 @@ export async function loadPortal(db: D1Database, customerId: string): Promise<Po
       LEFT JOIN shipments s ON s.id = c.shipment_id WHERE c.customer_id = ? ORDER BY c.created_at DESC LIMIT 20`).bind(customerId).all<Row>(),
     db.prepare("SELECT COUNT(*) AS n FROM customers WHERE upper(referral_code) = upper(?) AND id != ? AND archived_at IS NULL")
       .bind(customer.customer_code, customerId).first<{ n: number }>(),
+    // Courier details sent from the portal; empty until migration 0048 is applied.
+    db.prepare(`SELECT n.courier, n.waybill_number, n.packages, n.item, n.status, n.created_at, n.shipment_id, n.admin_note, n.file_name, s.tracking_number
+      FROM customer_courier_notices n LEFT JOIN shipments s ON s.id = n.shipment_id
+      WHERE n.customer_id = ? ORDER BY n.created_at DESC LIMIT 30`).bind(customerId).all<Row>().catch(() => ({ results: [] as Row[] })),
   ]);
 
   const shipments: PortalShipment[] = shipmentRows.results.map((row) => {
@@ -154,6 +164,11 @@ export async function loadPortal(db: D1Database, customerId: string): Promise<Po
     customer, shipments, bills,
     bookings: bookingRows.results.map((row) => ({ ref: String(row.booking_ref), status: String(row.status), service: String(row.service_type), item: String(row.item_description), createdAt: String(row.created_at) })),
     concerns: concernRows.results.map((row) => ({ topic: String(row.topic), status: String(row.status), message: String(row.message), createdAt: String(row.created_at), trackingNumber: str(row.tracking_number), adminNote: str(row.admin_note) })),
+    couriers: courierRows.results.map((row) => ({
+      courier: String(row.courier), waybill: String(row.waybill_number), packages: row.packages === null || row.packages === undefined ? null : num(row.packages),
+      item: str(row.item), status: String(row.status), createdAt: String(row.created_at), trackingNumber: str(row.tracking_number),
+      shipmentId: str(row.shipment_id), adminNote: str(row.admin_note), hasPhoto: Boolean(row.file_name),
+    })),
     referrals: num(referralRow?.n),
   };
 }
