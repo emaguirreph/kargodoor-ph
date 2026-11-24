@@ -53,14 +53,16 @@ export function planStart(nowMs = Date.now()) {
 
 type Choice = { topic: string; category: FbCategory; title: string; caption: string; image_path: string | null; link: string | null };
 
+/** Blog posts go out as a photo card (no link, see fb-library.ts): the article's own card, or the generic one. */
+const blogCard = (slug: string) => (insights.some((i) => i.slug === slug) ? `/fb-cards/blog-${slug}.jpg` : "/fb-cards/blog.jpg");
+
 async function blogChoices(env: Env, origin: string): Promise<Choice[]> {
   const seen = new Set<string>();
   const list: Choice[] = [];
   const add = (slug: string, title: string, description: string) => {
     if (seen.has(slug)) return;
     seen.add(slug);
-    const url = `${origin}/insights/${slug}`;
-    list.push({ topic: `blog:${slug}`, category: "Blog", title, caption: blogCaption(title, description, url), image_path: null, link: url });
+        list.push({ topic: `blog:${slug}`, category: "Blog", title, caption: blogCaption(title, description), image_path: blogCard(slug), link: null });
   };
   try {
     const rows = (await env.ADMIN_DB.prepare("SELECT slug,title,body FROM insights WHERE status='Published' ORDER BY published_at DESC").all<{ slug: string; title: string; body: string }>()).results;
@@ -218,7 +220,7 @@ function newPostForm(csrf: string, connected: boolean) {
   return `<details class="fbp-new"><summary>+ New post (your own image and caption)</summary><form method="post" action="${path}" enctype="multipart/form-data" class="grid" data-fb-post-form>
     <input type="hidden" name="csrf" value="${esc(csrf)}">
     <label class="wide">Image (from Canva or your phone)<input type="file" name="image" accept="image/jpeg,image/png" data-fb-post-image><small class="muted" style="display:block">Best size 1080 × 1350 or 1080 × 1080. Big images are made smaller in your browser before upload. Leave empty for a text-only post.</small></label>
-    <label class="wide">Caption *<textarea name="caption" maxlength="5000" required placeholder="Write your caption. Short lines, 1 or 2 emojis, and a link to kargodoorph.com/rates-calculator work best."></textarea></label>
+    <label class="wide">Caption *<textarea name="caption" maxlength="5000" required placeholder="Write your caption. Short lines, 1 or 2 emojis, and end with Comment RATE or Message us. No links: Facebook allows only 2 link posts a month."></textarea></label>
     <label>Date<input type="date" name="post_date" value="${esc(start)}" min="${esc(manilaDate())}" required></label>
     <label>Time (Manila)<input type="time" name="post_time" value="${DEFAULT_TIME}" required></label>
     <p class="wide muted" style="margin:0">Your post replaces that day's automatic post. The automatic post comes back if you delete yours.</p>

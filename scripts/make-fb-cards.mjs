@@ -8,6 +8,15 @@ import path from "node:path";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const { fbLibrary } = await import(path.join(root, "lib/admin/fb-library.ts"));
+// lib/insights.ts uses extensionless imports, so bundle it with esbuild before importing.
+const { buildSync } = createRequire(import.meta.url)("esbuild");
+const bundled = buildSync({ entryPoints: [path.join(root, "lib/insights.ts")], bundle: true, format: "esm", write: false, platform: "node" }).outputFiles[0].text;
+const { insights } = await import(`data:text/javascript;base64,${Buffer.from(bundled).toString("base64")}`);
+// Blog cards (the Blog day posts a photo, not a link): article title + its first section headings.
+const blogCards = [
+  { key: "blog", category: "Blog", headline: "Bago sa Blog namin", lines: ["Importing guides from China", "Rates, tips at checklists", "Taglish, madaling basahin"] },
+  ...insights.map((i) => ({ key: `blog-${i.slug}`, category: "Blog", headline: i.title, lines: i.sections.slice(0, 3).map((x) => x.heading.replace(/^\d+[.)]\s*/, "")) })),
+];
 const { chromium } = createRequire(import.meta.url)("playwright");
 
 const data = (file, type) => `data:${type};base64,${readFileSync(path.join(root, "public", file)).toString("base64")}`;
@@ -20,17 +29,18 @@ const pill = {
   Importing: ["#FFB020", "#0A2F86"],
   Business: ["#FF7A1A", "#ffffff"],
   "Rate comparison": ["#ffffff", "#0649A8"],
+  Blog: ["#ffffff", "#0A2F86"],
   Tip: ["#69BE28", "#0A2F86"],
   Rates: ["#FFB020", "#0A2F86"],
 };
 
 const card = (item) => {
   const [pillBg, pillFg] = pill[item.category] ?? ["#69BE28", "#0A2F86"];
-  const size = item.headline.length > 40 ? 72 : item.headline.length > 30 ? 84 : 98;
+  const size = item.headline.length > 52 ? 64 : item.headline.length > 40 ? 72 : item.headline.length > 30 ? 84 : 98;
   const stat = item.stat
     ? `<div class="stat"><div class="stat-v${item.stat.length > 7 ? " small" : ""}">${esc(item.stat)}</div><div class="stat-l">${esc(item.statLabel ?? "")}</div></div>`
     : "";
-  const tip = item.category === "Tip" ? "Quick tip" : item.category;
+  const tip = item.category === "Tip" ? "Quick tip" : item.category === "Blog" ? "Bago sa Blog" : item.category;
   return `<!doctype html><html><head><meta charset="utf-8"><style>
 @font-face{font-family:P;src:url(${font("poppins-800.woff2")});font-weight:800}
 @font-face{font-family:P;src:url(${font("poppins-700.woff2")});font-weight:700}
@@ -65,7 +75,7 @@ mkdirSync(out, { recursive: true });
 const only = process.argv.slice(2);
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1080, height: 1350 }, deviceScaleFactor: 1 });
-for (const item of fbLibrary) {
+for (const item of [...fbLibrary, ...blogCards]) {
   if (only.length && !only.includes(item.key)) continue;
   await page.setContent(card(item), { waitUntil: "load" });
   await page.evaluate(() => document.fonts.ready);
