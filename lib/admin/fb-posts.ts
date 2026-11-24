@@ -109,11 +109,19 @@ async function audit(env: Env, user: AdminUser, action: string, id: string, note
 
 const absolute = (origin: string, p: string | null) => (p ? new URL(p, origin).toString() : null);
 
+const SENDING = "Sending to Facebook…";
+
 async function sendToFacebook(env: Env, origin: string, pg: SocialPage | null, row: PostRow): Promise<string | null> {
   if (!pg) return "Connect Facebook first.";
   const when = unixFor(row.post_date, row.post_time);
   const timeError = checkTime(when);
   if (timeError) return `${niceDate(row.post_date)} ${niceTime(row.post_time)}: ${timeError}`;
+  // Claim the row first, so a double or triple click (or Schedule + Schedule all at once)
+  // sends it to Facebook only once. A claim older than 2 minutes is treated as stuck.
+  const claimedAt = new Date().toISOString();
+  const claim = await env.ADMIN_DB.prepare("UPDATE fb_posts SET error=?,updated_at=? WHERE id=? AND status IN ('planned','failed') AND (error IS NULL OR error<>? OR updated_at<?)")
+    .bind(SENDING, claimedAt, row.id, SENDING, new Date(Date.now() - 120_000).toISOString()).run();
+  if (!claim.meta?.changes) return `${niceDate(row.post_date)}: already sent to Facebook. Refresh the page.`;
   const r = await schedulePost(env, pg.id, { caption: row.caption, when, imageUrl: absolute(origin, row.image_path), link: row.link, ref: row.id });
   const now = new Date().toISOString();
   if (r.ok) await env.ADMIN_DB.prepare("UPDATE fb_posts SET status='scheduled',fb_post_id=?,error=NULL,updated_at=? WHERE id=?").bind(r.id, now, row.id).run();
