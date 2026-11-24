@@ -229,10 +229,12 @@ function newPostForm(csrf: string, connected: boolean) {
 async function listingPage(env: Env, user: AdminUser, url: URL, origin: string) {
   const canWrite = canMutateAdmin(user);
   const csrf = csrfToken(env, user.id, path);
-  if (canWrite) await ensurePlan(env, origin);
   const missing = setupMissing(env);
   const pg = missing.length ? null : await mainPage(env);
   const connected = !!pg && pg.token_status === "ok";
+  // Ask Facebook for its schedule while the plan and posts load (it is the slowest part).
+  const liveRequest = connected && pg ? scheduledOnFacebook(env, pg.id) : null;
+  if (canWrite) await ensurePlan(env, origin);
   const today = manilaDate();
   const rows = (await env.ADMIN_DB.prepare("SELECT * FROM fb_posts WHERE post_date >= ? ORDER BY post_date, post_time, kind DESC").bind(today).all<PostRow>()).results;
   const toSchedule = rows.filter((r) => (r.status === "planned" || r.status === "failed") && unixFor(r.post_date, r.post_time) > Date.now() / 1000 + 15 * 60).length;
@@ -247,8 +249,8 @@ async function listingPage(env: Env, user: AdminUser, url: URL, origin: string) 
   const scheduleAll = canWrite && connected && toSchedule ? `<form method="post" action="${path}" style="margin:0"><input type="hidden" name="csrf" value="${esc(csrf)}"><button name="action" value="schedule_all">Schedule all ${toSchedule} on Facebook</button></form>` : "";
 
   let onFacebook = "";
-  if (connected && pg) {
-    const live = await scheduledOnFacebook(env, pg.id);
+  if (liveRequest) {
+    const live = await liveRequest;
     onFacebook = live.ok
       ? live.posts.length
         ? `<div class="table"><table><thead><tr><th>When (Manila)</th><th>Post</th><th></th></tr></thead><tbody>${live.posts.sort((a, b) => (a.scheduled_publish_time ?? 0) - (b.scheduled_publish_time ?? 0)).map((p) => {
@@ -304,12 +306,16 @@ async function handlePost(env: Env, user: AdminUser, request: Request, origin: s
   if (action === "schedule_all") {
     const rows = (await env.ADMIN_DB.prepare("SELECT * FROM fb_posts WHERE status IN ('planned','failed') AND post_date >= ? ORDER BY post_date, post_time").bind(manilaDate()).all<PostRow>()).results
       .filter((r) => unixFor(r.post_date, r.post_time) > Date.now() / 1000 + 15 * 60);
-    let done = 0;
+    let done = 0, stop = false;
     const errors: string[] = [];
-    for (const row of rows) {
-      const e = await sendToFacebook(env, origin, pg, row);
-      if (e) errors.push(e); else done += 1;
-      if (e && /rate limit|expired|Connect Facebook/i.test(e)) break;
+    // 4 at a time: Facebook takes a few seconds per photo post (it downloads the image),
+    // so 10 posts one by one made the page wait 30+ seconds.
+    for (let i = 0; i < rows.length && !stop; i += 4) {
+      const results = await Promise.all(rows.slice(i, i + 4).map((row) => sendToFacebook(env, origin, pg, row)));
+      for (const e of results) {
+        if (e) errors.push(e); else done += 1;
+        if (e && /rate limit|expired|Connect Facebook/i.test(e)) stop = true;
+      }
     }
     await audit(env, user, "fb posts: schedule all", String(done), errors.join(" | "));
     return back(user, errors.length ? msg("err", `${done} scheduled. ${errors.length} not scheduled: ${errors[0]}`) : msg("ok", `${done} post${done === 1 ? "" : "s"} scheduled on Facebook.`));
