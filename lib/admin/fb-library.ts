@@ -20,7 +20,8 @@ export type FbLibraryItem = {
   caption: string;
 };
 
-const RATES = "https://kargodoorph.com/rates-calculator";
+// No links in captions: Facebook allows only 2 link posts a month for Pages without Meta One
+// (Em, 2026-11-24). The comment-to-message automation sends the rates link in Messenger instead.
 const TAGS = "#KargoDoorPH #ChinaToPhilippines #Importing";
 
 export const fbLibrary: FbLibraryItem[] = [
@@ -43,7 +44,7 @@ Example: 50 × 40 × 30 cm na box
 
 Tip: itanong sa supplier ang carton size BAGO ka magbayad, para alam mo agad ang shipping.
 
-Compute mo dito in 30 seconds: ${RATES}
+Comment "RATE" at isesend namin ang rates sa Messenger.
 
 ${TAGS}`,
   },
@@ -64,7 +65,7 @@ Walang code sa box = matagal hanapin, delayed ang shipment.
 
 Laging ibigay ang code mo sa supplier kasama ng warehouse address.
 
-Kunin ang code mo: kargodoorph.com
+Message us para makuha ang cargo code mo.
 
 ${TAGS}`,
   },
@@ -125,7 +126,7 @@ Pero kung mabigat pero maliit ang cargo, tulad ng tiles, metal parts o libro, by
 
 Kung alin ang mas mataas sa dalawa, yun ang singil. Fair ito para sa lahat ng nasa container.
 
-I-check ang cargo mo dito: ${RATES}
+Comment "RATE" at isesend namin ang rates sa Messenger.
 
 ${TAGS}`,
   },
@@ -145,7 +146,7 @@ ${TAGS}`,
 
 Kasama na sa rate ang customs clearance at taxes. Walang surprise charges.
 
-Start here: kargodoorph.com
+Message us para makapagsimula.
 
 ${TAGS}`,
   },
@@ -184,7 +185,7 @@ Ipadala sa China warehouse namin gamit ang cargo code mo
 
 Mas mura ang 1688 dahil factory price. Kami na sa shipping papuntang Pilipinas.
 
-Basahin ang full guide: kargodoorph.com/insights/paano-mag-order-sa-1688-ipadala-sa-pilipinas
+Comment "GUIDE" at isesend namin ang full guide sa Messenger.
 
 ${TAGS}`,
   },
@@ -240,7 +241,7 @@ ${TAGS}`,
 
 Ang tamang presyo: may tubo ka, at bibili pa rin ang customer.
 
-Need help computing freight? ${RATES}
+Comment "RATE" at isesend namin ang rates sa Messenger.
 
 ${TAGS}`,
   },
@@ -338,7 +339,7 @@ Air freight (₱500/kg): ₱5,000
 
 Kung hindi urgent, sea ang pinaka-tipid. Air kung kailangan agad o samples lang.
 
-Compute your own: ${RATES}
+Comment "RATE" at isesend namin ang rates sa Messenger.
 
 ${TAGS}`,
   },
@@ -376,7 +377,7 @@ Air freight (150 kg × ₱500): ₱75,000
 
 Halos ₱67,000 ang matitipid mo. Para sa bulky items, laging sea.
 
-Compute dito: ${RATES}
+Comment "RATE" at isesend namin ang rates sa Messenger.
 
 ${TAGS}`,
   },
@@ -396,7 +397,7 @@ Mabigat pero maliit? By weight, ₱19 per kg.
 
 Kasama na ang customs clearance at taxes. Pick up sa Malabon o door-to-door.
 
-${RATES}
+Comment "RATE" at isesend namin ang rates sa Messenger.
 
 ${TAGS}`,
   },
@@ -460,7 +461,7 @@ Magkano ang delivery sa address mo?
 
 Sa KargoDoor, kasama na ang customs at taxes sa rate. Delivery lang ang dagdag kung door-to-door.
 
-Read more: kargodoorph.com/insights/hidden-charges-sa-forwarder
+Comment "GUIDE" at isesend namin ang full guide sa Messenger.
 
 ${TAGS}`,
   },
@@ -496,7 +497,7 @@ Kasama na ang customs clearance at taxes
 3–5 weeks transit
 Pick up sa Malabon o door-to-door
 
-Get your rate: ${RATES}
+Comment "RATE" at isesend namin ang rates sa Messenger.
 
 ${TAGS}`,
   },
@@ -515,7 +516,7 @@ Kasama na ang customs clearance at taxes
 
 Bagay sa samples, urgent restock at maliliit pero mahal na items.
 
-Get your rate: ${RATES}
+Comment "RATE" at isesend namin ang rates sa Messenger.
 
 ${TAGS}`,
   },
@@ -532,7 +533,7 @@ ${TAGS}`,
 
 Walang sign up needed.
 
-${RATES}
+Comment "RATE" at isesend namin ang rates sa Messenger.
 
 ${TAGS}`,
   },
@@ -549,7 +550,7 @@ Pwede rin i-pick up sa Malabon warehouse para walang delivery fee.
 
 Kasama na ang customs at taxes sa freight rate.
 
-Get a quote: ${RATES}
+Comment "RATE" at isesend namin ang rates sa Messenger.
 
 ${TAGS}`,
   },
@@ -559,14 +560,14 @@ ${TAGS}`,
 export const fbRotation: FbCategory[] = ["Learning", "Rates", "Importing", "Blog", "Tip", "Business", "Rate comparison"];
 
 /** Caption for a Blog article post. */
-export function blogCaption(title: string, description: string, url: string) {
+export function blogCaption(title: string, description: string) {
   return `Bago sa Blog 📖
 
 ${title}
 
 ${description}
 
-Basahin dito: ${url}
+Comment "GUIDE" at isesend namin ang full guide sa Messenger.
 
 #KargoDoorPH #ChinaToPhilippines`;
 }

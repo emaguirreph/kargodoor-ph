@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { fbLibrary, fbRotation } from "../lib/admin/fb-library";
+import { blogCaption, fbLibrary, fbRotation } from "../lib/admin/fb-library";
+import { insights } from "../lib/insights";
 import { manilaDate, planStart, unixFor } from "../lib/admin/fb-posts";
 import { getSeaEstimate, getAirEstimate } from "../lib/shipping-estimate.mjs";
 
@@ -34,4 +35,13 @@ test("post library: cards, captions and rates", () => {
   assert.equal(getSeaEstimate(1, 150).amount, 7999);
   assert.equal(getAirEstimate(10).amount, 5000);
   assert.equal(getAirEstimate(150).amount, 75000);
+});
+
+test("No links in captions, and every Blog article has its card", () => {
+  // Facebook allows Pages only 2 link posts a month without Meta One (2026-11-24).
+  const link = /https?:\/\/|kargodoorph\.com|www\./i;
+  for (const item of fbLibrary) assert.ok(!link.test(item.caption), `${item.key} caption has a link`);
+  assert.ok(!link.test(blogCaption("Title", "Description")));
+  assert.ok(existsSync("public/fb-cards/blog.jpg"));
+  for (const i of insights) assert.ok(existsSync(`public/fb-cards/blog-${i.slug}.jpg`), `missing card for ${i.slug}`);
 });
