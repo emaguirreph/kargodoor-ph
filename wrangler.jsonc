@@ -11,7 +11,8 @@
   "vars": {
     "ADMIN_ORIGIN": "https://kargodoorph.com",
     "ACCESS_TEAM_DOMAIN": "misty-scene-f3ff.cloudflareaccess.com",
-    "ACCESS_AUD": "e299d6a99e9d618ee464f3746ea2fc6ecf03954a2b72ab01be2f2048b52c9965"
+    "ACCESS_AUD": "e299d6a99e9d618ee464f3746ea2fc6ecf03954a2b72ab01be2f2048b52c9965",
+    "FB_APP_ID": "2016283485715633"
   },
 
   "assets": {

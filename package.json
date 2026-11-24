@@ -21,6 +21,7 @@
     "test:money-flow": "node scripts/test-money-flow-http.mjs",
     "test:booking-flow": "node scripts/test-booking-flow-http.mjs",
     "test:email-verification": "node scripts/test-email-verification.mjs",
+    "test:fb-posts": "esbuild tests/fb-posts.test.ts --bundle --platform=node --format=esm --packages=external --outfile=.admin-local/fb-posts.test.mjs --log-level=warning && node --test .admin-local/fb-posts.test.mjs",
     "test:signup-flow": "node scripts/test-signup-flow-http.mjs"
   },
   "dependencies": {

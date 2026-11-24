@@ -11,7 +11,9 @@
   // "photo" for pictures like blog covers: up to 1600 px, under 200 KB.
   // PDFs and anything that is not a JPEG/PNG/WebP photo are returned untouched,
   // and if the browser cannot read the photo the original file is kept.
-  const presets = { doc: { maxSide: 2000, target: 300 * 1024 }, photo: { maxSide: 1600, target: 200 * 1024 } };
+  const presets = { doc: { maxSide: 2000, target: 300 * 1024 }, photo: { maxSide: 1600, target: 200 * 1024 },
+    // "post" for Facebook post images (FB Posts): sharp, JPEG only, under about 1.5 MB.
+    post: { maxSide: 2048, target: 1500 * 1024, format: "image/jpeg", quality: 0.9 } };
   const shrinkable = ["image/jpeg", "image/png", "image/webp"];
 
   // createImageBitmap reads the file directly, so it works under the admin
@@ -22,7 +24,7 @@
   };
 
   const shrinkImage = async (file, mode) => {
-    const { maxSide, target } = presets[mode] || presets.doc;
+    const { maxSide, target, format, quality: startQuality } = presets[mode] || presets.doc;
     if (!file || !shrinkable.includes(file.type) || typeof createImageBitmap !== "function") return file;
     try {
       const bitmap = await decode(file);
@@ -44,10 +46,10 @@
       const encode = (type, quality) => new Promise((resolve) => canvas.toBlob(resolve, type, quality));
       let size = scale;
       draw(size);
-      let type = "image/webp";
-      let quality = 0.82;
+      let type = format || "image/webp";
+      let quality = startQuality || 0.82;
       let blob = await encode(type, quality);
-      if (!blob || blob.type !== "image/webp") { type = "image/jpeg"; blob = await encode(type, quality); }
+      if (!blob || blob.type !== type) { type = "image/jpeg"; blob = await encode(type, quality); }
       for (;;) {
         // Lower the quality first (down to 0.5, still sharp text), then the size.
         while (blob && blob.size > target && quality > 0.55) { quality -= 0.1; blob = await encode(type, quality); }
