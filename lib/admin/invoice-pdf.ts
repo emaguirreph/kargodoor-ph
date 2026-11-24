@@ -206,7 +206,7 @@ export function customerInvoicePdf({ invoice, payments }: InvoicePdfData) {
 
   // Three info boxes.
   const boxTop = PAGE_H - 145;
-  const boxH = 72;
+  const boxH = 84;
   const gap = 12;
   const w1 = 190;
   const w2 = (R - L - w1 - gap * 2) / 2;
@@ -217,11 +217,15 @@ export function customerInvoicePdf({ invoice, payments }: InvoicePdfData) {
   let y = boxTop - 16;
   label("Billed to", boxes[0] + 11, y);
   c.text(str(invoice.full_name) || "Customer", boxes[0] + 11, y - 15, 10.5, { bold: true });
-  let by = y - 28;
-  if (str(invoice.company_name)) { c.text(str(invoice.company_name), boxes[0] + 11, by, 9); by -= 12; }
-  c.text(`Customer code ${str(invoice.customer_code)}`, boxes[0] + 11, by, 8.3, { color: C.muted });
+  let by = y - 29;
+  // KDOOR code in bold so it is easy to find (Em, 2026-11-16).
+  const codeLabel = "KDOOR CODE ";
+  c.text(codeLabel, boxes[0] + 11, by, 8.3, { bold: true, color: C.muted, spacing: 0.5 });
+  c.text(str(invoice.customer_code) || "—", boxes[0] + 11 + textWidth(codeLabel, 8.3, true) + 0.5 * codeLabel.length, by, 9.5, { bold: true, color: C.blue });
+  by -= 13;
+  if (str(invoice.company_name)) { c.text(str(invoice.company_name), boxes[0] + 11, by, 9); by -= 11; }
   const mobile = str(invoice.mobile).replace(/\s+/g, "");
-  if (mobile) c.text(/^09\d{9}$/.test(mobile) ? mobile.replace(/^(\d{4})(\d{3})(\d{4})$/, "$1 $2 $3") : str(invoice.mobile), boxes[0] + 11, by - 11, 8.3, { color: C.muted });
+  if (mobile) c.text(/^09\d{9}$/.test(mobile) ? mobile.replace(/^(\d{4})(\d{3})(\d{4})$/, "$1 $2 $3") : str(invoice.mobile), boxes[0] + 11, by, 8.3, { color: C.muted });
 
   const kv = (title: string, x: number, w: number, rows: [string, string][]) => {
     label(title, x + 11, y);
@@ -237,6 +241,7 @@ export function customerInvoicePdf({ invoice, payments }: InvoicePdfData) {
   if (str(invoice.quotation_number)) invoiceRows.push(["Quotation", str(invoice.quotation_number)]);
   const shipmentRows: [string, string][] = [
     ["Tracking", str(invoice.tracking_number) || "—"],
+    ["KDOOR code", str(invoice.customer_code) || "—"],
     ["Service", str(invoice.service_type)],
     str(invoice.actual_arrival) ? ["Arrived PH", niceDate(invoice.actual_arrival)] : ["From", str(invoice.china_warehouse)],
   ];

@@ -244,6 +244,7 @@ test("shipping instructions include the customer account code and supplier detai
   const onceShipped = onceShippedMessage();
   assert.match(onceShipped, /^📲 ONCE SHIPPED, PLEASE SEND US:\n/);
   assert.match(onceShipped, /• Total Packages: 1\n/);
+  assert.match(onceShipped, /kargodoorph\.com\/customer\/courier\n/);
   assert.match(onceShipped, /applicable freight rates\.\n\nThank you for trusting KargoDoorPH\.com! 💚 💙$/);
   assert.match(supplierShipmentMessage({}), /CARGO CODE: \[Add the customer's KDOOR code\][\s\S]*\[Choose the China warehouse on Edit shipment\]/);
 });

@@ -107,7 +107,7 @@ try {
   step("Chat lookup: wrong last 4 digits refused; New booking shows no cargo code");
 
   // 4. Admin menu count + Bookings page.
-  assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 1, proofs: 0, concerns: 0, signups: 0 });
+  assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 1, proofs: 0, concerns: 0, signups: 0, incoming: 0 });
   let html = await (await get("/admin/bookings")).text();
   assert.ok(html.includes(made.ref) && html.includes("Juan Dela Cruz"));
   html = await (await get("/admin/dashboard")).text();
@@ -143,7 +143,7 @@ try {
   assert.equal(approved.shipping_charge, approved.approved_amount);
   html = await (await get(`/admin/bookings?id=${saved.id}`)).text();
   assert.ok(html.includes(`Cargo code: ${approved.customer_code}`), "copy-ready Messenger message");
-  assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 0, proofs: 0, concerns: 0, signups: 0 });
+  assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 0, proofs: 0, concerns: 0, signups: 0, incoming: 0 });
   step(`Approved: customer ${approved.customer_code} + shipment ${approved.tracking_number} (₱${approved.shipping_charge / 100}); Messenger message ready; count back to 0`);
 
   // 6. Chat shows the code; no bill yet so proof is refused.
@@ -176,7 +176,7 @@ try {
   proof = new FormData(); proof.set("ref", made.ref); proof.set("last4", "4567"); proof.append("file", new Blob([png], { type: "image/png" }), "proof.png");
   res = await api("/api/bookings/proof", proof);
   assert.equal(res.status, 200, await res.clone().text());
-  assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 0, proofs: 1, concerns: 0, signups: 0 });
+  assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 0, proofs: 1, concerns: 0, signups: 0, incoming: 0 });
   html = await (await get("/admin/invoices")).text();
   assert.ok(html.includes(made.ref), "proof waiting on Invoices & Payments");
   html = await (await get(`/admin/bookings?id=${saved.id}`)).text();
@@ -185,7 +185,7 @@ try {
   assert.equal(res.status, 303, await res.text());
   const paid = sqlRows(`SELECT i.status, s.payment_status, (SELECT COUNT(*) FROM payment_proofs) AS proofs FROM invoices i JOIN shipments s ON s.id=i.shipment_id WHERE i.id='${invoice.id}'`)[0];
   assert.deepEqual(paid, { status: "Paid", payment_status: "Paid", proofs: 1 });
-  assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 0, proofs: 0, concerns: 0, signups: 0 });
+  assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 0, proofs: 0, concerns: 0, signups: 0, incoming: 0 });
   step("Proof uploaded → red count on Invoices & Payments → Record payment: invoice Paid, shipment Paid, proof kept");
 
   // 9. Customer downloads the paid invoice.
@@ -234,6 +234,15 @@ try {
   res = await browser("/customer");
   html = await res.text();
   assert.ok(html.includes(approved.customer_code) && html.includes(made.ref), `dashboard shows cargo code + shipment (${res.status} ${res.headers.get("location")} ${html.slice(0, 300)})`);
+  assert.ok(html.includes("pterms-dash-title"), "first sign-in shows the Shipping Terms pop-up");
+  const termsVersion = html.match(/name="terms" value="([^"]+)"/)[1];
+  res = await browser("/customer/actions/terms", { method: "POST", body: new URLSearchParams({ terms: termsVersion }) });
+  assert.match(res.headers.get("location"), /\/customer\?terms=1/);
+  html = await (await browser("/customer")).text();
+  assert.ok(!html.includes("pterms-dash-title"), "pop-up gone after agreeing");
+  assert.ok(sqlRows(`SELECT terms_accepted_at FROM customer_accounts WHERE customer_id='${saved2.customer_id}'`)[0].terms_accepted_at, "agreement saved on the account");
+  html = await (await get(`/admin/customers?id=${saved2.customer_id}`)).text();
+  assert.ok(html.includes("✅ Agreed"), "admin customer page shows the agreement");
   html = await (await browser("/customer/shipments")).text();
   assert.ok(html.includes(made.ref) && html.includes("PAID"), "My Shipments shows the paid shipment");
   html = await (await browser(`/customer/track?q=${made.ref}`)).text();
@@ -258,6 +267,10 @@ try {
   for (const [k, v] of Object.entries({ service: "air", warehouse: "Yiwu", item: "Phone cases", quantity: "3 boxes", cbm: "", weight: "15", supplier: "Supplier Wang", itemValue: "8000", deliveryMode: "pickup", deliveryAddress: "", notes: "" })) book.set(k, v);
   book.append("photos", new Blob([png], { type: "image/png" }), "case.png");
   res = await browser("/customer/actions/book", { method: "POST", body: book });
+  assert.match(decodeURIComponent(res.headers.get("location").replace(/\+/g, " ")), /agree to the Shipping Terms/, "booking without agreeing to the terms is refused");
+  html = await (await browser("/customer/book")).text();
+  book.set("terms", html.match(/name="terms" value="([^"]+)"/)[1]);
+  res = await browser("/customer/actions/book", { method: "POST", body: book });
   assert.equal(res.status, 303, await res.text());
   assert.match(res.headers.get("location"), /\/customer\/book\?done=1&ref=KDAIR-\d{6}/);
   const portalBooking = sqlRows("SELECT id, booking_ref, source, customer_id, phone FROM bookings WHERE source='portal'")[0];
@@ -266,7 +279,7 @@ try {
   html = await (await get("/admin/bookings")).text();
   assert.ok(html.includes(portalBooking.booking_ref) && html.includes("🔐 Portal"));
   html = await (await get(`/admin/bookings?id=${portalBooking.id}`)).text();
-  assert.ok(html.includes("Booked in the customer portal"));
+  assert.ok(html.includes("Booked in the customer portal") && html.includes("Agreed to the Shipping Terms"));
   html = await (await browser("/customer/shipments")).text();
   assert.ok(html.includes(portalBooking.booking_ref), "pending booking shows in the portal");
   sqlRows(`UPDATE bookings SET status='Declined' WHERE id='${portalBooking.id}'`);
@@ -283,7 +296,7 @@ try {
   const sendProof = new FormData(); sendProof.set("invoice_id", inv3); sendProof.append("file", new Blob([png], { type: "image/png" }), "gcash.png");
   res = await browser("/customer/actions/proof", { method: "POST", body: sendProof });
   assert.equal(res.status, 303, await res.text());
-  assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 2, proofs: 1, concerns: 0, signups: 0 }); // 2 = step 10 bookings still New
+  assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 2, proofs: 1, concerns: 0, signups: 0, incoming: 0 }); // 2 = step 10 bookings still New
   html = await (await get("/admin/invoices")).text();
   const reviewId = html.match(/review_proof=([0-9a-f-]{36})/)[1];
   html = await (await get(`/admin/bookings?review_proof=${reviewId}`)).text();
@@ -299,7 +312,7 @@ try {
   // 14. Support concern → admin Customer concerns tab → done note shows in the portal.
   res = await browser("/customer/actions/support", { method: "POST", body: new URLSearchParams({ topic: "Shipment / tracking", shipment_id: sid3, message: "When can I pick up my cargo?" }) });
   assert.equal(res.status, 303, await res.text());
-  assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 2, proofs: 0, concerns: 1, signups: 0 });
+  assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 2, proofs: 0, concerns: 1, signups: 0, incoming: 0 });
   html = await (await get("/admin/bookings?status=Concerns")).text();
   assert.ok(html.includes("When can I pick up my cargo?"));
   const concernId = html.match(/name="concern_id" value="([^"]+)"/)[1];
@@ -308,6 +321,53 @@ try {
   html = await (await browser("/customer/support")).text();
   assert.ok(html.includes("Ready for pickup tomorrow."));
   step("Support concern → admin Customer concerns (count 1) → marked done, note shows in the portal");
+
+  // 14b. Courier details: the customer sends the supplier's courier + waybill → admin Incoming warning.
+  const sid4 = randomUUID();
+  sqlRows(`INSERT INTO shipments (id, tracking_number, customer_id, service_type, china_warehouse, status, cbm, weight_kg, shipping_charge, delivery_charge, payment_status, created_at, updated_at)
+    VALUES ('${sid4}', 'KDSEA-333444', '${saved2.customer_id}', 'Sea Freight', 'Guangzhou', 'Awaiting Supplier Dispatch', 0.2, 20, 0, 0, 'Unpaid', '2026-11-15', '2026-11-15')`);
+  html = await (await browser("/customer/shipments")).text();
+  assert.ok(html.includes(`/customer/courier?shipment=${sid4}`), "shipment waiting for the supplier has a Send Courier Details button");
+  html = await (await browser(`/customer/courier?shipment=${sid4}`)).text();
+  assert.ok(html.includes("Courier Details") && html.includes("KDSEA-333444"), "courier page lists the shipment");
+  const courier = new FormData();
+  for (const [k, v] of Object.entries({ shipment_id: sid4, courier: "SF Express", waybill: "sf1234567890", packages: "3", item: "Phone stands", contents: "none", note: "2 boxes more next week" })) courier.set(k, v);
+  courier.append("photo", new Blob([png], { type: "image/png" }), "waybill.png");
+  res = await browser("/customer/actions/courier", { method: "POST", body: courier });
+  assert.equal(res.status, 303, await res.text());
+  assert.match(res.headers.get("location"), /\/customer\/courier\?done=1/);
+  res = await browser("/customer/actions/courier", { method: "POST", body: courier });
+  assert.match(decodeURIComponent(res.headers.get("location").replace(/\+/g, " ")), /already have waybill SF1234567890/, "same waybill twice is refused");
+  const noItem = new FormData(); noItem.set("shipment_id", ""); noItem.set("courier", "ZTO"); noItem.set("waybill", "ZT999"); noItem.set("contents", "none");
+  res = await browser("/customer/actions/courier", { method: "POST", body: noItem });
+  assert.match(decodeURIComponent(res.headers.get("location").replace(/\+/g, " ")), /what's inside/, "what's inside is required");
+  noItem.set("item", "Hair dryers"); noItem.delete("contents");
+  res = await browser("/customer/actions/courier", { method: "POST", body: noItem });
+  assert.match(decodeURIComponent(res.headers.get("location").replace(/\+/g, " ")), /restricted items/, "restricted items question is required");
+  const ship4 = sqlRows(`SELECT supplier_courier, supplier_waybill_number FROM shipments WHERE id='${sid4}'`)[0];
+  assert.deepEqual([ship4.supplier_courier, ship4.supplier_waybill_number], ["SF Express", "SF1234567890"], "empty shipment courier boxes are filled");
+  assert.deepEqual(await (await get("/admin/bookings?count=1")).json(), { bookings: 2, proofs: 0, concerns: 0, signups: 0, incoming: 1 });
+  html = await (await get("/admin/dashboard")).text();
+  assert.ok(html.includes("coming to the China warehouse") && html.includes("SF1234567890"), "Dashboard warns about the incoming shipment");
+  html = await (await get("/admin/bookings?status=Incoming")).text();
+  assert.ok(html.includes("SF1234567890") && html.includes("KDSEA-333444") && html.includes("2 boxes more next week"));
+  const courierId = html.match(/name="courier_id" value="([^"]+)"/)[1];
+  res = await get(`/admin/bookings?courier_file=${courierId}`);
+  assert.equal(res.status, 200); assert.match(res.headers.get("content-type"), /image\/png/);
+  res = await post("/admin/bookings", { csrf: token(html), action: "courier_status", courier_id: courierId, status: "Noted", admin_note: "Ni Hao is watching for it." });
+  assert.equal(res.status, 303);
+  assert.equal((await (await get("/admin/bookings?count=1")).json()).incoming, 0);
+  html = await (await browser("/customer/courier")).text();
+  assert.ok(html.includes("SF1234567890") && html.includes("WATCHING FOR IT") && html.includes("Ni Hao is watching for it."), "customer sees the status + note");
+  // Restricted items not checked with us: saved, red flag in admin, customer told to message us now.
+  noItem.set("contents", "not_asked"); noItem.set("item", "Power banks");
+  res = await browser("/customer/actions/courier", { method: "POST", body: noItem });
+  assert.match(res.headers.get("location"), /done=check/);
+  html = await (await browser(res.headers.get("location").replace(origin, ""))).text();
+  assert.ok(html.includes("please message us on Messenger NOW"), "customer is told to message us");
+  html = await (await get("/admin/bookings?status=Incoming")).text();
+  assert.ok(html.includes("Restricted items, NOT checked with us") && html.includes("Power banks"), "admin sees the red flag");
+  step("Courier details from the portal → shipment Courier/Waybill filled → admin Incoming count 1 + Dashboard warning → Got it, customer sees status");
 
   // 15. Own code can't be the referral code; cross-site posts are refused.
   html = await (await get(`/admin/customers?id=${saved2.customer_id}&edit=1`)).text();
