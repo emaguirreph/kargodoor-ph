@@ -192,7 +192,7 @@ function postCard(row: PostRow, csrf: string, canWrite: boolean, connected: bool
       <label>Date<input type="date" name="post_date" value="${esc(row.post_date)}" required></label>
       <label>Time<input type="time" name="post_time" value="${esc(row.post_time)}" required></label>
       <label class="wide">Caption<textarea name="caption" maxlength="5000" required>${esc(row.caption)}</textarea></label>
-      ${row.kind === "own" ? `<label class="wide">Replace image (optional)<input type="file" name="image" accept="image/jpeg,image/png" data-fb-post-image></label>` : ""}
+      <label class="wide">Use a different image (optional)<input type="file" name="image" accept="image/jpeg,image/png" data-fb-post-image><small class="muted" style="display:block">For example your own design from Canva. It replaces the picture shown on the left.</small></label>
       <p class="wide muted" style="margin:0">${row.status === "scheduled" ? "This post is already on Facebook. Saving takes it off and schedules it again with your changes." : "Saved changes stay here until you click Schedule."}</p>
       <p class="wide" style="margin:0"><button name="action" value="save">Save changes</button></p></form></details>`;
   } else if (canWrite && row.status === "skipped" && !row.replaced) {
@@ -354,7 +354,7 @@ async function handlePost(env: Env, user: AdminUser, request: Request, origin: s
     if (e) return back(user, msg("err", e));
     const image = form.get("image");
     let imagePath = row.image_path, imageId = row.image_id;
-    if (row.kind === "own" && image instanceof File && image.size) {
+    if (image instanceof File && image.size) {
       const newId = await saveImage(env, image);
       if (row.image_id) await env.ADMIN_DB.prepare("DELETE FROM insight_images WHERE id=?").bind(row.image_id).run();
       imageId = newId; imagePath = `/api/insights/images/${newId}`;
