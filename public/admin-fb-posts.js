@@ -10,7 +10,7 @@
     form.addEventListener("submit", async (event) => {
       if (ready) return;
       const file = input.files && input.files[0];
-      if (!file || file.size <= 1500 * 1024) return;
+      if (!file || !file.type.startsWith("image/") || file.size <= 1500 * 1024) return;
       event.preventDefault();
       const action = event.submitter && event.submitter.value;
       if (action) {

@@ -16,7 +16,8 @@ import type { D1Database } from "@cloudflare/workers-types";
 
 export const GRAPH_VERSION = "v24.0";
 const GRAPH = `https://graph.facebook.com/${GRAPH_VERSION}`;
-export const SCOPES = ["pages_show_list", "pages_read_engagement", "pages_manage_posts", "business_management"];
+// publish_video: Reels from "+ New post" (2026-11-24). Needs a Reconnect after it was added.
+export const SCOPES = ["pages_show_list", "pages_read_engagement", "pages_manage_posts", "publish_video", "business_management"];
 // Meta's window for scheduled feed/photo posts: 10 minutes to 30 days ahead.
 export const MIN_AHEAD_MIN = 15; // a little more than Meta's 10 minutes, for clock drift
 export const MAX_AHEAD_DAYS = 30;
@@ -237,6 +238,45 @@ export async function schedulePost(env: SocialEnv, pageId: number, opts: { capti
   const id = r.data.post_id ?? r.data.id;
   await log(env, { page: pageId, ref: opts.ref, action: `schedule ${kind}`, request: `${kind} at ${new Date(opts.when * 1000).toISOString()}`, status: 200, result: `ok id=${id}` });
   return { ok: true, id };
+}
+
+/** Largest Reel video we pass on (the Worker reads the whole upload; Workers accept up to 100 MB). */
+export const REEL_MAX_BYTES = 90 * 1024 * 1024;
+
+/**
+ * Schedules a Reel with Meta's Reels API: start an upload session, send the video bytes to
+ * rupload.facebook.com, then finish with video_state SCHEDULED. The video is not stored here.
+ */
+export async function scheduleReel(env: SocialEnv, pageId: number, opts: { caption: string; when: number; video: File; ref: string }): Promise<SendResult> {
+  const t = await pageToken(env, pageId);
+  if (!t) return { ok: false, error: "The Facebook Page is not connected. Click Connect Facebook." };
+  const fail = async (step: string, e: FbError) => {
+    await markToken(env, pageId, e);
+    await log(env, { page: pageId, ref: opts.ref, action: "schedule reel", request: step, status: e.status, code: e.code, result: e.message });
+    return { ok: false as const, error: explain(e) };
+  };
+  const start = await graph<{ video_id: string; upload_url?: string }>("POST", `/${t.fbId}/video_reels`, t.token, { upload_phase: "start" });
+  if (!start.ok) return fail("start", start.error);
+  const videoId = start.data.video_id;
+  let up: Response;
+  try {
+    up = await fetch(start.data.upload_url ?? `https://rupload.facebook.com/video-upload/${GRAPH_VERSION}/${videoId}`, {
+      method: "POST",
+      headers: { Authorization: `OAuth ${t.token}`, offset: "0", file_size: String(opts.video.size), "Content-Type": "application/octet-stream" },
+      body: await opts.video.arrayBuffer(),
+      signal: AbortSignal.timeout(120_000),
+    });
+  } catch (e) {
+    return fail("upload", { message: `Video upload to Facebook did not finish (${e instanceof Error ? e.name : "network"})`, status: 0 });
+  }
+  const upJson = (await up.json().catch(() => ({}))) as { success?: boolean; debug_info?: { message?: string } };
+  if (!up.ok || upJson.success === false) return fail("upload", { message: upJson.debug_info?.message ?? `Video upload failed (HTTP ${up.status})`, status: up.status });
+  const finish = await graph<{ success?: boolean }>("POST", `/${t.fbId}/video_reels`, t.token, {
+    upload_phase: "finish", video_id: videoId, video_state: "SCHEDULED", scheduled_publish_time: String(Math.floor(opts.when)), description: opts.caption,
+  });
+  if (!finish.ok) return fail("finish", finish.error);
+  await log(env, { page: pageId, ref: opts.ref, action: "schedule reel", request: `reel at ${new Date(opts.when * 1000).toISOString()} (${Math.round(opts.video.size / 1024 / 1024)} MB)`, status: 200, result: `ok id=${videoId}` });
+  return { ok: true, id: videoId };
 }
 
 export type ScheduledPost = { id: string; message?: string; scheduled_publish_time?: number; permalink_url?: string };

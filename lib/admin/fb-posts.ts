@@ -6,7 +6,7 @@ import { blogCaption, fbLibrary, fbRotation, type FbCategory } from "./fb-librar
 import { insights } from "../insights";
 import {
   CALLBACK_PATH, cancelPost, checkTime, connectWithCode, disconnect, loginUrl, mainPage, recentLog,
-  schedulePost, scheduledOnFacebook, setupMissing, type SocialEnv, type SocialPage,
+  REEL_MAX_BYTES, schedulePost, scheduleReel, scheduledOnFacebook, setupMissing, type SocialEnv, type SocialPage,
 } from "./fb-social";
 
 // FB Posts (Em, 2026-11-24): a 10-day Facebook posting plan in the admin.
@@ -115,6 +115,7 @@ const SENDING = "Sending to Facebook…";
 
 async function sendToFacebook(env: Env, origin: string, pg: SocialPage | null, row: PostRow): Promise<string | null> {
   if (!pg) return "Connect Facebook first.";
+  if (row.topic === "reel") return "A Reel can't be sent again from here. Delete it and upload the video again with + New post.";
   const when = unixFor(row.post_date, row.post_time);
   const timeError = checkTime(when);
   if (timeError) return `${niceDate(row.post_date)} ${niceTime(row.post_time)}: ${timeError}`;
@@ -170,7 +171,7 @@ const CSS = `<style>
 .fbp-meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:6px}
 .fbp-when{font-weight:800;color:#0A2F86}
 .fbp-badge{display:inline-block;font-size:.75rem;font-weight:700;padding:2px 10px;border-radius:999px;background:#e7f4fc;color:#0649A8}
-.fbp-badge.s-scheduled,.fbp-badge.s-posted{background:#e3f5ea;color:#1d6b3a}.fbp-badge.s-failed{background:#fde8e6;color:#a1261d}.fbp-badge.s-skipped{background:#eee;color:#555}.fbp-badge.own{background:#69BE28;color:#fff}
+.fbp-badge.s-scheduled,.fbp-badge.s-posted{background:#e3f5ea;color:#1d6b3a}.fbp-badge.s-failed{background:#fde8e6;color:#a1261d}.fbp-badge.s-skipped{background:#eee;color:#555}.fbp-badge.own{background:#69BE28;color:#fff}.fbp-badge.reel{background:#7b3fe4;color:#fff}
 .fbp-title{font-weight:800;margin:2px 0 4px}
 .fbp-caption{white-space:pre-wrap;color:#466177;font-size:.92rem;max-height:6.2em;overflow:hidden}
 .fbp-err{color:#a1261d;font-size:.9rem;margin:6px 0 0}
@@ -190,15 +191,16 @@ const CSS = `<style>
 function postCard(row: PostRow, csrf: string, canWrite: boolean, connected: boolean) {
   const hidden = `<input type="hidden" name="csrf" value="${esc(csrf)}"><input type="hidden" name="id" value="${esc(row.id)}">`;
   const button = (action: string, label: string, light = false) => `<form method="post" action="${path}">${hidden}<button name="action" value="${action}"${light ? ' class="light"' : ""}>${label}</button></form>`;
-  const thumb = row.image_path ? `<img class="fbp-thumb" src="${esc(row.image_path)}" alt="" loading="lazy">` : `<div class="fbp-thumb">🔗 Blog link<br>Facebook shows the article preview</div>`;
+  const reel = row.topic === "reel";
+  const thumb = reel ? `<div class="fbp-thumb">🎬 Reel<br>Video is on Facebook</div>` : row.image_path ? `<img class="fbp-thumb" src="${esc(row.image_path)}" alt="" loading="lazy">` : `<div class="fbp-thumb">🔗 Blog link<br>Facebook shows the article preview</div>`;
   const statusLabel = { planned: "Planned", scheduled: "On Facebook ✓", posted: "Posted", skipped: row.replaced ? "Replaced by your post" : "Skipped", failed: "Not scheduled" }[row.status];
   const open = row.status === "planned" || row.status === "failed" || row.status === "scheduled";
   let actions = "";
   if (canWrite && open) {
-    actions += row.status !== "scheduled" && connected ? button("schedule", "Schedule") : "";
+    actions += row.status !== "scheduled" && connected && !reel ? button("schedule", "Schedule") : "";
     actions += row.kind === "auto" ? button("swap", "Different post", true) : "";
     actions += row.kind === "own" ? button("delete", "Delete", true) : button("skip", "Skip this day", true);
-    actions += `<details class="fbp-edit"><summary>Edit caption / time</summary><form method="post" action="${path}" enctype="multipart/form-data" data-fb-post-form>${hidden}
+    if (!reel) actions += `<details class="fbp-edit"><summary>Edit caption / time</summary><form method="post" action="${path}" enctype="multipart/form-data" data-fb-post-form>${hidden}
       <label>Date<input type="date" name="post_date" value="${esc(row.post_date)}" required></label>
       <label>Time<input type="time" name="post_time" value="${esc(row.post_time)}" required></label>
       <label class="wide">Caption<textarea name="caption" maxlength="5000" required>${esc(row.caption)}</textarea></label>
@@ -209,7 +211,7 @@ function postCard(row: PostRow, csrf: string, canWrite: boolean, connected: bool
     actions += button("undo", "Undo skip", true);
   }
   return `<article class="fbp-card${row.status === "skipped" ? " is-skipped" : ""}${row.kind === "own" ? " is-own" : ""}">${thumb}<div>
-    <div class="fbp-meta"><span class="fbp-when">${esc(niceDate(row.post_date))} · ${esc(niceTime(row.post_time))}</span><span class="fbp-badge${row.kind === "own" ? " own" : ""}">${esc(row.kind === "own" ? "Your post" : row.category)}</span><span class="fbp-badge s-${row.status}">${esc(statusLabel)}</span></div>
+    <div class="fbp-meta"><span class="fbp-when">${esc(niceDate(row.post_date))} · ${esc(niceTime(row.post_time))}</span><span class="fbp-badge${reel ? " reel" : row.kind === "own" ? " own" : ""}">${esc(reel ? "Reel" : row.kind === "own" ? "Your post" : row.category)}</span><span class="fbp-badge s-${row.status}">${esc(statusLabel)}</span></div>
     ${row.kind === "own" ? "" : `<div class="fbp-title">${esc(row.title)}</div>`}<div class="fbp-caption">${esc(row.caption)}</div>
     ${row.status === "failed" && row.error ? `<p class="fbp-err">${esc(row.error)}</p>` : ""}
     <div class="fbp-actions">${actions}</div></div></article>`;
@@ -217,9 +219,9 @@ function postCard(row: PostRow, csrf: string, canWrite: boolean, connected: bool
 
 function newPostForm(csrf: string, connected: boolean) {
   const start = planStart();
-  return `<details class="fbp-new"><summary>+ New post (your own image and caption)</summary><form method="post" action="${path}" enctype="multipart/form-data" class="grid" data-fb-post-form>
+  return `<details class="fbp-new"><summary>+ New post (your own image, Reel video or caption)</summary><form method="post" action="${path}" enctype="multipart/form-data" class="grid" data-fb-post-form>
     <input type="hidden" name="csrf" value="${esc(csrf)}">
-    <label class="wide">Image (from Canva or your phone)<input type="file" name="image" accept="image/jpeg,image/png" data-fb-post-image><small class="muted" style="display:block">Best size 1080 × 1350 or 1080 × 1080. Big images are made smaller in your browser before upload. Leave empty for a text-only post.</small></label>
+    <label class="wide">Image or Reel video (from Canva or your phone)<input type="file" name="image" accept="image/jpeg,image/png,video/mp4,video/quicktime" data-fb-post-image><small class="muted" style="display:block">Image: best 1080 × 1350 or 1080 × 1080, made smaller in your browser. Reel: vertical MP4 or MOV, 1080 × 1920, 3 to 90 seconds, under 90 MB; it goes straight to Facebook with "Save and schedule". Leave empty for a text-only post.</small></label>
     <label class="wide">Caption *<textarea name="caption" maxlength="5000" required placeholder="Write your caption. Short lines, 1 or 2 emojis, and end with Comment RATE or Message us. No links: Facebook allows only 2 link posts a month."></textarea></label>
     <label>Date<input type="date" name="post_date" value="${esc(start)}" min="${esc(manilaDate())}" required></label>
     <label>Time (Manila)<input type="time" name="post_time" value="${DEFAULT_TIME}" required></label>
@@ -329,9 +331,30 @@ async function handlePost(env: Env, user: AdminUser, request: Request, origin: s
     if (!caption) throw new AdminError("Write a caption.");
     if (!validDate(date) || !validTime(time)) throw new AdminError("Pick a date and time.");
     const image = form.get("image");
-    const imageId = image instanceof File && image.size ? await saveImage(env, image) : null;
     const id = randomUUID();
     const title = caption.split("\n").find((l) => l.trim())?.trim().slice(0, 80) ?? "Your post";
+    // A video is a Reel: it goes straight to Facebook (videos are too big to keep here), and
+    // only then replaces that day's automatic post.
+    if (image instanceof File && image.size && image.type.startsWith("video/")) {
+      if (action !== "new_schedule") throw new AdminError("Reels can't be saved as drafts here. Click \"Save and schedule on Facebook\".");
+      if (!["video/mp4", "video/quicktime"].includes(image.type)) throw new AdminError("Upload the Reel as an MP4 or MOV video.");
+      if (image.size > REEL_MAX_BYTES) throw new AdminError("The video is over 90 MB. Export it smaller (1080 × 1920, under 90 seconds) and try again.");
+      if (!pg) return back(user, msg("err", "Connect Facebook first."));
+      const timeError = checkTime(unixFor(date, time));
+      if (timeError) return back(user, msg("err", timeError));
+      const r = await scheduleReel(env, pg.id, { caption, when: unixFor(date, time), video: image, ref: id });
+      if (!r.ok) return back(user, msg("err", `Reel not scheduled: ${r.error}`));
+      const autos = (await env.ADMIN_DB.prepare("SELECT * FROM fb_posts WHERE post_date=? AND kind='auto' AND status IN ('planned','scheduled','failed')").bind(date).all<PostRow>()).results;
+      for (const a of autos) {
+        if (await pullBack(env, pg, a)) continue;
+        await env.ADMIN_DB.prepare("UPDATE fb_posts SET status='skipped',replaced=1,updated_at=? WHERE id=?").bind(now, a.id).run();
+      }
+      await env.ADMIN_DB.prepare("INSERT INTO fb_posts (id,post_date,post_time,kind,topic,category,title,caption,status,fb_post_id,created_at,updated_at) VALUES (?,?,?,'own','reel','Reel',?,?,'scheduled',?,?,?)")
+        .bind(id, date, time, title, caption, r.id, now, now).run();
+      await audit(env, user, "fb posts: new reel", id, `${date} ${time}`);
+      return back(user, msg("ok", `Your Reel is scheduled on Facebook for ${niceDate(date)}, ${niceTime(time)}. Facebook may take a few minutes to process the video.`));
+    }
+    const imageId = image instanceof File && image.size ? await saveImage(env, image) : null;
     // Her post replaces the automatic post of that day (taken off Facebook first if it was scheduled).
     const autos = (await env.ADMIN_DB.prepare("SELECT * FROM fb_posts WHERE post_date=? AND kind='auto' AND status IN ('planned','scheduled','failed')").bind(date).all<PostRow>()).results;
     for (const a of autos) {
@@ -361,6 +384,7 @@ async function handlePost(env: Env, user: AdminUser, request: Request, origin: s
   }
 
   if (action === "save") {
+    if (row.topic === "reel") throw new AdminError("A Reel can't be edited here. Delete it and upload it again, or edit it in Meta Business Suite.");
     const caption = String(form.get("caption") ?? "").trim().slice(0, 5000);
     const date = String(form.get("post_date") ?? ""), time = String(form.get("post_time") ?? "");
     if (!caption) throw new AdminError("Write a caption.");
