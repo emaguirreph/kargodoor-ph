@@ -16,8 +16,9 @@ import type { D1Database } from "@cloudflare/workers-types";
 
 export const GRAPH_VERSION = "v24.0";
 const GRAPH = `https://graph.facebook.com/${GRAPH_VERSION}`;
-// publish_video: Reels from "+ New post" (2026-11-24). Needs a Reconnect after it was added.
-export const SCOPES = ["pages_show_list", "pages_read_engagement", "pages_manage_posts", "publish_video", "business_management"];
+// Reels (video_reels) need only pages_manage_posts + pages_read_engagement + pages_show_list.
+// publish_video is not offered in the "Manage everything on your Page" use case, so it is not asked for.
+export const SCOPES = ["pages_show_list", "pages_read_engagement", "pages_manage_posts", "business_management"];
 // Meta's window for scheduled feed/photo posts: 10 minutes to 30 days ahead.
 export const MIN_AHEAD_MIN = 15; // a little more than Meta's 10 minutes, for clock drift
 export const MAX_AHEAD_DAYS = 30;
