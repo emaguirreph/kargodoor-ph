@@ -76,10 +76,23 @@ const optional = (max: number) =>
     .max(max)
     .transform((value) => value || null);
 
+// Browsers send a number typed as ".08" exactly like that (Em, 2026-11-26:
+// Declared CBM ".08" was refused while the same Verified CBM saved), and
+// "1,250.5" may be pasted. Both mean an ordinary number, so read them as one.
+const cleanNumber = (value: string) => {
+  const normalizedThousands = /^\d{1,3}(?:,\d{3})+(?:\.\d+)?$/.test(value)
+    ? value.replaceAll(",", "")
+    : value;
+  return normalizedThousands.startsWith(".")
+    ? `0${normalizedThousands}`
+    : normalizedThousands;
+};
+
 const decimal = (max: number, precision = 3) =>
   required(30)
-    .regex(
-      new RegExp(`^\\d+(\\.\\d{1,${precision}})?$`),
+    .transform(cleanNumber)
+    .refine(
+      (value) => new RegExp(`^\\d+(\\.\\d{1,${precision}})?$`).test(value),
       `Use a positive number with up to ${precision} decimals`,
     )
     .transform(Number)
@@ -94,14 +107,7 @@ const optionalDecimal = (max: number, precision = 3) =>
   z
     .string()
     .trim()
-    .transform((value) => {
-      const normalizedThousands = /^\d{1,3}(?:,\d{3})+(?:\.\d+)?$/.test(value)
-        ? value.replaceAll(",", "")
-        : value;
-      return normalizedThousands.startsWith(".")
-        ? `0${normalizedThousands}`
-        : normalizedThousands;
-    })
+    .transform(cleanNumber)
     .refine(
       (value) =>
         !value ||

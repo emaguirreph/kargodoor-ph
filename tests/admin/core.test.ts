@@ -2520,3 +2520,14 @@ test("Ni Hao quote request fills from the quotation and leaves unknowns blank", 
   assert.deepEqual(nihaoQuoteLines("Air Freight", { description: "Phone cases" }), ["Sea or Air: Air", "Item: Phone cases", "Item Picture:", "Dimensions:", "Declared Total CBM:", "Declared Weight:"]);
   assert.equal(nihaoQuoteLines("Full Container", { containerSize: "40 ft HQ" })[0], "Sea or Air: Sea (FCL, 40 ft HQ)");
 });
+
+test("Declared CBM and weight typed with a leading dot save like the Verified ones", () => {
+  // Em, 2026-11-26: Declared CBM ".08" was refused with "up to 6 decimals".
+  const parsed = shipmentSchema.parse({ ...shipmentInput(randomUUID()), cbm: ".08", weight_kg: "12", verified_cbm: ".08", verified_weight_kg: "12" });
+  assert.equal(parsed.cbm, 0.08);
+  assert.equal(parsed.verified_cbm, 0.08);
+  assert.equal(shipmentSchema.parse({ ...shipmentInput(randomUUID()), weight_kg: ".5" }).weight_kg, 0.5);
+  assert.equal(shipmentSchema.parse({ ...shipmentInput(randomUUID()), cbm: "1,250.5" }).cbm, 1250.5);
+  assert.equal(shipmentSchema.safeParse({ ...shipmentInput(randomUUID()), cbm: "0.1234567" }).success, false);
+  assert.equal(shipmentSchema.safeParse({ ...shipmentInput(randomUUID()), cbm: "-0.08" }).success, false);
+});
